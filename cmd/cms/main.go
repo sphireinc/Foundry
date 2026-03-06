@@ -1,8 +1,65 @@
 package main
 
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/plugins"
+	"github.com/sphireinc/foundry/internal/renderer"
+	"github.com/sphireinc/foundry/internal/router"
+	"github.com/sphireinc/foundry/internal/server"
+	"github.com/sphireinc/foundry/internal/theme"
+)
+
 func main() {
-	// parse flags
-	// cms serve
-	// cms build
-	// cms new
+	if len(os.Args) < 2 {
+		fmt.Println("usage: cms [serve|preview|build]")
+		os.Exit(1)
+	}
+
+	cfg, err := config.Load("content/config/site.yaml")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	pluginManager := plugins.NewManager()
+	loader := content.NewLoader(cfg, pluginManager)
+	routeResolver := router.NewResolver(cfg)
+	themeManager := theme.NewManager("themes", cfg.Theme)
+	rendererEngine := renderer.New(cfg, themeManager)
+	ctx := context.Background()
+
+	switch os.Args[1] {
+	case "build":
+		graph, err := loader.Load(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load content: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := routeResolver.AssignURLs(graph); err != nil {
+			fmt.Fprintf(os.Stderr, "assign urls: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := rendererEngine.Build(ctx, graph); err != nil {
+			fmt.Fprintf(os.Stderr, "build: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("build complete")
+	case "serve":
+		srv := server.New(cfg, loader, routeResolver, rendererEngine)
+		if err := srv.ListenAndServe(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "serve: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Println("usage: cms [serve|preview|build]")
+		os.Exit(1)
+	}
 }
