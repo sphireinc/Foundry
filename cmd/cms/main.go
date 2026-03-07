@@ -16,7 +16,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: cms [serve|preview|build]")
+		fmt.Println("usage: cms [serve|serve-preview|build]")
 		os.Exit(1)
 	}
 
@@ -26,15 +26,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	pluginManager := plugins.NewManager()
-	loader := content.NewLoader(cfg, pluginManager)
+	pluginManager := plugins.NewManager(cfg.Plugins.Enabled)
 	routeResolver := router.NewResolver(cfg)
-	themeManager := theme.NewManager("themes", cfg.Theme)
+	themeManager := theme.NewManager(cfg.ThemesDir, cfg.Theme)
 	rendererEngine := renderer.New(cfg, themeManager)
 	ctx := context.Background()
 
 	switch os.Args[1] {
 	case "build":
+		loader := content.NewLoader(cfg, pluginManager, cfg.Build.IncludeDrafts)
 		graph, err := loader.Load(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "load content: %v\n", err)
@@ -52,14 +52,25 @@ func main() {
 		}
 
 		fmt.Println("build complete")
+
 	case "serve":
-		srv := server.New(cfg, loader, routeResolver, rendererEngine)
+		loader := content.NewLoader(cfg, pluginManager, false)
+		srv := server.New(cfg, loader, routeResolver, rendererEngine, false)
 		if err := srv.ListenAndServe(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "serve: %v\n", err)
 			os.Exit(1)
 		}
+
+	case "serve-preview":
+		loader := content.NewLoader(cfg, pluginManager, true)
+		srv := server.New(cfg, loader, routeResolver, rendererEngine, true)
+		if err := srv.ListenAndServe(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "serve preview: %v\n", err)
+			os.Exit(1)
+		}
+
 	default:
-		fmt.Println("usage: cms [serve|preview|build]")
+		fmt.Println("usage: cms [serve|serve-preview|build]")
 		os.Exit(1)
 	}
 }

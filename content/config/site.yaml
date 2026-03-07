@@ -1,13 +1,86 @@
+name: "foundry"
 title: "Foundry CMS"
 base_url: "http://localhost:8080"
 theme: "default"
 default_lang: "en"
 content_dir: "content"
 public_dir: "public"
+themes_dir: "themes"
+data_dir: "data"
+plugins_dir: "plugins"
 
 server:
   addr: ":8080"
+  live_reload: true
+  auto_open_browser: false
+  debug_routes: false
+
+build:
+  clean_public_dir: true
+  include_drafts: false
+  minify_html: true
+  copy_assets: true
+  copy_images: true
+  copy_uploads: true
+
+content:
+  pages_dir: "pages"
+  posts_dir: "posts"
+  images_dir: "images"
+  assets_dir: "assets"
+  uploads_dir: "uploads"
+  default_layout_page: "page"
+  default_layout_post: "post"
+  default_page_slug_index: "index"
 
 permalinks:
-  page: "/:lang/:slug/"
-  post: "/:lang/posts/:slug/"
+  page_default: "/:slug/"
+  page_i18n: "/:lang/:slug/"
+  post_default: "/posts/:slug/"
+  post_i18n: "/:lang/posts/:slug/"
+
+taxonomies:
+  enabled: true
+  default_set:
+    - tags
+    - categories
+
+plugins:
+  enabled: []
+
+fields:
+  enabled: true
+  allow_anything: true
+
+seo:
+  enabled: true
+  default_title_sep: "-"
+
+cache:
+  enabled: true
+
+security:
+  allow_unsafe_html: false
+
+feed:
+  rss_path: "/rss.xml"
+  sitemap_path: "/sitemap.xml"
+  rss_limit: 50
+  rss_title: "Foundry CMS"
+  rss_description: "Latest posts from Foundry CMS"
+
+params:
+  company_name: "Sphire"
+
+menus:
+  main:
+    - name: "Home"
+      url: "/"
+    - name: "Posts"
+      url: "/posts/hello-world/"
+    - name: "Go Tag"
+      url: "/tags/go/"
+    - name: "Engineering"
+      url: "/categories/engineering/"
+    - name: "RSS"
+      url: "/rss.xml"

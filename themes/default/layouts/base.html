@@ -1,0 +1,28 @@
+{{ define "base" }}
+<!doctype html>
+<html lang="{{ .Lang }}">
+{{ template "head" . }}
+<body>
+<div class="site-shell">
+    {{ template "header" . }}
+
+    <main class="site-main">
+        <div class="container">
+            {{ template "content" . }}
+        </div>
+    </main>
+
+    {{ template "footer" . }}
+</div>
+
+{{ if .LiveReload }}
+<script>
+    (() => {
+        const es = new EventSource('/__reload');
+        es.onmessage = () => window.location.reload();
+    })();
+</script>
+{{ end }}
+</body>
+</html>
+{{ end }}

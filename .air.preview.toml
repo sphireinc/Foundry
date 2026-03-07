@@ -1,0 +1,25 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/foundry ./cmd/cms"
+  bin = "./tmp/foundry"
+  full_bin = "./tmp/foundry serve-preview"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "bin", "public", "vendor", ".git"]
+  delay = 300
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = 500
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

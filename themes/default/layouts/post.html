@@ -1,0 +1,33 @@
+{{ define "content" }}
+<div class="split-layout">
+    <section>
+        <header class="post-header">
+            <div class="eyebrow">Post</div>
+            <h1>{{ .Page.Title }}</h1>
+
+            {{ if .Page.Summary }}
+            <p>{{ .Page.Summary }}</p>
+            {{ end }}
+
+            {{ template "post_meta" . }}
+        </header>
+
+        <article class="content-panel content-panel--article">
+            <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
+        </article>
+    </section>
+
+    <aside class="meta-panel">
+        <div class="meta-panel-block">
+            <h3>Overview</h3>
+            <div class="meta-list">
+                <div><strong>Type:</strong> {{ .Page.Type }}</div>
+                <div><strong>Slug:</strong> {{ .Page.Slug }}</div>
+                <div><strong>Language:</strong> {{ .Page.Lang }}</div>
+            </div>
+        </div>
+
+        {{ template "taxonomy_chips" . }}
+    </aside>
+</div>
+{{ end }}

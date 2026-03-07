@@ -1,0 +1,15 @@
+{{ define "content" }}
+<section class="page-wrap">
+    <header class="page-header">
+        <div class="eyebrow">Page</div>
+        <h1>{{ .Page.Title }}</h1>
+        {{ if .Page.Summary }}
+        <p>{{ .Page.Summary }}</p>
+        {{ end }}
+    </header>
+
+    <article class="content-panel content-panel--article">
+        <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
+    </article>
+</section>
+{{ end }}

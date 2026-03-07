@@ -1,0 +1,19 @@
+{{ define "header" }}
+<header class="site-header">
+    <div class="container site-header-inner">
+        <a class="site-brand" href="/">
+            <span class="site-brand-mark">F</span>
+            <span class="site-brand-text">
+        <span class="site-brand-title">{{ .Site.Title }}</span>
+        <span class="site-brand-subtitle">Modern publishing in Go</span>
+      </span>
+        </a>
+
+        <nav class="site-nav">
+            {{ range .Nav }}
+            <a href="{{ .URL }}"{{ if .Active }} class="is-active"{{ end }}>{{ .Name }}</a>
+            {{ end }}
+        </nav>
+    </div>
+</header>
+{{ end }}

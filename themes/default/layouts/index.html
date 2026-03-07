@@ -1,0 +1,87 @@
+{{ define "content" }}
+<section class="hero">
+    <div class="hero-grid">
+        <div class="hero-panel">
+            <div class="hero-kicker">Foundry Default Theme</div>
+            <h1>Elegant publishing, without the bloat.</h1>
+            <p>
+                Foundry is a Go-powered Markdown CMS built for developers, founders, and teams who want
+                a clean content workflow, premium presentation, and a system they actually control.
+            </p>
+
+            <div class="hero-actions">
+                <a class="button" href="/posts/hello-world/">Read the sample post</a>
+                <a class="button-secondary" href="{{ .Site.Feed.RSSPath }}">View RSS feed</a>
+            </div>
+        </div>
+
+        <aside class="side-panel">
+            <div>
+                <h2>Default theme</h2>
+                <p>
+                    Calm, editorial, fast, and intentionally restrained.
+                    A strong baseline for company sites, blogs, changelogs, and documentation-driven marketing.
+                </p>
+            </div>
+
+            <div class="stat-stack">
+                <div class="stat-card">
+                    <div class="stat-value">{{ len .Documents }}</div>
+                    <div class="stat-label">Published documents in this language</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">Go</div>
+                    <div class="stat-label">Powered by a modern CMS engine</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">MD</div>
+                    <div class="stat-label">Markdown-first authoring workflow</div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<section class="home-section">
+    <div class="section-heading">
+        <div>
+            <h2>Recent content</h2>
+            <p>Freshly rendered pages and posts using the default Foundry theme.</p>
+        </div>
+    </div>
+
+    <div class="post-grid">
+        {{ range .Documents }}
+        <article class="post-card">
+            <div class="post-card-header">
+                <div>
+                    <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+                    <div class="post-card-meta">
+                        {{ if eq .Type "post" }}Post{{ else }}Page{{ end }}
+                        {{ if .Date }} · {{ .Date.Format "Jan 2, 2006" }}{{ end }}
+                    </div>
+                </div>
+            </div>
+
+            {{ if .Summary }}
+            <div class="post-card-summary">{{ .Summary }}</div>
+            {{ end }}
+
+            <div class="post-card-footer">
+                <a class="post-card-link" href="{{ .URL }}">Read more</a>
+
+                {{ with index .Taxonomies "tags" }}
+                <div class="tag-row">
+                    {{ range . }}
+                    <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
+                    {{ end }}
+                </div>
+                {{ end }}
+            </div>
+        </article>
+        {{ else }}
+        <div class="empty-state">No content has been published yet.</div>
+        {{ end }}
+    </div>
+</section>
+{{ end }}

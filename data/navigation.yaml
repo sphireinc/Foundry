@@ -1,0 +1,11 @@
+main:
+  - name: "Home"
+    url: "/"
+  - name: "Sample Post"
+    url: "/posts/hello-world/"
+  - name: "Go Tag"
+    url: "/tags/go/"
+  - name: "Engineering"
+    url: "/categories/engineering/"
+  - name: "RSS"
+    url: "/rss.xml"
