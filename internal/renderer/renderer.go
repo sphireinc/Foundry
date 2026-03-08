@@ -15,12 +15,28 @@ import (
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
+type Hooks interface {
+	OnContext(*ViewData) error
+	OnBeforeRender(*ViewData) error
+	OnAfterRender(url string, html []byte) ([]byte, error)
+}
+
+type noopHooks struct{}
+
+func (noopHooks) OnContext(*ViewData) error                           { return nil }
+func (noopHooks) OnBeforeRender(*ViewData) error                      { return nil }
+func (noopHooks) OnAfterRender(_ string, html []byte) ([]byte, error) { return html, nil }
+
 type Renderer struct {
 	cfg    *config.Config
 	themes *theme.Manager
+	hooks  Hooks
 }
 
-func New(cfg *config.Config, themes *theme.Manager) *Renderer {
+func New(cfg *config.Config, themes *theme.Manager, hooks Hooks) *Renderer {
+	if hooks == nil {
+		hooks = noopHooks{}
+	}
 	return &Renderer{cfg: cfg, themes: themes}
 }
 
@@ -119,10 +135,10 @@ func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.Sit
 					return docs[i].URL < docs[j].URL
 				})
 
-				title := fmt.Sprintf("%s: %s", strings.Title(taxonomyName), term)
+				title := fmt.Sprintf("%s: %s", taxonomyName, term)
 				currentURL := r.taxonomyURL(lang, taxonomyName, term)
 
-				html, err := r.renderTemplate("list", ViewData{
+				html, err := r.renderTemplate("list", currentURL, ViewData{
 					Site:         graph.Config,
 					Data:         graph.Data,
 					Lang:         lang,
@@ -153,7 +169,7 @@ func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.Sit
 }
 
 func (r *Renderer) buildSingle(graph *content.SiteGraph, doc *content.Document) error {
-	html, err := r.renderTemplate(doc.Layout, ViewData{
+	html, err := r.renderTemplate(doc.Layout, doc.URL, ViewData{
 		Site:  graph.Config,
 		Page:  doc,
 		Data:  graph.Data,
@@ -179,8 +195,9 @@ func (r *Renderer) buildSingle(graph *content.SiteGraph, doc *content.Document) 
 }
 
 func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReload bool) ([]byte, error) {
-	if doc, ok := graph.ByURL[urlPath]; ok {
-		return r.renderTemplate(doc.Layout, ViewData{
+	doc, ok := graph.ByURL[urlPath]
+	if ok {
+		return r.renderTemplate(doc.Layout, doc.URL, ViewData{
 			Site:       graph.Config,
 			Page:       doc,
 			Data:       graph.Data,
@@ -192,7 +209,7 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 	}
 
 	if urlPath == "/" {
-		return r.renderTemplate("index", ViewData{
+		return r.renderTemplate("index", doc.URL, ViewData{
 			Site:       graph.Config,
 			Data:       graph.Data,
 			Lang:       graph.Config.DefaultLang,
@@ -205,7 +222,7 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 
 	for lang := range graph.ByLang {
 		if urlPath == "/"+lang+"/" {
-			return r.renderTemplate("index", ViewData{
+			return r.renderTemplate("index", doc.URL, ViewData{
 				Site:       graph.Config,
 				Data:       graph.Data,
 				Lang:       lang,
@@ -219,7 +236,7 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 
 	if vd, ok := r.findTaxonomyArchive(graph, urlPath, liveReload); ok {
 		vd.Nav = r.resolveNav(graph, urlPath)
-		return r.renderTemplate("list", vd)
+		return r.renderTemplate("list", doc.URL, vd)
 	}
 
 	return nil, os.ErrNotExist
@@ -281,7 +298,7 @@ func (r *Renderer) findTaxonomyArchive(graph *content.SiteGraph, urlPath string,
 		Site:         graph.Config,
 		Data:         graph.Data,
 		Lang:         lang,
-		Title:        fmt.Sprintf("%s: %s", strings.Title(taxonomyName), term),
+		Title:        fmt.Sprintf("%s: %s", taxonomyName, term),
 		Documents:    docs,
 		LiveReload:   liveReload,
 		TaxonomyName: taxonomyName,
@@ -428,7 +445,15 @@ func parseNavigationData(v any) []NavItem {
 	return items
 }
 
-func (r *Renderer) renderTemplate(name string, data ViewData) ([]byte, error) {
+func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) ([]byte, error) {
+	if err := r.hooks.OnContext(&data); err != nil {
+		return nil, err
+	}
+
+	if err := r.hooks.OnBeforeRender(&data); err != nil {
+		return nil, err
+	}
+
 	basePath := r.themes.LayoutPath("base")
 	pagePath := r.themes.LayoutPath(name)
 
@@ -469,5 +494,12 @@ func (r *Renderer) renderTemplate(name string, data ViewData) ([]byte, error) {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 
-	return []byte(sb.String()), nil
+	html := []byte(sb.String())
+
+	html, err = r.hooks.OnAfterRender(targetURL, html)
+	if err != nil {
+		return nil, err
+	}
+
+	return html, nil
 }

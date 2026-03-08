@@ -27,6 +27,10 @@ func main() {
 	}
 
 	pluginManager := plugins.NewManager(cfg.Plugins.Enabled)
+	if err := pluginManager.OnConfigLoaded(cfg); err != nil {
+		os.Exit(1)
+	}
+
 	routeResolver := router.NewResolver(cfg)
 	themeManager := theme.NewManager(cfg.ThemesDir, cfg.Theme)
 	rendererEngine := renderer.New(cfg, themeManager)
@@ -43,6 +47,9 @@ func main() {
 
 		if err := routeResolver.AssignURLs(graph); err != nil {
 			fmt.Fprintf(os.Stderr, "assign urls: %v\n", err)
+			os.Exit(1)
+		}
+		if err := pluginManager.OnRoutesAssigned(graph); err != nil {
 			os.Exit(1)
 		}
 

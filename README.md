@@ -697,8 +697,24 @@ The plugin manager looks up registered factories and instantiates only the enabl
 
 The plugin system currently supports these hooks:
 
-- `OnDocumentParsed(*Document) error`
-- `OnGraphBuilt(*SiteGraph) error`
+- `OnConfigLoaded(*config.Config) error`
+- `OnContentDiscovered(path string) error`
+- `OnFrontmatterParsed(*content.Document) error`
+- `OnMarkdownRendered(*content.Document) error`
+- `OnDocumentParsed(*content.Document) error`
+- `OnDataLoaded(map[string]any) error`
+- `OnGraphBuilding(*content.SiteGraph) error`
+- `OnGraphBuilt(*content.SiteGraph) error`
+- `OnTaxonomyBuilt(*content.SiteGraph) error`
+- `OnRoutesAssigned(*content.SiteGraph) error`
+- `OnContext(*renderer.ViewData) error`
+- `OnBeforeRender(*renderer.ViewData) error`
+- `OnAfterRender(url string, html []byte) ([]byte, error)`
+- `OnAssetsBuilding(*config.Config) error`
+- `OnBuildStarted() error`
+- `OnBuildCompleted(*content.SiteGraph) error`
+- `OnServerStarted(addr string) error`
+- `RegisterRoutes(mux *http.ServeMux)`
 
 These are invoked by the content loader.
 

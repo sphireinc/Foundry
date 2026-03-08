@@ -11,6 +11,10 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 )
 
+type Hooks interface {
+	OnAssetsBuilding(*config.Config) error
+}
+
 func Sync(cfg *config.Config) error {
 	if err := os.MkdirAll(cfg.PublicDir, 0o755); err != nil {
 		return fmt.Errorf("create public dir: %w", err)

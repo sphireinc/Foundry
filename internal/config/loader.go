@@ -19,5 +19,10 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg.ApplyDefaults()
+
+	if err := pluginManager.OnConfigLoaded(cfg); err != nil {
+		return err
+	}
+
 	return &cfg, nil
 }

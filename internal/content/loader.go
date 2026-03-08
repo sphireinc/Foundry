@@ -15,15 +15,27 @@ import (
 )
 
 type Hooks interface {
+	OnContentDiscovered(path string) error
+	OnFrontmatterParsed(*Document) error
+	OnMarkdownRendered(*Document) error
 	OnDocumentParsed(*Document) error
+	OnDataLoaded(map[string]any) error
+	OnGraphBuilding(*SiteGraph) error
 	OnGraphBuilt(*SiteGraph) error
+	OnTaxonomyBuilt(*SiteGraph) error
 }
 
 // these below are purley for type safety
 type noopHooks struct{}
 
-func (noopHooks) OnDocumentParsed(*Document) error { return nil }
-func (noopHooks) OnGraphBuilt(*SiteGraph) error    { return nil }
+func (noopHooks) OnContentDiscovered(path string) error { _ = path; return nil }
+func (noopHooks) OnFrontmatterParsed(*Document) error   { return nil }
+func (noopHooks) OnMarkdownRendered(*Document) error    { return nil }
+func (noopHooks) OnDocumentParsed(*Document) error      { return nil }
+func (noopHooks) OnDataLoaded(map[string]any) error     { return nil }
+func (noopHooks) OnGraphBuilding(*SiteGraph) error      { return nil }
+func (noopHooks) OnGraphBuilt(*SiteGraph) error         { return nil }
+func (noopHooks) OnTaxonomyBuilt(*SiteGraph) error      { return nil }
 
 type Loader struct {
 	cfg           *config.Config
