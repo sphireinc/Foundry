@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security reports
-    url: https://github.com/sphireinc/foundry/security/advisories/new
+    url: contact@sphire.co
     about: Please report security vulnerabilities privately.
