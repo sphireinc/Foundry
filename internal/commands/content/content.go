@@ -50,6 +50,10 @@ func (command) Details() []string {
 	}
 }
 
+func (command) RequiresConfig() bool {
+	return true
+}
+
 func (command) Run(cfg *config.Config, args []string) error {
 	if len(args) < 3 {
 		return fmt.Errorf("usage: foundry content [lint|new|list|graph]")

@@ -27,6 +27,10 @@ func (command) Details() []string {
 	}
 }
 
+func (command) RequiresConfig() bool {
+	return true
+}
+
 func (command) Run(cfg *foundryconfig.Config, args []string) error {
 	if len(args) < 3 || args[2] != "check" {
 		return fmt.Errorf("usage: foundry config check")

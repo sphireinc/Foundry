@@ -13,14 +13,16 @@ type Command interface {
 	Summary() string
 	Group() string
 	Details() []string
+	RequiresConfig() bool
 	Run(cfg *config.Config, args []string) error
 }
 
 type Info struct {
-	Name    string
-	Summary string
-	Group   string
-	Details []string
+	Name           string
+	Summary        string
+	Group          string
+	Details        []string
+	RequiresConfig bool
 }
 
 var commands = map[string]Command{}
@@ -35,12 +37,17 @@ func Register(cmd Command) {
 	commands[cmd.Name()] = cmd
 }
 
-func Run(cfg *config.Config, args []string) (bool, error) {
+func Lookup(args []string) (Command, bool) {
 	if len(args) < 2 {
-		return false, nil
+		return nil, false
 	}
 
 	cmd, ok := commands[args[1]]
+	return cmd, ok
+}
+
+func Run(cfg *config.Config, args []string) (bool, error) {
+	cmd, ok := Lookup(args)
 	if !ok {
 		return false, nil
 	}
@@ -52,10 +59,11 @@ func List() []Info {
 	out := make([]Info, 0, len(commands))
 	for _, cmd := range commands {
 		out = append(out, Info{
-			Name:    cmd.Name(),
-			Summary: cmd.Summary(),
-			Group:   cmd.Group(),
-			Details: cmd.Details(),
+			Name:           cmd.Name(),
+			Summary:        cmd.Summary(),
+			Group:          cmd.Group(),
+			Details:        cmd.Details(),
+			RequiresConfig: cmd.RequiresConfig(),
 		})
 	}
 

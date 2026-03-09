@@ -30,6 +30,10 @@ func (command) Details() []string {
 	return nil
 }
 
+func (command) RequiresConfig() bool {
+	return true
+}
+
 func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 	errCount := 0
 

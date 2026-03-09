@@ -25,13 +25,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	if handled := handleConfigFreeCLI(os.Args); handled {
+		return
+	}
+
 	cfg, err := config.Load(consts.ConfigFilePath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
 
-	handleCli(cfg, os.Args)
+	handleConfigBoundCLI(cfg, os.Args)
 
 	pluginManager, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
 	if err != nil {
@@ -108,15 +112,36 @@ func main() {
 	}
 }
 
-func handleCli(cfg *config.Config, args []string) {
-	handled, err := registry.Run(cfg, args)
-	if err != nil {
+func handleConfigFreeCLI(args []string) bool {
+	cmd, ok := registry.Lookup(args)
+	if !ok {
+		return false
+	}
+	if cmd.RequiresConfig() {
+		return false
+	}
+
+	if err := cmd.Run(nil, args); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
-	if handled {
-		os.Exit(0)
+	return true
+}
+
+func handleConfigBoundCLI(cfg *config.Config, args []string) {
+	cmd, ok := registry.Lookup(args)
+	if !ok {
+		return
 	}
+	if !cmd.RequiresConfig() {
+		return
+	}
+
+	if err := cmd.Run(cfg, args); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 func printUsage() {
