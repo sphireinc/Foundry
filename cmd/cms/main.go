@@ -121,7 +121,7 @@ func handlePluginInstallOrUninstall(cfg *config.Config, args []string) (bool, in
 	switch args[1] {
 	case "install":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: cms plugin install <git-url|owner/repo> [name]")
+			_, _ = fmt.Fprintln(os.Stderr, "usage: cms plugin install <git-url|owner/repo> [name]")
 			return true, 1
 		}
 
@@ -137,67 +137,75 @@ func handlePluginInstallOrUninstall(cfg *config.Config, args []string) (bool, in
 			Name:       name,
 		})
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			_, _ = fmt.Fprintln(os.Stderr, err)
 			return true, 1
 		}
 
-		fmt.Fprintf(os.Stdout, "Installed plugin: %s\n", meta.Name)
-		fmt.Fprintf(os.Stdout, "Directory: %s\n", meta.Directory)
-		fmt.Fprintf(os.Stdout, "Version: %s\n", meta.Version)
+		_, _ = fmt.Fprintf(os.Stdout, "Installed plugin: %s\n", meta.Name)
+		_, _ = fmt.Fprintf(os.Stdout, "Directory: %s\n", meta.Directory)
+		_, _ = fmt.Fprintf(os.Stdout, "Version: %s\n", meta.Version)
 
 		missing, warnErr := findMissingPluginDependencies(cfg, meta)
 		if warnErr != nil {
-			fmt.Fprintln(os.Stderr, warnErr)
+			_, _ = fmt.Fprintln(os.Stderr, warnErr)
 			return true, 1
 		}
 
 		if len(missing) > 0 {
-			fmt.Fprintln(os.Stdout, "")
-			fmt.Fprintln(os.Stdout, "Dependency warnings:")
+			_, _ = fmt.Fprintln(os.Stdout, "")
+			_, _ = fmt.Fprintln(os.Stdout, "Dependency warnings:")
 			for _, dep := range missing {
-				fmt.Fprintf(os.Stdout, "- Missing required plugin repo: %s\n", dep)
+				if dep.Installed {
+					_, _ = fmt.Fprintf(os.Stdout, "- Required plugin repo %s is installed as %q but not enabled\n", dep.Repo, dep.Name)
+				} else {
+					_, _ = fmt.Fprintf(os.Stdout, "- Missing required plugin repo: %s\n", dep.Repo)
+				}
 			}
 
-			fmt.Fprintln(os.Stdout, "")
-			fmt.Fprintln(os.Stdout, "Suggested installs:")
+			_, _ = fmt.Fprintln(os.Stdout, "")
+			_, _ = fmt.Fprintln(os.Stdout, "Suggested next steps:")
 			for _, dep := range missing {
-				fmt.Fprintf(os.Stdout, "cms plugin install %s\n", dep)
+				if dep.Installed {
+					_, _ = fmt.Fprintf(os.Stdout, `Add %q to content/config/site.yaml under plugins.enabled`+"\n", dep.Name)
+				} else {
+					_, _ = fmt.Fprintf(os.Stdout, "cms plugin install %s\n", dep.Repo)
+				}
 			}
 		}
 
-		fmt.Fprintln(os.Stdout, "")
-		fmt.Fprintln(os.Stdout, "Next steps:")
+		_, _ = fmt.Fprintln(os.Stdout, "")
+		_, _ = fmt.Fprintln(os.Stdout, "Next steps:")
 		if len(missing) > 0 {
-			fmt.Fprintln(os.Stdout, "1. Install missing dependencies if needed")
-			fmt.Fprintf(os.Stdout, "2. Add %q to content/config/site.yaml under plugins.enabled\n", meta.Name)
-			fmt.Fprintln(os.Stdout, "3. Run make plugins-sync")
-			fmt.Fprintln(os.Stdout, "4. Run make dev or make build")
+			_, _ = fmt.Fprintln(os.Stdout, "1. Resolve the dependency warnings above")
+			_, _ = fmt.Fprintf(os.Stdout, "2. Add %q to content/config/site.yaml under plugins.enabled\n", meta.Name)
+			_, _ = fmt.Fprintln(os.Stdout, "3. Run make plugins-sync")
+			_, _ = fmt.Fprintln(os.Stdout, "4. Run make dev or make build")
 		} else {
-			fmt.Fprintf(os.Stdout, "1. Add %q to content/config/site.yaml under plugins.enabled\n", meta.Name)
-			fmt.Fprintln(os.Stdout, "2. Run make plugins-sync")
-			fmt.Fprintln(os.Stdout, "3. Run make dev or make build")
+			_, _ = fmt.Fprintf(os.Stdout, "1. Add %q to content/config/site.yaml under plugins.enabled\n", meta.Name)
+			_, _ = fmt.Fprintln(os.Stdout, "2. Run make plugins-sync")
+			_, _ = fmt.Fprintln(os.Stdout, "3. Run make dev or make build")
 		}
 
 		return true, 0
 
 	case "uninstall":
 		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "usage: cms plugin uninstall <name>")
+			_, _ = fmt.Fprintln(os.Stderr, "usage: cms plugin uninstall <name>")
 			return true, 1
 		}
 
 		name := strings.TrimSpace(args[2])
 		if err := plugins.Uninstall(cfg.PluginsDir, name); err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			_, _ = fmt.Fprintln(os.Stderr, err)
 			return true, 1
 		}
 
-		fmt.Fprintf(os.Stdout, "Uninstalled plugin: %s\n", name)
-		fmt.Fprintln(os.Stdout, "")
-		fmt.Fprintln(os.Stdout, "Next steps:")
-		fmt.Fprintf(os.Stdout, "1. Remove %q from content/config/site.yaml under plugins.enabled\n", name)
-		fmt.Fprintln(os.Stdout, "2. Run make plugins-sync")
-		fmt.Fprintln(os.Stdout, "3. Run make dev or make build")
+		_, _ = fmt.Fprintf(os.Stdout, "Uninstalled plugin: %s\n", name)
+		_, _ = fmt.Fprintln(os.Stdout, "")
+		_, _ = fmt.Fprintln(os.Stdout, "Next steps:")
+		_, _ = fmt.Fprintf(os.Stdout, "1. Remove %q from content/config/site.yaml under plugins.enabled\n", name)
+		_, _ = fmt.Fprintln(os.Stdout, "2. Run make plugins-sync")
+		_, _ = fmt.Fprintln(os.Stdout, "3. Run make dev or make build")
 
 		return true, 0
 	}
@@ -205,7 +213,13 @@ func handlePluginInstallOrUninstall(cfg *config.Config, args []string) (bool, in
 	return false, 0
 }
 
-func findMissingPluginDependencies(cfg *config.Config, installed plugins.Metadata) ([]string, error) {
+type MissingDependency struct {
+	Repo      string
+	Installed bool
+	Name      string
+}
+
+func findMissingPluginDependencies(cfg *config.Config, installed plugins.Metadata) ([]MissingDependency, error) {
 	if len(installed.Requires) == 0 {
 		return nil, nil
 	}
@@ -215,35 +229,83 @@ func findMissingPluginDependencies(cfg *config.Config, installed plugins.Metadat
 		return nil, err
 	}
 
-	installedRepos := make(map[string]struct{}, len(enabledMetadata))
-	for _, meta := range enabledMetadata {
+	enabledRepos := make(map[string]string, len(enabledMetadata))
+	for name, meta := range enabledMetadata {
 		repo := strings.TrimSpace(meta.Repo)
 		if repo == "" {
 			continue
 		}
-		installedRepos[repo] = struct{}{}
+		enabledRepos[repo] = name
 	}
 
-	missing := make([]string, 0)
+	installedOnDisk, err := scanInstalledPluginRepos(cfg.PluginsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	missing := make([]MissingDependency, 0)
 	seen := make(map[string]struct{})
+
 	for _, dep := range installed.Requires {
 		dep = strings.TrimSpace(dep)
 		if dep == "" {
 			continue
 		}
-		if _, ok := installedRepos[dep]; ok {
+		if _, ok := enabledRepos[dep]; ok {
 			continue
 		}
 		if _, dup := seen[dep]; dup {
 			continue
 		}
 		seen[dep] = struct{}{}
-			missing = append(missing, dep)
+
+		md := MissingDependency{Repo: dep}
+
+		if name, ok := installedOnDisk[dep]; ok {
+			md.Installed = true
+			md.Name = name
 		}
+
+		missing = append(missing, md)
 	}
 
-	sort.Strings(missing)
+	sort.Slice(missing, func(i, j int) bool {
+		return missing[i].Repo < missing[j].Repo
+	})
+
 	return missing, nil
+}
+
+func scanInstalledPluginRepos(pluginsDir string) (map[string]string, error) {
+	entries, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+
+	out := make(map[string]string)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		meta, err := plugins.LoadMetadata(pluginsDir, name)
+		if err != nil {
+			return nil, err
+		}
+
+		repo := strings.TrimSpace(meta.Repo)
+		if repo == "" {
+			continue
+		}
+
+		out[repo] = name
+	}
+
+	return out, nil
 }
 
 func handlePluginCLI(pm *plugins.Manager, args []string) (bool, int) {
