@@ -2,3 +2,6 @@
 tmp/
 public/
 bin/
+assessment-security.txt
+assessment-static-analysis.txt
+assessment-technical-debt.txt
