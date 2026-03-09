@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -113,6 +114,10 @@ func NewManager(pluginsDir string, enabled []string) (*Manager, error) {
 	}
 	m.metadata = metadata
 
+	if err := validateDependencies(metadata); err != nil {
+		return nil, err
+	}
+
 	for _, name := range enabled {
 		name = strings.TrimSpace(name)
 		if name == "" {
@@ -157,6 +162,33 @@ func (m *Manager) MetadataList() []Metadata {
 	})
 
 	return items
+}
+
+func validateDependencies(metadata map[string]Metadata) error {
+	installedByRepo := make(map[string]string, len(metadata))
+
+	for pluginName, meta := range metadata {
+		repo := normalizeRepoRef(meta.Repo)
+		if repo == "" {
+			continue
+		}
+
+		if existing, ok := installedByRepo[repo]; ok && existing != pluginName {
+			return fmt.Errorf("duplicate plugin repo %q declared by %q and %q", repo, existing, pluginName)
+		}
+
+		installedByRepo[repo] = pluginName
+	}
+
+	for pluginName, meta := range metadata {
+		for _, dep := range meta.Requires {
+			if _, ok := installedByRepo[dep]; !ok {
+				return fmt.Errorf("plugin %q requires %q, but no enabled plugin declares repo %q", pluginName, dep, dep)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (m *Manager) OnConfigLoaded(cfg *config.Config) error {

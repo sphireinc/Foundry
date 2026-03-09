@@ -26,13 +26,15 @@ type siteConfig struct {
 }
 
 type pluginMetadata struct {
-	Name        string `yaml:"name"`
-	Title       string `yaml:"title"`
-	Version     string `yaml:"version"`
-	Description string `yaml:"description"`
-	Author      string `yaml:"author"`
-	Homepage    string `yaml:"homepage"`
-	License     string `yaml:"license"`
+	Name        string   `yaml:"name"`
+	Title       string   `yaml:"title"`
+	Version     string   `yaml:"version"`
+	Description string   `yaml:"description"`
+	Author      string   `yaml:"author"`
+	Homepage    string   `yaml:"homepage"`
+	License     string   `yaml:"license"`
+	Repo        string   `yaml:"repo"`
+	Requires    []string `yaml:"requires"`
 }
 
 func main() {
@@ -160,6 +162,21 @@ func validateMetadata(name string) error {
 		return fmt.Errorf("%s: metadata name %q must match plugin directory %q", path, meta.Name, name)
 	}
 
+	meta.Repo = normalizeRepoRef(meta.Repo)
+	if meta.Repo != "" && !isValidRepoRef(meta.Repo) {
+		return fmt.Errorf("%s: invalid repo %q", path, meta.Repo)
+	}
+
+	for _, dep := range meta.Requires {
+		dep = normalizeRepoRef(dep)
+		if dep == "" {
+			continue
+		}
+		if !isValidRepoRef(dep) {
+			return fmt.Errorf("%s: invalid requires entry %q", path, dep)
+		}
+	}
+
 	return nil
 }
 
@@ -198,6 +215,38 @@ func generateFile(enabled []string) string {
 	buf.WriteString(")\n")
 
 	return buf.String()
+}
+
+func normalizeRepoRef(v string) string {
+	v = strings.TrimSpace(v)
+	v = strings.TrimPrefix(v, "https://")
+	v = strings.TrimPrefix(v, "http://")
+	v = strings.TrimPrefix(v, "git@")
+	v = strings.TrimPrefix(v, "ssh://")
+	v = strings.TrimPrefix(v, "github.com:")
+	v = strings.TrimPrefix(v, "github.com/")
+	v = strings.Trim(v, "/")
+	v = strings.TrimSuffix(v, ".git")
+
+	if v == "" {
+		return ""
+	}
+
+	if strings.Count(v, "/") == 1 {
+		return "github.com/" + v
+	}
+
+	return v
+}
+
+func isValidRepoRef(v string) bool {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return false
+	}
+
+	parts := strings.Split(v, "/")
+	return len(parts) >= 3 && parts[0] != "" && parts[1] != "" && parts[2] != ""
 }
 
 func fatal(prefix string, err error) {

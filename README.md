@@ -706,6 +706,23 @@ Then regenerate plugin imports and rebuild using `make plugins-sync`
 
 Conversely, you can uninstall a plugin via `cms plugin uninstall <name>`
 
+## Plugin dependencies
+
+Plugins may declare dependencies in `plugin.yaml` metadata using repository idents such as:
+
+```yaml
+repo: github.com/someOwner/someOtherPlugin
+requires:
+  - github.com/someOwner/somePlugin
+```
+
+Dependencies are validated against the repo field of other
+enabled plugins. If a required dependency is missing, Foundry
+will fail during plugin loading with a clear error.
+
+IMPORTANT: Repository identifiers should be written in canonical form (`github.com/owner/repo`)
+
+
 
 
 ## Registration model
