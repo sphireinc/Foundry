@@ -845,9 +845,23 @@ Below is a minimal working plugin that injects HTML into a theme slot.
 
 ### File structure
 
+This file structure shows the possible base files for assets, metadata, and the plugin itself.
+
+Realistically, the only necessary file is the entrypoint. 
+
+Within the plugins directory, should exist `<pluginName>/<entrypoint>.go` at 
+a minimum (in the example below, `plugin.go`). In the config YAML `config.plugin.enabled`,
+it references the **folder name**, in this case `<pluginName>`.
+
 ```text
 plugins/
   related-posts/
+    assets/
+      css/
+        style.css
+      js/
+        script.js
+    plugin.yaml
     plugin.go
 ```
 
