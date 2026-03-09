@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/sphireinc/foundry/internal/config"
 )
@@ -11,6 +12,7 @@ type Command interface {
 	Name() string
 	Summary() string
 	Group() string
+	Details() []string
 	Run(cfg *config.Config, args []string) error
 }
 
@@ -18,6 +20,7 @@ type Info struct {
 	Name    string
 	Summary string
 	Group   string
+	Details []string
 }
 
 var commands = map[string]Command{}
@@ -52,6 +55,7 @@ func List() []Info {
 			Name:    cmd.Name(),
 			Summary: cmd.Summary(),
 			Group:   cmd.Group(),
+			Details: cmd.Details(),
 		})
 	}
 
@@ -94,13 +98,21 @@ func Usage() string {
 		}
 	}
 
-	out := "usage: foundry <command>\n"
+	var sb strings.Builder
+	sb.WriteString("usage: foundry <command>\n")
+
 	for _, group := range groups {
-		out += "\n" + group + ":\n"
+		sb.WriteString("\n")
+		sb.WriteString(group)
+		sb.WriteString(":\n")
+
 		for _, item := range grouped[group] {
-			out += fmt.Sprintf("  %-*s  %s\n", nameWidth, item.Name, item.Summary)
+			sb.WriteString(fmt.Sprintf("  %-*s  %s\n", nameWidth, item.Name, item.Summary))
+			for _, detail := range item.Details {
+				sb.WriteString(fmt.Sprintf("  %-*s  %s\n", nameWidth, "", detail))
+			}
 		}
 	}
 
-	return out
+	return strings.TrimRight(sb.String(), "\n")
 }

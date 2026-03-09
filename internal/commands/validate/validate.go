@@ -18,6 +18,18 @@ func (command) Name() string {
 	return "validate"
 }
 
+func (command) Summary() string {
+	return "Validate config, plugins, content, and routes"
+}
+
+func (command) Group() string {
+	return "core commands"
+}
+
+func (command) Details() []string {
+	return nil
+}
+
 func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 	errCount := 0
 

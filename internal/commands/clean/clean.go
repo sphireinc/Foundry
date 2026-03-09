@@ -23,6 +23,10 @@ func (command) Group() string {
 	return "core commands"
 }
 
+func (command) Details() []string {
+	return nil
+}
+
 func (command) Run(cfg *config.Config, _ []string) error {
 	paths := []string{
 		cfg.PublicDir,

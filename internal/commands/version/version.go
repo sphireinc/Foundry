@@ -28,6 +28,10 @@ func (command) Group() string {
 	return "core commands"
 }
 
+func (command) Details() []string {
+	return nil
+}
+
 func (command) Run(_ *config.Config, _ []string) error {
 	fmt.Println(String())
 	return nil

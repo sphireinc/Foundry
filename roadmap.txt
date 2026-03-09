@@ -1,12 +1,9 @@
-Doctor
-Validate
-Config check
-
 Content lint
 Content new page <slug>
 Content new post <slug>
 Content list
 Content graph
+
 Theme list
 Theme current
 Theme validate <name>
@@ -15,7 +12,6 @@ Theme switch <name>
 Plugin enable <name>
 Plugin disable <name>
 Plugin validate <name>
-Plugin sync
 Plugin deps <name>
 Plugin update <name>
 Plugin list --installed

@@ -14,11 +14,17 @@ func (command) Name() string {
 }
 
 func (command) Summary() string {
-	return "Validate config, plugins, content, and routes"
+	return "Validate site configuration"
 }
 
 func (command) Group() string {
-	return "core commands"
+	return "config commands"
+}
+
+func (command) Details() []string {
+	return []string{
+		"foundry config check",
+	}
 }
 
 func (command) Run(cfg *foundryconfig.Config, args []string) error {
