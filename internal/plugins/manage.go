@@ -8,14 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	foundryconfig "github.com/sphireinc/foundry/internal/config"
 )
-
-type configFile struct {
-	Plugins struct {
-		Enabled []string `yaml:"enabled"`
-	} `yaml:"plugins"`
-}
 
 func ListInstalled(pluginsDir string) ([]Metadata, error) {
 	entries, err := os.ReadDir(pluginsDir)
@@ -52,48 +46,21 @@ func ValidateInstalledPlugin(pluginsDir, name string) error {
 }
 
 func EnableInConfig(configPath, name string) error {
-	cfg, err := loadPluginConfigFile(configPath)
-	if err != nil {
-		return err
-	}
-
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("plugin name cannot be empty")
 	}
 
-	for _, existing := range cfg.Plugins.Enabled {
-		if existing == name {
-			return nil
-		}
-	}
-
-	cfg.Plugins.Enabled = append(cfg.Plugins.Enabled, name)
-	sort.Strings(cfg.Plugins.Enabled)
-
-	return writePluginConfigFile(configPath, cfg)
+	return foundryconfig.EnsureStringListValue(configPath, []string{"plugins", "enabled"}, name)
 }
 
 func DisableInConfig(configPath, name string) error {
-	cfg, err := loadPluginConfigFile(configPath)
-	if err != nil {
-		return err
-	}
-
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("plugin name cannot be empty")
 	}
 
-	out := make([]string, 0, len(cfg.Plugins.Enabled))
-	for _, existing := range cfg.Plugins.Enabled {
-		if existing != name {
-			out = append(out, existing)
-		}
-	}
-	cfg.Plugins.Enabled = out
-
-	return writePluginConfigFile(configPath, cfg)
+	return foundryconfig.RemoveStringListValue(configPath, []string{"plugins", "enabled"}, name)
 }
 
 func UpdateInstalled(pluginsDir, name string) (Metadata, error) {
@@ -161,29 +128,4 @@ func UpdateInstalled(pluginsDir, name string) (Metadata, error) {
 	installMeta.Name = name
 	installMeta.Directory = filepath.Join(pluginsDir, name)
 	return installMeta, nil
-}
-
-func loadPluginConfigFile(path string) (*configFile, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg configFile
-	if err := yaml.Unmarshal(b, &cfg); err != nil {
-		return nil, err
-	}
-	if cfg.Plugins.Enabled == nil {
-		cfg.Plugins.Enabled = []string{}
-	}
-
-	return &cfg, nil
-}
-
-func writePluginConfigFile(path string, cfg *configFile) error {
-	b, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, b, 0o644)
 }

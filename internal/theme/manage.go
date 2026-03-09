@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	foundryconfig "github.com/sphireinc/foundry/internal/config"
 )
 
 type Info struct {
@@ -139,50 +139,7 @@ func SwitchInConfig(configPath, themeName string) error {
 		return fmt.Errorf("theme name cannot be empty")
 	}
 
-	b, err := os.ReadFile(configPath)
-	if err != nil {
-		return err
-	}
-
-	var doc yaml.Node
-	if err := yaml.Unmarshal(b, &doc); err != nil {
-		return err
-	}
-	if len(doc.Content) == 0 {
-		return fmt.Errorf("invalid config document")
-	}
-
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return fmt.Errorf("config root must be a mapping")
-	}
-
-	for i := 0; i < len(root.Content); i += 2 {
-		key := root.Content[i]
-		val := root.Content[i+1]
-		if key.Value == "theme" {
-			val.Kind = yaml.ScalarNode
-			val.Tag = "!!str"
-			val.Value = themeName
-
-			out, err := yaml.Marshal(&doc)
-			if err != nil {
-				return err
-			}
-			return os.WriteFile(configPath, out, 0o644)
-		}
-	}
-
-	root.Content = append(root.Content,
-		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "theme"},
-		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: themeName},
-	)
-
-	out, err := yaml.Marshal(&doc)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, out, 0o644)
+	return foundryconfig.UpsertTopLevelScalar(configPath, "theme", themeName)
 }
 
 func scaffoldCSS() string {
