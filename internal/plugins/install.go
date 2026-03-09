@@ -1,7 +1,10 @@
 package plugins
 
 import (
+	"archive/zip"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -53,8 +56,13 @@ func Install(opts InstallOptions) (Metadata, error) {
 	cmd := exec.Command("git", "clone", repoURL, targetDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
 	if err := cmd.Run(); err != nil {
-		return Metadata{}, fmt.Errorf("git clone failed: %w", err)
+		fmt.Println("git clone failed because git not available, downloading repository archive instead")
+
+		if err := downloadAndExtract(repoURL, targetDir); err != nil {
+			return Metadata{}, fmt.Errorf("git clone failed and zip fallback failed: %w", err)
+		}
 	}
 
 	meta, err := LoadMetadata(pluginsDir, name)
@@ -102,6 +110,104 @@ func Uninstall(pluginsDir, name string) error {
 	}
 
 	return nil
+}
+
+func repoZipURL(repoURL string) (string, error) {
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return "", err
+	}
+
+	if !strings.Contains(u.Host, "github.com") {
+		return "", fmt.Errorf("zip fallback currently supports GitHub only")
+	}
+
+	path := strings.TrimSuffix(u.Path, ".git")
+	path = strings.Trim(path, "/")
+
+	return fmt.Sprintf("https://github.com/%s/archive/refs/heads/main.zip", path), nil
+}
+
+func downloadAndExtract(repoURL, targetDir string) error {
+	zipURL, err := repoZipURL(repoURL)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Get(zipURL)
+	if err != nil {
+		return fmt.Errorf("download plugin zip: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed: %s", resp.Status)
+	}
+
+	tmpFile, err := os.CreateTemp("", "foundry-plugin-*.zip")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+		return err
+	}
+	tmpFile.Close()
+
+	zr, err := zip.OpenReader(tmpFile.Name())
+	if err != nil {
+		return err
+	}
+	defer zr.Close()
+
+	tempDir, err := os.MkdirTemp("", "foundry-plugin")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempDir)
+
+	for _, f := range zr.File {
+		fp := filepath.Join(tempDir, f.Name)
+
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fp, f.Mode())
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fp), 0755); err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		out, err := os.Create(fp)
+		if err != nil {
+			rc.Close()
+			return err
+		}
+
+		if _, err := io.Copy(out, rc); err != nil {
+			rc.Close()
+			out.Close()
+			return err
+		}
+
+		rc.Close()
+		out.Close()
+	}
+
+	entries, err := os.ReadDir(tempDir)
+	if err != nil || len(entries) == 0 {
+		return fmt.Errorf("zip extraction failed")
+	}
+
+	root := filepath.Join(tempDir, entries[0].Name())
+
+	return os.Rename(root, targetDir)
 }
 
 func normalizeInstallURL(raw string) string {
