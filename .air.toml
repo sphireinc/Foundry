@@ -2,10 +2,10 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o ./tmp/foundry ./cmd/cms"
+  cmd = "go run ./cmd/plugin-sync && go build -o ./tmp/foundry ./cmd/cms"
   bin = "./tmp/foundry"
   full_bin = "./tmp/foundry serve"
-  include_ext = ["go"]
+  include_ext = ["go", "yaml", "yml"]
   exclude_dir = ["tmp", "bin", "public", "vendor", ".git"]
   exclude_file = []
   exclude_regex = []

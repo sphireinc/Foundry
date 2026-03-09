@@ -26,11 +26,26 @@ type Loader interface {
 	Load(context.Context) (*content.SiteGraph, error)
 }
 
+type Hooks interface {
+	RegisterRoutes(mux *http.ServeMux)
+	OnServerStarted(addr string) error
+	OnRoutesAssigned(graph *content.SiteGraph) error
+	OnAssetsBuilding(*config.Config) error
+}
+
+type noopHooks struct{}
+
+func (noopHooks) RegisterRoutes(_ *http.ServeMux)             {}
+func (noopHooks) OnServerStarted(_ string) error              { return nil }
+func (noopHooks) OnRoutesAssigned(_ *content.SiteGraph) error { return nil }
+func (noopHooks) OnAssetsBuilding(_ *config.Config) error     { return nil }
+
 type Server struct {
 	cfg          *config.Config
 	loader       Loader
 	router       *router.Resolver
 	renderer     *renderer.Renderer
+	hooks        Hooks
 	preview      bool
 	mu           sync.RWMutex
 	graph        *content.SiteGraph
@@ -38,12 +53,24 @@ type Server struct {
 	reloadSignal chan struct{}
 }
 
-func New(cfg *config.Config, loader Loader, router *router.Resolver, renderer *renderer.Renderer, preview bool) *Server {
+func New(
+	cfg *config.Config,
+	loader Loader,
+	router *router.Resolver,
+	renderer *renderer.Renderer,
+	hooks Hooks,
+	preview bool,
+) *Server {
+	if hooks == nil {
+		hooks = noopHooks{}
+	}
+
 	return &Server{
 		cfg:          cfg,
 		loader:       loader,
 		router:       router,
 		renderer:     renderer,
+		hooks:        hooks,
 		preview:      preview,
 		reloadSignal: make(chan struct{}, 1),
 	}
@@ -73,12 +100,19 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.Handle("/images/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
 	mux.Handle("/uploads/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
 	mux.Handle("/theme/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
+	mux.Handle("/plugins/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
+
+	s.hooks.RegisterRoutes(mux)
 
 	mux.HandleFunc("/", s.handlePage)
 
 	serverURL := s.listenURL()
 	fmt.Printf("Foundry running at %s\n", serverURL)
 	fmt.Printf("theme=%s preview=%t liveReload=%t\n", s.cfg.Theme, s.preview, s.cfg.Server.LiveReload)
+
+	if err := s.hooks.OnServerStarted(serverURL); err != nil {
+		return err
+	}
 
 	if s.cfg.Server.AutoOpenBrowser {
 		go func() {
@@ -112,7 +146,10 @@ func (s *Server) rebuild(ctx context.Context) error {
 	if err := s.router.AssignURLs(graph); err != nil {
 		return fmt.Errorf("assign urls: %w", err)
 	}
-	if err := assets.Sync(s.cfg); err != nil {
+	if err := s.hooks.OnRoutesAssigned(graph); err != nil {
+		return fmt.Errorf("route hooks: %w", err)
+	}
+	if err := assets.Sync(s.cfg, s.hooks); err != nil {
 		return fmt.Errorf("sync assets: %w", err)
 	}
 
@@ -133,7 +170,7 @@ func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet)
 	s.mu.RUnlock()
 
 	if len(changes.Assets) > 0 {
-		if err := assets.Sync(s.cfg); err != nil {
+		if err := assets.Sync(s.cfg, s.hooks); err != nil {
 			return fmt.Errorf("sync assets: %w", err)
 		}
 	}
@@ -159,14 +196,18 @@ func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet)
 	if err := s.router.AssignURLs(graph); err != nil {
 		return fmt.Errorf("assign urls: %w", err)
 	}
+	if err := s.hooks.OnRoutesAssigned(graph); err != nil {
+		return fmt.Errorf("route hooks: %w", err)
+	}
 
 	if len(plan.OutputURLs) > 0 {
 		if err := s.renderer.BuildURLs(ctx, graph, plan.OutputURLs); err != nil {
 			return fmt.Errorf("build urls: %w", err)
 		}
-		if err := s.renderer.BuildTaxonomyArchives(ctx, graph); err != nil {
-			return fmt.Errorf("build taxonomy archives: %w", err)
-		}
+	}
+
+	if err := s.renderer.BuildTaxonomyArchives(ctx, graph); err != nil {
+		return fmt.Errorf("build taxonomy archives: %w", err)
 	}
 
 	depGraph := deps.BuildSiteDependencyGraph(graph, s.cfg.Theme)

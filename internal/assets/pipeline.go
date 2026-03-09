@@ -15,7 +15,19 @@ type Hooks interface {
 	OnAssetsBuilding(*config.Config) error
 }
 
-func Sync(cfg *config.Config) error {
+type noopHooks struct{}
+
+func (noopHooks) OnAssetsBuilding(*config.Config) error { return nil }
+
+func Sync(cfg *config.Config, hooks Hooks) error {
+	if hooks == nil {
+		hooks = noopHooks{}
+	}
+
+	if err := hooks.OnAssetsBuilding(cfg); err != nil {
+		return err
+	}
+
 	if err := os.MkdirAll(cfg.PublicDir, 0o755); err != nil {
 		return fmt.Errorf("create public dir: %w", err)
 	}
@@ -48,6 +60,24 @@ func Sync(cfg *config.Config) error {
 	themeAssetsDst := filepath.Join(cfg.PublicDir, "theme")
 	if err := copyDirIfExists(themeAssetsSrc, themeAssetsDst); err != nil {
 		return err
+	}
+
+	pluginAssetsRoot := cfg.PluginsDir
+
+	entries, err := os.ReadDir(pluginAssetsRoot)
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+
+			src := filepath.Join(pluginAssetsRoot, entry.Name(), "assets")
+			dst := filepath.Join(cfg.PublicDir, "plugins", entry.Name())
+
+			if err := copyDirIfExists(src, dst); err != nil {
+				return err
+			}
+		}
 	}
 
 	if err := buildCSSBundle(cfg); err != nil {

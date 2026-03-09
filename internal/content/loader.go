@@ -66,10 +66,22 @@ func (l *Loader) Load(ctx context.Context) (*SiteGraph, error) {
 	}
 	graph.Data = store.All()
 
+	if err := l.hooks.OnDataLoaded(graph.Data); err != nil {
+		return nil, err
+	}
+
+	if err := l.hooks.OnGraphBuilding(graph); err != nil {
+		return nil, err
+	}
+
 	if err := l.loadSection(graph, "page", filepath.Join(l.cfg.ContentDir, l.cfg.Content.PagesDir)); err != nil {
 		return nil, err
 	}
 	if err := l.loadSection(graph, "post", filepath.Join(l.cfg.ContentDir, l.cfg.Content.PostsDir)); err != nil {
+		return nil, err
+	}
+
+	if err := l.hooks.OnTaxonomyBuilt(graph); err != nil {
 		return nil, err
 	}
 
@@ -87,6 +99,10 @@ func (l *Loader) loadSection(graph *SiteGraph, docType, root string) error {
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
+		}
+
+		if err := l.hooks.OnContentDiscovered(path); err != nil {
+			return err
 		}
 
 		rel, err := filepath.Rel(root, path)
@@ -138,11 +154,6 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 		slug = strings.TrimSuffix(base, filepath.Ext(base))
 	}
 
-	htmlBody, err := markup.MarkdownToHTML(body)
-	if err != nil {
-		return nil, fmt.Errorf("render markdown %s: %w", path, err)
-	}
-
 	layout := fm.Layout
 	if layout == "" {
 		if docType == "post" {
@@ -174,7 +185,6 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 		SourcePath: filepath.ToSlash(path),
 		RelPath:    relPath,
 		RawBody:    body,
-		HTMLBody:   htmlBody,
 		Summary:    buildSummary(fm.Summary, body),
 		Date:       fm.Date,
 		UpdatedAt:  fm.UpdatedAt,
@@ -186,6 +196,20 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 
 	if doc.Title == "" {
 		doc.Title = slug
+	}
+
+	if err := l.hooks.OnFrontmatterParsed(doc); err != nil {
+		return nil, err
+	}
+
+	htmlBody, err := markup.MarkdownToHTML(doc.RawBody)
+	if err != nil {
+		return nil, fmt.Errorf("render markdown %s: %w", path, err)
+	}
+	doc.HTMLBody = htmlBody
+
+	if err := l.hooks.OnMarkdownRendered(doc); err != nil {
+		return nil, err
 	}
 
 	return doc, nil

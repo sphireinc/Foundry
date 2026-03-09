@@ -46,7 +46,9 @@ taxonomies:
     - categories
 
 plugins:
-  enabled: []
+  enabled:
+    - readingtime
+    - toc
 
 fields:
   enabled: true
