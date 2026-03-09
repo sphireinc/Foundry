@@ -62,27 +62,18 @@ func runGraph(cfg *config.Config) error {
 		return err
 	}
 
-	exported := depGraph.Export()
-
-	rawNodes, _ := exported["nodes"].([]*deps.Node)
-	rawEdges, _ := exported["edges"].([]deps.Edge)
+	nodes := depGraph.Nodes()
+	edges := depGraph.Edges()
 
 	fmt.Println("Dependency graph")
 	fmt.Println("----------------")
 	fmt.Printf("documents: %d\n", len(graph.Documents))
-	fmt.Printf("nodes: %d\n", len(rawNodes))
-	fmt.Printf("edges: %d\n", len(rawEdges))
+	fmt.Printf("nodes: %d\n", len(nodes))
+	fmt.Printf("edges: %d\n", len(edges))
 	fmt.Println("")
 
-	sort.Slice(rawNodes, func(i, j int) bool {
-		if rawNodes[i].Type != rawNodes[j].Type {
-			return rawNodes[i].Type < rawNodes[j].Type
-		}
-		return rawNodes[i].ID < rawNodes[j].ID
-	})
-
 	fmt.Println("Nodes:")
-	for _, node := range rawNodes {
+	for _, node := range nodes {
 		fmt.Printf("- %s [%s]", node.ID, node.Type)
 		if len(node.Meta) > 0 {
 			fmt.Printf(" %s", formatMeta(node.Meta))
@@ -92,13 +83,7 @@ func runGraph(cfg *config.Config) error {
 
 	fmt.Println("")
 	fmt.Println("Edges:")
-	sort.Slice(rawEdges, func(i, j int) bool {
-		if rawEdges[i].From != rawEdges[j].From {
-			return rawEdges[i].From < rawEdges[j].From
-		}
-		return rawEdges[i].To < rawEdges[j].To
-	})
-	for _, edge := range rawEdges {
+	for _, edge := range edges {
 		fmt.Printf("- %s -> %s\n", edge.From, edge.To)
 	}
 
@@ -139,54 +124,35 @@ func runExplain(cfg *config.Config, targetURL string) error {
 	}
 	fmt.Println("")
 
-	exported := depGraph.Export()
-	rawEdges, _ := exported["edges"].([]deps.Edge)
+	dependencies := depGraph.DependenciesOf(outputID)
+	directDependents := depGraph.DirectDependentsOf(outputID)
+	transitiveDependents := depGraph.DependentsOf(outputID)
 
-	dependsOn := make([]string, 0)
-	rebuilds := depGraph.DependentsOf(outputID)
-
-	for _, edge := range rawEdges {
-		if edge.To == outputID {
-			dependsOn = append(dependsOn, edge.From)
-		}
-	}
-
-	sort.Strings(dependsOn)
-	sort.Strings(rebuilds)
-
-	if len(dependsOn) > 0 {
+	if len(dependencies) > 0 {
 		fmt.Println("Depends on:")
-		for _, dep := range dependsOn {
-			if n, ok := depGraph.Node(dep); ok {
-				fmt.Printf("- %s [%s]", n.ID, n.Type)
-				if len(n.Meta) > 0 {
-					fmt.Printf(" %s", formatMeta(n.Meta))
-				}
-				fmt.Println("")
-			} else {
-				fmt.Printf("- %s\n", dep)
-			}
+		for _, dep := range dependencies {
+			printNode(depGraph, dep)
 		}
 		fmt.Println("")
 	}
 
-	if len(rebuilds) > 0 {
-		fmt.Println("Dependents:")
-		for _, rebuild := range rebuilds {
-			if n, ok := depGraph.Node(rebuild); ok {
-				fmt.Printf("- %s [%s]", n.ID, n.Type)
-				if len(n.Meta) > 0 {
-					fmt.Printf(" %s", formatMeta(n.Meta))
-				}
-				fmt.Println("")
-			} else {
-				fmt.Printf("- %s\n", rebuild)
-			}
+	if len(directDependents) > 0 {
+		fmt.Println("Direct dependents:")
+		for _, dep := range directDependents {
+			printNode(depGraph, dep)
 		}
 		fmt.Println("")
 	}
 
-	fmt.Println("If this output route changes, it is itself a rebuild target.")
+	if len(transitiveDependents) > 0 {
+		fmt.Println("Transitive dependents:")
+		for _, dep := range transitiveDependents {
+			printNode(depGraph, dep)
+		}
+		fmt.Println("")
+	}
+
+	fmt.Println("This route is itself a rebuild target when its inputs change.")
 	return nil
 }
 
@@ -198,6 +164,19 @@ func loadGraphs(cfg *config.Config) (*content.SiteGraph, *deps.Graph, error) {
 
 	depGraph := deps.BuildSiteDependencyGraph(graph, cfg.Theme)
 	return graph, depGraph, nil
+}
+
+func printNode(g *deps.Graph, id string) {
+	if n, ok := g.Node(id); ok {
+		fmt.Printf("- %s [%s]", n.ID, n.Type)
+		if len(n.Meta) > 0 {
+			fmt.Printf(" %s", formatMeta(n.Meta))
+		}
+		fmt.Println("")
+		return
+	}
+
+	fmt.Printf("- %s\n", id)
 }
 
 func formatMeta(meta map[string]any) string {

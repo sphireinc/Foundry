@@ -1,5 +1,7 @@
 package deps
 
+import "sort"
+
 type NodeType string
 
 const (
@@ -64,6 +66,66 @@ func (g *Graph) Node(id string) (*Node, bool) {
 	return n, ok
 }
 
+func (g *Graph) Nodes() []*Node {
+	out := make([]*Node, 0, len(g.nodes))
+	for _, n := range g.nodes {
+		out = append(out, n)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].ID < out[j].ID
+	})
+
+	return out
+}
+
+func (g *Graph) Edges() []Edge {
+	out := make([]Edge, 0)
+
+	for from, tos := range g.forward {
+		for to := range tos {
+			out = append(out, Edge{
+				From: from,
+				To:   to,
+			})
+		}
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].From != out[j].From {
+			return out[i].From < out[j].From
+		}
+		return out[i].To < out[j].To
+	})
+
+	return out
+}
+
+func (g *Graph) DirectDependentsOf(id string) []string {
+	out := make([]string, 0)
+
+	for dep := range g.forward[id] {
+		out = append(out, dep)
+	}
+
+	sort.Strings(out)
+	return out
+}
+
+func (g *Graph) DependenciesOf(id string) []string {
+	out := make([]string, 0)
+
+	for dep := range g.reverse[id] {
+		out = append(out, dep)
+	}
+
+	sort.Strings(out)
+	return out
+}
+
 func (g *Graph) DependentsOf(id string) []string {
 	seen := make(map[string]struct{})
 	queue := []string{id}
@@ -83,24 +145,13 @@ func (g *Graph) DependentsOf(id string) []string {
 		}
 	}
 
+	sort.Strings(out)
 	return out
 }
 
 func (g *Graph) Export() map[string]any {
-	nodes := make([]*Node, 0, len(g.nodes))
-	edges := make([]Edge, 0)
-
-	for _, n := range g.nodes {
-		nodes = append(nodes, n)
-	}
-	for from, tos := range g.forward {
-		for to := range tos {
-			edges = append(edges, Edge{From: from, To: to})
-		}
-	}
-
 	return map[string]any{
-		"nodes": nodes,
-		"edges": edges,
+		"nodes": g.Nodes(),
+		"edges": g.Edges(),
 	}
 }
