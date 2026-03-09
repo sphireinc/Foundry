@@ -1,4 +1,0 @@
-1. Plugin asset pipeline (CSS/JS auto-loading)
-2. Plugin metadata (plugin.yaml)
-3. Plugin CLI commands
-4. Plugin install command
