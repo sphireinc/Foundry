@@ -1,0 +1,46 @@
+command notes:
+
+Clean
+Version
+Doctor
+Validate
+Config check
+Content lint
+Content new page <slug>
+Content new post <slug>
+Content list
+Content graph
+Theme list
+Theme current
+Theme validate <name>
+Theme scaffold <anme>
+Theme switch <name>
+Plugin enable <name>
+Plugin disable <name>
+Plugin validate <name>
+Plugin sync
+Plugin deps <name>
+Plugin update <name>
+Plugin list --installed
+Plugin list --enabled
+Assets build
+Assets clean
+Assets list
+Feed build
+Feed validate
+Routes list
+Routes check
+I18n list
+I18n missing
+I18n scaffold <lang> <type> <slug>
+Deps graph
+Deps explain <url>
+Debug routes
+Debug plugins
+Debug config
+
+
+
+the cli shape will be "foundry <cmd> <options>" - such as: "foundry debug routes" or "foundry theme scaffold <name>"
+
+foundry command should be installable similar to composer (php)
