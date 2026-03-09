@@ -1,7 +1,9 @@
 package relatedposts
 
 import (
+	"html/template"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,6 +66,75 @@ func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
 	ctx.Data["related_posts"] = items
 	ctx.Data["has_related_posts"] = len(items) > 0
 
+	return nil
+}
+
+func (p *Plugin) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) error {
+	if ctx.Page == nil || ctx.Page.Type != "post" {
+		return nil
+	}
+
+	p.mu.RLock()
+	items := cloneItems(p.related[ctx.Page.ID])
+	p.mu.RUnlock()
+
+	if len(items) == 0 {
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(`
+<section class="home-section">
+  <div class="section-heading">
+    <div>
+      <h2>Related posts</h2>
+      <p>More content you might want to read next.</p>
+    </div>
+  </div>
+
+  <div class="post-grid">
+`)
+
+	for _, item := range items {
+		sb.WriteString(`<article class="post-card">`)
+		sb.WriteString(`<div class="post-card-header"><div>`)
+		sb.WriteString(`<h3><a href="`)
+		sb.WriteString(template.HTMLEscapeString(item.URL))
+		sb.WriteString(`">`)
+		sb.WriteString(template.HTMLEscapeString(item.Title))
+		sb.WriteString(`</a></h3>`)
+
+		sb.WriteString(`<div class="post-card-meta">`)
+		if item.Date != nil {
+			sb.WriteString(template.HTMLEscapeString(item.Date.Format("Jan 2, 2006")))
+		} else {
+			sb.WriteString(`Related content`)
+		}
+		sb.WriteString(`</div>`)
+
+		sb.WriteString(`</div></div>`)
+
+		if strings.TrimSpace(item.Summary) != "" {
+			sb.WriteString(`<div class="post-card-summary">`)
+			sb.WriteString(template.HTMLEscapeString(item.Summary))
+			sb.WriteString(`</div>`)
+		}
+
+		sb.WriteString(`<div class="post-card-footer">`)
+		sb.WriteString(`<a class="post-card-link" href="`)
+		sb.WriteString(template.HTMLEscapeString(item.URL))
+		sb.WriteString(`">Read more</a>`)
+		sb.WriteString(`</div>`)
+
+		sb.WriteString(`</article>`)
+	}
+
+	sb.WriteString(`
+  </div>
+</section>
+`)
+
+	slots.Add("post.after_content", template.HTML(sb.String()))
 	return nil
 }
 

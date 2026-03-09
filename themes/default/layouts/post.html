@@ -1,6 +1,8 @@
 {{ define "content" }}
 <div class="split-layout">
     <section>
+    {{ pluginSlot "post.before_header" }}
+
         <header class="post-header">
             <div class="eyebrow">Post</div>
             <h1>{{ .Page.Title }}</h1>
@@ -12,8 +14,12 @@
             {{ template "post_meta" . }}
         </header>
 
+    {{ pluginSlot "post.after_header" }}
+
         <article class="content-panel content-panel--article">
+      {{ pluginSlot "post.before_content" }}
             <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
+      {{ pluginSlot "post.after_content" }}
         </article>
 
     {{ if .Data.has_related_posts }}
@@ -52,6 +58,8 @@
     </section>
 
     <aside class="meta-panel">
+    {{ pluginSlot "post.sidebar.top" }}
+
         <div class="meta-panel-block">
             <h3>Overview</h3>
             <div class="meta-list">
@@ -75,6 +83,8 @@
     {{ end }}
 
         {{ template "taxonomy_chips" . }}
+
+    {{ pluginSlot "post.sidebar.bottom" }}
     </aside>
 </div>
 {{ end }}

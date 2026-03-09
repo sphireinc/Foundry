@@ -20,6 +20,7 @@ type Hooks interface {
 	OnBeforeRender(*ViewData) error
 	OnAfterRender(url string, html []byte) ([]byte, error)
 	OnAssetsBuilding(*config.Config) error
+	OnHTMLSlots(*ViewData, *Slots) error
 }
 
 type noopHooks struct{}
@@ -28,6 +29,7 @@ func (noopHooks) OnContext(*ViewData) error                           { return n
 func (noopHooks) OnBeforeRender(*ViewData) error                      { return nil }
 func (noopHooks) OnAfterRender(_ string, html []byte) ([]byte, error) { return html, nil }
 func (noopHooks) OnAssetsBuilding(*config.Config) error               { return nil }
+func (noopHooks) OnHTMLSlots(*ViewData, *Slots) error                 { return nil }
 
 type Renderer struct {
 	cfg    *config.Config
@@ -64,6 +66,40 @@ type ViewData struct {
 	TaxonomyName string
 	TaxonomyTerm string
 	Nav          []NavItem
+}
+
+type Slots struct {
+	values map[string][]template.HTML
+}
+
+func NewSlots() *Slots {
+	return &Slots{
+		values: make(map[string][]template.HTML),
+	}
+}
+
+func (s *Slots) Add(name string, html template.HTML) {
+	if s == nil || strings.TrimSpace(name) == "" || strings.TrimSpace(string(html)) == "" {
+		return
+	}
+	s.values[name] = append(s.values[name], html)
+}
+
+func (s *Slots) Render(name string) template.HTML {
+	if s == nil {
+		return ""
+	}
+	items := s.values[name]
+	if len(items) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	for _, item := range items {
+		sb.WriteString(string(item))
+		sb.WriteString("\n")
+	}
+	return template.HTML(sb.String())
 }
 
 func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
@@ -456,6 +492,11 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 		return nil, err
 	}
 
+	slots := NewSlots()
+	if err := r.hooks.OnHTMLSlots(&data, slots); err != nil {
+		return nil, err
+	}
+
 	if err := r.hooks.OnBeforeRender(&data); err != nil {
 		return nil, err
 	}
@@ -489,6 +530,9 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 				return nil
 			}
 			return data.Data[key]
+		},
+		"pluginSlot": func(name string) template.HTML {
+			return slots.Render(name)
 		},
 	}).ParseFiles(files...)
 	if err != nil {

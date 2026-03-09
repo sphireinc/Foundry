@@ -1,6 +1,7 @@
 package toc
 
 import (
+	"html/template"
 	"regexp"
 	"strconv"
 	"strings"
@@ -63,6 +64,47 @@ func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
 		ctx.Data["has_toc"] = hasTOC
 	}
 
+	return nil
+}
+
+func (p *Plugin) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) error {
+	if ctx.Page == nil || ctx.Page.Type != "post" || ctx.Page.Fields == nil {
+		return nil
+	}
+
+	raw, ok := ctx.Page.Fields["toc"]
+	if !ok {
+		return nil
+	}
+
+	items, ok := raw.([]Item)
+	if !ok || len(items) == 0 {
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(`
+<div class="meta-panel-block">
+  <h3>On this page</h3>
+  <div class="toc-list">
+`)
+
+	for _, item := range items {
+		sb.WriteString(`<a class="toc-link toc-level-`)
+		sb.WriteString(strconv.Itoa(item.Level))
+		sb.WriteString(`" href="#`)
+		sb.WriteString(template.HTMLEscapeString(item.ID))
+		sb.WriteString(`">`)
+		sb.WriteString(template.HTMLEscapeString(item.Text))
+		sb.WriteString(`</a>`)
+	}
+
+	sb.WriteString(`
+  </div>
+</div>
+`)
+
+	slots.Add("post.sidebar.bottom", template.HTML(sb.String()))
 	return nil
 }
 
