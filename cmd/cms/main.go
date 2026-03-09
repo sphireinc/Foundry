@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	_ "github.com/sphireinc/foundry/internal/generated"
+
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/plugins"
@@ -27,17 +29,24 @@ func main() {
 	}
 
 	pluginManager := plugins.NewManager(cfg.Plugins.Enabled)
+
 	if err := pluginManager.OnConfigLoaded(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "plugin config hook failed: %v\n", err)
 		os.Exit(1)
 	}
 
 	routeResolver := router.NewResolver(cfg)
 	themeManager := theme.NewManager(cfg.ThemesDir, cfg.Theme)
-	rendererEngine := renderer.New(cfg, themeManager)
+	rendererEngine := renderer.New(cfg, themeManager, pluginManager)
 	ctx := context.Background()
 
 	switch os.Args[1] {
 	case "build":
+		if err := pluginManager.OnBuildStarted(); err != nil {
+			fmt.Fprintf(os.Stderr, "build start hook failed: %v\n", err)
+			os.Exit(1)
+		}
+
 		loader := content.NewLoader(cfg, pluginManager, cfg.Build.IncludeDrafts)
 		graph, err := loader.Load(ctx)
 		if err != nil {
@@ -49,7 +58,9 @@ func main() {
 			fmt.Fprintf(os.Stderr, "assign urls: %v\n", err)
 			os.Exit(1)
 		}
+
 		if err := pluginManager.OnRoutesAssigned(graph); err != nil {
+			fmt.Fprintf(os.Stderr, "route hook failed: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -58,11 +69,16 @@ func main() {
 			os.Exit(1)
 		}
 
+		if err := pluginManager.OnBuildCompleted(graph); err != nil {
+			fmt.Fprintf(os.Stderr, "build completed hook failed: %v\n", err)
+			os.Exit(1)
+		}
+
 		fmt.Println("build complete")
 
 	case "serve":
 		loader := content.NewLoader(cfg, pluginManager, false)
-		srv := server.New(cfg, loader, routeResolver, rendererEngine, false)
+		srv := server.New(cfg, loader, routeResolver, rendererEngine, pluginManager, false)
 		if err := srv.ListenAndServe(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "serve: %v\n", err)
 			os.Exit(1)
@@ -70,7 +86,7 @@ func main() {
 
 	case "serve-preview":
 		loader := content.NewLoader(cfg, pluginManager, true)
-		srv := server.New(cfg, loader, routeResolver, rendererEngine, true)
+		srv := server.New(cfg, loader, routeResolver, rendererEngine, pluginManager, true)
 		if err := srv.ListenAndServe(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "serve preview: %v\n", err)
 			os.Exit(1)

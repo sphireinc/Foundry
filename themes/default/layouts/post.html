@@ -24,8 +24,21 @@
                 <div><strong>Type:</strong> {{ .Page.Type }}</div>
                 <div><strong>Slug:</strong> {{ .Page.Slug }}</div>
                 <div><strong>Language:</strong> {{ .Page.Lang }}</div>
+        {{ if .Data.reading_time }}<div><strong>Reading time:</strong> {{ .Data.reading_time }} min</div>{{ end }}
+        {{ if .Data.word_count }}<div><strong>Words:</strong> {{ .Data.word_count }}</div>{{ end }}
+      </div>
             </div>
+
+    {{ if .Data.has_toc }}
+    <div class="meta-panel-block">
+      <h3>On this page</h3>
+      <div class="toc-list">
+        {{ range .Data.toc }}
+          <a class="toc-link toc-level-{{ .Level }}" href="#{{ .ID }}">{{ .Text }}</a>
+        {{ end }}
         </div>
+    </div>
+    {{ end }}
 
         {{ template "taxonomy_chips" . }}
     </aside>

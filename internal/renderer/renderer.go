@@ -19,6 +19,7 @@ type Hooks interface {
 	OnContext(*ViewData) error
 	OnBeforeRender(*ViewData) error
 	OnAfterRender(url string, html []byte) ([]byte, error)
+	OnAssetsBuilding(*config.Config) error
 }
 
 type noopHooks struct{}
@@ -26,6 +27,7 @@ type noopHooks struct{}
 func (noopHooks) OnContext(*ViewData) error                           { return nil }
 func (noopHooks) OnBeforeRender(*ViewData) error                      { return nil }
 func (noopHooks) OnAfterRender(_ string, html []byte) ([]byte, error) { return html, nil }
+func (noopHooks) OnAssetsBuilding(*config.Config) error               { return nil }
 
 type Renderer struct {
 	cfg    *config.Config
@@ -37,7 +39,12 @@ func New(cfg *config.Config, themes *theme.Manager, hooks Hooks) *Renderer {
 	if hooks == nil {
 		hooks = noopHooks{}
 	}
-	return &Renderer{cfg: cfg, themes: themes}
+
+	return &Renderer{
+		cfg:    cfg,
+		themes: themes,
+		hooks:  hooks,
+	}
 }
 
 type NavItem struct {
@@ -74,7 +81,7 @@ func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
 	if err := os.MkdirAll(r.cfg.PublicDir, 0o755); err != nil {
 		return err
 	}
-	if err := assets.Sync(r.cfg); err != nil {
+	if err := assets.Sync(r.cfg, r.hooks); err != nil {
 		return err
 	}
 
@@ -195,8 +202,7 @@ func (r *Renderer) buildSingle(graph *content.SiteGraph, doc *content.Document) 
 }
 
 func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReload bool) ([]byte, error) {
-	doc, ok := graph.ByURL[urlPath]
-	if ok {
+	if doc, ok := graph.ByURL[urlPath]; ok {
 		return r.renderTemplate(doc.Layout, doc.URL, ViewData{
 			Site:       graph.Config,
 			Page:       doc,
@@ -209,7 +215,7 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 	}
 
 	if urlPath == "/" {
-		return r.renderTemplate("index", doc.URL, ViewData{
+		return r.renderTemplate("index", "/", ViewData{
 			Site:       graph.Config,
 			Data:       graph.Data,
 			Lang:       graph.Config.DefaultLang,
@@ -222,7 +228,7 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 
 	for lang := range graph.ByLang {
 		if urlPath == "/"+lang+"/" {
-			return r.renderTemplate("index", doc.URL, ViewData{
+			return r.renderTemplate("index", urlPath, ViewData{
 				Site:       graph.Config,
 				Data:       graph.Data,
 				Lang:       lang,
@@ -236,7 +242,7 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 
 	if vd, ok := r.findTaxonomyArchive(graph, urlPath, liveReload); ok {
 		vd.Nav = r.resolveNav(graph, urlPath)
-		return r.renderTemplate("list", doc.URL, vd)
+		return r.renderTemplate("list", urlPath, vd)
 	}
 
 	return nil, os.ErrNotExist

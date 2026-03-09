@@ -1,14 +1,16 @@
-APP_NAME := foundry
-BINARY := bin/$(APP_NAME)
-MAIN := ./cmd/cms
+APP_NAME=foundry
+BINARY=bin/$(APP_NAME)
+MAIN=./cmd/cms
+PLUGIN_SYNC=./cmd/plugin-sync
 
-GO := go
+GO=go
 
 .PHONY: help
 help:
 	@echo ""
 	@echo "Foundry CMS Development Commands"
 	@echo ""
+	@echo "make plugins-sync    Generate plugin imports from site config"
 	@echo "make serve           Start dev server"
 	@echo "make preview         Start dev server with drafts"
 	@echo "make dev             Start hot-reload Go development server with air"
@@ -23,16 +25,16 @@ help:
 	@echo "make fmt             Format Go code"
 	@echo ""
 
-# -------------------------
-# Development
-# -------------------------
+.PHONY: plugins-sync
+plugins-sync:
+	$(GO) run $(PLUGIN_SYNC)
 
 .PHONY: serve
-serve:
+serve: plugins-sync
 	$(GO) run $(MAIN) serve
 
 .PHONY: preview
-preview:
+preview: plugins-sync
 	$(GO) run $(MAIN) serve-preview
 
 .PHONY: dev
@@ -44,7 +46,7 @@ dev-preview:
 	air -c .air.preview.toml
 
 .PHONY: run
-run:
+run: plugins-sync
 	$(GO) run $(MAIN)
 
 # -------------------------
@@ -52,11 +54,11 @@ run:
 # -------------------------
 
 .PHONY: build
-build:
+build: plugins-sync
 	$(GO) run $(MAIN) build
 
 .PHONY: compile
-compile:
+compile: plugins-sync
 	mkdir -p bin
 	$(GO) build -o $(BINARY) $(MAIN)
 
@@ -73,7 +75,7 @@ lint:
 	$(GO) vet ./...
 
 .PHONY: test
-test:
+test: plugins-sync
 	$(GO) test ./...
 
 .PHONY: tidy
