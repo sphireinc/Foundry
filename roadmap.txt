@@ -1,5 +1,3 @@
-command notes:
-
 Clean
 Version
 Doctor
@@ -40,7 +38,9 @@ Debug plugins
 Debug config
 
 
+We should support this out of the box:
 
-the cli shape will be "foundry <cmd> <options>" - such as: "foundry debug routes" or "foundry theme scaffold <name>"
-
-foundry command should be installable similar to composer (php)
+	•	cross-platform builds
+	•	bin/foundry-darwin-arm64
+	•	bin/foundry-linux-amd64
+	•	checksums

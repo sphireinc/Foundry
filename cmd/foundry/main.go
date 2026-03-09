@@ -7,8 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	_ "github.com/sphireinc/foundry/internal/commands/imports"
 	_ "github.com/sphireinc/foundry/internal/generated"
 
+	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/plugins"
@@ -29,6 +31,8 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
+
+	handleCli(cfg, os.Args)
 
 	if handled, exitCode := handlePluginInstallOrUninstall(cfg, os.Args[1:]); handled {
 		os.Exit(exitCode)
@@ -110,6 +114,17 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		printUsage()
 		os.Exit(1)
+	}
+}
+
+func handleCli(cfg *config.Config, args []string) {
+	handled, err := registry.Run(cfg, args)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	if handled {
+		os.Exit(0)
 	}
 }
 
@@ -322,8 +337,22 @@ func handlePluginCLI(pm *plugins.Manager, args []string) (bool, int) {
 
 		switch args[1] {
 		case "list":
-			for _, meta := range pm.MetadataList() {
-				_, _ = fmt.Printf("%s\t%s\t%s\n", meta.Name, meta.Version, meta.Title)
+			nameWidth := len("NAME")
+			versionWidth := len("VERSION")
+
+			metas := pm.MetadataList()
+			for _, meta := range metas {
+				if len(meta.Name) > nameWidth {
+					nameWidth = len(meta.Name)
+				}
+				if len(meta.Version) > versionWidth {
+					versionWidth = len(meta.Version)
+				}
+			}
+
+			_, _ = fmt.Printf("%-*s  %-*s  %s\n", nameWidth, "NAME", versionWidth, "VERSION", "TITLE")
+			for _, meta := range metas {
+				_, _ = fmt.Printf("%-*s  %-*s  %s\n", nameWidth, meta.Name, versionWidth, meta.Version, meta.Title)
 			}
 			return true, 0
 
@@ -382,12 +411,20 @@ func handlePluginCLI(pm *plugins.Manager, args []string) (bool, int) {
 }
 
 func printUsage() {
-	fmt.Println("usage: cms [serve|serve-preview|build|plugin]")
+	fmt.Println("usage: foundry <command>")
+	fmt.Println("")
+	fmt.Println("core commands:")
+	fmt.Println("  version         Print Foundry version information")
+	fmt.Println("  clean           Remove generated build artifacts")
+	fmt.Println("  serve           Start development server")
+	fmt.Println("  serve-preview   Start preview server including drafts")
+	fmt.Println("  build           Build the site")
 	fmt.Println("")
 	fmt.Println("plugin commands:")
-	fmt.Println("  cms plugin list")
-	fmt.Println("  cms plugin info <name>")
-	fmt.Println("  cms plugin install <git-url|owner/repo> [name]")
-	fmt.Println("  cms plugin uninstall <name>")
-	fmt.Println("  cms <plugin-command> [args...]")
+	fmt.Println("  foundry plugin list")
+	fmt.Println("  foundry plugin info <name>")
+	fmt.Println("  foundry plugin install <git-url|owner/repo> [name]")
+	fmt.Println("  foundry plugin uninstall <name>")
+	fmt.Println("")
+	fmt.Println("run `foundry <command>` for more information")
 }

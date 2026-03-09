@@ -218,7 +218,7 @@ The Foundry repository looks like this:
 /── go.mod
 ```
 
-1. **cmd/cms**: contains the application entrypoint. It parses commands, loads config, etc.
+1. **cmd/foundry**: contains the application entrypoint. It parses commands, loads config, etc.
 2. **internal/config**: loads teh onfiguration, exposes the unified config object
 3. **internal/content**: scans content, resolves translation, parsing, and rendering, as well as  bilding the in-memory document model.
 4. **internal/data**: loads teh data files from /data, exposes them as simple KV stores to the site graph
@@ -1120,9 +1120,9 @@ The sitemap includes all non-draft documents and uses `updated_at` or `date` whe
 
 Foundry supports a strong local development workflow with the following serve modes:
 
-| Serve mode    | Description                                                                |
-|---------------|----------------------------------------------------------------------------|
-| `serve`       | Runs the site locally, excludes drafts, enables live development features. |
+| Serve mode      | Description                                                                |
+|-----------------|----------------------------------------------------------------------------|
+| `serve`         | Runs the site locally, excludes drafts, enables live development features. |
 | `serve-preview` | Runs the site locally and includes drafts.                                 |
 | `build`         | Builds static output into `public/`                                        |
 
@@ -1150,19 +1150,19 @@ client snippet into pages during serve mode.
 The following commands are in the Makefile:
 
 
-| Command          | Meaning                               |
-|------------------|---------------------------------------|
-| make serve       | runs `go run ./cmd/cms serve`         |
-| make preview     | runs `go run ./cmd/cms serve-preview` |
-| make dev         | uses `air` for hot reload             |
-| make dev-preview | uses `air` in preview mode            |
-| make build       | builds static output                  |
-| make compile     | produces a binary under bin/          |
-| make fmt         | runs `go fmt`                         |
-| make lint        |                                       |
-| make test        |                                       |
-| make tidy        |                                       |
-| make clean       |                                       |
+| Command          | Meaning                                   |
+|------------------|-------------------------------------------|
+| make serve       | runs `go run ./cmd/foundry serve`         |
+| make preview     | runs `go run ./cmd/foundry serve-preview` |
+| make dev         | uses `air` for hot reload                 |
+| make dev-preview | uses `air` in preview mode                |
+| make build       | builds static output                      |
+| make compile     | produces a binary under bin/              |
+| make fmt         | runs `go fmt`                             |
+| make lint        |                                           |
+| make test        |                                           |
+| make tidy        |                                           |
+| make clean       |                                           |
 
 --- 
 

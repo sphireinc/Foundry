@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go run ./cmd/plugin-sync && go build -o ./tmp/foundry ./cmd/cms"
+  cmd = "go run ./cmd/plugin-sync && go build -o ./tmp/foundry ./cmd/foundry"
   bin = "./tmp/foundry"
   full_bin = "./tmp/foundry serve"
   include_ext = ["go", "yaml", "yml"]

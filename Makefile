@@ -1,6 +1,6 @@
 APP_NAME=foundry
 BINARY=bin/$(APP_NAME)
-MAIN=./cmd/cms
+MAIN=./cmd/foundry
 PLUGIN_SYNC=./cmd/plugin-sync
 
 GO=go
@@ -33,6 +33,10 @@ plugins-sync:
 serve: plugins-sync
 	$(GO) run $(MAIN) serve
 
+# -------------------------
+# Development
+# -------------------------
+
 .PHONY: preview
 preview: plugins-sync
 	$(GO) run $(MAIN) serve-preview
@@ -61,6 +65,10 @@ build: plugins-sync
 compile: plugins-sync
 	mkdir -p bin
 	$(GO) build -o $(BINARY) $(MAIN)
+
+.PHONY: release
+release:
+	go run ./scripts/build-release.go
 
 # -------------------------
 # Code Quality
