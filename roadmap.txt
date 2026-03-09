@@ -1,8 +1,7 @@
-Clean
-Version
 Doctor
 Validate
 Config check
+
 Content lint
 Content new page <slug>
 Content new post <slug>

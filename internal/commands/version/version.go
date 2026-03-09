@@ -20,6 +20,14 @@ func (command) Name() string {
 	return "version"
 }
 
+func (command) Summary() string {
+	return "Print Foundry version information"
+}
+
+func (command) Group() string {
+	return "core commands"
+}
+
 func (command) Run(_ *config.Config, _ []string) error {
 	fmt.Println(String())
 	return nil

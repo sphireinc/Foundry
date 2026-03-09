@@ -411,20 +411,11 @@ func handlePluginCLI(pm *plugins.Manager, args []string) (bool, int) {
 }
 
 func printUsage() {
-	fmt.Println("usage: foundry <command>")
-	fmt.Println("")
-	fmt.Println("core commands:")
-	fmt.Println("  version         Print Foundry version information")
-	fmt.Println("  clean           Remove generated build artifacts")
-	fmt.Println("  serve           Start development server")
-	fmt.Println("  serve-preview   Start preview server including drafts")
-	fmt.Println("  build           Build the site")
+	fmt.Println(registry.Usage())
 	fmt.Println("")
 	fmt.Println("plugin commands:")
-	fmt.Println("  foundry plugin list")
-	fmt.Println("  foundry plugin info <name>")
-	fmt.Println("  foundry plugin install <git-url|owner/repo> [name]")
-	fmt.Println("  foundry plugin uninstall <name>")
-	fmt.Println("")
-	fmt.Println("run `foundry <command>` for more information")
+	fmt.Println("  plugin list                 List enabled plugins")
+	fmt.Println("  plugin info <name>          Show plugin metadata")
+	fmt.Println("  plugin install <src> [name] Install a plugin from git-url or owner/repo")
+	fmt.Println("  plugin uninstall <name>     Remove an installed plugin")
 }

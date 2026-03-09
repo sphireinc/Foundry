@@ -15,6 +15,14 @@ func (command) Name() string {
 	return "clean"
 }
 
+func (command) Summary() string {
+	return "Remove generated build artifacts"
+}
+
+func (command) Group() string {
+	return "core commands"
+}
+
 func (command) Run(cfg *config.Config, _ []string) error {
 	paths := []string{
 		cfg.PublicDir,
