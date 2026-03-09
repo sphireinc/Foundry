@@ -28,17 +28,17 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.24'
-          cache: true
+        cache: true
 
-      - name: Verify formatting
-        run: |
-          test -z "$(gofmt -l .)"
+    - name: Verify formatting
+      run: |
+        test -z "$(gofmt -l .)"
 
-      - name: Sync generated plugin imports
-        run: go run ./cmd/plugin-sync
+    - name: Sync generated plugin imports
+      run: go run ./cmd/plugin-sync
 
-      - name: Vet
-        run: go vet ./...
+    - name: Vet
+      run: go vet ./...
 
     - name: Build
       run: go build -v ./...
