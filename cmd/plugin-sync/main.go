@@ -41,16 +41,22 @@ func main() {
 		fatal("load config", err)
 	}
 
-	enabled := uniqueSorted(cfg.Plugins.Enabled)
+	if err := SyncEnabledPlugins(cfg.Plugins.Enabled); err != nil {
+		fatal("sync plugins", err)
+	}
+}
+
+func SyncEnabledPlugins(enabled []string) error {
+	enabled = uniqueSorted(enabled)
 
 	for _, name := range enabled {
 		if err := validatePlugin(name); err != nil {
-			fatal("validate plugin "+name, err)
+			return fmt.Errorf("validate plugin %s: %w", name, err)
 		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
-		fatal("create output dir", err)
+		return fmt.Errorf("create output dir: %w", err)
 	}
 
 	content := generateFile(enabled)
@@ -58,15 +64,17 @@ func main() {
 	// Only write when the generated content actually changes, otherwise air freaks out and goes ito an infinite loop
 	existing, err := os.ReadFile(outputPath)
 	if err == nil && bytes.Equal(existing, []byte(content)) {
-		return
+		return nil
 	}
 	if err != nil && !os.IsNotExist(err) {
-		fatal("read existing generated imports", err)
+		return fmt.Errorf("read existing generated imports: %w", err)
 	}
 
 	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
-		fatal("write generated imports", err)
+		return fmt.Errorf("write generated imports: %w", err)
 	}
+
+	return nil
 }
 
 func loadConfig(path string) (*siteConfig, error) {

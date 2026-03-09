@@ -681,6 +681,33 @@ plugin system instead
 
 The plugin API is intentionally minimal.
 
+## Installing a plugin
+
+Plugins can be installed in two ways
+
+The first is to copy the plugin into the `plugins/` directory manually.
+
+The second is to install directly from a git repository:
+
+```bash
+cms plugin install https://github.com/someOwner/someRepo
+cms plugin install someOwner/somePlugin toc
+```
+
+If no explicit name is provided, Foundry will determine the plugin 
+directory name from the repository URL. It supports fully qualified URLs
+such as `https://github.com/someOwner/someRepo`, as well as shorthand (Github only)
+such as `someOwner/somePlugin`
+
+After installation, enable the plugin in `content/config/site.yaml`. Foundry
+does not by default enable install plugins.
+
+Then regenerate plugin imports and rebuild using `make plugins-sync`
+
+Conversely, you can uninstall a plugin via `cms plugin uninstall <name>`
+
+
+
 ## Registration model
 
 Plugins register themselves with the global plugin registry
@@ -719,7 +746,7 @@ Only enabled plugins are instantiated - others are ignored.
 
 Plugins listed under "enabled" that do not exist cause the application to error out
 
-## Theme Injection Slots
+## Theme injection slots
 
 Foundry themes can expose injection slots that plugins can target to insert HTML.
 
@@ -747,7 +774,7 @@ a theme should expose:
 
 I don't think they need explanations as they are quite clear in their intention
 
-## Plugin HTML Injection
+## Plugin HTML injection
 
 Plugins can inject HTML into specific slots exposed by the theme.
 
@@ -763,7 +790,7 @@ Multiple plugins may target the same slot.
 
 Injection order is deterministic and follows plugin load order (in YAML config file)
 
-## Asset Pipeline
+## Asset pipeline
 
 Plugin assets live with the plugin.
 
@@ -788,7 +815,7 @@ Slots provide a clear contract between themes and plugins:
 
 This prevents plugins from modifying templates and keeps themes predictable and maintainable.
 
-## Plugin Lifecycle
+## Plugin lifecycle
 
 Plugins follow a simple lifecycle managed by the plugin manager during application startup.
 
@@ -839,7 +866,7 @@ After initialization, plugins operate passively through the mechanisms they regi
 
 Plugins do not run continuously unless explicitly designed to.
 
-## Minimal Example Plugin
+## Minimal example ppugin
 
 Below is a minimal working plugin that injects HTML into a theme slot.
 
