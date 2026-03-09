@@ -2,6 +2,7 @@ package readingtime
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 
 	"github.com/sphireinc/foundry/internal/content"
@@ -31,16 +32,12 @@ func estimateMinutes(words int) int {
 		mins = 1
 	}
 
-	fmt.Println(mins)
-
 	return mins
 }
 
 func (p *Plugin) OnDocumentParsed(doc *content.Document) error {
 	words := countWords(doc.RawBody)
 	minutes := estimateMinutes(words)
-
-	fmt.Println(words, minutes)
 
 	if doc.Fields == nil {
 		doc.Fields = map[string]any{}
@@ -65,6 +62,32 @@ func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
 		ctx.Data["reading_time"] = ctx.Page.Fields["reading_time"]
 		ctx.Data["word_count"] = ctx.Page.Fields["word_count"]
 	}
+
+	return nil
+}
+
+func (p *Plugin) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) error {
+	if ctx.Page == nil || ctx.Page.Type != "post" || ctx.Page.Fields == nil {
+		return nil
+	}
+
+	readingTime, ok := ctx.Page.Fields["reading_time"]
+	if !ok {
+		return nil
+	}
+	wordCount, _ := ctx.Page.Fields["word_count"]
+
+	html := template.HTML(fmt.Sprintf(`
+<div class="meta-panel-block">
+  <h3>Reading</h3>
+  <div class="meta-list">
+    <div><strong>Reading time:</strong> %v min</div>
+    <div><strong>Words:</strong> %v</div>
+  </div>
+</div>
+`, readingTime, wordCount))
+
+	slots.Add("post.sidebar.top", html)
 
 	return nil
 }

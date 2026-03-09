@@ -7,10 +7,6 @@
     <link rel="alternate" type="application/rss+xml" title="RSS" href="{{ .Site.Feed.RSSPath }}">
     <link rel="sitemap" type="application/xml" href="{{ .Site.Feed.SitemapPath }}">
     <link rel="stylesheet" href="/assets/css/foundry.bundle.css">
-    {{ if .Data.plugin_styles }}
-        {{ range .Data.plugin_styles }}
-            <link rel="stylesheet" href="{{ . }}">
-        {{ end }}
-    {{ end }}
+  {{ pluginSlot "head.end" }}
 </head>
 {{ end }}

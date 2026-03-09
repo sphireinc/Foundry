@@ -648,29 +648,42 @@ Data files are ideal for:
 # Plugin Architecture
 
 Foundry uses a hook-based plugin architecture designed to feel familiar 
-to WordPress users while staying idiomatic in Go.
+to WordPress users while remaining idiomatic Go.
 
-Plugins in Foundry should be:
-- explicit
-- composable
-- testable
-- easy to register
-- straightforward to reason about
+
+Plugins in Foundry are designed to be:
+- Explicit
+- Composable
+- Testable
+- Easy to register
+- Straightforward to reason about
+
+Foundry is architected in a way that favors clarity and determinism over unnecessary magic.
 
 ## Current plugin model
 
-Plugins are currently registered and loaded at compile time by name from config. This means 
-they are linked into the application binary rather than dynamically loaded 
-at runtime. 
+Plugins in Foundry are registered at compile time and enabled at runtime through configuration.
 
-***That is intentional.*** 
+This means plugins are linked into the application binary, rather than dynamically loaded.
 
-In Go, compile-time linking is much simpler, safer, and easier to maintain than 
-a fragile dynamic plugin loading model. Future modifications should not move away from this model.
+***This is intentional***
+
+In Go, compile-time linking provides several advantages:
+- simpler dependency management
+- type safety
+- easier debugging
+- predictable builds
+- no fragile runtime plugin loading
+
+Dynamic plugin systems in Go tend to introduce platform limitations 
+and operational complexity. Foundry avoids those pitfalls by using a registry-based
+plugin system instead
+
+The plugin API is intentionally minimal.
 
 ## Registration model
 
-Plugins register themselves via a central registry, as such:
+Plugins register themselves with the global plugin registry
 
 ```bash
 func init() {
@@ -679,6 +692,8 @@ func init() {
     })
 }
 ```
+
+The registry stores a factory function, allowing the plugin manager to instantiate plugins as needed
 
 ## Plugin enablement
 
@@ -692,6 +707,165 @@ plugins:
 ```
 
 The plugin manager looks up registered factories and instantiates only the enabled plugins.
+
+During startup, the plugin manager:
+
+1. Reads the enabled plugin list 
+2. Looks up each plugin in the registry 
+3. Instantiates the plugin via its factory 
+4. Initializes the plugin lifecycle
+
+Only enabled plugins are instantiated - others are ignored.
+
+Plugins listed under "enabled" that do not exist cause the application to error out
+
+## Theme Injection Slots
+
+Foundry themes can expose injection slots that plugins can target to insert HTML.
+
+This allows plugins to extend theme templates without modifying the theme itself.
+
+For example, a theme template might define an injection point:
+
+```go
+{{ slot "post.footer" }}
+```
+
+This creates a named slot where plugins can insert content. These are the minimum suggested slots
+a theme should expose:
+
+- `head.end`
+- `body.end`
+- `page.before_content`
+- `page.after_content`
+- `post.before_content`
+- `post.after_content`
+- `post.sidebar.top`
+- `post.sidebar.bottom`
+- `list.before_items`
+- `list.after_items`
+
+I don't think they need explanations as they are quite clear in their intention
+
+## Plugin HTML Injection
+
+Plugins can inject HTML into specific slots exposed by the theme.
+
+```go
+func (p *MyPlugin) Init(ctx *plugins.Context) {
+    ctx.InjectHTML("post.footer", "<div class='related-posts'></div>")
+}
+```
+
+At render time, Foundry collects all HTML registered for a slot and injects it into the template.
+
+Multiple plugins may target the same slot.
+
+Injection order is deterministic and follows plugin load order (in YAML config file)
+
+### Why Slots Instead of Template Hooks?
+
+Slots provide a clear contract between themes and plugins:
+
+- Themes define where extensions are allowed
+- Plugins define what they want to add and where
+
+This prevents plugins from modifying templates and keeps themes predictable and maintainable.
+
+## Plugin Lifecycle
+
+Plugins follow a simple lifecycle managed by the plugin manager during application startup.
+
+The lifecycle is intentionally minimal to keep plugin behavior predictable and easy to test.
+
+### 1. Registration
+
+At program startup, plugins register themselves with the global registry via `init()`
+
+```go
+func init() {
+    plugins.Register("my-plugin", func() plugins.Plugin {
+        return &MyPlugin{}
+    })
+}
+```
+
+Registration only stores a factory function. No plugin code is executed yet.
+
+### 2. Instantiation
+
+During application startup, the plugin manager does the following:
+
+1. Reads the list of enabled plugins from config 
+2. Looks up each plugin in the registry 
+3. Instantiates the plugin using its factory function
+
+### 3. Initialization
+
+After instantiation, the plugin manager calls the plugins Init method.
+
+```go
+func (p *MyPlugin) Init(ctx *plugins.Context) error {
+    return nil
+}
+```
+
+The Context provides access to services the plugin may interact with, such as HTML injection, 
+configuration, and logging
+
+Plugins should use this phase to register injections, initialize internal state, or attach to extension points
+
+Initialization happens **once** at startup.
+
+### 4. Runtime Operation
+
+After initialization, plugins operate passively through the mechanisms they registered during Init.
+
+Plugins do not run continuously unless explicitly designed to.
+
+## Minimal Example Plugin
+
+Below is a minimal working plugin that injects HTML into a theme slot.
+
+### File structure
+
+```text
+plugins/
+  related-posts/
+    plugin.go
+```
+
+### Plugin implementation
+
+```go
+package relatedposts
+
+import (	
+	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/plugins"
+	"github.com/sphireinc/foundry/internal/renderer"
+)
+
+type RelatedPosts struct{}
+
+func init() {
+    plugins.Register("related-posts", func() plugins.Plugin {
+        return &RelatedPosts{}
+    })
+}
+
+func (p *RelatedPosts) Init(ctx *plugins.Context) error {
+
+    ctx.InjectHTML(
+        "post.footer",
+        `<div class="related-posts">
+            <h3>Related Posts</h3>
+        </div>`,
+    )
+
+    return nil
+}
+```
 
 ## Current hook types
 
@@ -720,20 +894,6 @@ These are invoked by the content loader.
 
 The content loader depends only on a narrow hook interface rather than the 
 concrete plugin manager type. This avoids cyclic imports and keeps subsystems loosely coupled.
-
-## Future plugin opportunities
-
-The architecture is designed to support future hooks such as:
-
-- before render
-- after render
-- asset pipeline hooks
-- route registration hooks
-- feed extension hooks
-- build complete hooks
-- admin or editor integration hooks
-
-These are not built yet, but will be eventually added.
 
 ---
 

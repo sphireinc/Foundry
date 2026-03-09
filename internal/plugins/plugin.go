@@ -58,6 +58,10 @@ type ContextHook interface {
 	OnContext(*renderer.ViewData) error
 }
 
+type HTMLSlotsHook interface {
+	OnHTMLSlots(*renderer.ViewData, *renderer.Slots) error
+}
+
 type BeforeRenderHook interface {
 	OnBeforeRender(*renderer.ViewData) error
 }
@@ -224,6 +228,17 @@ func (m *Manager) OnContext(ctx *renderer.ViewData) error {
 	for _, p := range m.plugins {
 		if hook, ok := p.(ContextHook); ok {
 			if err := hook.OnContext(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m *Manager) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) error {
+	for _, p := range m.plugins {
+		if hook, ok := p.(HTMLSlotsHook); ok {
+			if err := hook.OnHTMLSlots(ctx, slots); err != nil {
 				return err
 			}
 		}

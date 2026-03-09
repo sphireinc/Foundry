@@ -3,8 +3,12 @@
 <html lang="{{ .Lang }}">
 {{ template "head" . }}
 <body>
+  {{ pluginSlot "body.start" }}
+
 <div class="site-shell">
     {{ template "header" . }}
+
+    {{ pluginSlot "page.before_main" }}
 
     <main class="site-main">
         <div class="container">
@@ -12,8 +16,12 @@
         </div>
     </main>
 
+    {{ pluginSlot "page.after_main" }}
+
     {{ template "footer" . }}
 </div>
+
+  {{ pluginSlot "body.end" }}
 
 {{ if .LiveReload }}
 <script>

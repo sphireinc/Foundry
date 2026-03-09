@@ -50,6 +50,7 @@ plugins:
     - readingtime
     - toc
     - relatedposts
+    - callout
 
 fields:
   enabled: true
