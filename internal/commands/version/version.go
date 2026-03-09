@@ -32,6 +32,10 @@ func (command) Details() []string {
 	return nil
 }
 
+func (command) RequiresConfig() bool {
+	return false
+}
+
 func (command) Run(_ *config.Config, _ []string) error {
 	fmt.Println(String())
 	return nil

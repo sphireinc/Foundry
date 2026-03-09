@@ -1,19 +1,12 @@
 # Foundry
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/sphireinc/foundry)](https://github.com/sphireinc/foundry)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/sphireinc/foundry/go.yml?branch=main)](https://github.com/sphireinc/foundry/actions)
-[![License](https://img.shields.io/github/license/sphireinc/foundry)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/sphireinc/foundry)](https://github.com/sphireinc/foundry/releases)
 [![Repo Size](https://img.shields.io/github/repo-size/sphireinc/foundry)](https://github.com/sphireinc/foundry)
-[![Issues](https://img.shields.io/github/issues/sphireinc/foundry)](https://github.com/sphireinc/foundry/issues)
-
----
-
 [![Go Report Card](https://goreportcard.com/badge/github.com/sphireinc/foundry)](https://goreportcard.com/report/github.com/sphireinc/foundry)
-![Downloads](https://img.shields.io/github/downloads/sphireinc/foundry/total)
 ![Last Commit](https://img.shields.io/github/last-commit/sphireinc/foundry)
 ![Contributors](https://img.shields.io/github/contributors/sphireinc/foundry)
 ![Stars](https://img.shields.io/github/stars/sphireinc/foundry)
+[//]: # ([![Issues]&#40;https://img.shields.io/github/issues/sphireinc/foundry&#41;]&#40;https://github.com/sphireinc/foundry/issues&#41;)
 
 ### Foundry is a Markdown-driven CMS written in Go
 

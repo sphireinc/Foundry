@@ -27,6 +27,10 @@ func (command) Details() []string {
 	return nil
 }
 
+func (command) RequiresConfig() bool {
+	return true
+}
+
 func (command) Run(cfg *config.Config, _ []string) error {
 	paths := []string{
 		cfg.PublicDir,
