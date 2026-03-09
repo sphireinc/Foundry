@@ -11,6 +11,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/data"
 	"github.com/sphireinc/foundry/internal/fields"
+	"github.com/sphireinc/foundry/internal/i18n"
 	"github.com/sphireinc/foundry/internal/markup"
 )
 
@@ -130,11 +131,7 @@ func (l *Loader) loadSection(graph *SiteGraph, docType, root string) error {
 }
 
 func (l *Loader) resolveLanguage(rel string) (lang, relDocPath string, isDefault bool) {
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	if len(parts) > 1 && len(parts[0]) == 2 {
-		return parts[0], strings.Join(parts[1:], "/"), false
-	}
-	return l.cfg.DefaultLang, filepath.ToSlash(rel), true
+	return i18n.SplitLeadingLang(rel, l.cfg.DefaultLang)
 }
 
 func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docType string) (*Document, error) {
