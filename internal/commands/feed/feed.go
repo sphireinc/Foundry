@@ -12,8 +12,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/feed"
-	"github.com/sphireinc/foundry/internal/plugins"
-	"github.com/sphireinc/foundry/internal/router"
+	"github.com/sphireinc/foundry/internal/site"
 )
 
 type command struct{}
@@ -146,28 +145,10 @@ func runValidate(cfg *config.Config) error {
 }
 
 func loadGraph(cfg *config.Config) (*content.SiteGraph, error) {
-	pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	graph, _, err := site.LoadConfiguredGraph(context.Background(), cfg, false)
 	if err != nil {
 		return nil, err
 	}
-	if err := pm.OnConfigLoaded(cfg); err != nil {
-		return nil, err
-	}
-
-	loader := content.NewLoader(cfg, pm, false)
-	graph, err := loader.Load(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	resolver := router.NewResolver(cfg)
-	if err := resolver.AssignURLs(graph); err != nil {
-		return nil, err
-	}
-	if err := pm.OnRoutesAssigned(graph); err != nil {
-		return nil, err
-	}
-
 	return graph, nil
 }
 

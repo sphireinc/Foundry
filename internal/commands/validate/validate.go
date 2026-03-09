@@ -6,9 +6,7 @@ import (
 
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
-	"github.com/sphireinc/foundry/internal/content"
-	"github.com/sphireinc/foundry/internal/plugins"
-	"github.com/sphireinc/foundry/internal/router"
+	"github.com/sphireinc/foundry/internal/site"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -50,41 +48,28 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 		errCount++
 	}
 
-	pluginManager, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	graph, _, err := site.LoadConfiguredGraph(context.Background(), cfg, true)
 	if err != nil {
-		fmt.Printf("plugins: %v\n", err)
+		fmt.Printf("site: %v\n", err)
 		errCount++
 	} else {
-		loader := content.NewLoader(cfg, pluginManager, true)
-		graph, loadErr := loader.Load(context.Background())
-		if loadErr != nil {
-			fmt.Printf("content load: %v\n", loadErr)
-			errCount++
-		} else {
-			resolver := router.NewResolver(cfg)
-			if routeErr := resolver.AssignURLs(graph); routeErr != nil {
-				fmt.Printf("routes: %v\n", routeErr)
+		seen := make(map[string]string)
+		for _, doc := range graph.Documents {
+			if doc.URL == "" {
+				fmt.Printf("document %s has empty URL\n", doc.SourcePath)
 				errCount++
-			} else {
-				seen := make(map[string]string)
-				for _, doc := range graph.Documents {
-					if doc.URL == "" {
-						fmt.Printf("document %s has empty URL\n", doc.SourcePath)
-						errCount++
-						continue
-					}
-					if other, ok := seen[doc.URL]; ok {
-						fmt.Printf("duplicate URL %s for %s and %s\n", doc.URL, other, doc.SourcePath)
-						errCount++
-						continue
-					}
-					seen[doc.URL] = doc.SourcePath
-				}
-
-				fmt.Printf("validated %d document(s)\n", len(graph.Documents))
-				fmt.Printf("validated %d route(s)\n", len(seen))
+				continue
 			}
+			if other, ok := seen[doc.URL]; ok {
+				fmt.Printf("duplicate URL %s for %s and %s\n", doc.URL, other, doc.SourcePath)
+				errCount++
+				continue
+			}
+			seen[doc.URL] = doc.SourcePath
 		}
+
+		fmt.Printf("validated %d document(s)\n", len(graph.Documents))
+		fmt.Printf("validated %d route(s)\n", len(seen))
 	}
 
 	if errCount > 0 {

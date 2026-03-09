@@ -10,8 +10,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/deps"
-	"github.com/sphireinc/foundry/internal/plugins"
-	"github.com/sphireinc/foundry/internal/router"
+	"github.com/sphireinc/foundry/internal/site"
 )
 
 type command struct{}
@@ -192,25 +191,8 @@ func runExplain(cfg *config.Config, targetURL string) error {
 }
 
 func loadGraphs(cfg *config.Config) (*content.SiteGraph, *deps.Graph, error) {
-	pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	graph, _, err := site.LoadConfiguredGraph(context.Background(), cfg, true)
 	if err != nil {
-		return nil, nil, err
-	}
-	if err := pm.OnConfigLoaded(cfg); err != nil {
-		return nil, nil, err
-	}
-
-	loader := content.NewLoader(cfg, pm, true)
-	graph, err := loader.Load(context.Background())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resolver := router.NewResolver(cfg)
-	if err := resolver.AssignURLs(graph); err != nil {
-		return nil, nil, err
-	}
-	if err := pm.OnRoutesAssigned(graph); err != nil {
 		return nil, nil, err
 	}
 

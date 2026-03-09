@@ -12,8 +12,7 @@ import (
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
-	"github.com/sphireinc/foundry/internal/plugins"
-	"github.com/sphireinc/foundry/internal/router"
+	"github.com/sphireinc/foundry/internal/site"
 )
 
 type command struct{}
@@ -313,30 +312,10 @@ func runGraph(cfg *config.Config) error {
 }
 
 func loadGraph(cfg *config.Config, includeDrafts bool) (*content.SiteGraph, error) {
-	pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	graph, _, err := site.LoadConfiguredGraph(context.Background(), cfg, includeDrafts)
 	if err != nil {
-		return nil, fmt.Errorf("load plugins: %w", err)
+		return nil, err
 	}
-
-	if err := pm.OnConfigLoaded(cfg); err != nil {
-		return nil, fmt.Errorf("plugin config hook failed: %w", err)
-	}
-
-	loader := content.NewLoader(cfg, pm, includeDrafts)
-	graph, err := loader.Load(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("load content: %w", err)
-	}
-
-	resolver := router.NewResolver(cfg)
-	if err := resolver.AssignURLs(graph); err != nil {
-		return nil, fmt.Errorf("assign urls: %w", err)
-	}
-
-	if err := pm.OnRoutesAssigned(graph); err != nil {
-		return nil, fmt.Errorf("route hook failed: %w", err)
-	}
-
 	return graph, nil
 }
 

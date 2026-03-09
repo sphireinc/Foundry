@@ -8,14 +8,15 @@ import (
 	_ "github.com/sphireinc/foundry/internal/commands/imports"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/consts"
+	"github.com/sphireinc/foundry/internal/content"
 	_ "github.com/sphireinc/foundry/internal/generated"
 
 	"github.com/sphireinc/foundry/internal/config"
-	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/renderer"
 	"github.com/sphireinc/foundry/internal/router"
 	"github.com/sphireinc/foundry/internal/server"
+	"github.com/sphireinc/foundry/internal/site"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -60,20 +61,9 @@ func main() {
 			os.Exit(1)
 		}
 
-		loader := content.NewLoader(cfg, pluginManager, cfg.Build.IncludeDrafts)
-		graph, err := loader.Load(ctx)
+		graph, err := site.LoadGraphWithManager(ctx, cfg, pluginManager, cfg.Build.IncludeDrafts)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "load content: %v\n", err)
-			os.Exit(1)
-		}
-
-		if err := routeResolver.AssignURLs(graph); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "assign urls: %v\n", err)
-			os.Exit(1)
-		}
-
-		if err := pluginManager.OnRoutesAssigned(graph); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "route hook failed: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
 
