@@ -17,6 +17,7 @@ import (
 
 type Hooks interface {
 	OnContext(*ViewData) error
+	OnAssets(*ViewData, *AssetSet) error
 	OnBeforeRender(*ViewData) error
 	OnAfterRender(url string, html []byte) ([]byte, error)
 	OnAssetsBuilding(*config.Config) error
@@ -26,6 +27,7 @@ type Hooks interface {
 type noopHooks struct{}
 
 func (noopHooks) OnContext(*ViewData) error                           { return nil }
+func (noopHooks) OnAssets(*ViewData, *AssetSet) error                 { return nil }
 func (noopHooks) OnBeforeRender(*ViewData) error                      { return nil }
 func (noopHooks) OnAfterRender(_ string, html []byte) ([]byte, error) { return html, nil }
 func (noopHooks) OnAssetsBuilding(*config.Config) error               { return nil }
@@ -100,6 +102,88 @@ func (s *Slots) Render(name string) template.HTML {
 		sb.WriteString("\n")
 	}
 	return template.HTML(sb.String())
+}
+
+type ScriptPosition string
+
+const (
+	ScriptPositionHead    ScriptPosition = "head"
+	ScriptPositionBodyEnd ScriptPosition = "body.end"
+)
+
+type AssetSet struct {
+	styles      []string
+	headScripts []string
+	bodyScripts []string
+}
+
+func NewAssetSet() *AssetSet {
+	return &AssetSet{
+		styles:      make([]string, 0),
+		headScripts: make([]string, 0),
+		bodyScripts: make([]string, 0),
+	}
+}
+
+func (a *AssetSet) AddStyle(url string) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return
+	}
+	if !containsString(a.styles, url) {
+		a.styles = append(a.styles, url)
+	}
+}
+
+func (a *AssetSet) AddScript(url string, pos ScriptPosition) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return
+	}
+
+	switch pos {
+	case ScriptPositionHead:
+		if !containsString(a.headScripts, url) {
+			a.headScripts = append(a.headScripts, url)
+		}
+	default:
+		if !containsString(a.bodyScripts, url) {
+			a.bodyScripts = append(a.bodyScripts, url)
+		}
+	}
+}
+
+func (a *AssetSet) RenderInto(slots *Slots) {
+	if a == nil || slots == nil {
+		return
+	}
+
+	for _, href := range a.styles {
+		slots.Add("head.end", template.HTML(
+			`<link rel="stylesheet" href="`+template.HTMLEscapeString(href)+`">`,
+		))
+	}
+
+	for _, src := range a.headScripts {
+		slots.Add("head.end", template.HTML(
+			`<script src="`+template.HTMLEscapeString(src)+`"></script>`,
+		))
+	}
+
+	for _, src := range a.bodyScripts {
+		slots.Add("body.end", template.HTML(
+			`<script src="`+template.HTMLEscapeString(src)+`"></script>`,
+		))
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
@@ -492,7 +576,14 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 		return nil, err
 	}
 
+	assetSet := NewAssetSet()
+	if err := r.hooks.OnAssets(&data, assetSet); err != nil {
+		return nil, err
+	}
+
 	slots := NewSlots()
+	assetSet.RenderInto(slots)
+
 	if err := r.hooks.OnHTMLSlots(&data, slots); err != nil {
 		return nil, err
 	}

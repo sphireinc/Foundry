@@ -62,21 +62,17 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 		return err
 	}
 
-	pluginAssetsRoot := cfg.PluginsDir
+	for _, pluginName := range cfg.Plugins.Enabled {
+		pluginName = strings.TrimSpace(pluginName)
+		if pluginName == "" {
+			continue
+		}
 
-	entries, err := os.ReadDir(pluginAssetsRoot)
-	if err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
+		src := filepath.Join(cfg.PluginsDir, pluginName, "assets")
+		dst := filepath.Join(cfg.PublicDir, "plugins", pluginName)
 
-			src := filepath.Join(pluginAssetsRoot, entry.Name(), "assets")
-			dst := filepath.Join(cfg.PublicDir, "plugins", entry.Name())
-
-			if err := copyDirIfExists(src, dst); err != nil {
-				return err
-			}
+		if err := copyDirIfExists(src, dst); err != nil {
+			return err
 		}
 	}
 

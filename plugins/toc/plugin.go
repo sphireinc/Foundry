@@ -53,10 +53,6 @@ func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
 		ctx.Data = map[string]any{}
 	}
 
-	styles, _ := ctx.Data["plugin_styles"].([]string)
-	styles = append(styles, "/plugins/toc/css/toc.css")
-	ctx.Data["plugin_styles"] = styles
-
 	if toc, ok := ctx.Page.Fields["toc"]; ok {
 		ctx.Data["toc"] = toc
 	}
@@ -64,6 +60,15 @@ func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
 		ctx.Data["has_toc"] = hasTOC
 	}
 
+	return nil
+}
+
+func (p *Plugin) OnAssets(ctx *renderer.ViewData, assetSet *renderer.AssetSet) error {
+	if ctx.Page == nil || ctx.Page.Type != "post" {
+		return nil
+	}
+
+	assetSet.AddStyle("/plugins/toc/css/toc.css")
 	return nil
 }
 

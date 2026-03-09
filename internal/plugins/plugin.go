@@ -58,6 +58,10 @@ type ContextHook interface {
 	OnContext(*renderer.ViewData) error
 }
 
+type AssetsHook interface {
+	OnAssets(*renderer.ViewData, *renderer.AssetSet) error
+}
+
 type HTMLSlotsHook interface {
 	OnHTMLSlots(*renderer.ViewData, *renderer.Slots) error
 }
@@ -228,6 +232,17 @@ func (m *Manager) OnContext(ctx *renderer.ViewData) error {
 	for _, p := range m.plugins {
 		if hook, ok := p.(ContextHook); ok {
 			if err := hook.OnContext(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m *Manager) OnAssets(ctx *renderer.ViewData, assetSet *renderer.AssetSet) error {
+	for _, p := range m.plugins {
+		if hook, ok := p.(AssetsHook); ok {
+			if err := hook.OnAssets(ctx, assetSet); err != nil {
 				return err
 			}
 		}
