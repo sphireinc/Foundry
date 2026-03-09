@@ -34,6 +34,7 @@ cleanly from a simple Markdown CMS into a much more capable platform over time.
 - [Current Capabilities](#current-capabilities)
 - [High-Level Architecture](#high-level-architecture)
 - [Project Structure](#project-structure)
+- [Installing the Foundry CLI](#installing-the-foundry-cli)
 - [How Foundry Thinks About Content](#how-foundry-thinks-about-content)
 - [Language and Localization Model](#language-and-localization-model)
 - [Configuration](#configuration)
@@ -232,6 +233,34 @@ The Foundry repository looks like this:
 13. **internal/fields**: normalizing custom field maps
 14. **internal/markup**: Markdown-to-HTML conversion and helpers
 15. **internal/cache**: in-memory caching of parsed content, etc
+
+---
+
+# Installing the Foundry CLI
+
+Foundry provides a command-line interface used to create, build, and manage Foundry projects.
+
+The CLI follows a familair command structure:
+
+```bash
+foundry <command> <subcommand> <options>
+```
+
+This design is similar in spirit to tools such as Composer and Hugo.
+
+## Installation
+
+The Foundry CLI can be installed directly using Go:
+
+```bash
+go install github.com/sphireinc/foundry/cmd/foundry@latest
+```
+
+This installs the Foundry binary into your Go bin directory (typically $GOPATH/bin or $HOME/go/bin).
+
+Make sure this directory is included in your system PATH.
+
+After installation, verify the CLI is available: `foundry version`
 
 ---
 
