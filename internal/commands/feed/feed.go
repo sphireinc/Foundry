@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/feed"
 	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/router"
 )
@@ -94,7 +93,7 @@ func runBuild(cfg *config.Config) error {
 		return err
 	}
 
-	rssXML, sitemapXML, err := buildFeeds(cfg, graph)
+	rssXML, sitemapXML, err := feed.Build(cfg, graph)
 	if err != nil {
 		return err
 	}
@@ -127,7 +126,7 @@ func runValidate(cfg *config.Config) error {
 		return err
 	}
 
-	rssXML, sitemapXML, err := buildFeeds(cfg, graph)
+	rssXML, sitemapXML, err := feed.Build(cfg, graph)
 	if err != nil {
 		return err
 	}
@@ -144,86 +143,6 @@ func runValidate(cfg *config.Config) error {
 
 	fmt.Printf("feed validation OK (rss items: %d, sitemap urls: %d)\n", len(rssDoc.Channel.Items), len(sitemapDoc.URLs))
 	return nil
-}
-
-func buildFeeds(cfg *config.Config, graph *content.SiteGraph) ([]byte, []byte, error) {
-	docs := make([]*content.Document, 0)
-	for _, doc := range graph.Documents {
-		if doc.Draft {
-			continue
-		}
-		docs = append(docs, doc)
-	}
-
-	sort.Slice(docs, func(i, j int) bool {
-		di, dj := docs[i].Date, docs[j].Date
-		switch {
-		case di != nil && dj != nil:
-			return di.After(*dj)
-		case di != nil:
-			return true
-		case dj != nil:
-			return false
-		default:
-			return docs[i].URL < docs[j].URL
-		}
-	})
-
-	limit := cfg.Feed.RSSLimit
-	if limit <= 0 || limit > len(docs) {
-		limit = len(docs)
-	}
-
-	items := make([]rssItem, 0, limit)
-	for _, doc := range docs[:limit] {
-		item := rssItem{
-			Title:       doc.Title,
-			Link:        absoluteURL(cfg.BaseURL, doc.URL),
-			Description: doc.Summary,
-		}
-		if doc.Date != nil {
-			item.PubDate = doc.Date.Format(time.RFC1123Z)
-		}
-		items = append(items, item)
-	}
-
-	rssDoc := rss{
-		Version: "2.0",
-		Channel: rssChannel{
-			Title:       choose(cfg.Feed.RSSTitle, cfg.Title),
-			Link:        strings.TrimRight(cfg.BaseURL, "/"),
-			Description: choose(cfg.Feed.RSSDescription, cfg.Title),
-			Items:       items,
-		},
-	}
-
-	rssXML, err := xml.MarshalIndent(rssDoc, "", "  ")
-	if err != nil {
-		return nil, nil, err
-	}
-	rssXML = append([]byte(xml.Header), rssXML...)
-
-	sitemapDoc := sitemapURLSet{
-		Xmlns: "http://www.sitemaps.org/schemas/sitemap/0.9",
-		URLs:  make([]sitemapURL, 0, len(docs)),
-	}
-	for _, doc := range docs {
-		u := sitemapURL{
-			Loc: absoluteURL(cfg.BaseURL, doc.URL),
-		}
-		if doc.Date != nil {
-			u.LastMod = doc.Date.Format("2006-01-02")
-		}
-		sitemapDoc.URLs = append(sitemapDoc.URLs, u)
-	}
-
-	sitemapXML, err := xml.MarshalIndent(sitemapDoc, "", "  ")
-	if err != nil {
-		return nil, nil, err
-	}
-	sitemapXML = append([]byte(xml.Header), sitemapXML...)
-
-	return rssXML, sitemapXML, nil
 }
 
 func loadGraph(cfg *config.Config) (*content.SiteGraph, error) {
@@ -250,24 +169,6 @@ func loadGraph(cfg *config.Config) (*content.SiteGraph, error) {
 	}
 
 	return graph, nil
-}
-
-func absoluteURL(baseURL, path string) string {
-	baseURL = strings.TrimRight(baseURL, "/")
-	if path == "" {
-		return baseURL
-	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	return baseURL + path
-}
-
-func choose(a, b string) string {
-	if strings.TrimSpace(a) != "" {
-		return a
-	}
-	return b
 }
 
 func init() {
