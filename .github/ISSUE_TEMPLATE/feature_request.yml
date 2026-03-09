@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest an improvement or new capability for Foundry
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement.
+
+        Please describe the problem you are trying to solve, not only the solution you have in mind.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do? What is missing today?
+      placeholder: Describe the problem or need.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the change you would like to see.
+      placeholder: Describe your proposed solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternatives or workarounds you considered.
+      placeholder: Describe alternatives.
+
+  - type: textarea
+    id: prior_art
+    attributes:
+      label: Prior art or references
+      description: Link to related projects, plugins, issues, or examples if helpful.
+      placeholder: Hugo, WordPress, Ghost, custom implementation, etc.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Foundry is most relevant?
+      options:
+        - content model
+        - renderer
+        - themes
+        - plugins
+        - assets
+        - routing
+        - dev server
+        - CLI
+        - install/uninstall
+        - documentation
+        - other
+    validations:
+      required: true

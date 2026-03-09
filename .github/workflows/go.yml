@@ -9,10 +9,18 @@ on:
   pull_request:
     branches: [ "main" ]
 
-jobs:
+permissions:
+  contents: read
 
+concurrency:
+  group: go-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
     - uses: actions/checkout@v4
 
@@ -20,6 +28,17 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.24'
+          cache: true
+
+      - name: Verify formatting
+        run: |
+          test -z "$(gofmt -l .)"
+
+      - name: Sync generated plugin imports
+        run: go run ./cmd/plugin-sync
+
+      - name: Vet
+        run: go vet ./...
 
     - name: Build
       run: go build -v ./...

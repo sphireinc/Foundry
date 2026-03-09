@@ -1,0 +1,104 @@
+name: Bug report
+description: Report a reproducible bug in Foundry
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        Please provide enough detail for the issue to be reproduced and diagnosed. If this is a security issue, do not file it here. Use the process in `SECURITY.md`.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear and concise description of the bug.
+      placeholder: Describe the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Tell us exactly how to reproduce the problem.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Change ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or output
+      description: Paste relevant logs, error messages, screenshots, or terminal output.
+      render: shell
+
+  - type: input
+    id: foundry_version
+    attributes:
+      label: Foundry version
+      description: What version or commit are you using?
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: go_version
+    attributes:
+      label: Go version
+      description: Output of `go version`
+      placeholder: go1.24.x
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: OS and version
+      placeholder: macOS 15, Ubuntu 24.04, Windows 11
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Foundry is most relevant?
+      options:
+        - content loading
+        - renderer
+        - themes
+        - plugins
+        - assets
+        - routing
+        - dev server
+        - CLI
+        - install/uninstall
+        - CI/CD
+        - other
+    validations:
+      required: true

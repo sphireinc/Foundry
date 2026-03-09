@@ -1,0 +1,97 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**'
+          - '.github/**/*.md'
+
+github-actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - '.github/labeler.yml'
+          - '.github/dependabot.yml'
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'content/config/**'
+          - '**/*.yaml'
+          - '**/*.yml'
+
+go:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.go'
+          - 'go.mod'
+          - 'go.sum'
+
+cmd:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'cmd/**'
+
+internal:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/**'
+
+plugins:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'plugins/**'
+
+themes:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'themes/**'
+
+content:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'content/pages/**'
+          - 'content/posts/**'
+          - 'content/images/**'
+          - 'content/uploads/**'
+          - 'content/assets/**'
+          - 'data/**'
+
+assets:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'content/assets/**'
+          - 'themes/**/assets/**'
+          - 'plugins/**/assets/**'
+
+renderer:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/renderer/**'
+          - 'themes/**/layouts/**'
+
+server:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/server/**'
+
+routing:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/router/**'
+
+taxonomy:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/taxonomy/**'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'go.mod'
+          - 'go.sum'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*_test.go'
+          - 'testdata/**'

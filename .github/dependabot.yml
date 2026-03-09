@@ -4,11 +4,39 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
+
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "08:00"
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps"
+    labels:
+      - "dependencies"
+      - "go"
+    groups:
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
+      testing:
+        patterns:
+          - "github.com/stretchr/*"
+          - "github.com/onsi/ginkgo*"
+          - "github.com/onsi/gomega*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:30"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"

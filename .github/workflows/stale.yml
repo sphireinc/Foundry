@@ -7,21 +7,52 @@ name: Mark stale issues and pull requests
 
 on:
   schedule:
-  - cron: '27 11 * * *'
+    - cron: '27 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stale-${{ github.workflow }}
+  cancel-in-progress: true
 
 jobs:
   stale:
-
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
 
     steps:
-    - uses: actions/stale@v5
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        stale-issue-message: 'Stale issue message'
-        stale-pr-message: 'Stale pull request message'
-        stale-issue-label: 'no-issue-activity'
-        stale-pr-label: 'no-pr-activity'
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          stale-issue-message: >
+            This issue has been automatically marked as stale because it has had no recent activity.
+            If this is still relevant, leave a comment or remove the stale label and it will remain open.
+          stale-pr-message: >
+            This pull request has been automatically marked as stale because it has had no recent activity.
+            If work is still ongoing, leave a comment or push an update and it will remain open.
+
+          close-issue-message: >
+            This issue was automatically closed after a period of inactivity.
+            It can be reopened if the problem is still relevant.
+          close-pr-message: >
+            This pull request was automatically closed after a period of inactivity.
+            It can be reopened if work resumes.
+
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
+
+          days-before-issue-stale: 60
+          days-before-pr-stale: 30
+          days-before-issue-close: 14
+          days-before-pr-close: 14
+
+          exempt-issue-labels: 'pinned,security,planned,discussion,good first issue,help wanted'
+          exempt-pr-labels: 'pinned,security,work-in-progress,dependencies'
+
+          remove-issue-stale-when-updated: true
+          remove-pr-stale-when-updated: true
+
+          operations-per-run: 200
