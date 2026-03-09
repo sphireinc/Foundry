@@ -9,13 +9,7 @@ Theme current
 Theme validate <name>
 Theme scaffold <anme>
 Theme switch <name>
-Plugin enable <name>
-Plugin disable <name>
-Plugin validate <name>
-Plugin deps <name>
-Plugin update <name>
-Plugin list --installed
-Plugin list --enabled
+
 Assets build
 Assets clean
 Assets list

@@ -9,11 +9,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sphireinc/foundry/internal/consts"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	DefaultSyncConfigPath = "content/config/site.yaml"
+	DefaultSyncConfigPath = consts.ConfigFilePath
 	DefaultSyncPluginsDir = "plugins"
 	DefaultSyncOutputPath = "internal/generated/plugins_gen.go"
 	DefaultSyncModulePath = "github.com/sphireinc/foundry"

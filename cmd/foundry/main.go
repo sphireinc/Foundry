@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/sphireinc/foundry/internal/commands/imports"
 	"github.com/sphireinc/foundry/internal/commands/registry"
+	"github.com/sphireinc/foundry/internal/consts"
 	_ "github.com/sphireinc/foundry/internal/generated"
 
 	"github.com/sphireinc/foundry/internal/config"
@@ -24,7 +25,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load("content/config/site.yaml")
+	cfg, err := config.Load(consts.ConfigFilePath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
