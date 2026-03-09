@@ -49,6 +49,7 @@ plugins:
   enabled:
     - readingtime
     - toc
+    - relatedposts
 
 fields:
   enabled: true
