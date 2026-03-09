@@ -1,0 +1,7 @@
+name: toc
+title: Table of Contents
+version: 1.0.0
+description: Generates a table of contents for Markdown headings
+author: Juan Sanchez <jsanchez@sphire.co>
+homepage: https://github.com/sphireinc/foundry/plugins/toc
+license: MIT

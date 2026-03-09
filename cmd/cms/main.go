@@ -28,7 +28,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	pluginManager := plugins.NewManager(cfg.Plugins.Enabled)
+	pluginManager, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load plugins: %v\n", err)
+		os.Exit(1)
+	}
 
 	if err := pluginManager.OnConfigLoaded(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "plugin config hook failed: %v\n", err)

@@ -1,0 +1,7 @@
+name: readingtime
+title: Reading Time
+version: 1.0.0
+description: Estimates reading time and word count for content
+author: Juan Sanchez <jsanchez@sphire.co>
+homepage: https://github.com/sphireinc/foundry/plugins/readingtime
+license: MIT

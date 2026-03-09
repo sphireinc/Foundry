@@ -2,7 +2,6 @@
 package generated
 
 import (
-	_ "github.com/sphireinc/foundry/plugins/callout"
 	_ "github.com/sphireinc/foundry/plugins/readingtime"
 	_ "github.com/sphireinc/foundry/plugins/relatedposts"
 	_ "github.com/sphireinc/foundry/plugins/toc"

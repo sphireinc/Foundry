@@ -25,6 +25,16 @@ type siteConfig struct {
 	} `yaml:"plugins"`
 }
 
+type pluginMetadata struct {
+	Name        string `yaml:"name"`
+	Title       string `yaml:"title"`
+	Version     string `yaml:"version"`
+	Description string `yaml:"description"`
+	Author      string `yaml:"author"`
+	Homepage    string `yaml:"homepage"`
+	License     string `yaml:"license"`
+}
+
 func main() {
 	cfg, err := loadConfig(configPath)
 	if err != nil {
@@ -112,6 +122,34 @@ func validatePlugin(name string) error {
 
 	if !foundGo {
 		return fmt.Errorf("plugin %q has no .go files under %q", name, root)
+	}
+
+	if err := validateMetadata(name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateMetadata(name string) error {
+	path := filepath.Join(pluginsDir, name, "plugin.yaml")
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var meta pluginMetadata
+	if err := yaml.Unmarshal(b, &meta); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	meta.Name = strings.TrimSpace(meta.Name)
+	if meta.Name != "" && meta.Name != name {
+		return fmt.Errorf("%s: metadata name %q must match plugin directory %q", path, meta.Name, name)
 	}
 
 	return nil
