@@ -1,6 +1,0 @@
-We should support this out of the box:
-
-	•	cross-platform builds
-	•	bin/foundry-darwin-arm64
-	•	bin/foundry-linux-amd64
-	•	checksums
