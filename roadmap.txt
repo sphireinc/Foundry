@@ -1,34 +1,3 @@
-Content lint
-Content new page <slug>
-Content new post <slug>
-Content list
-Content graph
-
-Theme list
-Theme current
-Theme validate <name>
-Theme scaffold <anme>
-Theme switch <name>
-
-Assets build
-Assets clean
-Assets list
-
-Feed build
-Feed validate
-
-I18n list
-I18n missing
-I18n scaffold <lang> <type> <slug>
-
-Deps graph
-Deps explain <url>
-
-Debug routes
-Debug plugins
-Debug config
-
-
 We should support this out of the box:
 
 	•	cross-platform builds
