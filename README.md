@@ -763,6 +763,22 @@ Multiple plugins may target the same slot.
 
 Injection order is deterministic and follows plugin load order (in YAML config file)
 
+## Asset Pipeline
+
+Plugin assets live with the plugin.
+
+To register assets, inside a plugin do this:
+
+```go
+func (p *Plugin) OnAssets(ctx *renderer.ViewData, assets *renderer.AssetSet) error {
+	assets.AddStyle("/plugins/myplugin/css/widget.css")
+	assets.AddScript("/plugins/myplugin/js/widget.js", renderer.ScriptPositionBodyEnd)
+	return nil
+}
+```
+
+The renderer injects those assets automatically into `head.end` or `body.end` HTML slots
+
 ### Why Slots Instead of Template Hooks?
 
 Slots provide a clear contract between themes and plugins:
