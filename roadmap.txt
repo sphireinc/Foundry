@@ -13,15 +13,17 @@ Theme switch <name>
 Assets build
 Assets clean
 Assets list
+
 Feed build
 Feed validate
-Routes list
-Routes check
+
 I18n list
 I18n missing
 I18n scaffold <lang> <type> <slug>
+
 Deps graph
 Deps explain <url>
+
 Debug routes
 Debug plugins
 Debug config

@@ -11,8 +11,6 @@ import (
 	"github.com/sphireinc/foundry/internal/plugins"
 )
 
-const configPath = consts.ConfigFilePath
-
 type command struct{}
 
 func (command) Name() string {
@@ -68,12 +66,13 @@ func (command) Run(cfg *config.Config, args []string) error {
 	case "update":
 		return runUpdate(cfg, args)
 	case "sync":
-		if err := plugins.SyncFromConfig(plugins.SyncOptions{
-			ConfigPath: plugins.DefaultSyncConfigPath,
+		err := plugins.SyncFromConfig(plugins.SyncOptions{
+			ConfigPath: consts.ConfigFilePath,
 			PluginsDir: cfg.PluginsDir,
-			OutputPath: plugins.DefaultSyncOutputPath,
+			OutputPath: consts.GeneratedPluginsFile,
 			ModulePath: plugins.DefaultSyncModulePath,
-		}); err != nil {
+		})
+		if err != nil {
 			return err
 		}
 		fmt.Println("plugin imports synced")
@@ -231,7 +230,7 @@ func runEnable(_ *config.Config, args []string) error {
 	}
 
 	name := strings.TrimSpace(args[3])
-	if err := plugins.EnableInConfig(configPath, name); err != nil {
+	if err := plugins.EnableInConfig(consts.ConfigFilePath, name); err != nil {
 		return err
 	}
 
@@ -248,7 +247,7 @@ func runDisable(_ *config.Config, args []string) error {
 	}
 
 	name := strings.TrimSpace(args[3])
-	if err := plugins.DisableInConfig(configPath, name); err != nil {
+	if err := plugins.DisableInConfig(consts.ConfigFilePath, name); err != nil {
 		return err
 	}
 
