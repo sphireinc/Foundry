@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
@@ -95,27 +96,47 @@ type RoutesRegisterHook interface {
 }
 
 type Manager struct {
-	plugins []Plugin
+	plugins  []Plugin
+	metadata map[string]Metadata
 }
 
-func NewManager(enabled []string) *Manager {
+func NewManager(pluginsDir string, enabled []string) (*Manager, error) {
 	m := &Manager{
-		plugins: make([]Plugin, 0),
+		plugins:  make([]Plugin, 0),
+		metadata: make(map[string]Metadata),
 	}
 
+	metadata, err := LoadAllMetadata(pluginsDir, enabled)
+	if err != nil {
+		return nil, err
+	}
+	m.metadata = metadata
+
 	for _, name := range enabled {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+
 		if factory, ok := registry[name]; ok {
 			m.plugins = append(m.plugins, factory())
 		}
 	}
 
-	return m
+	return m, nil
 }
 
-func (m *Manager) Plugins() []Plugin {
-	out := make([]Plugin, len(m.plugins))
-	copy(out, m.plugins)
+func (m *Manager) Metadata() map[string]Metadata {
+	out := make(map[string]Metadata, len(m.metadata))
+	for k, v := range m.metadata {
+		out[k] = v
+	}
 	return out
+}
+
+func (m *Manager) MetadataFor(name string) (Metadata, bool) {
+	meta, ok := m.metadata[name]
+	return meta, ok
 }
 
 func (m *Manager) OnConfigLoaded(cfg *config.Config) error {
