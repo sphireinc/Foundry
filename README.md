@@ -868,7 +868,7 @@ plugins/
 ### Plugin implementation
 
 ```go
-package relatedposts
+package someplugin
 
 import (	
 	"github.com/sphireinc/foundry/internal/content"
@@ -876,24 +876,34 @@ import (
 	"github.com/sphireinc/foundry/internal/renderer"
 )
 
-type RelatedPosts struct{}
+type Plugin struct{}
 
 func init() {
-    plugins.Register("related-posts", func() plugins.Plugin {
-        return &RelatedPosts{}
+    plugins.Register("someplugin", func() plugins.Plugin {
+        return &Plugin{}
     })
 }
 
-func (p *RelatedPosts) Init(ctx *plugins.Context) error {
-
+func (p *Plugin) Init(ctx *plugins.Context) error {
     ctx.InjectHTML(
         "post.footer",
-        `<div class="related-posts">
-            <h3>Related Posts</h3>
-        </div>`,
+        `<div class="someplugin"><h3>Some HTML</h3></div>`,
     )
-
     return nil
+}
+
+func (p *Plugin) Commands() []plugins.Command {
+	return []plugins.Command{
+		{
+			Name:        "someplugin",
+			Summary:     "Runs someplugin command",
+			Description: "Shows information about this plugin.",
+			Run: func(ctx plugins.CommandContext) error {
+				_, err := fmt.Fprintln(ctx.Stdout, "Plugin is installed and available.")
+				return err
+			},
+		},
+	}
 }
 ```
 

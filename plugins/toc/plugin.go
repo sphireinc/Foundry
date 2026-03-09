@@ -1,6 +1,7 @@
 package toc
 
 import (
+	"fmt"
 	"html/template"
 	"regexp"
 	"strconv"
@@ -111,6 +112,20 @@ func (p *Plugin) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) erro
 
 	slots.Add("post.sidebar.bottom", template.HTML(sb.String()))
 	return nil
+}
+
+func (p *Plugin) Commands() []plugins.Command {
+	return []plugins.Command{
+		{
+			Name:        "toc",
+			Summary:     "Inspect TOC plugin",
+			Description: "Shows information about the table of contents plugin.",
+			Run: func(ctx plugins.CommandContext) error {
+				_, err := fmt.Fprintln(ctx.Stdout, "TOC plugin is installed and available.")
+				return err
+			},
+		},
+	}
 }
 
 func extractTOC(body string) []Item {

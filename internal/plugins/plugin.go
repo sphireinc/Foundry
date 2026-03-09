@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/sphireinc/foundry/internal/config"
@@ -126,6 +127,12 @@ func NewManager(pluginsDir string, enabled []string) (*Manager, error) {
 	return m, nil
 }
 
+func (m *Manager) Plugins() []Plugin {
+	out := make([]Plugin, len(m.plugins))
+	copy(out, m.plugins)
+	return out
+}
+
 func (m *Manager) Metadata() map[string]Metadata {
 	out := make(map[string]Metadata, len(m.metadata))
 	for k, v := range m.metadata {
@@ -137,6 +144,19 @@ func (m *Manager) Metadata() map[string]Metadata {
 func (m *Manager) MetadataFor(name string) (Metadata, bool) {
 	meta, ok := m.metadata[name]
 	return meta, ok
+}
+
+func (m *Manager) MetadataList() []Metadata {
+	items := make([]Metadata, 0, len(m.metadata))
+	for _, meta := range m.metadata {
+		items = append(items, meta)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+
+	return items
 }
 
 func (m *Manager) OnConfigLoaded(cfg *config.Config) error {
