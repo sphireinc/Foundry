@@ -1,7 +1,7 @@
 {{ define "content" }}
 <div class="split-layout">
     <section>
-    {{ pluginSlot "post.before_header" }}
+        {{ pluginSlot "post.before_header" }}
 
         <header class="post-header">
             <div class="eyebrow">Post</div>
@@ -14,51 +14,18 @@
             {{ template "post_meta" . }}
         </header>
 
-    {{ pluginSlot "post.after_header" }}
+        {{ pluginSlot "post.after_header" }}
 
         <article class="content-panel content-panel--article">
-      {{ pluginSlot "post.before_content" }}
+            {{ pluginSlot "post.before_content" }}
             <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
-      {{ pluginSlot "post.after_content" }}
         </article>
 
-    {{ if .Data.has_related_posts }}
-    <section class="home-section">
-      <div class="section-heading">
-        <div>
-          <h2>Related posts</h2>
-          <p>More content you might want to read next.</p>
-        </div>
-      </div>
-
-      <div class="post-grid">
-        {{ range .Data.related_posts }}
-          <article class="post-card">
-            <div class="post-card-header">
-              <div>
-                <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
-                <div class="post-card-meta">
-                  {{ if .Date }}{{ .Date.Format "Jan 2, 2006" }}{{ else }}Related content{{ end }}
-                </div>
-              </div>
-            </div>
-
-            {{ if .Summary }}
-              <div class="post-card-summary">{{ .Summary }}</div>
-            {{ end }}
-
-            <div class="post-card-footer">
-              <a class="post-card-link" href="{{ .URL }}">Read more</a>
-            </div>
-          </article>
-        {{ end }}
-      </div>
-    </section>
-    {{ end }}
+        {{ pluginSlot "post.after_content" }}
     </section>
 
     <aside class="meta-panel">
-    {{ pluginSlot "post.sidebar.top" }}
+        {{ pluginSlot "post.sidebar.top" }}
 
         <div class="meta-panel-block">
             <h3>Overview</h3>
@@ -66,25 +33,13 @@
                 <div><strong>Type:</strong> {{ .Page.Type }}</div>
                 <div><strong>Slug:</strong> {{ .Page.Slug }}</div>
                 <div><strong>Language:</strong> {{ .Page.Lang }}</div>
-        {{ if .Data.reading_time }}<div><strong>Reading time:</strong> {{ .Data.reading_time }} min</div>{{ end }}
-        {{ if .Data.word_count }}<div><strong>Words:</strong> {{ .Data.word_count }}</div>{{ end }}
-      </div>
+                {{ pluginSlot "post.sidebar.overview" }}
             </div>
-
-    {{ if .Data.has_toc }}
-    <div class="meta-panel-block">
-      <h3>On this page</h3>
-      <div class="toc-list">
-        {{ range .Data.toc }}
-          <a class="toc-link toc-level-{{ .Level }}" href="#{{ .ID }}">{{ .Text }}</a>
-        {{ end }}
         </div>
-    </div>
-    {{ end }}
 
         {{ template "taxonomy_chips" . }}
 
-    {{ pluginSlot "post.sidebar.bottom" }}
+        {{ pluginSlot "post.sidebar.bottom" }}
     </aside>
 </div>
 {{ end }}
