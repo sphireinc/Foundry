@@ -15,6 +15,40 @@
         <article class="content-panel content-panel--article">
             <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
         </article>
+
+    {{ if .Data.has_related_posts }}
+    <section class="home-section">
+      <div class="section-heading">
+        <div>
+          <h2>Related posts</h2>
+          <p>More content you might want to read next.</p>
+        </div>
+      </div>
+
+      <div class="post-grid">
+        {{ range .Data.related_posts }}
+          <article class="post-card">
+            <div class="post-card-header">
+              <div>
+                <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+                <div class="post-card-meta">
+                  {{ if .Date }}{{ .Date.Format "Jan 2, 2006" }}{{ else }}Related content{{ end }}
+                </div>
+              </div>
+            </div>
+
+            {{ if .Summary }}
+              <div class="post-card-summary">{{ .Summary }}</div>
+            {{ end }}
+
+            <div class="post-card-footer">
+              <a class="post-card-link" href="{{ .URL }}">Read more</a>
+            </div>
+          </article>
+        {{ end }}
+      </div>
+    </section>
+    {{ end }}
     </section>
 
     <aside class="meta-panel">
