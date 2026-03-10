@@ -109,7 +109,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/", s.handlePage)
 
 	serverURL := s.listenURL()
-	logx.Info("Foundry is starting",
+	logx.Info(
+		"Foundry is running",
 		"url", serverURL,
 		"theme", s.cfg.Theme,
 		"preview", s.preview,
@@ -129,10 +130,10 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		}()
 	}
 
-	err := http.ListenAndServe(s.cfg.Server.Addr, mux)
-	if err != nil {
+	if err := http.ListenAndServe(s.cfg.Server.Addr, mux); err != nil {
 		return diag.Wrap(diag.KindServe, "listen and serve", err)
 	}
+
 	return nil
 }
 
@@ -172,7 +173,11 @@ func (s *Server) rebuild(ctx context.Context) error {
 	s.depGraph = depGraph
 	s.mu.Unlock()
 
-	logx.Info("site graph rebuilt", "documents", len(graph.Documents), "routes", len(graph.ByURL))
+	logx.Info(
+		"site rebuilt",
+		"documents", len(graph.Documents),
+		"routes", len(graph.ByURL),
+	)
 
 	s.signalReload()
 	return nil
@@ -327,7 +332,11 @@ func shouldAddWatch(path string) bool {
 	return info.IsDir()
 }
 
-func addWatchRecursively(w *fsnotify.Watcher, root string) error {
+type watcherAdder interface {
+	Add(string) error
+}
+
+func addWatchRecursively(w watcherAdder, root string) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err == nil && info.IsDir() {
 			_ = w.Add(path)
@@ -337,127 +346,71 @@ func addWatchRecursively(w *fsnotify.Watcher, root string) error {
 }
 
 func (s *Server) classifyChanges(paths []string) deps.ChangeSet {
-	changes := deps.ChangeSet{}
+	changes := deps.ChangeSet{
+		Sources:   make([]string, 0),
+		Templates: make([]string, 0),
+		DataKeys:  make([]string, 0),
+		Assets:    make([]string, 0),
+	}
 
-	for _, p := range paths {
-		p = filepath.ToSlash(p)
+	contentDir := filepath.ToSlash(s.cfg.ContentDir)
+	themesDir := filepath.ToSlash(s.cfg.ThemesDir)
+	dataDir := filepath.ToSlash(s.cfg.DataDir)
+	configPath := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, "config", "site.yaml"))
+	pagesRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PagesDir))
+	postsRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PostsDir))
+	contentAssetsRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir))
+	contentImagesRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.ImagesDir))
+	contentUploadsRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.UploadsDir))
+	themeAssetsRoot := filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "assets"))
+	themeLayoutsRoot := filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "layouts"))
+
+	for _, path := range paths {
+		clean := filepath.ToSlash(path)
 
 		switch {
-		case strings.HasPrefix(p, filepath.ToSlash(s.cfg.ContentDir)+"/"):
-			if strings.HasSuffix(p, ".md") {
-				changes.Sources = append(changes.Sources, p)
-			} else if strings.HasPrefix(p, filepath.ToSlash(s.cfg.ContentDir)+"/assets/") ||
-				strings.HasPrefix(p, filepath.ToSlash(s.cfg.ContentDir)+"/images/") ||
-				strings.HasPrefix(p, filepath.ToSlash(s.cfg.ContentDir)+"/uploads/") {
-				changes.Assets = append(changes.Assets, p)
-			} else if strings.HasPrefix(p, filepath.ToSlash(s.cfg.ContentDir)+"/config/") {
-				changes.Full = true
-			}
+		case clean == configPath:
+			changes.Full = true
 
-		case strings.HasPrefix(p, filepath.ToSlash(s.cfg.ThemesDir)+"/"):
-			if strings.Contains(p, "/layouts/") && strings.HasSuffix(p, ".html") {
-				changes.Templates = append(changes.Templates, p)
-			} else if strings.Contains(p, "/assets/") {
-				changes.Assets = append(changes.Assets, p)
-			} else {
-				changes.Full = true
-			}
+		case strings.HasPrefix(clean, pagesRoot+"/") || strings.HasPrefix(clean, postsRoot+"/"):
+			changes.Sources = append(changes.Sources, clean)
 
-		case strings.HasPrefix(p, filepath.ToSlash(s.cfg.DataDir)+"/"):
-			rel, err := filepath.Rel(s.cfg.DataDir, p)
+		case strings.HasPrefix(clean, themeLayoutsRoot+"/"):
+			changes.Templates = append(changes.Templates, clean)
+
+		case strings.HasPrefix(clean, contentAssetsRoot+"/"),
+			strings.HasPrefix(clean, contentImagesRoot+"/"),
+			strings.HasPrefix(clean, contentUploadsRoot+"/"),
+			strings.HasPrefix(clean, themeAssetsRoot+"/"):
+			changes.Assets = append(changes.Assets, clean)
+
+		case strings.HasPrefix(clean, dataDir+"/"):
+			rel, err := filepath.Rel(s.cfg.DataDir, path)
 			if err == nil {
 				key := strings.TrimSuffix(filepath.ToSlash(rel), filepath.Ext(rel))
-				key = strings.TrimPrefix(key, "./")
 				changes.DataKeys = append(changes.DataKeys, key)
 			} else {
 				changes.Full = true
 			}
 
-		case strings.HasPrefix(p, filepath.ToSlash(s.cfg.PluginsDir)+"/"):
-			if strings.Contains(p, "/assets/") {
-				changes.Assets = append(changes.Assets, p)
-			} else {
-				changes.Full = true
-			}
+		case strings.HasPrefix(clean, filepath.ToSlash(s.cfg.PluginsDir)+"/"):
+			changes.Full = true
+
+		case strings.HasPrefix(clean, themesDir+"/"), strings.HasPrefix(clean, contentDir+"/"):
+			changes.Full = true
 
 		default:
 			changes.Full = true
 		}
 	}
 
-	changes.Sources = uniq(changes.Sources)
-	changes.Templates = uniq(changes.Templates)
-	changes.DataKeys = uniq(changes.DataKeys)
-	changes.Assets = uniq(changes.Assets)
-
 	return changes
-}
-
-func uniq(in []string) []string {
-	if len(in) == 0 {
-		return in
-	}
-	seen := make(map[string]struct{}, len(in))
-	out := make([]string, 0, len(in))
-	for _, v := range in {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
-}
-
-func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
-	s.mu.RLock()
-	graph := s.graph
-	s.mu.RUnlock()
-
-	if graph == nil {
-		http.Error(w, "site graph unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	path := r.URL.Path
-	doc, ok := graph.ByURL[path]
-	if !ok {
-		data, handled := s.renderer.RenderTaxonomyArchiveData(graph, path, s.cfg.Server.LiveReload)
-		if handled {
-			html, err := s.renderer.RenderData(r.Context(), path, data)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("render taxonomy archive: %v", err), http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write(html)
-			return
-		}
-
-		http.NotFound(w, r)
-		return
-	}
-
-	html, err := s.renderer.RenderPage(r.Context(), graph, doc.URL)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			http.NotFound(w, r)
-			return
-		}
-
-		http.Error(w, fmt.Sprintf("render page: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(html)
 }
 
 func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		http.Error(w, "stream unsupported", http.StatusInternalServerError)
 		return
 	}
 
@@ -466,7 +419,6 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 
 	notify := r.Context().Done()
-
 	for {
 		select {
 		case <-notify:
@@ -478,18 +430,28 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleDepsDebug(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
-	graph := s.depGraph
+	graph := s.graph
 	s.mu.RUnlock()
 
-	if graph == nil {
-		http.Error(w, "dependency graph unavailable", http.StatusServiceUnavailable)
+	path := r.URL.Path
+	if !strings.HasSuffix(path, "/") && !strings.Contains(filepath.Base(path), ".") {
+		path += "/"
+	}
+
+	out, err := s.renderer.RenderURL(graph, path, s.cfg.Server.LiveReload)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		logx.Error("render page failed", "path", path, "error", err)
+		b, _ := json.Marshal(map[string]string{"error": err.Error()})
+		http.Error(w, string(b), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(graph.Export())
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(out)
 }
