@@ -51,33 +51,34 @@ func (command) Run(cfg *config.Config, args []string) error {
 		return fmt.Errorf("usage: foundry plugin [list|info|install|uninstall|enable|disable|validate|deps|update|sync]")
 	}
 
+	project := plugins.NewProject(
+		consts.ConfigFilePath,
+		cfg.PluginsDir,
+		consts.GeneratedPluginsFile,
+		plugins.DefaultSyncModulePath,
+	)
+
 	switch args[2] {
 	case "list":
-		return runList(cfg, args)
+		return runList(cfg, project, args)
 	case "info":
-		return runInfo(cfg, args)
+		return runInfo(project, args)
 	case "install":
-		return runInstall(cfg, args)
+		return runInstall(cfg, project, args)
 	case "uninstall":
-		return runUninstall(cfg, args)
+		return runUninstall(project, args)
 	case "enable":
-		return runEnable(args)
+		return runEnable(project, args)
 	case "disable":
-		return runDisable(args)
+		return runDisable(project, args)
 	case "validate":
-		return runValidate(cfg, args)
+		return runValidate(cfg, project, args)
 	case "deps":
-		return runDeps(cfg, args)
+		return runDeps(cfg, project, args)
 	case "update":
-		return runUpdate(cfg, args)
+		return runUpdate(project, args)
 	case "sync":
-		err := plugins.SyncFromConfig(plugins.SyncOptions{
-			ConfigPath: consts.ConfigFilePath,
-			PluginsDir: cfg.PluginsDir,
-			OutputPath: plugins.DefaultSyncOutputPath,
-			ModulePath: plugins.DefaultSyncModulePath,
-		})
-		if err != nil {
+		if err := project.Sync(); err != nil {
 			return err
 		}
 		fmt.Println("plugin imports synced")
@@ -87,7 +88,7 @@ func (command) Run(cfg *config.Config, args []string) error {
 	return fmt.Errorf("unknown plugin subcommand: %s", args[2])
 }
 
-func runList(cfg *config.Config, args []string) error {
+func runList(cfg *config.Config, project plugins.Project, args []string) error {
 	mode := "--enabled"
 	if len(args) >= 4 {
 		mode = args[3]
@@ -95,9 +96,9 @@ func runList(cfg *config.Config, args []string) error {
 
 	switch mode {
 	case "--enabled":
-		return printEnabledPluginTable(cfg)
+		return printEnabledPluginTable(cfg, project)
 	case "--installed":
-		metas, err := plugins.ListInstalled(cfg.PluginsDir)
+		metas, err := project.ListInstalled()
 		if err != nil {
 			return err
 		}
@@ -107,12 +108,12 @@ func runList(cfg *config.Config, args []string) error {
 	}
 }
 
-func runInfo(cfg *config.Config, args []string) error {
+func runInfo(project plugins.Project, args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin info <name>")
 	}
 
-	meta, err := plugins.LoadMetadata(cfg.PluginsDir, args[3])
+	meta, err := project.Metadata(args[3])
 	if err != nil {
 		return err
 	}
@@ -136,7 +137,7 @@ func runInfo(cfg *config.Config, args []string) error {
 	return nil
 }
 
-func runInstall(cfg *config.Config, args []string) error {
+func runInstall(cfg *config.Config, project plugins.Project, args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin install <git-url|owner/repo> [name]")
 	}
@@ -147,11 +148,7 @@ func runInstall(cfg *config.Config, args []string) error {
 		name = strings.TrimSpace(args[4])
 	}
 
-	meta, err := plugins.Install(plugins.InstallOptions{
-		PluginsDir: cfg.PluginsDir,
-		URL:        repoURL,
-		Name:       name,
-	})
+	meta, err := project.Install(repoURL, name)
 	if err != nil {
 		return err
 	}
@@ -160,7 +157,7 @@ func runInstall(cfg *config.Config, args []string) error {
 	fmt.Printf("Directory: %s\n", meta.Directory)
 	fmt.Printf("Version: %s\n", meta.Version)
 
-	missing, warnErr := findMissingPluginDependencies(cfg, meta)
+	missing, warnErr := project.MissingDependencies(meta, cfg.Plugins.Enabled)
 	if warnErr != nil {
 		return warnErr
 	}
@@ -203,13 +200,13 @@ func runInstall(cfg *config.Config, args []string) error {
 	return nil
 }
 
-func runUninstall(cfg *config.Config, args []string) error {
+func runUninstall(project plugins.Project, args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin uninstall <name>")
 	}
 
 	name := strings.TrimSpace(args[3])
-	if err := plugins.Uninstall(cfg.PluginsDir, name); err != nil {
+	if err := project.Uninstall(name); err != nil {
 		return err
 	}
 
@@ -223,13 +220,13 @@ func runUninstall(cfg *config.Config, args []string) error {
 	return nil
 }
 
-func runEnable(args []string) error {
+func runEnable(project plugins.Project, args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin enable <name>")
 	}
 
 	name := strings.TrimSpace(args[3])
-	if err := plugins.EnableInConfig(consts.ConfigFilePath, name); err != nil {
+	if err := project.Enable(name); err != nil {
 		return err
 	}
 
@@ -240,13 +237,13 @@ func runEnable(args []string) error {
 	return nil
 }
 
-func runDisable(args []string) error {
+func runDisable(project plugins.Project, args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin disable <name>")
 	}
 
 	name := strings.TrimSpace(args[3])
-	if err := plugins.DisableInConfig(consts.ConfigFilePath, name); err != nil {
+	if err := project.Disable(name); err != nil {
 		return err
 	}
 
@@ -257,17 +254,17 @@ func runDisable(args []string) error {
 	return nil
 }
 
-func runValidate(cfg *config.Config, args []string) error {
+func runValidate(cfg *config.Config, project plugins.Project, args []string) error {
 	if len(args) >= 4 {
 		name := strings.TrimSpace(args[3])
-		if err := plugins.ValidateInstalledPlugin(cfg.PluginsDir, name); err != nil {
+		if err := project.Validate(name); err != nil {
 			return err
 		}
 		fmt.Printf("Plugin %q is valid\n", name)
 		return nil
 	}
 
-	issues := plugins.ValidateEnabledPlugins(cfg.PluginsDir, cfg.Plugins.Enabled)
+	issues := project.ValidateEnabled(cfg.Plugins.Enabled)
 	if len(issues) == 0 {
 		fmt.Printf("All %d enabled plugin(s) are valid\n", len(cfg.Plugins.Enabled))
 		return nil
@@ -280,67 +277,44 @@ func runValidate(cfg *config.Config, args []string) error {
 	return fmt.Errorf("plugin validation failed with %d issue(s)", len(issues))
 }
 
-func runDeps(cfg *config.Config, args []string) error {
+func runDeps(cfg *config.Config, project plugins.Project, args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin deps <name>")
 	}
 
 	name := strings.TrimSpace(args[3])
-	meta, err := plugins.LoadMetadata(cfg.PluginsDir, name)
+	statuses, err := project.DependencyStatuses(name, cfg.Plugins.Enabled)
 	if err != nil {
 		return err
 	}
 
-	if len(meta.Requires) == 0 {
+	if len(statuses) == 0 {
 		fmt.Printf("Plugin %q has no declared dependencies\n", name)
 		return nil
 	}
 
-	enabled, err := plugins.LoadAllMetadata(cfg.PluginsDir, cfg.Plugins.Enabled)
-	if err != nil {
-		return err
-	}
-
-	enabledRepos := map[string]string{}
-	for pluginName, m := range enabled {
-		if strings.TrimSpace(m.Repo) != "" {
-			enabledRepos[m.Repo] = pluginName
-		}
-	}
-
-	installed, err := plugins.ListInstalled(cfg.PluginsDir)
-	if err != nil {
-		return err
-	}
-	installedRepos := map[string]string{}
-	for _, m := range installed {
-		if strings.TrimSpace(m.Repo) != "" {
-			installedRepos[m.Repo] = m.Name
-		}
-	}
-
 	fmt.Printf("Dependencies for %q:\n", name)
-	for _, dep := range meta.Requires {
-		switch {
-		case enabledRepos[dep] != "":
-			fmt.Printf("- %s  [enabled as %s]\n", dep, enabledRepos[dep])
-		case installedRepos[dep] != "":
-			fmt.Printf("- %s  [installed as %s, not enabled]\n", dep, installedRepos[dep])
+	for _, dep := range statuses {
+		switch dep.Status {
+		case "enabled":
+			fmt.Printf("- %s  [enabled as %s]\n", dep.Repo, dep.Name)
+		case "installed":
+			fmt.Printf("- %s  [installed as %s, not enabled]\n", dep.Repo, dep.Name)
 		default:
-			fmt.Printf("- %s  [missing]\n", dep)
+			fmt.Printf("- %s  [missing]\n", dep.Repo)
 		}
 	}
 
 	return nil
 }
 
-func runUpdate(cfg *config.Config, args []string) error {
+func runUpdate(project plugins.Project, args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin update <name>")
 	}
 
 	name := strings.TrimSpace(args[3])
-	meta, err := plugins.UpdateInstalled(cfg.PluginsDir, name)
+	meta, err := project.Update(name)
 	if err != nil {
 		return err
 	}
@@ -351,7 +325,7 @@ func runUpdate(cfg *config.Config, args []string) error {
 	return nil
 }
 
-func printEnabledPluginTable(cfg *config.Config) error {
+func printEnabledPluginTable(cfg *config.Config, project plugins.Project) error {
 	names := make([]string, 0, len(cfg.Plugins.Enabled))
 	seen := make(map[string]struct{}, len(cfg.Plugins.Enabled))
 
@@ -369,7 +343,7 @@ func printEnabledPluginTable(cfg *config.Config) error {
 
 	sort.Strings(names)
 
-	statuses := plugins.EnabledPluginStatus(cfg.PluginsDir, names)
+	statuses := project.EnabledStatuses(names)
 
 	type row struct {
 		Name    string
@@ -392,7 +366,7 @@ func printEnabledPluginTable(cfg *config.Config) error {
 		title := "-"
 		version := "-"
 
-		meta, err := plugins.LoadMetadata(cfg.PluginsDir, name)
+		meta, err := project.Metadata(name)
 		if err == nil {
 			if strings.TrimSpace(meta.Title) != "" {
 				title = meta.Title
@@ -447,86 +421,6 @@ func printInstalledPluginTable(metas []plugins.Metadata) error {
 	}
 
 	return nil
-}
-
-type MissingDependency struct {
-	Repo      string
-	Installed bool
-	Name      string
-}
-
-func findMissingPluginDependencies(cfg *config.Config, installed plugins.Metadata) ([]MissingDependency, error) {
-	if len(installed.Requires) == 0 {
-		return nil, nil
-	}
-
-	enabledMetadata, err := plugins.LoadAllMetadata(cfg.PluginsDir, cfg.Plugins.Enabled)
-	if err != nil {
-		return nil, err
-	}
-
-	enabledRepos := make(map[string]string, len(enabledMetadata))
-	for name, meta := range enabledMetadata {
-		repo := strings.TrimSpace(meta.Repo)
-		if repo == "" {
-			continue
-		}
-		enabledRepos[repo] = name
-	}
-
-	installedOnDisk, err := scanInstalledPluginRepos(cfg.PluginsDir)
-	if err != nil {
-		return nil, err
-	}
-
-	missing := make([]MissingDependency, 0)
-	seen := make(map[string]struct{})
-
-	for _, dep := range installed.Requires {
-		dep = strings.TrimSpace(dep)
-		if dep == "" {
-			continue
-		}
-		if _, ok := enabledRepos[dep]; ok {
-			continue
-		}
-		if _, dup := seen[dep]; dup {
-			continue
-		}
-		seen[dep] = struct{}{}
-
-		md := MissingDependency{Repo: dep}
-		if name, ok := installedOnDisk[dep]; ok {
-			md.Installed = true
-			md.Name = name
-		}
-
-		missing = append(missing, md)
-	}
-
-	sort.Slice(missing, func(i, j int) bool {
-		return missing[i].Repo < missing[j].Repo
-	})
-
-	return missing, nil
-}
-
-func scanInstalledPluginRepos(pluginsDir string) (map[string]string, error) {
-	metas, err := plugins.ListInstalled(pluginsDir)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make(map[string]string)
-	for _, meta := range metas {
-		repo := strings.TrimSpace(meta.Repo)
-		if repo == "" {
-			continue
-		}
-		out[repo] = meta.Name
-	}
-
-	return out, nil
 }
 
 func init() {
