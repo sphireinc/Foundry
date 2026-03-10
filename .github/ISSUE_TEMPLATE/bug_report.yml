@@ -70,7 +70,7 @@ body:
     attributes:
       label: Go version
       description: Output of `go version`
-      placeholder: go1.24.x
+      placeholder: go1.25.x
     validations:
       required: true
 
