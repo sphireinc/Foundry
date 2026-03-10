@@ -54,8 +54,17 @@ type ContentConfig struct {
 }
 
 type TaxonomyConfig struct {
-	Enabled    bool     `yaml:"enabled"`
-	DefaultSet []string `yaml:"default_set"`
+	Enabled     bool                          `yaml:"enabled"`
+	DefaultSet  []string                      `yaml:"default_set"`
+	Definitions map[string]TaxonomyDefinition `yaml:"definitions"`
+}
+
+type TaxonomyDefinition struct {
+	Title         string            `yaml:"title"`
+	Labels        map[string]string `yaml:"labels"`
+	ArchiveLayout string            `yaml:"archive_layout"`
+	TermLayout    string            `yaml:"term_layout"`
+	Order         string            `yaml:"order"`
 }
 
 type PluginConfig struct {
@@ -158,6 +167,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Taxonomies.DefaultSet == nil {
 		c.Taxonomies.DefaultSet = []string{"tags", "categories"}
+	}
+	if c.Taxonomies.Definitions == nil {
+		c.Taxonomies.Definitions = map[string]TaxonomyDefinition{}
 	}
 	if c.Feed.RSSPath == "" {
 		c.Feed.RSSPath = "/rss.xml"

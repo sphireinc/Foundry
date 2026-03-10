@@ -44,6 +44,19 @@ taxonomies:
   default_set:
     - tags
     - categories
+  definitions:
+    tags:
+      title: Tags
+      labels:
+        en: Tags
+        es: Etiquetas
+      term_layout: list
+    categories:
+      title: Categories
+      labels:
+        en: Categories
+        es: Categorías
+      term_layout: list
 
 plugins:
   enabled:

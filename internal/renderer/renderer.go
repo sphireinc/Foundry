@@ -245,8 +245,12 @@ func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.Sit
 		return err
 	}
 
-	for taxonomyName, terms := range graph.Taxonomies.Values {
-		for term, entries := range terms {
+	for _, taxonomyName := range graph.Taxonomies.OrderedNames() {
+		terms := graph.Taxonomies.Values[taxonomyName]
+		def := graph.Taxonomies.Definition(taxonomyName)
+
+		for _, term := range graph.Taxonomies.OrderedTerms(taxonomyName) {
+			entries := terms[term]
 			byLang := make(map[string][]*content.Document)
 
 			for _, entry := range entries {
@@ -262,10 +266,11 @@ func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.Sit
 					return docs[i].URL < docs[j].URL
 				})
 
-				title := fmt.Sprintf("%s: %s", taxonomyName, term)
+				title := fmt.Sprintf("%s: %s", def.DisplayTitle(lang), term)
 				currentURL := r.taxonomyURL(lang, taxonomyName, term)
+				layout := def.EffectiveTermLayout()
 
-				html, err := r.renderTemplate("list", currentURL, ViewData{
+				html, err := r.renderTemplate(layout, currentURL, ViewData{
 					Site:         graph.Config,
 					Data:         graph.Data,
 					Lang:         lang,
@@ -420,11 +425,13 @@ func (r *Renderer) findTaxonomyArchive(graph *content.SiteGraph, urlPath string,
 		return docs[i].URL < docs[j].URL
 	})
 
+	def := graph.Taxonomies.Definition(taxonomyName)
+
 	return ViewData{
 		Site:         graph.Config,
 		Data:         graph.Data,
 		Lang:         lang,
-		Title:        fmt.Sprintf("%s: %s", taxonomyName, term),
+		Title:        fmt.Sprintf("%s: %s", def.DisplayTitle(lang), term),
 		Documents:    docs,
 		LiveReload:   liveReload,
 		TaxonomyName: taxonomyName,

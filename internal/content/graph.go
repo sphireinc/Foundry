@@ -22,7 +22,7 @@ func NewSiteGraph(cfg *config.Config) *SiteGraph {
 		ByURL:      make(map[string]*Document),
 		ByType:     make(map[string][]*Document),
 		ByLang:     make(map[string][]*Document),
-		Taxonomies: taxonomy.New(),
+		Taxonomies: taxonomy.New(buildTaxonomyDefinitions(cfg)),
 		Data:       make(map[string]any),
 	}
 }
@@ -45,4 +45,32 @@ func (g *SiteGraph) Add(doc *Document) {
 		doc.Slug,
 		doc.Taxonomies,
 	)
+}
+
+func buildTaxonomyDefinitions(cfg *config.Config) map[string]taxonomy.Definition {
+	out := make(map[string]taxonomy.Definition)
+
+	if cfg == nil {
+		return out
+	}
+
+	for _, name := range cfg.Taxonomies.DefaultSet {
+		if name == "" {
+			continue
+		}
+		out[name] = taxonomy.Definition{Name: name}
+	}
+
+	for name, def := range cfg.Taxonomies.Definitions {
+		out[name] = taxonomy.Definition{
+			Name:          name,
+			Title:         def.Title,
+			Labels:        def.Labels,
+			ArchiveLayout: def.ArchiveLayout,
+			TermLayout:    def.TermLayout,
+			Order:         def.Order,
+		}
+	}
+
+	return out
 }

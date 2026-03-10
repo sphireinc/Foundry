@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
@@ -142,16 +141,22 @@ func runNew(cfg *config.Config, args []string) error {
 		return fmt.Errorf("slug must not be empty")
 	}
 
+	var path string
 	switch kind {
 	case "page":
-		path := filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, slug+".md")
-		return writeNewContentFile(path, buildPageTemplate(cfg, slug))
+		path = filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, slug+".md")
 	case "post":
-		path := filepath.Join(cfg.ContentDir, cfg.Content.PostsDir, slug+".md")
-		return writeNewContentFile(path, buildPostTemplate(cfg, slug))
+		path = filepath.Join(cfg.ContentDir, cfg.Content.PostsDir, slug+".md")
 	default:
 		return fmt.Errorf("unknown content type: %s", kind)
 	}
+
+	body, err := content.BuildNewContent(cfg, kind, slug)
+	if err != nil {
+		return err
+	}
+
+	return writeNewContentFile(path, body)
 }
 
 func runList(cfg *config.Config) error {
@@ -260,23 +265,12 @@ func runGraph(cfg *config.Config) error {
 
 	if graph.Taxonomies.Values != nil && len(graph.Taxonomies.Values) > 0 {
 		fmt.Println("Taxonomies:")
-		taxNames := make([]string, 0, len(graph.Taxonomies.Values))
-		for name := range graph.Taxonomies.Values {
-			taxNames = append(taxNames, name)
-		}
-		sort.Strings(taxNames)
-
-		for _, name := range taxNames {
+		for _, name := range graph.Taxonomies.OrderedNames() {
+			def := graph.Taxonomies.Definition(name)
 			terms := graph.Taxonomies.Values[name]
-			fmt.Printf("- %s: %d term(s)\n", name, len(terms))
+			fmt.Printf("- %s (%s): %d term(s)\n", name, def.DisplayTitle(cfg.DefaultLang), len(terms))
 
-			termNames := make([]string, 0, len(terms))
-			for term := range terms {
-				termNames = append(termNames, term)
-			}
-			sort.Strings(termNames)
-
-			for _, term := range termNames {
+			for _, term := range graph.Taxonomies.OrderedTerms(name) {
 				fmt.Printf("  - %s: %d document(s)\n", term, len(terms[term]))
 			}
 		}
@@ -327,60 +321,6 @@ func normalizeSlug(s string) string {
 	}
 	s = strings.Trim(s, "-")
 	return s
-}
-
-func humanizeSlug(slug string) string {
-	if slug == "" {
-		return ""
-	}
-	parts := strings.Split(slug, "-")
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(part[:1]) + part[1:]
-	}
-	return strings.Join(parts, " ")
-}
-
-func buildPageTemplate(cfg *config.Config, slug string) string {
-	title := humanizeSlug(slug)
-	layout := cfg.Content.DefaultLayoutPage
-	if strings.TrimSpace(layout) == "" {
-		layout = "page"
-	}
-
-	return fmt.Sprintf(`---
-title: %s
-slug: %s
-layout: %s
-draft: false
----
-
-# %s
-
-`, title, slug, layout, title)
-}
-
-func buildPostTemplate(cfg *config.Config, slug string) string {
-	title := humanizeSlug(slug)
-	layout := cfg.Content.DefaultLayoutPost
-	if strings.TrimSpace(layout) == "" {
-		layout = "post"
-	}
-
-	return fmt.Sprintf(`---
-title: %s
-slug: %s
-layout: %s
-draft: true
-date: %s
-summary: ""
----
-
-# %s
-
-`, title, slug, layout, time.Now().Format("2006-01-02"), title)
 }
 
 func writeNewContentFile(path, body string) error {
