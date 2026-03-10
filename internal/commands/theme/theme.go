@@ -71,19 +71,48 @@ func runList(cfg *config.Config) error {
 	}
 
 	nameWidth := len("NAME")
-	for _, t := range themes {
-		if len(t.Name) > nameWidth {
-			nameWidth = len(t.Name)
-		}
+	versionWidth := len("VERSION")
+
+	type row struct {
+		Name    string
+		Version string
+		Title   string
+		Status  string
 	}
 
-	fmt.Printf("%-*s  %s\n", nameWidth, "NAME", "STATUS")
+	rows := make([]row, 0, len(themes))
 	for _, t := range themes {
+		manifest, err := theme.LoadManifest(cfg.ThemesDir, t.Name)
+		title := t.Name
+		version := "-"
+		if err == nil {
+			title = manifest.Title
+			version = manifest.Version
+		}
+
 		status := ""
 		if t.Name == cfg.Theme {
 			status = "current"
 		}
-		fmt.Printf("%-*s  %s\n", nameWidth, t.Name, status)
+
+		rows = append(rows, row{
+			Name:    t.Name,
+			Version: version,
+			Title:   title,
+			Status:  status,
+		})
+
+		if len(t.Name) > nameWidth {
+			nameWidth = len(t.Name)
+		}
+		if len(version) > versionWidth {
+			versionWidth = len(version)
+		}
+	}
+
+	fmt.Printf("%-*s  %-*s  %-20s  %s\n", nameWidth, "NAME", versionWidth, "VERSION", "TITLE", "STATUS")
+	for _, row := range rows {
+		fmt.Printf("%-*s  %-*s  %-20s  %s\n", nameWidth, row.Name, versionWidth, row.Version, row.Title, row.Status)
 	}
 
 	return nil
@@ -104,7 +133,15 @@ func runValidate(cfg *config.Config, args []string) error {
 		return err
 	}
 
+	manifest, err := theme.LoadManifest(cfg.ThemesDir, name)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Theme %q is valid\n", name)
+	fmt.Printf("Title: %s\n", manifest.Title)
+	fmt.Printf("Version: %s\n", manifest.Version)
+	fmt.Printf("Min Foundry Version: %s\n", manifest.MinFoundryVersion)
 	return nil
 }
 

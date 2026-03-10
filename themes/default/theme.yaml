@@ -1,0 +1,25 @@
+name: default
+title: Default Theme
+version: 0.1.0
+description: The default Foundry theme.
+author: Sphire
+license: MIT
+min_foundry_version: 0.1.0
+layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+slots:
+  - head.end
+  - body.start
+  - body.end
+  - page.before_main
+  - page.after_main
+  - page.before_content
+  - page.after_content
+  - post.before_header
+  - post.after_header
+  - post.before_content
+  - post.after_content

@@ -8,11 +8,24 @@ import (
 	"strings"
 
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 type Info struct {
 	Name string
 	Path string
+}
+
+type Manifest struct {
+	Name              string   `yaml:"name"`
+	Title             string   `yaml:"title"`
+	Version           string   `yaml:"version"`
+	Description       string   `yaml:"description"`
+	Author            string   `yaml:"author"`
+	License           string   `yaml:"license"`
+	MinFoundryVersion string   `yaml:"min_foundry_version"`
+	Layouts           []string `yaml:"layouts"`
+	Slots             []string `yaml:"slots"`
 }
 
 func ListInstalled(themesDir string) ([]Info, error) {
@@ -43,6 +56,39 @@ func ListInstalled(themesDir string) ([]Info, error) {
 	return out, nil
 }
 
+func LoadManifest(themesDir, name string) (*Manifest, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("theme name cannot be empty")
+	}
+
+	path := filepath.Join(themesDir, name, "theme.yaml")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("theme %q is missing theme.yaml", name)
+		}
+		return nil, err
+	}
+
+	var m Manifest
+	if err := yaml.Unmarshal(b, &m); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	if strings.TrimSpace(m.Name) == "" {
+		m.Name = name
+	}
+	if strings.TrimSpace(m.Title) == "" {
+		m.Title = m.Name
+	}
+	if strings.TrimSpace(m.Version) == "" {
+		m.Version = "0.0.0"
+	}
+
+	return &m, nil
+}
+
 func ValidateInstalled(themesDir, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -61,21 +107,40 @@ func ValidateInstalled(themesDir, name string) error {
 		return fmt.Errorf("theme path %q is not a directory", root)
 	}
 
-	required := []string{
-		filepath.Join(root, "layouts", "base.html"),
-		filepath.Join(root, "layouts", "index.html"),
-		filepath.Join(root, "layouts", "page.html"),
-		filepath.Join(root, "layouts", "post.html"),
-		filepath.Join(root, "layouts", "list.html"),
+	manifest, err := LoadManifest(themesDir, name)
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(manifest.Name) != name {
+		return fmt.Errorf("theme manifest name %q must match directory %q", manifest.Name, name)
+	}
+
+	requiredLayouts := manifest.Layouts
+	if len(requiredLayouts) == 0 {
+		requiredLayouts = []string{"base", "index", "page", "post", "list"}
+	}
+
+	for _, layout := range requiredLayouts {
+		path := filepath.Join(root, "layouts", layout+".html")
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("missing required theme layout: %s", path)
+			}
+			return err
+		}
+	}
+
+	requiredPartials := []string{
 		filepath.Join(root, "layouts", "partials", "head.html"),
 		filepath.Join(root, "layouts", "partials", "header.html"),
 		filepath.Join(root, "layouts", "partials", "footer.html"),
 	}
 
-	for _, path := range required {
+	for _, path := range requiredPartials {
 		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
-				return fmt.Errorf("missing required theme file: %s", path)
+				return fmt.Errorf("missing required theme partial: %s", path)
 			}
 			return err
 		}
@@ -113,6 +178,7 @@ func Scaffold(themesDir, name string) (string, error) {
 	}
 
 	files := map[string]string{
+		filepath.Join(root, "theme.yaml"):                         scaffoldManifest(name),
 		filepath.Join(root, "assets", "css", "base.css"):          scaffoldCSS(),
 		filepath.Join(root, "layouts", "base.html"):               scaffoldBase(),
 		filepath.Join(root, "layouts", "index.html"):              scaffoldIndex(),
@@ -140,6 +206,46 @@ func SwitchInConfig(configPath, themeName string) error {
 	}
 
 	return foundryconfig.UpsertTopLevelScalar(configPath, "theme", themeName)
+}
+
+func scaffoldManifest(name string) string {
+	return fmt.Sprintf(`name: %s
+title: %s
+version: 0.1.0
+description: A Foundry theme.
+author: Unknown
+license: MIT
+min_foundry_version: 0.1.0
+layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+slots:
+  - head.end
+  - body.start
+  - body.end
+  - page.before_main
+  - page.after_main
+  - page.before_content
+  - page.after_content
+  - post.before_header
+  - post.after_header
+  - post.before_content
+  - post.after_content
+`, name, humanizeName(name))
+}
+
+func humanizeName(name string) string {
+	parts := strings.Split(strings.ReplaceAll(name, "_", "-"), "-")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, " ")
 }
 
 func scaffoldCSS() string {
