@@ -14,8 +14,6 @@ import (
 	"github.com/sphireinc/foundry/internal/logx"
 
 	adminhttp "github.com/sphireinc/foundry/internal/admin/http"
-	adminservice "github.com/sphireinc/foundry/internal/admin/service"
-
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/renderer"
@@ -81,10 +79,7 @@ func main() {
 
 	case "serve":
 		loader := content.NewLoader(cfg, pluginManager, false)
-		adminSvc := adminservice.New(cfg)
-		adminRouter := adminhttp.New(cfg, adminSvc)
-		hooks := adminhttp.WrapHooks(pluginManager, adminRouter)
-
+		hooks := adminhttp.NewHooks(cfg, pluginManager)
 		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, false)
 		if err := srv.ListenAndServe(ctx); err != nil {
 			exitWithError(diag.Wrap(diag.KindServe, "serve site", err))
@@ -92,10 +87,7 @@ func main() {
 
 	case "serve-preview":
 		loader := content.NewLoader(cfg, pluginManager, true)
-		adminSvc := adminservice.New(cfg)
-		adminRouter := adminhttp.New(cfg, adminSvc)
-		hooks := adminhttp.WrapHooks(pluginManager, adminRouter)
-
+		hooks := adminhttp.NewHooks(cfg, pluginManager)
 		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, true)
 		if err := srv.ListenAndServe(ctx); err != nil {
 			exitWithError(diag.Wrap(diag.KindServe, "serve preview site", err))

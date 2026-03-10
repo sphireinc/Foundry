@@ -1,12 +1,11 @@
 package httpadmin
 
 import (
-	"fmt"
-	"html"
 	"net/http"
 
 	adminauth "github.com/sphireinc/foundry/internal/admin/auth"
 	"github.com/sphireinc/foundry/internal/admin/service"
+	adminui "github.com/sphireinc/foundry/internal/admin/ui"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/server"
@@ -39,6 +38,19 @@ func New(cfg *config.Config, svc *service.Service) *Router {
 	return r
 }
 
+func NewHooks(cfg *config.Config, base server.Hooks, opts ...service.Option) server.Hooks {
+	if cfg == nil || !cfg.Admin.Enabled {
+		if base == nil {
+			return hookBase{}
+		}
+		return base
+	}
+
+	svc := service.New(cfg, opts...)
+	router := New(cfg, svc)
+	return WrapHooks(base, router)
+}
+
 func (r *Router) RegisterRegistrar(reg Registrar) {
 	if reg == nil {
 		return
@@ -63,35 +75,7 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 
 func (r *Router) handleIndex(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	_, _ = fmt.Fprintf(w, `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>%s Admin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
-    h1 { margin-bottom: 0.25rem; }
-    code { background: #f4f4f4; padding: 2px 6px; border-radius: 6px; }
-    ul { padding-left: 20px; }
-    .muted { color: #666; }
-  </style>
-</head>
-<body>
-  <h1>%s Admin</h1>
-  <p class="muted">Filesystem-first admin boundary for Foundry.</p>
-
-  <h2>Available endpoints</h2>
-  <ul>
-    <li><code>GET /__admin/api/status</code></li>
-    <li><code>GET /__admin/api/documents</code></li>
-    <li><code>GET /__admin/api/document?id=&lt;document-id-or-path&gt;</code></li>
-    <li><code>POST /__admin/api/documents/save</code></li>
-    <li><code>POST /__admin/api/documents/preview</code></li>
-  </ul>
-</body>
-</html>`, html.EscapeString(r.cfg.Title), html.EscapeString(r.cfg.Title))
+	_, _ = w.Write([]byte(adminui.IndexHTML(r.cfg.Title)))
 }
 
 func WrapHooks(base server.Hooks, admin *Router) server.Hooks {
