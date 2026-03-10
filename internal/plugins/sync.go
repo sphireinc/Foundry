@@ -26,18 +26,6 @@ type syncSiteConfig struct {
 	} `yaml:"plugins"`
 }
 
-type syncPluginMetadata struct {
-	Name        string   `yaml:"name"`
-	Title       string   `yaml:"title"`
-	Version     string   `yaml:"version"`
-	Description string   `yaml:"description"`
-	Author      string   `yaml:"author"`
-	Homepage    string   `yaml:"homepage"`
-	License     string   `yaml:"license"`
-	Repo        string   `yaml:"repo"`
-	Requires    []string `yaml:"requires"`
-}
-
 type SyncOptions struct {
 	ConfigPath string
 	PluginsDir string
@@ -159,47 +147,8 @@ func validatePluginForSync(pluginsDir, name string) error {
 		return fmt.Errorf("plugin %q has no .go files under %q", name, root)
 	}
 
-	if err := validateMetadataForSync(pluginsDir, name); err != nil {
+	if _, err := LoadMetadata(pluginsDir, name); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func validateMetadataForSync(pluginsDir, name string) error {
-	path := filepath.Join(pluginsDir, name, "plugin.yaml")
-
-	b, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-
-	var meta syncPluginMetadata
-	if err := yaml.Unmarshal(b, &meta); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
-	}
-
-	meta.Name = strings.TrimSpace(meta.Name)
-	if meta.Name != "" && meta.Name != name {
-		return fmt.Errorf("%s: metadata name %q must match plugin directory %q", path, meta.Name, name)
-	}
-
-	meta.Repo = normalizeRepoRef(meta.Repo)
-	if meta.Repo != "" && !isValidRepoRef(meta.Repo) {
-		return fmt.Errorf("%s: invalid repo %q", path, meta.Repo)
-	}
-
-	for _, dep := range meta.Requires {
-		dep = normalizeRepoRef(dep)
-		if dep == "" {
-			continue
-		}
-		if !isValidRepoRef(dep) {
-			return fmt.Errorf("%s: invalid requires entry %q", path, dep)
-		}
 	}
 
 	return nil

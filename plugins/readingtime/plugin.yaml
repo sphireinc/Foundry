@@ -5,3 +5,5 @@ description: Estimates reading time and word count for content
 author: Juan Sanchez <jsanchez@sphire.co>
 homepage: https://github.com/sphireinc/foundry/plugins/readingtime
 license: MIT
+foundry_api: v1
+min_foundry_version: 0.1.0

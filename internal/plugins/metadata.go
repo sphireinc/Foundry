@@ -10,16 +10,18 @@ import (
 )
 
 type Metadata struct {
-	Name        string   `yaml:"name"`
-	Title       string   `yaml:"title"`
-	Version     string   `yaml:"version"`
-	Description string   `yaml:"description"`
-	Author      string   `yaml:"author"`
-	Homepage    string   `yaml:"homepage"`
-	License     string   `yaml:"license"`
-	Repo        string   `yaml:"repo"`
-	Requires    []string `yaml:"requires"`
-	Directory   string   `yaml:"-"`
+	Name              string   `yaml:"name"`
+	Title             string   `yaml:"title"`
+	Version           string   `yaml:"version"`
+	Description       string   `yaml:"description"`
+	Author            string   `yaml:"author"`
+	Homepage          string   `yaml:"homepage"`
+	License           string   `yaml:"license"`
+	Repo              string   `yaml:"repo"`
+	Requires          []string `yaml:"requires"`
+	FoundryAPI        string   `yaml:"foundry_api"`
+	MinFoundryVersion string   `yaml:"min_foundry_version"`
+	Directory         string   `yaml:"-"`
 }
 
 func LoadMetadata(pluginsDir, name string) (Metadata, error) {
@@ -52,6 +54,8 @@ func LoadMetadata(pluginsDir, name string) (Metadata, error) {
 	meta.Homepage = strings.TrimSpace(meta.Homepage)
 	meta.License = strings.TrimSpace(meta.License)
 	meta.Repo = normalizeRepoRef(meta.Repo)
+	meta.FoundryAPI = strings.TrimSpace(meta.FoundryAPI)
+	meta.MinFoundryVersion = strings.TrimSpace(meta.MinFoundryVersion)
 	meta.Directory = filepath.Join(pluginsDir, name)
 
 	if meta.Name == "" {
@@ -78,6 +82,10 @@ func LoadMetadata(pluginsDir, name string) (Metadata, error) {
 		reqs = append(reqs, r)
 	}
 	meta.Requires = reqs
+
+	if err := validateMetadataCompatibility(meta); err != nil {
+		return Metadata{}, fmt.Errorf("validate plugin metadata %s: %w", path, err)
+	}
 
 	return meta, nil
 }

@@ -121,6 +121,8 @@ func runInfo(project plugins.Project, args []string) error {
 	fmt.Printf("Name:        %s\n", meta.Name)
 	fmt.Printf("Title:       %s\n", meta.Title)
 	fmt.Printf("Version:     %s\n", meta.Version)
+	fmt.Printf("Foundry API:  %s\n", meta.FoundryAPI)
+	fmt.Printf("Min Foundry:  %s\n", meta.MinFoundryVersion)
 	fmt.Printf("Description: %s\n", meta.Description)
 	fmt.Printf("Author:      %s\n", meta.Author)
 	fmt.Printf("Homepage:    %s\n", meta.Homepage)
@@ -422,6 +424,7 @@ func printEnabledPluginTable(cfg *config.Config, project plugins.Project) error 
 func printInstalledPluginTable(metas []plugins.Metadata) error {
 	nameWidth := len("NAME")
 	versionWidth := len("VERSION")
+	apiWidth := len("API")
 
 	for _, meta := range metas {
 		if len(meta.Name) > nameWidth {
@@ -430,11 +433,14 @@ func printInstalledPluginTable(metas []plugins.Metadata) error {
 		if len(meta.Version) > versionWidth {
 			versionWidth = len(meta.Version)
 		}
+		if len(meta.FoundryAPI) > apiWidth {
+			apiWidth = len(meta.FoundryAPI)
+		}
 	}
 
-	fmt.Printf("%-*s  %-*s  %s\n", nameWidth, "NAME", versionWidth, "VERSION", "TITLE")
+	fmt.Printf("%-*s  %-*s  %-*s  %s\n", nameWidth, "NAME", versionWidth, "VERSION", apiWidth, "API", "TITLE")
 	for _, meta := range metas {
-		fmt.Printf("%-*s  %-*s  %s\n", nameWidth, meta.Name, versionWidth, meta.Version, meta.Title)
+		fmt.Printf("%-*s  %-*s  %-*s  %s\n", nameWidth, meta.Name, versionWidth, meta.Version, apiWidth, meta.FoundryAPI, meta.Title)
 	}
 
 	return nil

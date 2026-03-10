@@ -96,7 +96,20 @@ func enabledPluginStatus(pluginsDir, name string) string {
 
 	meta, err := LoadMetadata(pluginsDir, name)
 	if err != nil {
-		return "metadata error"
+		msg := err.Error()
+
+		switch {
+		case strings.Contains(msg, "read ") && strings.Contains(msg, "plugin.yaml"):
+			return "metadata missing"
+		case strings.Contains(msg, "missing required field \"foundry_api\""):
+			return "api missing"
+		case strings.Contains(msg, "unsupported foundry_api"):
+			return "api unsupported"
+		case strings.Contains(msg, "missing required field \"min_foundry_version\""):
+			return "version missing"
+		default:
+			return "metadata error"
+		}
 	}
 
 	if err := validatePluginForSync(pluginsDir, name); err != nil {
@@ -105,10 +118,6 @@ func enabledPluginStatus(pluginsDir, name string) string {
 		switch {
 		case strings.Contains(msg, "does not exist"):
 			return "not installed"
-		case strings.Contains(msg, "read ") && strings.Contains(msg, "plugin.yaml"):
-			return "metadata missing"
-		case strings.Contains(msg, "parse "):
-			return "metadata error"
 		case strings.Contains(msg, "metadata name"):
 			return "metadata invalid"
 		case strings.Contains(msg, "invalid repo"):
