@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -18,43 +19,60 @@ func (v ValidationIssue) String() string {
 	return fmt.Sprintf("%s: %s: %v", v.Name, v.Status, v.Err)
 }
 
-func ValidateEnabledPlugins(pluginsDir string, enabled []string) []ValidationIssue {
-	issues := make([]ValidationIssue, 0)
+type PluginValidationReport struct {
+	Passed []string
+	Issues []ValidationIssue
+}
 
-	metadata, err := LoadAllMetadata(pluginsDir, enabled)
-	if err != nil {
-		issues = append(issues, ValidationIssue{
-			Name:   "*",
-			Status: "metadata load failed",
-			Err:    err,
-		})
-		return issues
+func ValidateEnabledPlugins(pluginsDir string, enabled []string) PluginValidationReport {
+	report := PluginValidationReport{
+		Passed: make([]string, 0),
+		Issues: make([]ValidationIssue, 0),
 	}
 
+	normalized := make([]string, 0, len(enabled))
 	for _, name := range enabled {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
+		normalized = append(normalized, name)
+	}
 
+	sort.Strings(normalized)
+
+	metadata, err := LoadAllMetadata(pluginsDir, normalized)
+	if err != nil {
+		report.Issues = append(report.Issues, ValidationIssue{
+			Name:   "*",
+			Status: "metadata load failed",
+			Err:    err,
+		})
+		return report
+	}
+
+	for _, name := range normalized {
 		if err := validatePluginForSync(pluginsDir, name); err != nil {
-			issues = append(issues, ValidationIssue{
+			report.Issues = append(report.Issues, ValidationIssue{
 				Name:   name,
 				Status: "invalid",
 				Err:    err,
 			})
+			continue
 		}
+
+		report.Passed = append(report.Passed, name)
 	}
 
 	if err := validateDependencies(metadata); err != nil {
-		issues = append(issues, ValidationIssue{
+		report.Issues = append(report.Issues, ValidationIssue{
 			Name:   "*",
 			Status: "dependency validation failed",
 			Err:    err,
 		})
 	}
 
-	return issues
+	return report
 }
 
 func EnabledPluginStatus(pluginsDir string, enabled []string) map[string]string {
@@ -87,7 +105,9 @@ func enabledPluginStatus(pluginsDir, name string) string {
 		switch {
 		case strings.Contains(msg, "does not exist"):
 			return "not installed"
-		case strings.Contains(msg, "read "+name) || strings.Contains(msg, "parse "):
+		case strings.Contains(msg, "read ") && strings.Contains(msg, "plugin.yaml"):
+			return "metadata missing"
+		case strings.Contains(msg, "parse "):
 			return "metadata error"
 		case strings.Contains(msg, "metadata name"):
 			return "metadata invalid"

@@ -67,7 +67,7 @@ func (p Project) Validate(name string) error {
 	return ValidateInstalledPlugin(p.PluginsDir, name)
 }
 
-func (p Project) ValidateEnabled(enabled []string) []ValidationIssue {
+func (p Project) ValidateEnabled(enabled []string) PluginValidationReport {
 	return ValidateEnabledPlugins(p.PluginsDir, enabled)
 }
 

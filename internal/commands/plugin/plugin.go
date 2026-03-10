@@ -260,21 +260,38 @@ func runValidate(cfg *config.Config, project plugins.Project, args []string) err
 		if err := project.Validate(name); err != nil {
 			return err
 		}
-		fmt.Printf("Plugin %q is valid\n", name)
+		fmt.Println("Plugin validation")
+		fmt.Println("")
+		fmt.Println("Legend:")
+		fmt.Println("  OK    valid and loadable")
+		fmt.Println("  FAIL  invalid or not loadable")
+		fmt.Println("")
+		fmt.Printf("[OK]   %s\n", name)
 		return nil
 	}
 
-	issues := project.ValidateEnabled(cfg.Plugins.Enabled)
-	if len(issues) == 0 {
-		fmt.Printf("All %d enabled plugin(s) are valid\n", len(cfg.Plugins.Enabled))
-		return nil
-	}
+	report := project.ValidateEnabled(cfg.Plugins.Enabled)
 
-	for _, issue := range issues {
+	fmt.Println("Plugin validation")
+	fmt.Println("")
+	fmt.Println("Legend:")
+	fmt.Println("  OK    valid and loadable")
+	fmt.Println("  FAIL  invalid or not loadable")
+	fmt.Println("")
+
+	for _, name := range report.Passed {
+		fmt.Printf("[OK]   %s\n", name)
+	}
+	for _, issue := range report.Issues {
 		fmt.Printf("[FAIL] %s\n", issue.String())
 	}
 
-	return fmt.Errorf("plugin validation failed with %d issue(s)", len(issues))
+	if len(report.Issues) == 0 {
+		fmt.Printf("\nAll %d enabled plugin(s) are valid\n", len(report.Passed))
+		return nil
+	}
+
+	return fmt.Errorf("plugin validation failed with %d issue(s)", len(report.Issues))
 }
 
 func runDeps(cfg *config.Config, project plugins.Project, args []string) error {
