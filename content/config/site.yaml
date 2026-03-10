@@ -15,6 +15,11 @@ server:
   auto_open_browser: false
   debug_routes: false
 
+admin:
+  enabled: false
+  addr: ""
+  local_only: true
+
 build:
   clean_public_dir: true
   include_drafts: false

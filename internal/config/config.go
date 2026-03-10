@@ -5,6 +5,7 @@ type Config struct {
 	Title       string                `yaml:"title"`
 	BaseURL     string                `yaml:"base_url"`
 	Theme       string                `yaml:"theme"`
+	Admin       AdminConfig           `yaml:"admin"`
 	DefaultLang string                `yaml:"default_lang"`
 	ContentDir  string                `yaml:"content_dir"`
 	PublicDir   string                `yaml:"public_dir"`
@@ -24,6 +25,12 @@ type Config struct {
 	Feed        FeedConfig            `yaml:"feed"`
 	Params      map[string]any        `yaml:"params"`
 	Menus       map[string][]MenuItem `yaml:"menus"`
+}
+
+type AdminConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Addr      string `yaml:"addr"`
+	LocalOnly bool   `yaml:"local_only"`
 }
 
 type ServerConfig struct {
@@ -111,6 +118,12 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Theme == "" {
 		c.Theme = "default"
+	}
+	if c.Admin.Addr == "" {
+		c.Admin.Addr = ""
+	}
+	if !c.Admin.LocalOnly {
+		c.Admin.LocalOnly = true
 	}
 	if c.DefaultLang == "" {
 		c.DefaultLang = "en"
