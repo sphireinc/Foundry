@@ -5,10 +5,14 @@ import (
 	"os"
 
 	"github.com/sphireinc/foundry/internal/consts"
+	"github.com/sphireinc/foundry/internal/diag"
+	"github.com/sphireinc/foundry/internal/logx"
 	"github.com/sphireinc/foundry/internal/plugins"
 )
 
 func main() {
+	logx.InitFromEnv()
+
 	project := plugins.NewProject(
 		consts.ConfigFilePath,
 		consts.PluginsDir,
@@ -17,7 +21,9 @@ func main() {
 	)
 
 	if err := project.Sync(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "sync plugins: %v\n", err)
-		os.Exit(1)
+		err = diag.Wrap(diag.KindPlugin, "sync plugins", err)
+		logx.Error("plugin sync failed", "kind", diag.KindOf(err), "error", err)
+		_, _ = fmt.Fprintln(os.Stderr, diag.Present(err))
+		os.Exit(diag.ExitCode(err))
 	}
 }
