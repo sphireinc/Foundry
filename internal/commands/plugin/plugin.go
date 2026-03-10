@@ -34,6 +34,7 @@ func (command) Details() []string {
 		"foundry plugin uninstall <name>",
 		"foundry plugin enable <name>",
 		"foundry plugin disable <name>",
+		"foundry plugin validate",
 		"foundry plugin validate <name>",
 		"foundry plugin deps <name>",
 		"foundry plugin update <name>",
@@ -60,9 +61,9 @@ func (command) Run(cfg *config.Config, args []string) error {
 	case "uninstall":
 		return runUninstall(cfg, args)
 	case "enable":
-		return runEnable(cfg, args)
+		return runEnable(args)
 	case "disable":
-		return runDisable(cfg, args)
+		return runDisable(args)
 	case "validate":
 		return runValidate(cfg, args)
 	case "deps":
@@ -73,7 +74,7 @@ func (command) Run(cfg *config.Config, args []string) error {
 		err := plugins.SyncFromConfig(plugins.SyncOptions{
 			ConfigPath: consts.ConfigFilePath,
 			PluginsDir: cfg.PluginsDir,
-			OutputPath: consts.GeneratedPluginsFile,
+			OutputPath: plugins.DefaultSyncOutputPath,
 			ModulePath: plugins.DefaultSyncModulePath,
 		})
 		if err != nil {
@@ -94,19 +95,13 @@ func runList(cfg *config.Config, args []string) error {
 
 	switch mode {
 	case "--enabled":
-		pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
-		if err != nil {
-			return err
-		}
-		return printMetadataTable(pm.MetadataList())
-
+		return printEnabledPluginTable(cfg)
 	case "--installed":
 		metas, err := plugins.ListInstalled(cfg.PluginsDir)
 		if err != nil {
 			return err
 		}
-		return printMetadataTable(metas)
-
+		return printInstalledPluginTable(metas)
 	default:
 		return fmt.Errorf("usage: foundry plugin list [--installed|--enabled]")
 	}
@@ -228,7 +223,7 @@ func runUninstall(cfg *config.Config, args []string) error {
 	return nil
 }
 
-func runEnable(_ *config.Config, args []string) error {
+func runEnable(args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin enable <name>")
 	}
@@ -245,7 +240,7 @@ func runEnable(_ *config.Config, args []string) error {
 	return nil
 }
 
-func runDisable(_ *config.Config, args []string) error {
+func runDisable(args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("usage: foundry plugin disable <name>")
 	}
@@ -263,17 +258,26 @@ func runDisable(_ *config.Config, args []string) error {
 }
 
 func runValidate(cfg *config.Config, args []string) error {
-	if len(args) < 4 {
-		return fmt.Errorf("usage: foundry plugin validate <name>")
+	if len(args) >= 4 {
+		name := strings.TrimSpace(args[3])
+		if err := plugins.ValidateInstalledPlugin(cfg.PluginsDir, name); err != nil {
+			return err
+		}
+		fmt.Printf("Plugin %q is valid\n", name)
+		return nil
 	}
 
-	name := strings.TrimSpace(args[3])
-	if err := plugins.ValidateInstalledPlugin(cfg.PluginsDir, name); err != nil {
-		return err
+	issues := plugins.ValidateEnabledPlugins(cfg.PluginsDir, cfg.Plugins.Enabled)
+	if len(issues) == 0 {
+		fmt.Printf("All %d enabled plugin(s) are valid\n", len(cfg.Plugins.Enabled))
+		return nil
 	}
 
-	fmt.Printf("Plugin %q is valid\n", name)
-	return nil
+	for _, issue := range issues {
+		fmt.Printf("[FAIL] %s\n", issue.String())
+	}
+
+	return fmt.Errorf("plugin validation failed with %d issue(s)", len(issues))
 }
 
 func runDeps(cfg *config.Config, args []string) error {
@@ -347,7 +351,84 @@ func runUpdate(cfg *config.Config, args []string) error {
 	return nil
 }
 
-func printMetadataTable(metas []plugins.Metadata) error {
+func printEnabledPluginTable(cfg *config.Config) error {
+	names := make([]string, 0, len(cfg.Plugins.Enabled))
+	seen := make(map[string]struct{}, len(cfg.Plugins.Enabled))
+
+	for _, name := range cfg.Plugins.Enabled {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	statuses := plugins.EnabledPluginStatus(cfg.PluginsDir, names)
+
+	type row struct {
+		Name    string
+		Status  string
+		Version string
+		Title   string
+	}
+
+	rows := make([]row, 0, len(names))
+	nameWidth := len("NAME")
+	statusWidth := len("STATUS")
+	versionWidth := len("VERSION")
+
+	for _, name := range names {
+		status := statuses[name]
+		if status == "" {
+			status = "enabled"
+		}
+
+		title := "-"
+		version := "-"
+
+		meta, err := plugins.LoadMetadata(cfg.PluginsDir, name)
+		if err == nil {
+			if strings.TrimSpace(meta.Title) != "" {
+				title = meta.Title
+			}
+			if strings.TrimSpace(meta.Version) != "" {
+				version = meta.Version
+			}
+		}
+
+		rows = append(rows, row{
+			Name:    name,
+			Status:  status,
+			Version: version,
+			Title:   title,
+		})
+
+		if len(name) > nameWidth {
+			nameWidth = len(name)
+		}
+		if len(status) > statusWidth {
+			statusWidth = len(status)
+		}
+		if len(version) > versionWidth {
+			versionWidth = len(version)
+		}
+	}
+
+	fmt.Printf("%-*s  %-*s  %-*s  %s\n", nameWidth, "NAME", statusWidth, "STATUS", versionWidth, "VERSION", "TITLE")
+	for _, row := range rows {
+		fmt.Printf("%-*s  %-*s  %-*s  %s\n", nameWidth, row.Name, statusWidth, row.Status, versionWidth, row.Version, row.Title)
+	}
+
+	return nil
+}
+
+func printInstalledPluginTable(metas []plugins.Metadata) error {
 	nameWidth := len("NAME")
 	versionWidth := len("VERSION")
 
