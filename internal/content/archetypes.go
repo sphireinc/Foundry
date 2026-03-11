@@ -8,11 +8,30 @@ import (
 	"time"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/i18n"
 )
 
 func BuildNewContent(cfg *config.Config, kind, slug string) (string, error) {
-	kind = strings.TrimSpace(kind)
-	slug = strings.TrimSpace(slug)
+	return BuildNewContentWithOptions(cfg, NewContentOptions{
+		Kind:      kind,
+		Slug:      slug,
+		Archetype: kind,
+		Lang:      cfg.DefaultLang,
+	})
+}
+
+type NewContentOptions struct {
+	Kind      string
+	Slug      string
+	Archetype string
+	Lang      string
+}
+
+func BuildNewContentWithOptions(cfg *config.Config, opts NewContentOptions) (string, error) {
+	kind := strings.TrimSpace(opts.Kind)
+	slug := strings.TrimSpace(opts.Slug)
+	archetype := strings.TrimSpace(opts.Archetype)
+	lang := normalizeContentLang(cfg, opts.Lang)
 
 	if kind == "" {
 		return "", fmt.Errorf("content kind must not be empty")
@@ -20,8 +39,11 @@ func BuildNewContent(cfg *config.Config, kind, slug string) (string, error) {
 	if slug == "" {
 		return "", fmt.Errorf("slug must not be empty")
 	}
+	if archetype == "" {
+		archetype = kind
+	}
 
-	if body, ok, err := loadArchetype(cfg, kind, slug); err != nil {
+	if body, ok, err := loadArchetype(cfg, archetype, kind, slug, lang); err != nil {
 		return "", err
 	} else if ok {
 		return body, nil
@@ -29,16 +51,16 @@ func BuildNewContent(cfg *config.Config, kind, slug string) (string, error) {
 
 	switch kind {
 	case "page":
-		return defaultPageArchetype(cfg, slug), nil
+		return defaultPageArchetype(cfg, slug, lang), nil
 	case "post":
-		return defaultPostArchetype(cfg, slug), nil
+		return defaultPostArchetype(cfg, slug, lang), nil
 	default:
 		return "", fmt.Errorf("unknown content type: %s", kind)
 	}
 }
 
-func loadArchetype(cfg *config.Config, kind, slug string) (string, bool, error) {
-	path := filepath.Join(cfg.ContentDir, "archetypes", kind+".md")
+func loadArchetype(cfg *config.Config, archetype, kind, slug, lang string) (string, bool, error) {
+	path := filepath.Join(cfg.ContentDir, "archetypes", archetype+".md")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -47,10 +69,10 @@ func loadArchetype(cfg *config.Config, kind, slug string) (string, bool, error) 
 		return "", false, fmt.Errorf("read archetype %s: %w", path, err)
 	}
 
-	return renderArchetype(cfg, kind, slug, string(b)), true, nil
+	return renderArchetype(cfg, kind, slug, lang, string(b)), true, nil
 }
 
-func renderArchetype(cfg *config.Config, kind, slug, body string) string {
+func renderArchetype(cfg *config.Config, kind, slug, lang, body string) string {
 	title := humanizeSlug(slug)
 
 	layout := cfg.Content.DefaultLayoutPage
@@ -73,7 +95,7 @@ func renderArchetype(cfg *config.Config, kind, slug, body string) string {
 		"{{layout}}": layout,
 		"{{draft}}":  draft,
 		"{{date}}":   date,
-		"{{lang}}":   cfg.DefaultLang,
+		"{{lang}}":   normalizeContentLang(cfg, lang),
 		"{{type}}":   kind,
 	}
 
@@ -84,44 +106,58 @@ func renderArchetype(cfg *config.Config, kind, slug, body string) string {
 	return body
 }
 
-func defaultPageArchetype(cfg *config.Config, slug string) string {
+func defaultPageArchetype(cfg *config.Config, slug, lang string) string {
 	title := humanizeSlug(slug)
 	layout := cfg.Content.DefaultLayoutPage
 	if strings.TrimSpace(layout) == "" {
 		layout = "page"
 	}
 
-	return fmt.Sprintf(`---
+	frontmatter := fmt.Sprintf(`---
 title: %s
 slug: %s
 layout: %s
 draft: false
----
+`, title, slug, layout)
 
-# %s
+	lang = normalizeContentLang(cfg, lang)
+	if lang != "" && lang != cfg.DefaultLang {
+		frontmatter += fmt.Sprintf("lang: %s\n", lang)
+	}
 
-`, title, slug, layout, title)
+	frontmatter += `---
+
+# ` + title + "\n\n"
+
+	return frontmatter
 }
 
-func defaultPostArchetype(cfg *config.Config, slug string) string {
+func defaultPostArchetype(cfg *config.Config, slug, lang string) string {
 	title := humanizeSlug(slug)
 	layout := cfg.Content.DefaultLayoutPost
 	if strings.TrimSpace(layout) == "" {
 		layout = "post"
 	}
 
-	return fmt.Sprintf(`---
+	frontmatter := fmt.Sprintf(`---
 title: %s
 slug: %s
 layout: %s
 draft: true
 date: %s
 summary: ""
----
+`, title, slug, layout, time.Now().Format("2006-01-02"))
 
-# %s
+	lang = normalizeContentLang(cfg, lang)
+	if lang != "" && lang != cfg.DefaultLang {
+		frontmatter += fmt.Sprintf("lang: %s\n", lang)
+	}
 
-`, title, slug, layout, time.Now().Format("2006-01-02"), title)
+	frontmatter += `---
+
+# ` + title + "\n\n"
+
+	return frontmatter
 }
 
 func humanizeSlug(slug string) string {
@@ -136,4 +172,16 @@ func humanizeSlug(slug string) string {
 		parts[i] = strings.ToUpper(part[:1]) + part[1:]
 	}
 	return strings.Join(parts, " ")
+}
+
+func normalizeContentLang(cfg *config.Config, lang string) string {
+	lang = strings.TrimSpace(lang)
+	if lang == "" {
+		return cfg.DefaultLang
+	}
+	lang = i18n.NormalizeTag(lang)
+	if !i18n.IsValidTag(lang) {
+		return cfg.DefaultLang
+	}
+	return lang
 }

@@ -60,3 +60,40 @@ type DocumentPreviewResponse struct {
 	HTML      string     `json:"html"`
 	WordCount int        `json:"word_count"`
 }
+
+type DocumentCreateRequest struct {
+	Kind      string `json:"kind"`
+	Slug      string `json:"slug"`
+	Lang      string `json:"lang,omitempty"`
+	Archetype string `json:"archetype,omitempty"`
+}
+
+type DocumentCreateResponse struct {
+	Kind       string `json:"kind"`
+	Slug       string `json:"slug"`
+	Lang       string `json:"lang"`
+	Archetype  string `json:"archetype"`
+	SourcePath string `json:"source_path"`
+	Created    bool   `json:"created"`
+}
+
+type DocumentMoveRequest struct {
+	SourcePath      string `json:"source_path"`
+	DestinationPath string `json:"destination_path"`
+}
+
+type DocumentMoveResponse struct {
+	SourcePath      string `json:"source_path"`
+	DestinationPath string `json:"destination_path"`
+	Operation       string `json:"operation"`
+}
+
+type DocumentDeleteRequest struct {
+	SourcePath string `json:"source_path"`
+}
+
+type DocumentDeleteResponse struct {
+	SourcePath string `json:"source_path"`
+	TrashPath  string `json:"trash_path"`
+	Operation  string `json:"operation"`
+}
