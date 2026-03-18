@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"html/template"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/config"
@@ -61,6 +64,62 @@ func TestSaveDocumentInvalidatesGraphCache(t *testing.T) {
 	}
 	if loads != 2 {
 		t.Fatalf("expected cache invalidation to force second load, got %d loads", loads)
+	}
+}
+
+func TestDocumentQueriesPreviewAndStatus(t *testing.T) {
+	cfg := testServiceConfig(t)
+	now := time.Now()
+	graph := content.NewSiteGraph(cfg)
+	doc := &content.Document{
+		ID:         "doc-1",
+		Type:       "page",
+		Lang:       "en",
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+		RawBody:    "# Hello",
+		HTMLBody:   template.HTML("<h1>Hello</h1>"),
+		Summary:    "Summary",
+		Date:       &now,
+		Taxonomies: map[string][]string{"tags": {"intro"}},
+	}
+	graph.Add(doc)
+
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return graph, nil
+	}))
+
+	list, err := svc.ListDocuments(context.Background(), types.DocumentListOptions{Query: "about"})
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list documents: %v %#v", err, list)
+	}
+	detail, err := svc.GetDocument(context.Background(), "doc-1", true)
+	if err != nil || detail.ID != "doc-1" {
+		t.Fatalf("get document: %v %#v", err, detail)
+	}
+
+	preview, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{
+		Raw: "---\ntitle: Preview\nslug: preview\n---\n\n# Hello",
+	})
+	if err != nil || preview.Title != "Preview" || !strings.Contains(preview.HTML, "<h1") {
+		t.Fatalf("preview document: %v %#v", err, preview)
+	}
+
+	status, err := svc.GetSystemStatus(context.Background())
+	if err != nil {
+		t.Fatalf("get system status: %v", err)
+	}
+	if status.Content.DocumentCount != 1 || len(status.Checks) == 0 {
+		t.Fatalf("unexpected system status: %#v", status)
+	}
+	if svc.Config() != cfg {
+		t.Fatal("expected config getter")
+	}
+	if len(svc.providers()) == 0 {
+		t.Fatal("expected status providers")
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/server"
 )
 
 func TestStatusEndpoint(t *testing.T) {
@@ -169,6 +171,74 @@ func TestAdminRoutesRequireTokenWhenConfigured(t *testing.T) {
 		t.Fatalf("expected 200 with token, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestAdminIndexMethodAndErrorPaths(t *testing.T) {
+	cfg := testConfig(t)
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/__admin", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Admin") {
+		t.Fatalf("unexpected admin index response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/__admin/api/document", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected missing id bad request, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/status", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected method not allowed, got %d", rr.Code)
+	}
+}
+
+func TestHelpersAndHookWrapping(t *testing.T) {
+	if !truthy("yes") || truthy("no") {
+		t.Fatal("unexpected truthy helper behavior")
+	}
+
+	rr := httptest.NewRecorder()
+	writeJSONError(rr, http.StatusBadRequest, errors.New("boom"))
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "boom") {
+		t.Fatalf("unexpected writeJSONError response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	base := stubHooks{}
+	admin := &Router{}
+	hooks := WrapHooks(base, admin)
+	if hooks.OnServerStarted("addr") != nil || hooks.OnRoutesAssigned(nil) != nil || hooks.OnAssetsBuilding(nil) != nil {
+		t.Fatal("expected wrapped hooks to delegate cleanly")
+	}
+	if _, ok := NewHooks(&config.Config{}, nil).(hookBase); !ok {
+		t.Fatal("expected disabled admin hooks to return hookBase when no base hooks")
+	}
+	if _, ok := NewHooks(&config.Config{Admin: config.AdminConfig{Enabled: true}}, base).(hookSet); !ok {
+		t.Fatal("expected enabled admin hooks to wrap base hooks")
+	}
+}
+
+type stubHooks struct{}
+
+func (stubHooks) RegisterRoutes(*http.ServeMux)             {}
+func (stubHooks) OnServerStarted(string) error              { return nil }
+func (stubHooks) OnRoutesAssigned(*content.SiteGraph) error { return nil }
+func (stubHooks) OnAssetsBuilding(*config.Config) error     { return nil }
+
+var _ server.Hooks = stubHooks{}
 
 func newTestRouter(t *testing.T, cfg *config.Config) *Router {
 	t.Helper()
