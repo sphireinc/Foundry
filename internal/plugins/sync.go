@@ -107,11 +107,10 @@ func loadSyncConfig(path string) (*syncSiteConfig, error) {
 }
 
 func validatePluginForSync(pluginsDir, name string) error {
-	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("plugin name cannot be empty")
-	}
-	if strings.Contains(name, "/") || strings.Contains(name, `\`) {
-		return fmt.Errorf("plugin name %q must be a single directory name", name)
+	var err error
+	name, err = validatePluginName(name)
+	if err != nil {
+		return err
 	}
 
 	root := filepath.Join(pluginsDir, name)

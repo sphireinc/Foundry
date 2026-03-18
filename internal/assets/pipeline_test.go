@@ -67,6 +67,40 @@ func TestAssetHelpers(t *testing.T) {
 	}
 }
 
+func TestSyncRejectsUnsafeThemeAndPluginNames(t *testing.T) {
+	cfg := testAssetsConfig(t)
+	cfg.Theme = ".."
+	if err := Sync(cfg, nil); err == nil {
+		t.Fatal("expected unsafe theme name rejection")
+	}
+
+	cfg = testAssetsConfig(t)
+	cfg.Plugins.Enabled = []string{".."}
+	if err := Sync(cfg, nil); err == nil {
+		t.Fatal("expected unsafe plugin name rejection")
+	}
+}
+
+func TestAssetHelpersRejectSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.css")
+	writeFile(t, outside, "body{}")
+	link := filepath.Join(root, "linked.css")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	if _, err := listFiles(root, ".css"); err == nil {
+		t.Fatal("expected listFiles to reject symlinked asset")
+	}
+	if err := copyDirIfExists(root, filepath.Join(t.TempDir(), "out")); err == nil {
+		t.Fatal("expected copyDirIfExists to reject symlinked asset")
+	}
+	if err := copyFile(link, filepath.Join(t.TempDir(), "single.css"), os.ModeSymlink); err == nil {
+		t.Fatal("expected copyFile to reject symlink mode")
+	}
+}
+
 func testAssetsConfig(t *testing.T) *config.Config {
 	t.Helper()
 	root := t.TempDir()

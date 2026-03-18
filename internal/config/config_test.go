@@ -58,6 +58,9 @@ func TestLoadValidateAndEditYAML(t *testing.T) {
 
 func TestValidateAndSequenceHelpersErrors(t *testing.T) {
 	cfg := &Config{
+		Theme:   "..",
+		Plugins: PluginConfig{Enabled: []string{"../escape"}},
+		Admin:   AdminConfig{Enabled: true},
 		Feed: FeedConfig{
 			RSSPath:     "rss.xml",
 			SitemapPath: "rss.xml",

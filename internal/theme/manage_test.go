@@ -46,8 +46,17 @@ func TestThemeManagementErrorsAndHelpers(t *testing.T) {
 	if err := ValidateInstalled(root, ""); err == nil {
 		t.Fatal("expected empty theme name error")
 	}
+	if err := ValidateInstalled(root, ".."); err == nil {
+		t.Fatal("expected path traversal theme name error")
+	}
 	if _, err := Scaffold(root, "bad/name"); err == nil {
 		t.Fatal("expected invalid scaffold name error")
+	}
+	if _, err := Scaffold(root, ".."); err == nil {
+		t.Fatal("expected traversal scaffold name error")
+	}
+	if err := SwitchInConfig(filepath.Join(t.TempDir(), "site.yaml"), ".."); err == nil {
+		t.Fatal("expected invalid switch theme name error")
 	}
 
 	name := humanizeName("my_theme-name")

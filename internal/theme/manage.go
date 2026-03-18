@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/safepath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -57,9 +58,10 @@ func ListInstalled(themesDir string) ([]Info, error) {
 }
 
 func LoadManifest(themesDir, name string) (*Manifest, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, fmt.Errorf("theme name cannot be empty")
+	var err error
+	name, err = safepath.ValidatePathComponent("theme name", name)
+	if err != nil {
+		return nil, err
 	}
 
 	path := filepath.Join(themesDir, name, "theme.yaml")
@@ -90,9 +92,10 @@ func LoadManifest(themesDir, name string) (*Manifest, error) {
 }
 
 func ValidateInstalled(themesDir, name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return fmt.Errorf("theme name cannot be empty")
+	var err error
+	name, err = safepath.ValidatePathComponent("theme name", name)
+	if err != nil {
+		return err
 	}
 
 	root := filepath.Join(themesDir, name)
@@ -150,12 +153,10 @@ func ValidateInstalled(themesDir, name string) error {
 }
 
 func Scaffold(themesDir, name string) (string, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return "", fmt.Errorf("theme name cannot be empty")
-	}
-	if strings.Contains(name, "/") || strings.Contains(name, `\`) {
-		return "", fmt.Errorf("theme name must be a single directory name")
+	var err error
+	name, err = safepath.ValidatePathComponent("theme name", name)
+	if err != nil {
+		return "", err
 	}
 
 	root := filepath.Join(themesDir, name)
@@ -200,9 +201,10 @@ func Scaffold(themesDir, name string) (string, error) {
 }
 
 func SwitchInConfig(configPath, themeName string) error {
-	themeName = strings.TrimSpace(themeName)
-	if themeName == "" {
-		return fmt.Errorf("theme name cannot be empty")
+	var err error
+	themeName, err = safepath.ValidatePathComponent("theme name", themeName)
+	if err != nil {
+		return err
 	}
 
 	return foundryconfig.UpsertTopLevelScalar(configPath, "theme", themeName)

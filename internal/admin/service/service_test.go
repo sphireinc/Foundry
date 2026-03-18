@@ -168,6 +168,33 @@ func TestServiceHelpersAndErrorPaths(t *testing.T) {
 	svc.RegisterStatusProvider(nil)
 }
 
+func TestDocumentPathResolutionRejectsSymlinkEscape(t *testing.T) {
+	cfg := testServiceConfig(t)
+	outsidePath := filepath.Join(filepath.Dir(cfg.ContentDir), "outside.md")
+	if err := os.WriteFile(outsidePath, []byte("outside"), 0o644); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, "pages"), 0o755); err != nil {
+		t.Fatalf("mkdir pages: %v", err)
+	}
+
+	link := filepath.Join(cfg.ContentDir, "pages", "linked.md")
+	if err := os.Symlink(outsidePath, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	svc := New(cfg)
+	if _, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{SourcePath: "pages/linked.md"}); err == nil {
+		t.Fatal("expected preview symlink escape rejection")
+	}
+	if _, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{
+		SourcePath: "pages/linked.md",
+		Raw:        "---\ntitle: Linked\nslug: linked\n---\n\nBody",
+	}); err == nil {
+		t.Fatal("expected save symlink escape rejection")
+	}
+}
+
 func TestStatusProvidersBranches(t *testing.T) {
 	cfg := testServiceConfig(t)
 	graph := content.NewSiteGraph(cfg)

@@ -46,27 +46,30 @@ func ValidateInstalledPlugin(pluginsDir, name string) error {
 }
 
 func EnableInConfig(configPath, name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return fmt.Errorf("plugin name cannot be empty")
+	var err error
+	name, err = validatePluginName(name)
+	if err != nil {
+		return err
 	}
 
 	return foundryconfig.EnsureStringListValue(configPath, []string{"plugins", "enabled"}, name)
 }
 
 func DisableInConfig(configPath, name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return fmt.Errorf("plugin name cannot be empty")
+	var err error
+	name, err = validatePluginName(name)
+	if err != nil {
+		return err
 	}
 
 	return foundryconfig.RemoveStringListValue(configPath, []string{"plugins", "enabled"}, name)
 }
 
 func UpdateInstalled(pluginsDir, name string) (Metadata, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return Metadata{}, fmt.Errorf("plugin name cannot be empty")
+	var err error
+	name, err = validatePluginName(name)
+	if err != nil {
+		return Metadata{}, err
 	}
 
 	targetDir := filepath.Join(pluginsDir, name)

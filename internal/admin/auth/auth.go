@@ -39,6 +39,13 @@ func (m *Middleware) Authorize(r *http.Request) error {
 }
 
 func isLocalRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if hasProxyHeaders(r) {
+		return false
+	}
+
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	if err != nil {
 		host = strings.TrimSpace(r.RemoteAddr)
@@ -50,6 +57,15 @@ func isLocalRequest(r *http.Request) bool {
 	}
 
 	return ip.IsLoopback()
+}
+
+func hasProxyHeaders(r *http.Request) bool {
+	for _, name := range []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Real-IP"} {
+		if strings.TrimSpace(r.Header.Get(name)) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func extractAccessToken(r *http.Request) string {

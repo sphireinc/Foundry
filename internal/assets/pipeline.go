@@ -3,12 +3,14 @@ package assets
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 type Hooks interface {
@@ -33,7 +35,10 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 	}
 
 	if cfg.Build.CopyAssets {
-		src := filepath.Join(cfg.ContentDir, cfg.Content.AssetsDir)
+		src, err := safepath.ResolveRelativeUnderRoot(cfg.ContentDir, cfg.Content.AssetsDir)
+		if err != nil {
+			return err
+		}
 		dst := filepath.Join(cfg.PublicDir, "assets")
 		if err := copyDirIfExists(src, dst); err != nil {
 			return err
@@ -41,7 +46,10 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 	}
 
 	if cfg.Build.CopyImages {
-		src := filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir)
+		src, err := safepath.ResolveRelativeUnderRoot(cfg.ContentDir, cfg.Content.ImagesDir)
+		if err != nil {
+			return err
+		}
 		dst := filepath.Join(cfg.PublicDir, "images")
 		if err := copyDirIfExists(src, dst); err != nil {
 			return err
@@ -49,14 +57,21 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 	}
 
 	if cfg.Build.CopyUploads {
-		src := filepath.Join(cfg.ContentDir, cfg.Content.UploadsDir)
+		src, err := safepath.ResolveRelativeUnderRoot(cfg.ContentDir, cfg.Content.UploadsDir)
+		if err != nil {
+			return err
+		}
 		dst := filepath.Join(cfg.PublicDir, "uploads")
 		if err := copyDirIfExists(src, dst); err != nil {
 			return err
 		}
 	}
 
-	themeAssetsSrc := filepath.Join(cfg.ThemesDir, cfg.Theme, "assets")
+	themeName, err := safepath.ValidatePathComponent("theme name", cfg.Theme)
+	if err != nil {
+		return err
+	}
+	themeAssetsSrc := filepath.Join(cfg.ThemesDir, themeName, "assets")
 	themeAssetsDst := filepath.Join(cfg.PublicDir, "theme")
 	if err := copyDirIfExists(themeAssetsSrc, themeAssetsDst); err != nil {
 		return err
@@ -66,6 +81,10 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 		pluginName = strings.TrimSpace(pluginName)
 		if pluginName == "" {
 			continue
+		}
+		pluginName, err = safepath.ValidatePathComponent("plugin name", pluginName)
+		if err != nil {
+			return err
 		}
 
 		src := filepath.Join(cfg.PluginsDir, pluginName, "assets")
@@ -84,8 +103,16 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 }
 
 func buildCSSBundle(cfg *config.Config) error {
-	themeCSSRoot := filepath.Join(cfg.ThemesDir, cfg.Theme, "assets", "css")
-	contentCSSRoot := filepath.Join(cfg.ContentDir, cfg.Content.AssetsDir, "css")
+	themeName, err := safepath.ValidatePathComponent("theme name", cfg.Theme)
+	if err != nil {
+		return err
+	}
+	contentAssetsRoot, err := safepath.ResolveRelativeUnderRoot(cfg.ContentDir, cfg.Content.AssetsDir)
+	if err != nil {
+		return err
+	}
+	themeCSSRoot := filepath.Join(cfg.ThemesDir, themeName, "assets", "css")
+	contentCSSRoot := filepath.Join(contentAssetsRoot, "css")
 	targetDir := filepath.Join(cfg.PublicDir, "assets", "css")
 	targetFile := filepath.Join(targetDir, "foundry.bundle.css")
 
@@ -134,22 +161,28 @@ func buildCSSBundle(cfg *config.Config) error {
 func listFiles(root, ext string) ([]string, error) {
 	out := make([]string, 0)
 
-	info, err := os.Stat(root)
+	info, err := os.Lstat(root)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return out, nil
 		}
 		return nil, fmt.Errorf("stat %s: %w", root, err)
 	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("symlinked asset root is not allowed: %s", root)
+	}
 	if !info.IsDir() {
 		return out, nil
 	}
 
-	err = filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if info.IsDir() {
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlinked asset path is not allowed: %s", path)
+		}
+		if d.IsDir() {
 			return nil
 		}
 		if strings.EqualFold(filepath.Ext(path), ext) {
@@ -166,12 +199,15 @@ func listFiles(root, ext string) ([]string, error) {
 }
 
 func copyDirIfExists(src, dst string) error {
-	info, err := os.Stat(src)
+	info, err := os.Lstat(src)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return fmt.Errorf("stat %s: %w", src, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("symlinked asset root is not allowed: %s", src)
 	}
 	if !info.IsDir() {
 		return nil
@@ -180,6 +216,9 @@ func copyDirIfExists(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlinked asset path is not allowed: %s", path)
 		}
 
 		rel, err := filepath.Rel(src, path)
@@ -197,6 +236,10 @@ func copyDirIfExists(src, dst string) error {
 }
 
 func copyFile(src, dst string, mode os.FileMode) error {
+	if mode&os.ModeSymlink != 0 {
+		return fmt.Errorf("symlinked asset file is not allowed: %s", src)
+	}
+
 	in, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("open src file %s: %w", src, err)
