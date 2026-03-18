@@ -19,10 +19,13 @@
       </a>
       <nav class="nav">
         <a href="../">Home</a>
-        <a href="../getting-started/">Overview</a>
-        <a href="../plugins/">Plugins</a>
+        <a href="../getting-started/">Getting Started</a>
         <a href="../architecture/">Architecture</a>
-        <a href="https://github.com/sphireinc/foundry/tree/main/themes">Themes</a>
+        <a href="../plugins/">Plugins</a>
+        <a href="../themes/">Themes</a>
+        <a href="../contract/">CLI Contract</a>
+        <a href="../coverage/">Coverage</a>
+        <a href="https://github.com/sphireinc/foundry">GitHub</a>
       </nav>
     </header>
 
@@ -82,8 +85,27 @@ layouts:
           <li><strong>list.html:</strong> renders list-style views such as taxonomy archives.</li>
         </ul>
 
+        <h2>Injectable slots</h2>
+        <p>The active theme defines which plugin slots actually exist in rendered output. The scaffold and default theme currently expose the following slot names:</p>
+        <ul>
+          <li><code>head.end</code></li>
+          <li><code>body.start</code></li>
+          <li><code>body.end</code></li>
+          <li><code>page.before_main</code></li>
+          <li><code>page.after_main</code></li>
+          <li><code>page.before_content</code></li>
+          <li><code>page.after_content</code></li>
+          <li><code>post.before_header</code></li>
+          <li><code>post.after_header</code></li>
+          <li><code>post.before_content</code></li>
+          <li><code>post.after_content</code></li>
+          <li><code>post.sidebar.top</code></li>
+          <li><code>post.sidebar.overview</code></li>
+          <li><code>post.sidebar.bottom</code></li>
+        </ul>
+
         <h2>Theme and plugin interplay</h2>
-        <p>Theme templates should leave room for plugin-provided markup. The scaffold includes slot calls such as <code>head.end</code>, <code>body.start</code>, <code>body.end</code>, and post/page content-adjacent slots.</p>
+        <p>Theme templates should leave room for plugin-provided markup. If you introduce a new slot, document it in the theme manifest and place it intentionally in the layout instead of treating slots as arbitrary append-only escape hatches.</p>
 
         <h2>Assets</h2>
         <p>Put theme CSS and other theme-owned assets under <code>assets/</code>. During build or preview, Foundry copies theme assets into <code>public/theme/</code> and bundles discovered CSS into the main CSS output.</p>
