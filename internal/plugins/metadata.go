@@ -25,6 +25,12 @@ type Metadata struct {
 }
 
 func LoadMetadata(pluginsDir, name string) (Metadata, error) {
+	var err error
+	name, err = validatePluginName(name)
+	if err != nil {
+		return Metadata{}, err
+	}
+
 	meta := Metadata{
 		Name:      name,
 		Title:     name,

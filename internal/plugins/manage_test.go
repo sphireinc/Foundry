@@ -74,6 +74,12 @@ func TestManageHelpersValidation(t *testing.T) {
 	if err := DisableInConfig(filepath.Join(t.TempDir(), "site.yaml"), ""); err == nil {
 		t.Fatal("expected empty plugin disable failure")
 	}
+	if err := EnableInConfig(filepath.Join(t.TempDir(), "site.yaml"), ".."); err == nil {
+		t.Fatal("expected traversal plugin enable failure")
+	}
+	if err := DisableInConfig(filepath.Join(t.TempDir(), "site.yaml"), ".."); err == nil {
+		t.Fatal("expected traversal plugin disable failure")
+	}
 }
 
 func TestInstallHelpersAndUninstall(t *testing.T) {
@@ -111,6 +117,15 @@ func TestInstallHelpersAndUninstall(t *testing.T) {
 	if _, err := Install(InstallOptions{}); err == nil {
 		t.Fatal("expected install usage failure")
 	}
+	if _, err := validateInstallURL("http://github.com/acme/demo.git"); err == nil {
+		t.Fatal("expected insecure install URL rejection")
+	}
+	if _, err := validateInstallURL("https://example.com/acme/demo.git"); err == nil {
+		t.Fatal("expected non-GitHub install URL rejection")
+	}
+	if _, err := validateInstallURL("https://github.com/acme"); err == nil {
+		t.Fatal("expected incomplete GitHub repo rejection")
+	}
 
 	pluginDir := filepath.Join(root, "alpha")
 	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
@@ -130,6 +145,9 @@ func TestInstallHelpersAndUninstall(t *testing.T) {
 	}
 	if err := Uninstall(root, "bad/name"); err == nil {
 		t.Fatal("expected uninstall invalid name failure")
+	}
+	if err := Uninstall(root, ".."); err == nil {
+		t.Fatal("expected uninstall traversal name failure")
 	}
 }
 

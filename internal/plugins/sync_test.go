@@ -66,6 +66,9 @@ func TestSyncValidationFailures(t *testing.T) {
 	if err := validatePluginForSync(pluginsDir, "alpha/bad"); err == nil {
 		t.Fatal("expected invalid path error")
 	}
+	if err := validatePluginForSync(pluginsDir, ".."); err == nil {
+		t.Fatal("expected traversal plugin name error")
+	}
 	if err := validatePluginForSync(pluginsDir, "missing"); err == nil {
 		t.Fatal("expected missing plugin error")
 	}

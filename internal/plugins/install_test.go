@@ -21,3 +21,15 @@ func TestSafeArchivePathAcceptsNestedPath(t *testing.T) {
 		t.Fatal("expected non-empty resolved path")
 	}
 }
+
+func TestValidateInstallURL(t *testing.T) {
+	if got, err := validateInstallURL("acme/demo"); err != nil || got != "https://github.com/acme/demo.git" {
+		t.Fatalf("expected shorthand GitHub URL, got %q %v", got, err)
+	}
+	if _, err := validateInstallURL("http://github.com/acme/demo.git"); err == nil {
+		t.Fatal("expected insecure URL rejection")
+	}
+	if _, err := validateInstallURL("https://example.com/acme/demo.git"); err == nil {
+		t.Fatal("expected non-GitHub URL rejection")
+	}
+}

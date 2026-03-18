@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 func Validate(cfg *Config) []error {
@@ -50,6 +52,20 @@ func Validate(cfg *Config) []error {
 
 	if cfg.DefaultLang != "" && strings.Contains(cfg.DefaultLang, "/") {
 		errs = append(errs, fmt.Errorf("default_lang must not contain '/'"))
+	}
+	if _, err := safepath.ValidatePathComponent("theme", cfg.Theme); err != nil {
+		errs = append(errs, err)
+	}
+	for _, name := range cfg.Plugins.Enabled {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		if _, err := safepath.ValidatePathComponent("plugin name", name); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if cfg.Admin.Enabled && strings.TrimSpace(cfg.Admin.AccessToken) == "" {
+		errs = append(errs, fmt.Errorf("admin.access_token must not be empty when admin is enabled"))
 	}
 
 	return errs
