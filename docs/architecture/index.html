@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foundry Architecture</title>
+  <meta name="description" content="A practical overview of the main Foundry subsystems and runtime flow.">
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="../">
+        <span class="brand-mark">F</span>
+        <span class="brand-copy">
+          <strong>Foundry</strong>
+          <span>Architecture</span>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="../">Home</a>
+        <a href="../getting-started/">Overview</a>
+        <a href="../plugins/">Plugins</a>
+        <a href="../themes/">Themes</a>
+        <a href="https://github.com/sphireinc/foundry/tree/main/internal">Source</a>
+      </nav>
+    </header>
+
+    <main class="content-card">
+      <div class="page-header">
+        <div class="eyebrow">Reference</div>
+        <h1 class="page-title">Architecture</h1>
+        <p>Foundry keeps the runtime split into a few clear stages: load content, assign routes, build dependencies, render outputs, and serve or publish the result.</p>
+      </div>
+
+      <div class="page-body">
+        <h2>Main flow</h2>
+        <pre><code>config
+  -&gt; content/data load
+  -&gt; site graph
+  -&gt; route assignment
+  -&gt; dependency graph
+  -&gt; renderer
+  -&gt; preview server or static output</code></pre>
+
+        <h2>Key packages</h2>
+        <ul>
+          <li><strong>internal/config:</strong> config loading, editing, and validation.</li>
+          <li><strong>internal/content:</strong> document loading, frontmatter parsing, markdown rendering, and site graph construction.</li>
+          <li><strong>internal/router:</strong> URL assignment for documents and archives.</li>
+          <li><strong>internal/deps:</strong> dependency graph construction and rebuild planning.</li>
+          <li><strong>internal/renderer:</strong> template rendering, output writing, asset coordination, and taxonomy archive rendering.</li>
+          <li><strong>internal/server:</strong> preview HTTP server, file watching, and incremental rebuild orchestration.</li>
+          <li><strong>internal/plugins:</strong> plugin metadata, registration, lifecycle hooks, and generated plugin sync.</li>
+          <li><strong>internal/theme:</strong> theme management, validation, and scaffolding.</li>
+        </ul>
+
+        <h2>Two graphs</h2>
+        <p>Foundry uses two different graph models for different jobs:</p>
+        <ul>
+          <li><strong>SiteGraph:</strong> the in-memory model of documents, routes, taxonomies, data, and config.</li>
+          <li><strong>DependencyGraph:</strong> the rebuild graph used to determine which outputs need to be regenerated after a change.</li>
+        </ul>
+
+        <h2>Preview runtime</h2>
+        <ol>
+          <li>Load the site graph.</li>
+          <li>Assign URLs.</li>
+          <li>Run route hooks.</li>
+          <li>Sync assets.</li>
+          <li>Build dependency state.</li>
+          <li>Watch content, theme, data, and plugin roots for changes.</li>
+          <li>Choose between a full rebuild and a targeted rebuild based on the dependency graph.</li>
+        </ol>
+
+        <h2>Why the package boundaries matter</h2>
+        <p>The project is intentionally not organized as a single giant runtime package. That makes it easier to test subsystems independently and to evolve the rebuild and rendering logic without entangling CLI, admin, plugin, and serving concerns.</p>
+
+        <h2>Useful entry points</h2>
+        <ul>
+          <li><strong>cmd/foundry:</strong> application entrypoint.</li>
+          <li><strong>internal/commands:</strong> command implementations.</li>
+          <li><strong>internal/server/server.go:</strong> preview serving and rebuild orchestration.</li>
+          <li><strong>internal/renderer/renderer.go:</strong> rendering and output writing.</li>
+        </ul>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>This page is meant to shorten the ramp-up time for contributors reading the codebase.</span>
+    </footer>
+  </div>
+</body>
+</html>

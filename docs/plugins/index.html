@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foundry Plugin Authoring</title>
+  <meta name="description" content="How to build, register, and validate a Foundry plugin.">
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="../">
+        <span class="brand-mark">F</span>
+        <span class="brand-copy">
+          <strong>Foundry</strong>
+          <span>Plugin authoring</span>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="../">Home</a>
+        <a href="../getting-started/">Overview</a>
+        <a href="../themes/">Themes</a>
+        <a href="../architecture/">Architecture</a>
+        <a href="https://github.com/sphireinc/foundry/tree/main/plugins">Built-in plugins</a>
+      </nav>
+    </header>
+
+    <main class="content-card">
+      <div class="page-header">
+        <div class="eyebrow">Authoring Guide</div>
+        <h1 class="page-title">Building a plugin</h1>
+        <p>Foundry plugins are regular Go packages that register themselves through the plugin registry and optionally implement one or more hook interfaces.</p>
+      </div>
+
+      <div class="page-body">
+        <h2>Plugin shape</h2>
+        <pre><code>plugins/myplugin/
+  plugin.go
+  plugin.yaml
+  assets/
+    css/
+    js/</code></pre>
+
+        <h2>Required metadata</h2>
+        <p>Every plugin should ship a <code>plugin.yaml</code> file. The compatibility fields are the ones that matter most operationally:</p>
+        <pre><code>name: myplugin
+title: My Plugin
+version: 0.1.0
+description: Adds project-specific behavior
+author: Your Team
+license: MIT
+foundry_api: v1
+min_foundry_version: 0.1.0</code></pre>
+
+        <h2>Minimal implementation</h2>
+        <pre><code class="language-go">package myplugin
+
+import "github.com/sphireinc/foundry/internal/plugins"
+
+type Plugin struct{}
+
+func (p *Plugin) Name() string { return "myplugin" }
+
+func init() {
+  plugins.Register("myplugin", func() plugins.Plugin {
+    return &amp;Plugin{}
+  })
+}</code></pre>
+
+        <h2>Common hook categories</h2>
+        <ul>
+          <li><strong>Content hooks:</strong> react during document discovery, frontmatter parsing, markdown rendering, and graph construction.</li>
+          <li><strong>Render hooks:</strong> enrich the renderer context, inject assets, inject HTML slots, or post-process rendered HTML.</li>
+          <li><strong>Runtime hooks:</strong> react to config load, build start/completion, route assignment, and server startup.</li>
+          <li><strong>CLI hooks:</strong> expose plugin-specific commands through the plugin command surface.</li>
+        </ul>
+
+        <h2>Typical workflow</h2>
+        <ol>
+          <li>Create the plugin directory under <code>plugins/</code>.</li>
+          <li>Add <code>plugin.go</code> and <code>plugin.yaml</code>.</li>
+          <li>Register the plugin in <code>init()</code>.</li>
+          <li>Enable it in project config.</li>
+          <li>Run <code>foundry plugin sync</code> or <code>go run ./cmd/plugin-sync</code>.</li>
+          <li>Run <code>go test ./...</code> and <code>foundry plugin validate</code>.</li>
+        </ol>
+
+        <h2>Asset and HTML integration</h2>
+        <p>Plugins can contribute assets through the renderer asset hooks and add markup through HTML slots. If a plugin ships public assets, place them under <code>assets/</code>; Foundry will copy enabled plugin assets into <code>public/plugins/&lt;name&gt;/</code>.</p>
+
+        <h2>Dependency and install notes</h2>
+        <ul>
+          <li>Use the <code>requires</code> field in <code>plugin.yaml</code> when your plugin depends on another plugin by repo identity.</li>
+          <li>Plugin installation is intentionally restricted to GitHub over <code>https</code> or <code>git@github.com</code>.</li>
+          <li>Installing a plugin still means trusting third-party code. Treat it as a supply-chain boundary.</li>
+        </ul>
+
+        <h2>Reference code</h2>
+        <p>The built-in plugins are the best reference implementations:</p>
+        <ul>
+          <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/readingtime">Reading Time</a> for document enrichment and slot rendering.</li>
+          <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/toc">TOC</a> for content parsing, asset injection, slot rendering, and plugin CLI commands.</li>
+        </ul>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>Use the built-in plugins as working examples before designing new hook patterns.</span>
+    </footer>
+  </div>
+</body>
+</html>

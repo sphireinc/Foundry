@@ -48,7 +48,7 @@ foundry content list
 
 These should use explicit status markers where appropriate.
 
-Preferred markers such as `[OK]` and `[FAIL]`
+Preferred markers include `[OK]` and `[FAIL]`.
 
 Existing commands that follow this practice:
 
@@ -59,12 +59,12 @@ foundry validate
 foundry routes check
 ```
 
-### 3. Mutators
+### Mutators
 
 These should clearly state what changed, and print `Next steps:` when
-user action is still required
+user action is still required.
 
-Exusting commands that follow this practice:
+Existing commands that follow this practice:
 
 ```bash
 foundry plugin install
@@ -81,7 +81,7 @@ User facing command suggestions should prefer the public CLI tool over the Makef
 
 > Run `foundry plugin sync`
 
-instead of: 
+instead of:
 
 > Run `make plugins-sync`
 
@@ -115,9 +115,9 @@ afterward, print an action list:
 
 Commands should not require project config unless they actually need it.
 
-An example of config-free commands is `foundry version`
+An example of config-free commands is `foundry version`.
 
-An example of config-bound commands is `foundry build`
+An example of config-bound commands is `foundry build`.
 
 ## Validation scope
 
@@ -137,9 +137,9 @@ implies. KEEP IT SIMPLE.
 Default CLI output should be optimized for humans.
 
 Machine-readable output such as `--json` may be added, but
-human-readable output remains the default. We're building for 
-developers and non-developers alike, remmeber that always.
+human-readable output remains the default. Foundry should stay accessible
+to both developers and non-developers.
 
 ## Incremental adoption
 
-This contract applies to all new commands and to existing commands whenever they are modified
+This contract applies to all new commands and to existing commands whenever they are modified.
