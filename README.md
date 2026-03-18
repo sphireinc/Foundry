@@ -128,10 +128,14 @@ Foundry currently supports the following core capabilities.
 - Dynamic RSS feed generation
 - Dynamic sitemap generation
 - Dependency graph debug endpoints
+- Incremental rebuilds for both document outputs and taxonomy archive outputs
 - Asset syncing
 - CSS bundle generation
 - Live reload support
 - Auto-open browser on startup
+- Admin service graph memoization to avoid rebuilding the site graph on every admin read
+- Config-controlled raw HTML handling in Markdown rendering
+- HTTP server timeouts for safer preview/admin serving
 - Air-based hot reload workflow for Go code in development
 
 ---
@@ -174,7 +178,7 @@ The rebuild-centric dependency graph is used for rebuild planning. It tracks rel
 
 - source file -> document
 - document -> taxonomy
-- document, template, data file -> output
+- document, taxonomy, template, data file -> output
 
 Keeping those two graphs separate is intentional. It makes the architecture easier to 
 think about and easier to evolve in the future
@@ -372,6 +376,7 @@ The config file controls the entire site runtime.
 |-----------------|----------------------------------------------------------------------------------------------------------------------------------------------|
 | Core identity   | `name`, `title`, `base_url`, `theme`, `default_lang`                                                                                         |
 | Directory paths | `content_dir`, `public_dir`, `themes_dir`, `data_dir`, `plugins_dir`                                                                         |
+| Admin           | `enabled`, `addr`, `local_only`, `access_token`                                                                                              |
 | Server          | `addr`, `live_reload`, `auto_open_browser`, `debug_routes`                                                                                   |
 | Build           | `clean_public_dir`, `include_drafts`, `minify_html`, `copy_assets`, `copy_images`, `copy_uploads`                                            |
 | Content         | `pages_dir`, `posts_dir`, `images_dir`, `assets_dir`, `uploads_dir`, `default_layout_page`, `default_layout_post`, `default_page_slug_index` |
@@ -383,6 +388,37 @@ The config file controls the entire site runtime.
 | Cache           | `enabled`                                                                                                                                    |
 | Security        | `allow_unsafe_html`                                                                                                                          |
 | Feed            | `rss_path`, `sitemap_path`, `rss_limit`, `rss_title`, `rss_description`                                                                      |
+
+## Admin
+
+If the admin API/UI is enabled, `admin.access_token` must be set. Requests must send that value in either the `Authorization: Bearer <token>` header or the `X-Foundry-Admin-Token` header.
+
+```yaml
+admin:
+  enabled: true
+  local_only: true
+  access_token: "replace-with-a-long-random-secret"
+```
+
+Admin read endpoints memoize the loaded site graph briefly so repeated status and document reads do not rebuild the full graph on every request. Any document save invalidates that cache immediately.
+
+## Security
+
+`security.allow_unsafe_html` controls whether raw HTML embedded in Markdown is preserved during rendering.
+
+- `false`: raw HTML is not rendered into the output
+- `true`: raw HTML is preserved and emitted into rendered HTML
+
+Use `true` only when content authors are trusted.
+
+## Server runtime
+
+The preview/admin HTTP server uses defensive timeouts by default:
+
+- `ReadHeaderTimeout`: 5 seconds
+- `ReadTimeout`: 10 seconds
+- `WriteTimeout`: 30 seconds
+- `IdleTimeout`: 120 seconds
 
 ## Params
 
@@ -736,6 +772,8 @@ directory name from the repository URL. It supports fully qualified URLs
 such as `https://github.com/someOwner/someRepo`, as well as shorthand (Github only)
 such as `someOwner/somePlugin`
 
+If `git clone` is unavailable, Foundry can fall back to downloading a GitHub ZIP archive. That fallback validates archive paths and rejects traversal or symlink entries before extraction.
+
 After installation, enable the plugin in `content/config/site.yaml`. Foundry
 does not by default enable install plugins.
 
@@ -1039,6 +1077,7 @@ The graph includes node types such as:
 Example relationships
 - a Markdown file produces a document
 - a document produces an output
+- a taxonomy term archive produces its own output URL
 - a layout template affects outputs rendered with that layout
 - base.html affects every rendered output
 - a data file can affect many outputs
@@ -1056,10 +1095,11 @@ The resolver then computes a rebuild plan, which can request:
 
 ## Current state
 
-The dependency graph is already used to support incremental rebuild planning and a debug endpoint.
+The dependency graph is used for incremental rebuild planning and the debug endpoint.
 
-There is still room for future refinement, such as more precise taxonomy 
-archive targeting and partial dependency tracing.
+Incremental rebuilds now include taxonomy archive outputs in the dependency graph, so taxonomy pages can participate in targeted URL rebuilds instead of forcing taxonomy archive regeneration every time.
+
+There is still room for future refinement, such as more precise partial dependency tracing inside templates and plugin-generated relationships.
 
 ---
 
