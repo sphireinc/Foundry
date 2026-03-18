@@ -6,7 +6,6 @@
 ![Last Commit](https://img.shields.io/github/last-commit/sphireinc/foundry)
 ![Contributors](https://img.shields.io/github/contributors/sphireinc/foundry)
 ![Stars](https://img.shields.io/github/stars/sphireinc/foundry)
-[//]: # ([![Issues]&#40;https://img.shields.io/github/issues/sphireinc/foundry&#41;]&#40;https://github.com/sphireinc/foundry/issues&#41;)
 
 ### Foundry is a Markdown-driven CMS written in Go
 
