@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	_ "github.com/sphireinc/foundry/internal/commands/imports"
 	"github.com/sphireinc/foundry/internal/commands/registry"
@@ -78,17 +79,27 @@ func main() {
 		_, _ = fmt.Println("build complete")
 
 	case "serve":
+		serveDebug, err := parseServeDebugFlag(os.Args[2:])
+		if err != nil {
+			exitWithError(diag.Wrap(diag.KindUsage, "parse serve flags", err))
+		}
+
 		loader := content.NewLoader(cfg, pluginManager, false)
 		hooks := adminhttp.NewHooks(cfg, pluginManager)
-		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, false)
+		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, false, server.WithDebugMode(serveDebug))
 		if err := srv.ListenAndServe(ctx); err != nil {
 			exitWithError(diag.Wrap(diag.KindServe, "serve site", err))
 		}
 
 	case "serve-preview":
+		serveDebug, err := parseServeDebugFlag(os.Args[2:])
+		if err != nil {
+			exitWithError(diag.Wrap(diag.KindUsage, "parse serve-preview flags", err))
+		}
+
 		loader := content.NewLoader(cfg, pluginManager, true)
 		hooks := adminhttp.NewHooks(cfg, pluginManager)
-		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, true)
+		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, true, server.WithDebugMode(serveDebug))
 		if err := srv.ListenAndServe(ctx); err != nil {
 			exitWithError(diag.Wrap(diag.KindServe, "serve preview site", err))
 		}
@@ -130,6 +141,23 @@ func handleConfigBoundCLI(cfg *config.Config, args []string) {
 
 func printUsage() {
 	fmt.Println(registry.Usage())
+}
+
+func parseServeDebugFlag(args []string) (bool, error) {
+	debug := false
+
+	for _, arg := range args {
+		switch strings.TrimSpace(arg) {
+		case "":
+			continue
+		case "--debug":
+			debug = true
+		default:
+			return false, fmt.Errorf("unknown serve flag: %s", arg)
+		}
+	}
+
+	return debug, nil
 }
 
 func exitWithError(err error) {

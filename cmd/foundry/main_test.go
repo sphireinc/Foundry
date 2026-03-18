@@ -22,3 +22,19 @@ func TestHandleConfigFreeCLI(t *testing.T) {
 func TestHandleConfigBoundCLINoCommand(t *testing.T) {
 	handleConfigBoundCLI(&config.Config{}, []string{"foundry", "unknown"})
 }
+
+func TestParseServeDebugFlag(t *testing.T) {
+	debug, err := parseServeDebugFlag([]string{"--debug"})
+	if err != nil || !debug {
+		t.Fatalf("expected serve debug flag to be parsed, got debug=%v err=%v", debug, err)
+	}
+
+	debug, err = parseServeDebugFlag(nil)
+	if err != nil || debug {
+		t.Fatalf("expected empty serve args to be accepted, got debug=%v err=%v", debug, err)
+	}
+
+	if _, err := parseServeDebugFlag([]string{"--nope"}); err == nil {
+		t.Fatal("expected unknown serve flag to fail")
+	}
+}

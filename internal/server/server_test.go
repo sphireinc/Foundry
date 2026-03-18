@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"html/template"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -101,8 +102,14 @@ func TestServerHelpersAndHandlers(t *testing.T) {
 	if !hasRenderableChanges(deps.ChangeSet{Sources: []string{"x"}}) || hasRenderableChanges(deps.ChangeSet{Assets: []string{"x"}}) {
 		t.Fatal("unexpected renderable change detection")
 	}
+	if got := s.reloadVer.Load(); got != 0 {
+		t.Fatalf("expected initial reload version to be zero, got %d", got)
+	}
 	s.signalReload()
 	s.signalReload()
+	if got := s.reloadVer.Load(); got != 2 {
+		t.Fatalf("expected reload version to increment, got %d", got)
+	}
 	select {
 	case <-s.reloadSignal:
 	default:
@@ -232,6 +239,77 @@ func TestServerRebuildIncrementalAndNew(t *testing.T) {
 	}
 }
 
+func TestServerDebugModeOptionAndRequestTracing(t *testing.T) {
+	cfg := testServerConfig(t)
+	writeServerTheme(t, cfg)
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       "en",
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+	})
+
+	s := New(
+		cfg,
+		stubLoader{graph: graph},
+		router.NewResolver(cfg),
+		renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil),
+		&hookRecorder{},
+		false,
+		WithDebugMode(true),
+	)
+	if !s.debug {
+		t.Fatal("expected debug mode to be enabled")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/about", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	reqID, finish := s.beginDebugRequest(req, "/about/")
+	if reqID == 0 {
+		t.Fatal("expected debug request id")
+	}
+	finish(nil, 128)
+
+	reqID, finish = (&Server{}).beginDebugRequest(req, "/about/")
+	if reqID != 0 {
+		t.Fatalf("expected non-debug request id to be zero, got %d", reqID)
+	}
+	finish(nil, 0)
+}
+
+func TestRuntimeSnapshotFields(t *testing.T) {
+	s := &Server{}
+	before := s.captureRuntimeSnapshot()
+	after := s.captureRuntimeSnapshot()
+
+	fields := after.logFields("runtime_")
+	if len(fields) == 0 {
+		t.Fatal("expected runtime snapshot fields")
+	}
+
+	deltas := after.deltaFields(before, time.Millisecond, "delta_")
+	if len(deltas) == 0 {
+		t.Fatal("expected runtime snapshot delta fields")
+	}
+
+	connA, connB := net.Pipe()
+	defer connA.Close()
+	defer connB.Close()
+	s.connStates = map[net.Conn]http.ConnState{
+		connA: http.StateActive,
+		connB: http.StateIdle,
+	}
+	if got := s.connectionStateFields("connections_"); len(got) == 0 {
+		t.Fatal("expected connection state fields")
+	}
+}
+
 func TestServerErrorAndUnavailablePaths(t *testing.T) {
 	cfg := testServerConfig(t)
 	writeServerTheme(t, cfg)
@@ -285,6 +363,52 @@ func TestServerErrorAndUnavailablePaths(t *testing.T) {
 	s.handleReload(w, httptest.NewRequest(http.MethodGet, "/__reload", nil))
 	if w.status != http.StatusInternalServerError {
 		t.Fatalf("expected reload stream unsupported, got %d", w.status)
+	}
+}
+
+func TestReloadPollEndpointAndVersionParsing(t *testing.T) {
+	s := &Server{}
+
+	rr := httptest.NewRecorder()
+	s.handleReloadPoll(rr, httptest.NewRequest(http.MethodGet, "/__reload/poll", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected poll endpoint OK, got %d", rr.Code)
+	}
+	var initial map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &initial); err != nil {
+		t.Fatalf("decode initial poll response: %v", err)
+	}
+	if initial["reload"] != false {
+		t.Fatalf("expected initial poll response to not request reload, got %#v", initial)
+	}
+
+	s.signalReload()
+	rr = httptest.NewRecorder()
+	s.handleReloadPoll(rr, httptest.NewRequest(http.MethodGet, "/__reload/poll?since=1", nil))
+	var unchanged map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &unchanged); err != nil {
+		t.Fatalf("decode unchanged poll response: %v", err)
+	}
+	if unchanged["reload"] != false {
+		t.Fatalf("expected unchanged poll response to not request reload, got %#v", unchanged)
+	}
+
+	s.signalReload()
+	rr = httptest.NewRecorder()
+	s.handleReloadPoll(rr, httptest.NewRequest(http.MethodGet, "/__reload/poll?since=1", nil))
+	var changed map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &changed); err != nil {
+		t.Fatalf("decode changed poll response: %v", err)
+	}
+	if changed["reload"] != true {
+		t.Fatalf("expected changed poll response to request reload, got %#v", changed)
+	}
+
+	if got := parseReloadVersion(" 42 "); got != 42 {
+		t.Fatalf("expected parsed reload version, got %d", got)
+	}
+	if got := parseReloadVersion("invalid"); got != 0 {
+		t.Fatalf("expected invalid reload version to parse as zero, got %d", got)
 	}
 }
 

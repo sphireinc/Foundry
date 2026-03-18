@@ -85,6 +85,7 @@ go install github.com/sphireinc/foundry/cmd/foundry@latest
 foundry version
 foundry build
 foundry serve
+foundry serve --debug
 foundry serve-preview
 foundry plugin list --enabled
 foundry theme list
@@ -97,6 +98,17 @@ foundry routes check
 2. Add pages and posts under `content/pages` and `content/posts`.
 3. Run `foundry serve` during development.
 4. Run `foundry build` to generate static output in `public/`.
+
+If a page appears to hang during local preview, run `foundry serve --debug` to emit per-request timing plus runtime snapshots, including:
+
+- heap allocation and in-use heap
+- stack and total runtime memory
+- goroutine count
+- active request count
+- GC count
+- process user/system CPU time and request CPU percentage estimates
+
+If live reload causes browser connection stalls in development, switch `server.live_reload_mode` from `stream` to `poll`. `stream` uses Server-Sent Events and refreshes immediately. `poll` trades a small delay for simpler connection behavior.
 
 ## Content model
 
@@ -168,6 +180,15 @@ Accepted request auth headers:
 `security.allow_unsafe_html` controls whether raw HTML in Markdown is preserved in rendered output.
 
 ### Server
+
+`server.live_reload` turns live reload on during local preview.
+
+`server.live_reload_mode` controls the transport:
+
+- `stream`: uses a long-lived SSE connection to `/__reload`
+- `poll`: polls `/__reload/poll` every 1.5 seconds and reloads when the rebuild version changes
+
+Use `poll` if your browser or proxy environment is sensitive to long-lived local connections.
 
 The preview/admin server uses explicit read, write, and idle timeouts by default.
 
