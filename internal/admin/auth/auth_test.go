@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -60,5 +61,27 @@ func TestAuthorizeRequiresConfiguredToken(t *testing.T) {
 	req.Header.Set("X-Foundry-Admin-Token", "secret-token")
 	if err := m.Authorize(req); err != nil {
 		t.Fatalf("expected header token to be accepted, got %v", err)
+	}
+}
+
+func TestWrapRejectsUnauthorizedAndHandlesNilNext(t *testing.T) {
+	m := New(&config.Config{Admin: config.AdminConfig{Enabled: true, LocalOnly: true, AccessToken: "secret-token"}})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	m.Wrap(nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected nil handler to map to 404, got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	m.Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected forbidden without token, got %d", rr.Code)
 	}
 }
