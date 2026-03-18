@@ -19,10 +19,13 @@
       </a>
       <nav class="nav">
         <a href="../">Home</a>
-        <a href="../getting-started/">Overview</a>
-        <a href="../themes/">Themes</a>
+        <a href="../getting-started/">Getting Started</a>
         <a href="../architecture/">Architecture</a>
-        <a href="https://github.com/sphireinc/foundry/tree/main/plugins">Built-in plugins</a>
+        <a href="../plugins/">Plugins</a>
+        <a href="../themes/">Themes</a>
+        <a href="../contract/">CLI Contract</a>
+        <a href="../coverage/">Coverage</a>
+        <a href="https://github.com/sphireinc/foundry">GitHub</a>
       </nav>
     </header>
 
@@ -53,6 +56,21 @@ license: MIT
 foundry_api: v1
 min_foundry_version: 0.1.0</code></pre>
 
+        <h2>Available metadata fields</h2>
+        <ul>
+          <li><code>name</code></li>
+          <li><code>title</code></li>
+          <li><code>version</code></li>
+          <li><code>description</code></li>
+          <li><code>author</code></li>
+          <li><code>homepage</code></li>
+          <li><code>license</code></li>
+          <li><code>repo</code></li>
+          <li><code>requires</code></li>
+          <li><code>foundry_api</code></li>
+          <li><code>min_foundry_version</code></li>
+        </ul>
+
         <h2>Minimal implementation</h2>
         <pre><code class="language-go">package myplugin
 
@@ -68,12 +86,58 @@ func init() {
   })
 }</code></pre>
 
-        <h2>Common hook categories</h2>
+        <h2>Available plugin hooks</h2>
+        <p>The current plugin surface is interface-based. A plugin implements only the hooks it needs.</p>
         <ul>
-          <li><strong>Content hooks:</strong> react during document discovery, frontmatter parsing, markdown rendering, and graph construction.</li>
-          <li><strong>Render hooks:</strong> enrich the renderer context, inject assets, inject HTML slots, or post-process rendered HTML.</li>
-          <li><strong>Runtime hooks:</strong> react to config load, build start/completion, route assignment, and server startup.</li>
-          <li><strong>CLI hooks:</strong> expose plugin-specific commands through the plugin command surface.</li>
+          <li><code>OnConfigLoaded(*config.Config) error</code></li>
+          <li><code>OnContentDiscovered(path string) error</code></li>
+          <li><code>OnFrontmatterParsed(*content.Document) error</code></li>
+          <li><code>OnMarkdownRendered(*content.Document) error</code></li>
+          <li><code>OnDocumentParsed(*content.Document) error</code></li>
+          <li><code>OnDataLoaded(map[string]any) error</code></li>
+          <li><code>OnGraphBuilding(*content.SiteGraph) error</code></li>
+          <li><code>OnGraphBuilt(*content.SiteGraph) error</code></li>
+          <li><code>OnTaxonomyBuilt(*content.SiteGraph) error</code></li>
+          <li><code>OnRoutesAssigned(*content.SiteGraph) error</code></li>
+          <li><code>OnContext(*renderer.ViewData) error</code></li>
+          <li><code>OnAssets(*renderer.ViewData, *renderer.AssetSet) error</code></li>
+          <li><code>OnHTMLSlots(*renderer.ViewData, *renderer.Slots) error</code></li>
+          <li><code>OnBeforeRender(*renderer.ViewData) error</code></li>
+          <li><code>OnAfterRender(url string, html []byte) ([]byte, error)</code></li>
+          <li><code>OnAssetsBuilding(*config.Config) error</code></li>
+          <li><code>OnBuildStarted() error</code></li>
+          <li><code>OnBuildCompleted(*content.SiteGraph) error</code></li>
+          <li><code>OnServerStarted(addr string) error</code></li>
+          <li><code>RegisterRoutes(mux *http.ServeMux)</code></li>
+          <li><code>Commands() []plugins.Command</code> for plugin-provided CLI commands</li>
+        </ul>
+
+        <h2>Injectable HTML slots</h2>
+        <p>Slots are defined by the active theme. The current scaffold and default theme expose the following names, which are the safe targets for <code>OnHTMLSlots</code> today:</p>
+        <ul>
+          <li><code>head.end</code></li>
+          <li><code>body.start</code></li>
+          <li><code>body.end</code></li>
+          <li><code>page.before_main</code></li>
+          <li><code>page.after_main</code></li>
+          <li><code>page.before_content</code></li>
+          <li><code>page.after_content</code></li>
+          <li><code>post.before_header</code></li>
+          <li><code>post.after_header</code></li>
+          <li><code>post.before_content</code></li>
+          <li><code>post.after_content</code></li>
+          <li><code>post.sidebar.top</code></li>
+          <li><code>post.sidebar.overview</code></li>
+          <li><code>post.sidebar.bottom</code></li>
+        </ul>
+
+        <h2>Plugin command surface</h2>
+        <p>If a plugin implements CLI commands, each command currently exposes these fields:</p>
+        <ul>
+          <li><code>Name</code></li>
+          <li><code>Summary</code></li>
+          <li><code>Description</code></li>
+          <li><code>Run func(ctx plugins.CommandContext) error</code></li>
         </ul>
 
         <h2>Typical workflow</h2>
@@ -101,6 +165,7 @@ func init() {
         <ul>
           <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/readingtime">Reading Time</a> for document enrichment and slot rendering.</li>
           <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/toc">TOC</a> for content parsing, asset injection, slot rendering, and plugin CLI commands.</li>
+          <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/relatedposts">Related Posts</a> for post-render content injection into post slots.</li>
         </ul>
       </div>
     </main>
