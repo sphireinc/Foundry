@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/config"
@@ -42,7 +43,15 @@ type Service struct {
 	loadGraph       GraphLoader
 	mu              sync.RWMutex
 	statusProviders map[string]StatusProvider
+	graphCache      map[bool]cachedGraph
 }
+
+type cachedGraph struct {
+	graph    *content.SiteGraph
+	loadedAt time.Time
+}
+
+const graphCacheTTL = time.Second
 
 type Option func(*Service)
 
@@ -67,6 +76,7 @@ func New(cfg *config.Config, opts ...Option) *Service {
 		cfg:             cfg,
 		fs:              osFS{},
 		statusProviders: make(map[string]StatusProvider),
+		graphCache:      make(map[bool]cachedGraph),
 		loadGraph: func(ctx context.Context, cfg *config.Config, includeDrafts bool) (*content.SiteGraph, error) {
 			graph, _, err := site.LoadConfiguredGraph(ctx, cfg, includeDrafts)
 			return graph, err
@@ -101,7 +111,26 @@ func (s *Service) RegisterStatusProvider(provider StatusProvider) {
 }
 
 func (s *Service) load(ctx context.Context, includeDrafts bool) (*content.SiteGraph, error) {
-	return s.loadGraph(ctx, s.cfg, includeDrafts)
+	s.mu.RLock()
+	cached, ok := s.graphCache[includeDrafts]
+	s.mu.RUnlock()
+	if ok && cached.graph != nil && time.Since(cached.loadedAt) < graphCacheTTL {
+		return cached.graph, nil
+	}
+
+	graph, err := s.loadGraph(ctx, s.cfg, includeDrafts)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	s.graphCache[includeDrafts] = cachedGraph{
+		graph:    graph,
+		loadedAt: time.Now(),
+	}
+	s.mu.Unlock()
+
+	return graph, nil
 }
 
 func (s *Service) providers() []StatusProvider {
@@ -113,4 +142,10 @@ func (s *Service) providers() []StatusProvider {
 		out = append(out, p)
 	}
 	return out
+}
+
+func (s *Service) invalidateGraphCache() {
+	s.mu.Lock()
+	s.graphCache = make(map[bool]cachedGraph)
+	s.mu.Unlock()
 }

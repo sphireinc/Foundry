@@ -97,6 +97,7 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	if err := s.fs.WriteFile(sourcePath, []byte(req.Raw), 0o644); err != nil {
 		return nil, err
 	}
+	s.invalidateGraphCache()
 
 	return &types.DocumentSaveResponse{
 		SourcePath: filepath.ToSlash(sourcePath),
@@ -130,7 +131,7 @@ func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreview
 		return nil, err
 	}
 
-	htmlBody, err := markup.MarkdownToHTML(body)
+	htmlBody, err := markup.MarkdownToHTML(body, s.cfg.Security.AllowUnsafeHTML)
 	if err != nil {
 		return nil, err
 	}

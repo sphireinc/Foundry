@@ -9,6 +9,7 @@ import (
 
 func BuildSiteDependencyGraph(site *content.SiteGraph, themeName string) *Graph {
 	g := NewGraph()
+	outputIDs := make(map[string]struct{})
 
 	baseTemplatePath := filepath.Join(site.Config.ThemesDir, themeName, "layouts", "base.html")
 	baseTemplateID := templateNodeID(baseTemplatePath)
@@ -46,6 +47,7 @@ func BuildSiteDependencyGraph(site *content.SiteGraph, themeName string) *Graph 
 			Type: NodeOutput,
 			Meta: map[string]any{"url": doc.URL},
 		})
+		outputIDs[outputID] = struct{}{}
 
 		g.AddEdge(sourceID, docID)
 		g.AddEdge(docID, outputID)
@@ -53,8 +55,19 @@ func BuildSiteDependencyGraph(site *content.SiteGraph, themeName string) *Graph 
 		g.AddEdge(baseTemplateID, outputID)
 
 		for taxonomy, terms := range doc.Taxonomies {
+			def := site.Taxonomies.Definition(taxonomy)
+			layoutPath := filepath.Join(site.Config.ThemesDir, themeName, "layouts", def.EffectiveTermLayout()+".html")
+			layoutID := templateNodeID(layoutPath)
+			g.AddNode(&Node{
+				ID:   layoutID,
+				Type: NodeTemplate,
+				Meta: map[string]any{"path": filepath.ToSlash(layoutPath)},
+			})
+
 			for _, term := range terms {
 				taxID := taxonomyNodeID(taxonomy, term, doc.Lang)
+				taxURL := taxonomyOutputURL(site.Config.DefaultLang, doc.Lang, taxonomy, term)
+				taxOutputID := outputNodeID(taxURL)
 				g.AddNode(&Node{
 					ID:   taxID,
 					Type: NodeTaxonomy,
@@ -64,7 +77,16 @@ func BuildSiteDependencyGraph(site *content.SiteGraph, themeName string) *Graph 
 						"lang":     doc.Lang,
 					},
 				})
+				g.AddNode(&Node{
+					ID:   taxOutputID,
+					Type: NodeOutput,
+					Meta: map[string]any{"url": taxURL},
+				})
+				outputIDs[taxOutputID] = struct{}{}
 				g.AddEdge(docID, taxID)
+				g.AddEdge(taxID, taxOutputID)
+				g.AddEdge(layoutID, taxOutputID)
+				g.AddEdge(baseTemplateID, taxOutputID)
 			}
 		}
 	}
@@ -77,12 +99,19 @@ func BuildSiteDependencyGraph(site *content.SiteGraph, themeName string) *Graph 
 			Meta: map[string]any{"key": key},
 		})
 
-		for _, doc := range site.Documents {
-			g.AddEdge(dataID, outputNodeID(doc.URL))
+		for outputID := range outputIDs {
+			g.AddEdge(dataID, outputID)
 		}
 	}
 
 	return g
+}
+
+func taxonomyOutputURL(defaultLang, lang, taxonomy, term string) string {
+	if lang == "" || lang == defaultLang {
+		return fmt.Sprintf("/%s/%s/", taxonomy, term)
+	}
+	return fmt.Sprintf("/%s/%s/%s/", lang, taxonomy, term)
 }
 
 func sourceNodeID(path string) string {

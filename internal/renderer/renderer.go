@@ -226,11 +226,14 @@ func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls
 	}
 
 	for _, url := range urls {
-		doc, ok := graph.ByURL[url]
-		if !ok {
-			continue
+		html, err := r.RenderURL(graph, url, false)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
 		}
-		if err := r.buildSingle(graph, doc); err != nil {
+		if err := r.writeRenderedURL(url, html); err != nil {
 			return err
 		}
 	}
@@ -326,6 +329,20 @@ func (r *Renderer) buildSingle(graph *content.SiteGraph, doc *content.Document) 
 	return nil
 }
 
+func (r *Renderer) writeRenderedURL(url string, html []byte) error {
+	targetDir := filepath.Join(r.cfg.PublicDir, strings.TrimPrefix(url, "/"))
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir target %s: %w", targetDir, err)
+	}
+
+	targetFile := filepath.Join(targetDir, "index.html")
+	if err := os.WriteFile(targetFile, html, 0o644); err != nil {
+		return fmt.Errorf("write file %s: %w", targetFile, err)
+	}
+
+	return nil
+}
+
 func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReload bool) ([]byte, error) {
 	if doc, ok := graph.ByURL[urlPath]; ok {
 		return r.renderTemplate(doc.Layout, doc.URL, ViewData{
@@ -367,7 +384,8 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 
 	if vd, ok := r.findTaxonomyArchive(graph, urlPath, liveReload); ok {
 		vd.Nav = r.resolveNav(graph, urlPath)
-		return r.renderTemplate("list", urlPath, vd)
+		layout := graph.Taxonomies.Definition(vd.TaxonomyName).EffectiveTermLayout()
+		return r.renderTemplate(layout, urlPath, vd)
 	}
 
 	return nil, os.ErrNotExist
