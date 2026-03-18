@@ -28,9 +28,10 @@ type Config struct {
 }
 
 type AdminConfig struct {
-	Enabled   bool   `yaml:"enabled"`
-	Addr      string `yaml:"addr"`
-	LocalOnly bool   `yaml:"local_only"`
+	Enabled     bool   `yaml:"enabled"`
+	Addr        string `yaml:"addr"`
+	LocalOnly   bool   `yaml:"local_only"`
+	AccessToken string `yaml:"access_token"`
 }
 
 type ServerConfig struct {

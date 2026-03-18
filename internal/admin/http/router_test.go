@@ -24,6 +24,7 @@ func TestStatusEndpoint(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
 	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
 	rr := httptest.NewRecorder()
 
 	mux := http.NewServeMux()
@@ -51,6 +52,7 @@ func TestDocumentsListAndDetailEndpoints(t *testing.T) {
 
 	listReq := httptest.NewRequest(http.MethodGet, "/__admin/api/documents?include_drafts=1", nil)
 	listReq.RemoteAddr = "127.0.0.1:10000"
+	listReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
 	listRR := httptest.NewRecorder()
 	mux.ServeHTTP(listRR, listReq)
 
@@ -68,6 +70,7 @@ func TestDocumentsListAndDetailEndpoints(t *testing.T) {
 
 	detailReq := httptest.NewRequest(http.MethodGet, "/__admin/api/document?id=doc-1&include_drafts=1", nil)
 	detailReq.RemoteAddr = "127.0.0.1:10000"
+	detailReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
 	detailRR := httptest.NewRecorder()
 	mux.ServeHTTP(detailRR, detailReq)
 
@@ -97,6 +100,7 @@ func TestSaveAndPreviewEndpoints(t *testing.T) {
 	saveReq := httptest.NewRequest(http.MethodPost, "/__admin/api/documents/save", bytes.NewBufferString(saveBody))
 	saveReq.RemoteAddr = "127.0.0.1:10000"
 	saveReq.Header.Set("Content-Type", "application/json")
+	saveReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
 	saveRR := httptest.NewRecorder()
 	mux.ServeHTTP(saveRR, saveReq)
 
@@ -117,6 +121,7 @@ func TestSaveAndPreviewEndpoints(t *testing.T) {
 	previewReq := httptest.NewRequest(http.MethodPost, "/__admin/api/documents/preview", bytes.NewBufferString(previewBody))
 	previewReq.RemoteAddr = "127.0.0.1:10000"
 	previewReq.Header.Set("Content-Type", "application/json")
+	previewReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
 	previewRR := httptest.NewRecorder()
 	mux.ServeHTTP(previewRR, previewReq)
 
@@ -133,6 +138,35 @@ func TestSaveAndPreviewEndpoints(t *testing.T) {
 	}
 	if !strings.Contains(resp.HTML, "Preview Hello") {
 		t.Fatalf("expected preview HTML to contain heading text, got %q", resp.HTML)
+	}
+}
+
+func TestAdminRoutesRequireTokenWhenConfigured(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Admin.LocalOnly = false
+	cfg.Admin.AccessToken = "secret-token"
+
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
+	req.RemoteAddr = "8.8.8.8:10000"
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without token, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
+	req.RemoteAddr = "8.8.8.8:10000"
+	req.Header.Set("X-Foundry-Admin-Token", "secret-token")
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 with token, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -187,8 +221,9 @@ func testConfig(t *testing.T) *config.Config {
 		PluginsDir:  filepath.Join(root, "plugins"),
 		DataDir:     filepath.Join(root, "data"),
 		Admin: config.AdminConfig{
-			Enabled:   true,
-			LocalOnly: true,
+			Enabled:     true,
+			LocalOnly:   true,
+			AccessToken: "test-token",
 		},
 		Content: config.ContentConfig{
 			PagesDir:          "pages",
