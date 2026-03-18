@@ -25,6 +25,9 @@ type InstallOptions struct {
 
 func Install(opts InstallOptions) (Metadata, error) {
 	repoURL, err := validateInstallURL(opts.URL)
+	if err != nil {
+		return Metadata{}, err
+	}
 	if strings.TrimSpace(repoURL) == "" {
 		return Metadata{}, fmt.Errorf("plugin URL cannot be empty")
 	}
