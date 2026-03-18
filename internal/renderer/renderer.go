@@ -189,29 +189,17 @@ func containsString(values []string, target string) bool {
 func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
 	_ = ctx
 
-	if err := r.themes.MustExist(); err != nil {
-		return err
-	}
-
-	if r.cfg.Build.CleanPublicDir {
-		if err := os.RemoveAll(r.cfg.PublicDir); err != nil {
-			return err
-		}
-	}
-	if err := os.MkdirAll(r.cfg.PublicDir, 0o755); err != nil {
-		return err
-	}
-	if err := assets.Sync(r.cfg, r.hooks); err != nil {
+	if err := r.prepareBuild(true, true); err != nil {
 		return err
 	}
 
 	for _, doc := range graph.Documents {
-		if err := r.buildSingle(graph, doc); err != nil {
+		if err := r.renderDocumentToDisk(graph, doc, false); err != nil {
 			return err
 		}
 	}
 
-	if err := r.BuildTaxonomyArchives(ctx, graph); err != nil {
+	if err := r.buildTaxonomyArchives(ctx, graph, false, nil); err != nil {
 		return err
 	}
 
@@ -221,7 +209,7 @@ func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
 func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls []string) error {
 	_ = ctx
 
-	if err := r.themes.MustExist(); err != nil {
+	if err := r.prepareBuild(false, false); err != nil {
 		return err
 	}
 
@@ -242,9 +230,13 @@ func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls
 }
 
 func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.SiteGraph) error {
+	return r.buildTaxonomyArchives(ctx, graph, false, nil)
+}
+
+func (r *Renderer) buildTaxonomyArchives(ctx context.Context, graph *content.SiteGraph, liveReload bool, filter map[string]struct{}) error {
 	_ = ctx
 
-	if err := r.themes.MustExist(); err != nil {
+	if err := r.prepareBuild(false, false); err != nil {
 		return err
 	}
 
@@ -269,32 +261,18 @@ func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.Sit
 					return docs[i].URL < docs[j].URL
 				})
 
-				title := fmt.Sprintf("%s: %s", def.DisplayTitle(lang), term)
 				currentURL := r.taxonomyURL(lang, taxonomyName, term)
-				layout := def.EffectiveTermLayout()
+				if !shouldBuildURL(filter, currentURL) {
+					continue
+				}
 
-				html, err := r.renderTemplate(layout, currentURL, ViewData{
-					Site:         graph.Config,
-					Data:         graph.Data,
-					Lang:         lang,
-					Title:        title,
-					Documents:    docs,
-					TaxonomyName: taxonomyName,
-					TaxonomyTerm: term,
-					Nav:          r.resolveNav(graph, currentURL),
-				})
+				html, err := r.renderTaxonomyArchive(graph, def.EffectiveTermLayout(), currentURL, taxonomyName, term, lang, docs, liveReload)
 				if err != nil {
 					return fmt.Errorf("render taxonomy archive %s/%s/%s: %w", lang, taxonomyName, term, err)
 				}
 
-				targetDir := filepath.Join(r.cfg.PublicDir, strings.TrimPrefix(currentURL, "/"))
-				if err := os.MkdirAll(targetDir, 0o755); err != nil {
-					return fmt.Errorf("mkdir taxonomy target %s: %w", targetDir, err)
-				}
-
-				targetFile := filepath.Join(targetDir, "index.html")
-				if err := os.WriteFile(targetFile, html, 0o644); err != nil {
-					return fmt.Errorf("write taxonomy archive %s: %w", targetFile, err)
+				if err := r.writeRenderedURL(currentURL, html); err != nil {
+					return fmt.Errorf("write taxonomy archive %s: %w", currentURL, err)
 				}
 			}
 		}
@@ -303,27 +281,14 @@ func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.Sit
 	return nil
 }
 
-func (r *Renderer) buildSingle(graph *content.SiteGraph, doc *content.Document) error {
-	html, err := r.renderTemplate(doc.Layout, doc.URL, ViewData{
-		Site:  graph.Config,
-		Page:  doc,
-		Data:  graph.Data,
-		Lang:  doc.Lang,
-		Title: doc.Title,
-		Nav:   r.resolveNav(graph, doc.URL),
-	})
+func (r *Renderer) renderDocumentToDisk(graph *content.SiteGraph, doc *content.Document, liveReload bool) error {
+	html, err := r.renderTemplate(doc.Layout, doc.URL, r.documentViewData(graph, doc, liveReload))
 	if err != nil {
 		return fmt.Errorf("render document %s: %w", doc.SourcePath, err)
 	}
 
-	targetDir := filepath.Join(r.cfg.PublicDir, strings.TrimPrefix(doc.URL, "/"))
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir target %s: %w", targetDir, err)
-	}
-
-	targetFile := filepath.Join(targetDir, "index.html")
-	if err := os.WriteFile(targetFile, html, 0o644); err != nil {
-		return fmt.Errorf("write file %s: %w", targetFile, err)
+	if err := r.writeRenderedURL(doc.URL, html); err != nil {
+		return fmt.Errorf("write file for %s: %w", doc.URL, err)
 	}
 
 	return nil
@@ -345,40 +310,16 @@ func (r *Renderer) writeRenderedURL(url string, html []byte) error {
 
 func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReload bool) ([]byte, error) {
 	if doc, ok := graph.ByURL[urlPath]; ok {
-		return r.renderTemplate(doc.Layout, doc.URL, ViewData{
-			Site:       graph.Config,
-			Page:       doc,
-			Data:       graph.Data,
-			Lang:       doc.Lang,
-			Title:      doc.Title,
-			LiveReload: liveReload,
-			Nav:        r.resolveNav(graph, doc.URL),
-		})
+		return r.renderTemplate(doc.Layout, doc.URL, r.documentViewData(graph, doc, liveReload))
 	}
 
 	if urlPath == "/" {
-		return r.renderTemplate("index", "/", ViewData{
-			Site:       graph.Config,
-			Data:       graph.Data,
-			Lang:       graph.Config.DefaultLang,
-			Title:      graph.Config.Title,
-			Documents:  r.documentsForLang(graph, graph.Config.DefaultLang),
-			LiveReload: liveReload,
-			Nav:        r.resolveNav(graph, "/"),
-		})
+		return r.renderTemplate("index", "/", r.indexViewData(graph, graph.Config.DefaultLang, "/", liveReload))
 	}
 
 	for lang := range graph.ByLang {
 		if urlPath == "/"+lang+"/" {
-			return r.renderTemplate("index", urlPath, ViewData{
-				Site:       graph.Config,
-				Data:       graph.Data,
-				Lang:       lang,
-				Title:      graph.Config.Title,
-				Documents:  r.documentsForLang(graph, lang),
-				LiveReload: liveReload,
-				Nav:        r.resolveNav(graph, urlPath),
-			})
+			return r.renderTemplate("index", urlPath, r.indexViewData(graph, lang, urlPath, liveReload))
 		}
 	}
 
@@ -389,6 +330,82 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 	}
 
 	return nil, os.ErrNotExist
+}
+
+func (r *Renderer) prepareBuild(cleanPublicDir, syncAssets bool) error {
+	if err := r.themes.MustExist(); err != nil {
+		return err
+	}
+	if cleanPublicDir {
+		if err := os.RemoveAll(r.cfg.PublicDir); err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(r.cfg.PublicDir, 0o755); err != nil {
+		return err
+	}
+	if syncAssets {
+		if err := assets.Sync(r.cfg, r.hooks); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Renderer) documentViewData(graph *content.SiteGraph, doc *content.Document, liveReload bool) ViewData {
+	return ViewData{
+		Site:       graph.Config,
+		Page:       doc,
+		Data:       graph.Data,
+		Lang:       doc.Lang,
+		Title:      doc.Title,
+		LiveReload: liveReload,
+		Nav:        r.resolveNav(graph, doc.URL),
+	}
+}
+
+func (r *Renderer) indexViewData(graph *content.SiteGraph, lang, currentURL string, liveReload bool) ViewData {
+	return ViewData{
+		Site:       graph.Config,
+		Data:       graph.Data,
+		Lang:       lang,
+		Title:      graph.Config.Title,
+		Documents:  r.documentsForLang(graph, lang),
+		LiveReload: liveReload,
+		Nav:        r.resolveNav(graph, currentURL),
+	}
+}
+
+func (r *Renderer) renderTaxonomyArchive(
+	graph *content.SiteGraph,
+	layout string,
+	currentURL string,
+	taxonomyName string,
+	term string,
+	lang string,
+	docs []*content.Document,
+	liveReload bool,
+) ([]byte, error) {
+	title := fmt.Sprintf("%s: %s", graph.Taxonomies.Definition(taxonomyName).DisplayTitle(lang), term)
+	return r.renderTemplate(layout, currentURL, ViewData{
+		Site:         graph.Config,
+		Data:         graph.Data,
+		Lang:         lang,
+		Title:        title,
+		Documents:    docs,
+		LiveReload:   liveReload,
+		TaxonomyName: taxonomyName,
+		TaxonomyTerm: term,
+		Nav:          r.resolveNav(graph, currentURL),
+	})
+}
+
+func shouldBuildURL(filter map[string]struct{}, url string) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	_, ok := filter[url]
+	return ok
 }
 
 func (r *Renderer) findTaxonomyArchive(graph *content.SiteGraph, urlPath string, liveReload bool) (ViewData, bool) {

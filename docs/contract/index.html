@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Foundry CLI Contract</title>
-  <meta name="description" content="The Foundry CLI UX contract, rendered for GitHub Pages and linked to the raw Markdown source.">
+  <meta name="description" content="The Foundry CLI contract, rendered for GitHub Pages and linked to the raw Markdown source.">
   <link rel="stylesheet" href="../site.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
       <a class="brand" href="../">
         <span class="brand-mark">F</span>
         <span class="brand-copy">
-          <strong>Foundry Pages</strong>
+          <strong>Foundry</strong>
           <span>CLI contract</span>
         </span>
       </a>
@@ -29,16 +29,16 @@
       <div class="page-header">
         <div class="eyebrow">Reference</div>
         <h1 class="page-title">Foundry CLI UX Contract</h1>
-        <p>This page publishes the contract currently stored in <code>docs/cli-contract.md</code>. It should be the default reference before changing command naming, output shape, validation scope, or mutation messaging.</p>
+        <p>This page publishes the contract stored in <code>docs/cli-contract.md</code>. It should be the default reference before changing command naming, output shape, validation scope, or mutation messaging.</p>
       </div>
 
       <div class="notice">
-        <p>Prefer this rendered page for browsing, and use <a href="../cli-contract.md">the raw Markdown</a> when you need to quote or edit the source document directly.</p>
+        <p>Use this rendered page for browsing, and use <a href="../cli-contract.md">the raw Markdown</a> when you need to quote or edit the source directly.</p>
       </div>
 
       <div class="page-body">
         <h2>Core position</h2>
-        <p>Foundry commands should optimize for simplicity, determinism, and consistent human-readable output. New commands should follow the existing UX contract instead of inventing one-off styles.</p>
+        <p>Foundry commands should optimize for simplicity, determinism, and consistent human-readable output. New commands should follow the existing contract instead of inventing one-off styles.</p>
 
         <h2>Command shape</h2>
         <pre><code>foundry &lt;command&gt; &lt;subcommand&gt; [options]</code></pre>
@@ -75,7 +75,7 @@
         </ol>
 
         <h2>Human-first output</h2>
-        <p>Default CLI output should stay optimized for humans. Machine-readable formats such as <code>--json</code> can exist, but they are not the primary UX.</p>
+        <p>Default CLI output should stay optimized for humans. Machine-readable formats such as <code>--json</code> can exist, but they are not the primary interface.</p>
 
         <h2>Source document</h2>
         <p>The canonical source is <a href="../cli-contract.md">docs/cli-contract.md</a>. Update that file when the contract changes.</p>
