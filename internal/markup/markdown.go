@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark"
+	rendererhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 var headingTagRE = regexp.MustCompile(`<(h[1-6])>(.*?)</h[1-6]>`)
@@ -16,9 +17,15 @@ var invalidSlugCharsRE = regexp.MustCompile(`[^a-z0-9\s-]`)
 var multiDashRE = regexp.MustCompile(`-+`)
 var multiSpaceRE = regexp.MustCompile(`\s+`)
 
-func MarkdownToHTML(input string) (template.HTML, error) {
+func MarkdownToHTML(input string, allowUnsafeHTML bool) (template.HTML, error) {
 	var buf bytes.Buffer
-	if err := goldmark.Convert([]byte(input), &buf); err != nil {
+
+	md := goldmark.New()
+	if allowUnsafeHTML {
+		md = goldmark.New(goldmark.WithRendererOptions(rendererhtml.WithUnsafe()))
+	}
+
+	if err := md.Convert([]byte(input), &buf); err != nil {
 		return "", err
 	}
 

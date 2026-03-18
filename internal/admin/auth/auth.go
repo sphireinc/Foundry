@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"net"
 	"net/http"
@@ -27,6 +28,13 @@ func (m *Middleware) Authorize(r *http.Request) error {
 	if m.cfg.Admin.LocalOnly && !isLocalRequest(r) {
 		return fmt.Errorf("admin is restricted to local requests")
 	}
+	token := strings.TrimSpace(m.cfg.Admin.AccessToken)
+	if token == "" {
+		return fmt.Errorf("admin access token is required")
+	}
+	if !tokensEqual(extractAccessToken(r), token) {
+		return fmt.Errorf("invalid admin access token")
+	}
 	return nil
 }
 
@@ -42,4 +50,29 @@ func isLocalRequest(r *http.Request) bool {
 	}
 
 	return ip.IsLoopback()
+}
+
+func extractAccessToken(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+
+	if token := strings.TrimSpace(r.Header.Get("X-Foundry-Admin-Token")); token != "" {
+		return token
+	}
+
+	authz := strings.TrimSpace(r.Header.Get("Authorization"))
+	const bearerPrefix = "Bearer "
+	if strings.HasPrefix(authz, bearerPrefix) {
+		return strings.TrimSpace(authz[len(bearerPrefix):])
+	}
+
+	return ""
+}
+
+func tokensEqual(got, want string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }

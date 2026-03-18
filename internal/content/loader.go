@@ -199,7 +199,7 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 		return nil, err
 	}
 
-	htmlBody, err := markup.MarkdownToHTML(doc.RawBody)
+	htmlBody, err := markup.MarkdownToHTML(doc.RawBody, l.cfg.Security.AllowUnsafeHTML)
 	if err != nil {
 		return nil, fmt.Errorf("render markdown %s: %w", path, err)
 	}

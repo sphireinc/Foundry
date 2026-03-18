@@ -10,7 +10,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+var pluginDownloadClient = &http.Client{Timeout: 30 * time.Second}
 
 type InstallOptions struct {
 	PluginsDir string
@@ -134,7 +137,7 @@ func downloadAndExtract(repoURL, targetDir string) error {
 		return err
 	}
 
-	resp, err := http.Get(zipURL)
+	resp, err := pluginDownloadClient.Get(zipURL)
 	if err != nil {
 		return fmt.Errorf("download plugin zip: %w", err)
 	}
@@ -168,10 +171,19 @@ func downloadAndExtract(repoURL, targetDir string) error {
 	defer os.RemoveAll(tempDir)
 
 	for _, f := range zr.File {
-		fp := filepath.Join(tempDir, f.Name)
+		if f.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("zip contains unsupported symlink entry: %s", f.Name)
+		}
+
+		fp, err := safeArchivePath(tempDir, f.Name)
+		if err != nil {
+			return err
+		}
 
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(fp, f.Mode())
+			if err := os.MkdirAll(fp, f.Mode()); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -206,8 +218,42 @@ func downloadAndExtract(repoURL, targetDir string) error {
 	}
 
 	root := filepath.Join(tempDir, entries[0].Name())
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		return err
+	}
+	if !rootInfo.IsDir() {
+		return fmt.Errorf("zip extraction failed: root entry is not a directory")
+	}
 
 	return os.Rename(root, targetDir)
+}
+
+func safeArchivePath(root, name string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("zip contains empty entry name")
+	}
+	if filepath.IsAbs(name) {
+		return "", fmt.Errorf("zip entry escapes target dir: %s", name)
+	}
+
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+
+	target := filepath.Join(rootAbs, filepath.Clean(filepath.FromSlash(name)))
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return "", err
+	}
+
+	rootWithSep := rootAbs + string(filepath.Separator)
+	if targetAbs != rootAbs && !strings.HasPrefix(targetAbs, rootWithSep) {
+		return "", fmt.Errorf("zip entry escapes target dir: %s", name)
+	}
+
+	return targetAbs, nil
 }
 
 func normalizeInstallURL(raw string) string {

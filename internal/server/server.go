@@ -130,7 +130,23 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		}()
 	}
 
-	if err := http.ListenAndServe(s.cfg.Server.Addr, mux); err != nil {
+	srv := &http.Server{
+		Addr:              s.cfg.Server.Addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return diag.Wrap(diag.KindServe, "listen and serve", err)
 	}
 
@@ -226,10 +242,6 @@ func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet)
 		if err := s.renderer.BuildURLs(ctx, graph, plan.OutputURLs); err != nil {
 			return diag.Wrap(diag.KindRender, "build urls", err)
 		}
-	}
-
-	if err := s.renderer.BuildTaxonomyArchives(ctx, graph); err != nil {
-		return diag.Wrap(diag.KindRender, "build taxonomy archives", err)
 	}
 
 	depGraph := deps.BuildSiteDependencyGraph(graph, s.cfg.Theme)
