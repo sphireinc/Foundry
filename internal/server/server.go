@@ -85,29 +85,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	go s.watch(ctx)
 
-	mux := http.NewServeMux()
-
-	if s.cfg.Server.LiveReload {
-		mux.HandleFunc("/__reload", s.handleReload)
-	}
-
-	if s.cfg.Server.DebugRoutes {
-		mux.HandleFunc("/__debug/deps", s.handleDepsDebug)
-	}
-
-	mux.HandleFunc(s.cfg.Feed.RSSPath, s.handleRSS)
-	mux.HandleFunc(s.cfg.Feed.SitemapPath, s.handleSitemap)
-
-	mux.Handle("/assets/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
-	mux.Handle("/images/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
-	mux.Handle("/uploads/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
-	mux.Handle("/theme/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
-	mux.Handle("/plugins/", http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
-
-	s.hooks.RegisterRoutes(mux)
-
-	mux.HandleFunc("/", s.handlePage)
-
 	serverURL := s.listenURL()
 	logx.Info(
 		"Foundry is running",
@@ -122,29 +99,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 
 	if s.cfg.Server.AutoOpenBrowser {
-		go func() {
-			time.Sleep(250 * time.Millisecond)
-			if err := openBrowser(serverURL); err != nil {
-				logx.Warn("open browser failed", "url", serverURL, "error", err)
-			}
-		}()
+		go s.openBrowserAfterStartup(serverURL)
 	}
 
-	srv := &http.Server{
-		Addr:              s.cfg.Server.Addr,
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
-	}()
+	srv := s.newHTTPServer(s.newMux())
+	go s.shutdownOnContextDone(ctx, srv)
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return diag.Wrap(diag.KindServe, "listen and serve", err)
@@ -153,60 +112,89 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	return nil
 }
 
+func (s *Server) newMux() *http.ServeMux {
+	mux := http.NewServeMux()
+
+	if s.cfg.Server.LiveReload {
+		mux.HandleFunc("/__reload", s.handleReload)
+	}
+	if s.cfg.Server.DebugRoutes {
+		mux.HandleFunc("/__debug/deps", s.handleDepsDebug)
+	}
+
+	mux.HandleFunc(s.cfg.Feed.RSSPath, s.handleRSS)
+	mux.HandleFunc(s.cfg.Feed.SitemapPath, s.handleSitemap)
+
+	for _, prefix := range []string{"/assets/", "/images/", "/uploads/", "/theme/", "/plugins/"} {
+		mux.Handle(prefix, http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
+	}
+
+	s.hooks.RegisterRoutes(mux)
+	mux.HandleFunc("/", s.handlePage)
+
+	return mux
+}
+
+func (s *Server) newHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              s.cfg.Server.Addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+}
+
+func (s *Server) shutdownOnContextDone(ctx context.Context, srv *http.Server) {
+	<-ctx.Done()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(shutdownCtx)
+}
+
+func (s *Server) openBrowserAfterStartup(serverURL string) {
+	time.Sleep(250 * time.Millisecond)
+	if err := openBrowser(serverURL); err != nil {
+		logx.Warn("open browser failed", "url", serverURL, "error", err)
+	}
+}
+
 func (s *Server) listenURL() string {
 	addr := s.cfg.Server.Addr
-	if strings.HasPrefix(addr, ":") {
+	switch {
+	case strings.HasPrefix(addr, ":"):
 		return "http://localhost" + addr
-	}
-	if strings.HasPrefix(addr, "127.0.0.1:") || strings.HasPrefix(addr, "localhost:") {
+	case strings.HasPrefix(addr, "127.0.0.1:"), strings.HasPrefix(addr, "localhost:"):
+		return "http://" + addr
+	case strings.HasPrefix(addr, "http://"), strings.HasPrefix(addr, "https://"):
+		return addr
+	default:
 		return "http://" + addr
 	}
-	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
-		return addr
-	}
-	return "http://" + addr
 }
 
 func (s *Server) rebuild(ctx context.Context) error {
-	graph, err := s.loader.Load(ctx)
+	graph, err := s.loadPreparedGraph(ctx)
 	if err != nil {
-		return diag.Wrap(diag.KindBuild, "load site graph", err)
+		return err
 	}
-	if err := s.router.AssignURLs(graph); err != nil {
-		return diag.Wrap(diag.KindBuild, "assign urls", err)
-	}
-	if err := s.hooks.OnRoutesAssigned(graph); err != nil {
-		return diag.Wrap(diag.KindPlugin, "run route hooks", err)
-	}
-	if err := assets.Sync(s.cfg, s.hooks); err != nil {
-		return diag.Wrap(diag.KindIO, "sync assets", err)
+	if err := s.syncAssets(); err != nil {
+		return err
 	}
 
-	depGraph := deps.BuildSiteDependencyGraph(graph, s.cfg.Theme)
-
-	s.mu.Lock()
-	s.graph = graph
-	s.depGraph = depGraph
-	s.mu.Unlock()
-
-	logx.Info(
-		"site rebuilt",
-		"documents", len(graph.Documents),
-		"routes", len(graph.ByURL),
-	)
-
+	s.updateGraphState(graph)
+	logx.Info("site rebuilt", "documents", len(graph.Documents), "routes", len(graph.ByURL))
 	s.signalReload()
 	return nil
 }
 
 func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet) error {
-	s.mu.RLock()
-	oldDepGraph := s.depGraph
-	s.mu.RUnlock()
+	oldDepGraph := s.currentDepGraph()
 
 	if len(changes.Assets) > 0 {
-		if err := assets.Sync(s.cfg, s.hooks); err != nil {
-			return diag.Wrap(diag.KindIO, "sync assets", err)
+		if err := s.syncAssets(); err != nil {
+			return err
 		}
 	}
 
@@ -227,34 +215,54 @@ func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet)
 		return s.rebuild(ctx)
 	}
 
-	graph, err := s.loader.Load(ctx)
+	graph, err := s.loadPreparedGraph(ctx)
 	if err != nil {
-		return diag.Wrap(diag.KindBuild, "load site graph", err)
+		return err
 	}
-	if err := s.router.AssignURLs(graph); err != nil {
-		return diag.Wrap(diag.KindBuild, "assign urls", err)
-	}
-	if err := s.hooks.OnRoutesAssigned(graph); err != nil {
-		return diag.Wrap(diag.KindPlugin, "run route hooks", err)
-	}
-
 	if len(plan.OutputURLs) > 0 {
 		if err := s.renderer.BuildURLs(ctx, graph, plan.OutputURLs); err != nil {
 			return diag.Wrap(diag.KindRender, "build urls", err)
 		}
 	}
 
-	depGraph := deps.BuildSiteDependencyGraph(graph, s.cfg.Theme)
-
-	s.mu.Lock()
-	s.graph = graph
-	s.depGraph = depGraph
-	s.mu.Unlock()
-
+	s.updateGraphState(graph)
 	logx.Debug("incremental rebuild complete", "output_count", len(plan.OutputURLs))
-
 	s.signalReload()
 	return nil
+}
+
+func (s *Server) loadPreparedGraph(ctx context.Context) (*content.SiteGraph, error) {
+	graph, err := s.loader.Load(ctx)
+	if err != nil {
+		return nil, diag.Wrap(diag.KindBuild, "load site graph", err)
+	}
+	if err := s.router.AssignURLs(graph); err != nil {
+		return nil, diag.Wrap(diag.KindBuild, "assign urls", err)
+	}
+	if err := s.hooks.OnRoutesAssigned(graph); err != nil {
+		return nil, diag.Wrap(diag.KindPlugin, "run route hooks", err)
+	}
+	return graph, nil
+}
+
+func (s *Server) syncAssets() error {
+	if err := assets.Sync(s.cfg, s.hooks); err != nil {
+		return diag.Wrap(diag.KindIO, "sync assets", err)
+	}
+	return nil
+}
+
+func (s *Server) updateGraphState(graph *content.SiteGraph) {
+	s.mu.Lock()
+	s.graph = graph
+	s.depGraph = deps.BuildSiteDependencyGraph(graph, s.cfg.Theme)
+	s.mu.Unlock()
+}
+
+func (s *Server) currentDepGraph() *deps.Graph {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.depGraph
 }
 
 func hasRenderableChanges(changes deps.ChangeSet) bool {
@@ -283,22 +291,7 @@ func (s *Server) watch(ctx context.Context) {
 		}
 	}(w)
 
-	paths := []string{
-		s.cfg.ContentDir,
-		s.cfg.ThemesDir,
-		s.cfg.DataDir,
-		s.cfg.PluginsDir,
-		filepath.Join(s.cfg.ContentDir, "config"),
-	}
-
-	for _, p := range paths {
-		_ = filepath.Walk(p, func(path string, info os.FileInfo, err error) error {
-			if err == nil && info.IsDir() {
-				_ = w.Add(path)
-			}
-			return nil
-		})
-	}
+	s.walkWatchRoots(w)
 
 	var changedPaths []string
 	var debounce <-chan time.Time
@@ -307,7 +300,6 @@ func (s *Server) watch(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-
 		case ev := <-w.Events:
 			if ev.Op != 0 {
 				if shouldAddWatch(ev.Name) {
@@ -316,7 +308,6 @@ func (s *Server) watch(ctx context.Context) {
 				changedPaths = append(changedPaths, ev.Name)
 				debounce = time.After(250 * time.Millisecond)
 			}
-
 		case <-debounce:
 			if len(changedPaths) == 0 {
 				continue
@@ -327,12 +318,36 @@ func (s *Server) watch(ctx context.Context) {
 			}
 			changedPaths = nil
 			debounce = nil
-
 		case err := <-w.Errors:
 			if err != nil {
 				logx.Warn("watcher error", "error", err)
 			}
 		}
+	}
+}
+
+func (s *Server) watchRoots() []string {
+	return []string{
+		s.cfg.ContentDir,
+		s.cfg.ThemesDir,
+		s.cfg.DataDir,
+		s.cfg.PluginsDir,
+		filepath.Join(s.cfg.ContentDir, "config"),
+	}
+}
+
+type watcherAdder interface {
+	Add(string) error
+}
+
+func (s *Server) walkWatchRoots(w watcherAdder) {
+	for _, root := range s.watchRoots() {
+		_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err == nil && info.IsDir() {
+				_ = w.Add(path)
+			}
+			return nil
+		})
 	}
 }
 
@@ -342,10 +357,6 @@ func shouldAddWatch(path string) bool {
 		return false
 	}
 	return info.IsDir()
-}
-
-type watcherAdder interface {
-	Add(string) error
 }
 
 func addWatchRecursively(w watcherAdder, root string) error {
@@ -365,58 +376,69 @@ func (s *Server) classifyChanges(paths []string) deps.ChangeSet {
 		Assets:    make([]string, 0),
 	}
 
-	contentDir := filepath.ToSlash(s.cfg.ContentDir)
-	themesDir := filepath.ToSlash(s.cfg.ThemesDir)
-	dataDir := filepath.ToSlash(s.cfg.DataDir)
-	configPath := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, "config", "site.yaml"))
-	pagesRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PagesDir))
-	postsRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PostsDir))
-	contentAssetsRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir))
-	contentImagesRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.ImagesDir))
-	contentUploadsRoot := filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.UploadsDir))
-	themeAssetsRoot := filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "assets"))
-	themeLayoutsRoot := filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "layouts"))
+	roots := s.changeRoots()
 
 	for _, path := range paths {
 		clean := filepath.ToSlash(path)
 
 		switch {
-		case clean == configPath:
+		case clean == roots["config"]:
 			changes.Full = true
-
-		case strings.HasPrefix(clean, pagesRoot+"/") || strings.HasPrefix(clean, postsRoot+"/"):
+		case strings.HasPrefix(clean, roots["pages"]+"/"), strings.HasPrefix(clean, roots["posts"]+"/"):
 			changes.Sources = append(changes.Sources, clean)
-
-		case strings.HasPrefix(clean, themeLayoutsRoot+"/"):
+		case strings.HasPrefix(clean, roots["theme_layouts"]+"/"):
 			changes.Templates = append(changes.Templates, clean)
-
-		case strings.HasPrefix(clean, contentAssetsRoot+"/"),
-			strings.HasPrefix(clean, contentImagesRoot+"/"),
-			strings.HasPrefix(clean, contentUploadsRoot+"/"),
-			strings.HasPrefix(clean, themeAssetsRoot+"/"):
+		case strings.HasPrefix(clean, roots["content_assets"]+"/"),
+			strings.HasPrefix(clean, roots["content_images"]+"/"),
+			strings.HasPrefix(clean, roots["content_uploads"]+"/"),
+			strings.HasPrefix(clean, roots["theme_assets"]+"/"):
 			changes.Assets = append(changes.Assets, clean)
-
-		case strings.HasPrefix(clean, dataDir+"/"):
-			rel, err := filepath.Rel(s.cfg.DataDir, path)
-			if err == nil {
-				key := strings.TrimSuffix(filepath.ToSlash(rel), filepath.Ext(rel))
-				changes.DataKeys = append(changes.DataKeys, key)
-			} else {
+		case strings.HasPrefix(clean, roots["data"]+"/"):
+			key, err := s.classifyDataKey(path)
+			if err != nil {
 				changes.Full = true
+				continue
 			}
-
-		case strings.HasPrefix(clean, filepath.ToSlash(s.cfg.PluginsDir)+"/"):
+			changes.DataKeys = append(changes.DataKeys, key)
+		case strings.HasPrefix(clean, roots["plugins"]+"/"):
 			changes.Full = true
-
-		case strings.HasPrefix(clean, themesDir+"/"), strings.HasPrefix(clean, contentDir+"/"):
+		case strings.HasPrefix(clean, roots["themes"]+"/"), strings.HasPrefix(clean, roots["content"]+"/"):
 			changes.Full = true
-
 		default:
 			changes.Full = true
 		}
 	}
 
 	return changes
+}
+
+func (s *Server) changeRoots() map[string]string {
+	return map[string]string{
+		"config":          filepath.ToSlash(s.contentConfigPath()),
+		"pages":           filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PagesDir)),
+		"posts":           filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PostsDir)),
+		"content_assets":  filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir)),
+		"content_images":  filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.ImagesDir)),
+		"content_uploads": filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.UploadsDir)),
+		"theme_assets":    filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "assets")),
+		"theme_layouts":   filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "layouts")),
+		"data":            filepath.ToSlash(s.cfg.DataDir),
+		"plugins":         filepath.ToSlash(s.cfg.PluginsDir),
+		"themes":          filepath.ToSlash(s.cfg.ThemesDir),
+		"content":         filepath.ToSlash(s.cfg.ContentDir),
+	}
+}
+
+func (s *Server) contentConfigPath() string {
+	return filepath.Join(s.cfg.ContentDir, "config", "site.yaml")
+}
+
+func (s *Server) classifyDataKey(path string) (string, error) {
+	rel, err := filepath.Rel(s.cfg.DataDir, path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(filepath.ToSlash(rel), filepath.Ext(rel)), nil
 }
 
 func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
