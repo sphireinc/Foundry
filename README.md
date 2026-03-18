@@ -1,6 +1,8 @@
 # Foundry
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/sphireinc/foundry/go.yml?branch=main)](https://github.com/sphireinc/foundry/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/sphireinc/foundry/build.yml?branch=main)](https://github.com/sphireinc/foundry/actions)
+[![CodeQL](https://github.com/sphireinc/Foundry/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main)](https://github.com/sphireinc/Foundry/actions/workflows/github-code-scanning/codeql)
+[![Pages](https://github.com/sphireinc/Foundry/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/sphireinc/Foundry/actions/workflows/pages/pages-build-deployment)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sphireinc/foundry)](https://goreportcard.com/report/github.com/sphireinc/foundry)
 ![Last Commit](https://img.shields.io/github/last-commit/sphireinc/foundry)
 
