@@ -38,4 +38,13 @@ func TestManagerMustExistErrors(t *testing.T) {
 	if err := mgr.MustExist(); err == nil {
 		t.Fatal("expected non-directory theme error")
 	}
+
+	mgr = NewManager(root, "..")
+	if err := mgr.MustExist(); err == nil {
+		t.Fatal("expected invalid theme name error")
+	}
+
+	if got := NewManager(root, "..").LayoutPath("post"); got != "" {
+		t.Fatalf("expected invalid theme layout path to be empty, got %q", got)
+	}
 }

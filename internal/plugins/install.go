@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 var pluginDownloadClient = &http.Client{Timeout: 30 * time.Second}
@@ -22,7 +24,7 @@ type InstallOptions struct {
 }
 
 func Install(opts InstallOptions) (Metadata, error) {
-	repoURL := normalizeInstallURL(opts.URL)
+	repoURL, err := validateInstallURL(opts.URL)
 	if strings.TrimSpace(repoURL) == "" {
 		return Metadata{}, fmt.Errorf("plugin URL cannot be empty")
 	}
@@ -34,15 +36,15 @@ func Install(opts InstallOptions) (Metadata, error) {
 
 	name := strings.TrimSpace(opts.Name)
 	if name == "" {
-		var err error
 		name, err = inferPluginName(repoURL)
 		if err != nil {
 			return Metadata{}, err
 		}
 	}
 
-	if strings.Contains(name, "/") || strings.Contains(name, `\`) {
-		return Metadata{}, fmt.Errorf("plugin name must be a single directory name")
+	name, err = validatePluginName(name)
+	if err != nil {
+		return Metadata{}, err
 	}
 
 	targetDir := filepath.Join(pluginsDir, name)
@@ -84,16 +86,14 @@ func Install(opts InstallOptions) (Metadata, error) {
 
 func Uninstall(pluginsDir, name string) error {
 	pluginsDir = strings.TrimSpace(pluginsDir)
-	name = strings.TrimSpace(name)
 
 	if pluginsDir == "" {
 		return fmt.Errorf("plugins directory cannot be empty")
 	}
-	if name == "" {
-		return fmt.Errorf("plugin name cannot be empty")
-	}
-	if strings.Contains(name, "/") || strings.Contains(name, `\`) {
-		return fmt.Errorf("plugin name must be a single directory name")
+	var err error
+	name, err = validatePluginName(name)
+	if err != nil {
+		return err
 	}
 
 	targetDir := filepath.Join(pluginsDir, name)
@@ -121,7 +121,7 @@ func repoZipURL(repoURL string) (string, error) {
 		return "", err
 	}
 
-	if !strings.Contains(u.Host, "github.com") {
+	if !strings.EqualFold(u.Host, "github.com") {
 		return "", fmt.Errorf("zip fallback currently supports GitHub only")
 	}
 
@@ -290,6 +290,50 @@ func normalizeInstallURL(raw string) string {
 	}
 
 	return raw
+}
+
+func validateInstallURL(raw string) (string, error) {
+	normalized := normalizeInstallURL(raw)
+	if strings.TrimSpace(normalized) == "" {
+		return "", nil
+	}
+
+	if strings.HasPrefix(normalized, "git@github.com:") {
+		name, err := inferPluginName(normalized)
+		if err != nil {
+			return "", err
+		}
+		if _, err := validatePluginName(name); err != nil {
+			return "", fmt.Errorf("invalid GitHub repository path: %w", err)
+		}
+		return normalized, nil
+	}
+
+	u, err := url.Parse(normalized)
+	if err != nil {
+		return "", fmt.Errorf("parse plugin URL: %w", err)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return "", fmt.Errorf("plugin URL must use https or git@github.com")
+	}
+	if !strings.EqualFold(u.Host, "github.com") {
+		return "", fmt.Errorf("plugin URL must target github.com")
+	}
+
+	path := strings.Trim(strings.TrimSuffix(u.Path, ".git"), "/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", fmt.Errorf("plugin URL must point to a GitHub owner/repository")
+	}
+	if _, err := validatePluginName(parts[1]); err != nil {
+		return "", fmt.Errorf("invalid GitHub repository path: %w", err)
+	}
+
+	return normalized, nil
+}
+
+func validatePluginName(name string) (string, error) {
+	return safepath.ValidatePathComponent("plugin name", name)
 }
 
 func inferPluginName(raw string) (string, error) {

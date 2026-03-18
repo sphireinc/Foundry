@@ -30,6 +30,18 @@ func TestAuthorizeRejectsNonLocalRequest(t *testing.T) {
 	}
 }
 
+func TestAuthorizeRejectsForwardedLoopbackRequest(t *testing.T) {
+	m := New(&config.Config{Admin: config.AdminConfig{Enabled: true, LocalOnly: true, AccessToken: "secret-token"}})
+	req := httptest.NewRequest("GET", "/__admin/api/status", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "8.8.8.8")
+	req.Header.Set("X-Foundry-Admin-Token", "secret-token")
+
+	if err := m.Authorize(req); err == nil {
+		t.Fatal("expected forwarded request to be rejected for local-only admin")
+	}
+}
+
 func TestAuthorizeRejectsRemoteAdminWithoutToken(t *testing.T) {
 	m := New(&config.Config{Admin: config.AdminConfig{Enabled: true, LocalOnly: false, AccessToken: "secret-token"}})
 	req := httptest.NewRequest("GET", "/__admin/api/status", nil)

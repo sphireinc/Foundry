@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/markup"
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 func (s *Service) ListDocuments(ctx context.Context, opts types.DocumentListOptions) ([]types.DocumentSummary, error) {
@@ -241,6 +243,70 @@ func (s *Service) resolveContentPath(path string) (string, error) {
 	if filepath.Ext(full) != ".md" {
 		return "", fmt.Errorf("source path must point to a markdown file")
 	}
+	if err := ensureNoSymlinkEscape(contentRoot, full); err != nil {
+		return "", err
+	}
 
 	return full, nil
+}
+
+func ensureNoSymlinkEscape(root, target string) error {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+
+	rel, err := filepath.Rel(rootAbs, targetAbs)
+	if err != nil {
+		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("source path must be inside %s", root)
+	}
+
+	current := rootAbs
+	if rel == "." {
+		return nil
+	}
+
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+
+		info, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				ok, err := safepath.IsWithinRoot(rootAbs, current)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return fmt.Errorf("source path must be inside %s", root)
+				}
+				continue
+			}
+			return err
+		}
+
+		if info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+
+		resolved, err := filepath.EvalSymlinks(current)
+		if err != nil {
+			return err
+		}
+		ok, err := safepath.IsWithinRoot(rootAbs, resolved)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("source path must stay inside %s after resolving symlinks", root)
+		}
+	}
+
+	return nil
 }
