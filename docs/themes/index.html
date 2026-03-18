@@ -74,7 +74,22 @@ layouts:
   - index
   - page
   - post
-  - list</code></pre>
+  - list
+slots:
+  - head.end
+  - body.start
+  - body.end
+  - page.before_main
+  - page.after_main
+  - page.before_content
+  - page.after_content
+  - post.before_header
+  - post.after_header
+  - post.before_content
+  - post.after_content
+  - post.sidebar.top
+  - post.sidebar.overview
+  - post.sidebar.bottom</code></pre>
 
         <h2>Layout responsibilities</h2>
         <ul>
@@ -85,8 +100,8 @@ layouts:
           <li><strong>list.html:</strong> renders list-style views such as taxonomy archives.</li>
         </ul>
 
-        <h2>Injectable slots</h2>
-        <p>The active theme defines which plugin slots actually exist in rendered output. The scaffold and default theme currently expose the following slot names:</p>
+        <h2>Required slots</h2>
+        <p>For the launch version of Foundry, theme validation enforces a minimum slot contract. A valid theme must declare and render all of the following slots:</p>
         <ul>
           <li><code>head.end</code></li>
           <li><code>body.start</code></li>
@@ -102,6 +117,13 @@ layouts:
           <li><code>post.sidebar.top</code></li>
           <li><code>post.sidebar.overview</code></li>
           <li><code>post.sidebar.bottom</code></li>
+        </ul>
+
+        <h2>Validation behavior</h2>
+        <p>Theme validation checks two things for the launch slot contract:</p>
+        <ul>
+          <li>the theme manifest declares the required slot names</li>
+          <li>the expected layouts actually render those slot calls</li>
         </ul>
 
         <h2>Theme and plugin interplay</h2>

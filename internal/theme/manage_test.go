@@ -66,6 +66,11 @@ func TestThemeManagementErrorsAndHelpers(t *testing.T) {
 	if !strings.Contains(scaffoldManifest("hello"), "name: hello") {
 		t.Fatal("expected manifest scaffold content")
 	}
+	for _, slot := range requiredLaunchSlots {
+		if !strings.Contains(scaffoldManifest("hello"), slot) {
+			t.Fatalf("expected scaffold manifest to include slot %q", slot)
+		}
+	}
 	if !strings.Contains(scaffoldBase(), `define "base"`) ||
 		!strings.Contains(scaffoldHead(), `define "head"`) ||
 		!strings.Contains(scaffoldHeader(), `define "header"`) ||
@@ -76,5 +81,43 @@ func TestThemeManagementErrorsAndHelpers(t *testing.T) {
 		!strings.Contains(scaffoldList(), `No entries found.`) ||
 		!strings.Contains(scaffoldCSS(), "font-family") {
 		t.Fatal("expected scaffold helper content")
+	}
+}
+
+func TestValidateInstalledRequiresLaunchSlotsInManifestAndTemplates(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "launch-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+
+	manifestPath := filepath.Join(scaffolded, "theme.yaml")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	body = []byte(strings.Replace(string(body), "  - post.sidebar.bottom\n", "", 1))
+	if err := os.WriteFile(manifestPath, body, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if err := ValidateInstalled(root, "launch-theme"); err == nil {
+		t.Fatal("expected validation failure for missing required slot declaration")
+	}
+
+	scaffolded, err = Scaffold(root, "template-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	postPath := filepath.Join(scaffolded, "layouts", "post.html")
+	postBody, err := os.ReadFile(postPath)
+	if err != nil {
+		t.Fatalf("read post layout: %v", err)
+	}
+	postBody = []byte(strings.Replace(string(postBody), `{{ pluginSlot "post.sidebar.overview" }}`, "", 1))
+	if err := os.WriteFile(postPath, postBody, 0o644); err != nil {
+		t.Fatalf("write post layout: %v", err)
+	}
+	if err := ValidateInstalled(root, "template-theme"); err == nil {
+		t.Fatal("expected validation failure for missing required slot rendering")
 	}
 }

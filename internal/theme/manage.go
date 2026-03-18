@@ -29,6 +29,40 @@ type Manifest struct {
 	Slots             []string `yaml:"slots"`
 }
 
+var requiredLaunchSlots = []string{
+	"head.end",
+	"body.start",
+	"body.end",
+	"page.before_main",
+	"page.after_main",
+	"page.before_content",
+	"page.after_content",
+	"post.before_header",
+	"post.after_header",
+	"post.before_content",
+	"post.after_content",
+	"post.sidebar.top",
+	"post.sidebar.overview",
+	"post.sidebar.bottom",
+}
+
+var requiredLaunchSlotFiles = map[string]string{
+	"head.end":              filepath.Join("layouts", "partials", "head.html"),
+	"body.start":            filepath.Join("layouts", "base.html"),
+	"body.end":              filepath.Join("layouts", "base.html"),
+	"page.before_main":      filepath.Join("layouts", "base.html"),
+	"page.after_main":       filepath.Join("layouts", "base.html"),
+	"page.before_content":   filepath.Join("layouts", "page.html"),
+	"page.after_content":    filepath.Join("layouts", "page.html"),
+	"post.before_header":    filepath.Join("layouts", "post.html"),
+	"post.after_header":     filepath.Join("layouts", "post.html"),
+	"post.before_content":   filepath.Join("layouts", "post.html"),
+	"post.after_content":    filepath.Join("layouts", "post.html"),
+	"post.sidebar.top":      filepath.Join("layouts", "post.html"),
+	"post.sidebar.overview": filepath.Join("layouts", "post.html"),
+	"post.sidebar.bottom":   filepath.Join("layouts", "post.html"),
+}
+
 func ListInstalled(themesDir string) ([]Info, error) {
 	entries, err := os.ReadDir(themesDir)
 	if err != nil {
@@ -149,6 +183,10 @@ func ValidateInstalled(themesDir, name string) error {
 		}
 	}
 
+	if err := validateRequiredLaunchSlots(root, manifest); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -236,6 +274,9 @@ slots:
   - post.after_header
   - post.before_content
   - post.after_content
+  - post.sidebar.top
+  - post.sidebar.overview
+  - post.sidebar.bottom
 `, name, humanizeName(name))
 }
 
@@ -407,14 +448,24 @@ func scaffoldPage() string {
 
 func scaffoldPost() string {
 	return `{{ define "content" }}
-<article class="prose">
-  {{ pluginSlot "post.before_header" }}
-  <h1>{{ .Page.Title }}</h1>
-  {{ pluginSlot "post.after_header" }}
-  {{ pluginSlot "post.before_content" }}
-  {{ safeHTML .Page.HTMLBody }}
-  {{ pluginSlot "post.after_content" }}
-</article>
+<div class="split-layout">
+  <section class="prose">
+    {{ pluginSlot "post.before_header" }}
+    <h1>{{ .Page.Title }}</h1>
+    {{ pluginSlot "post.after_header" }}
+    {{ pluginSlot "post.before_content" }}
+    {{ safeHTML .Page.HTMLBody }}
+    {{ pluginSlot "post.after_content" }}
+  </section>
+
+  <aside>
+    {{ pluginSlot "post.sidebar.top" }}
+    <div>
+      {{ pluginSlot "post.sidebar.overview" }}
+    </div>
+    {{ pluginSlot "post.sidebar.bottom" }}
+  </aside>
+</div>
 {{ end }}
 `
 }
@@ -434,4 +485,34 @@ func scaffoldList() string {
 {{ end }}
 {{ end }}
 `
+}
+
+func validateRequiredLaunchSlots(root string, manifest *Manifest) error {
+	declared := make(map[string]struct{}, len(manifest.Slots))
+	for _, slot := range manifest.Slots {
+		slot = strings.TrimSpace(slot)
+		if slot == "" {
+			continue
+		}
+		declared[slot] = struct{}{}
+	}
+
+	for _, slot := range requiredLaunchSlots {
+		if _, ok := declared[slot]; !ok {
+			return fmt.Errorf("theme manifest is missing required slot %q", slot)
+		}
+
+		relPath := requiredLaunchSlotFiles[slot]
+		path := filepath.Join(root, relPath)
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read slot template %s: %w", path, err)
+		}
+		call := fmt.Sprintf(`pluginSlot %q`, slot)
+		if !strings.Contains(string(body), call) {
+			return fmt.Errorf("theme must render required slot %q in %s", slot, path)
+		}
+	}
+
+	return nil
 }
