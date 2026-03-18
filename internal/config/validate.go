@@ -39,6 +39,7 @@ func Validate(cfg *Config) []error {
 	require("server.addr", cfg.Server.Addr)
 	require("feed.rss_path", cfg.Feed.RSSPath)
 	require("feed.sitemap_path", cfg.Feed.SitemapPath)
+	require("server.live_reload_mode", cfg.Server.LiveReloadMode)
 
 	if cfg.Feed.RSSPath != "" && !strings.HasPrefix(cfg.Feed.RSSPath, "/") {
 		errs = append(errs, fmt.Errorf("feed.rss_path must start with '/'"))
@@ -48,6 +49,13 @@ func Validate(cfg *Config) []error {
 	}
 	if cfg.Feed.RSSPath != "" && cfg.Feed.RSSPath == cfg.Feed.SitemapPath {
 		errs = append(errs, fmt.Errorf("feed.rss_path and feed.sitemap_path must not be the same"))
+	}
+	if cfg.Server.LiveReloadMode != "" {
+		switch strings.ToLower(strings.TrimSpace(cfg.Server.LiveReloadMode)) {
+		case "stream", "poll":
+		default:
+			errs = append(errs, fmt.Errorf("server.live_reload_mode must be one of: stream, poll"))
+		}
 	}
 
 	if cfg.DefaultLang != "" && strings.Contains(cfg.DefaultLang, "/") {

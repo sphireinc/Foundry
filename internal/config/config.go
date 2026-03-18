@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 type Config struct {
 	Name        string                `yaml:"name"`
 	Title       string                `yaml:"title"`
@@ -37,6 +39,7 @@ type AdminConfig struct {
 type ServerConfig struct {
 	Addr            string `yaml:"addr"`
 	LiveReload      bool   `yaml:"live_reload"`
+	LiveReloadMode  string `yaml:"live_reload_mode"`
 	AutoOpenBrowser bool   `yaml:"auto_open_browser"`
 	DebugRoutes     bool   `yaml:"debug_routes"`
 }
@@ -146,6 +149,11 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
+	}
+	if strings.TrimSpace(c.Server.LiveReloadMode) == "" {
+		c.Server.LiveReloadMode = "stream"
+	} else {
+		c.Server.LiveReloadMode = strings.ToLower(strings.TrimSpace(c.Server.LiveReloadMode))
 	}
 	if c.Content.PagesDir == "" {
 		c.Content.PagesDir = "pages"
