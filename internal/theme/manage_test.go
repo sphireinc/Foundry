@@ -82,6 +82,14 @@ func TestThemeManagementErrorsAndHelpers(t *testing.T) {
 		!strings.Contains(scaffoldCSS(), "font-family") {
 		t.Fatal("expected scaffold helper content")
 	}
+	if !strings.Contains(scaffoldBase(), "window.__foundryReloadSource") ||
+		!strings.Contains(scaffoldBase(), "window.__foundryReloadPollTimer") ||
+		!strings.Contains(scaffoldBase(), "/__reload/poll") ||
+		!strings.Contains(scaffoldBase(), "mode === 'poll'") ||
+		!strings.Contains(scaffoldBase(), "pagehide") ||
+		!strings.Contains(scaffoldBase(), "beforeunload") {
+		t.Fatal("expected scaffold base to close live reload connections")
+	}
 }
 
 func TestValidateInstalledRequiresLaunchSlotsInManifestAndTemplates(t *testing.T) {

@@ -26,8 +26,77 @@
 {{ if .LiveReload }}
 <script>
     (() => {
+        const mode = '{{ .Site.Server.LiveReloadMode }}' || 'stream';
+
+        if (window.__foundryReloadSource) {
+            window.__foundryReloadSource.close();
+            window.__foundryReloadSource = null;
+        }
+        if (window.__foundryReloadPollTimer) {
+            window.clearTimeout(window.__foundryReloadPollTimer);
+            window.__foundryReloadPollTimer = null;
+        }
+
+        if (mode === 'poll') {
+            const state = { closed: false, version: 0 };
+
+            const close = () => {
+                state.closed = true;
+                if (window.__foundryReloadPollTimer) {
+                    window.clearTimeout(window.__foundryReloadPollTimer);
+                    window.__foundryReloadPollTimer = null;
+                }
+            };
+
+            const poll = async () => {
+                try {
+                    const url = state.version > 0 ? `/__reload/poll?since=${state.version}` : '/__reload/poll';
+                    const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+                    if (!response.ok) {
+                        throw new Error(`reload poll failed with status ${response.status}`);
+                    }
+                    const payload = await response.json();
+                    if (state.closed) {
+                        return;
+                    }
+                    if (payload && typeof payload.version === 'number') {
+                        state.version = payload.version;
+                    }
+                    if (payload && payload.reload) {
+                        close();
+                        window.location.reload();
+                        return;
+                    }
+                } catch (_error) {
+                }
+                if (!state.closed) {
+                    window.__foundryReloadPollTimer = window.setTimeout(poll, 1500);
+                }
+            };
+
+            window.addEventListener('pagehide', close, { once: true });
+            window.addEventListener('beforeunload', close, { once: true });
+            void poll();
+            return;
+        }
+
         const es = new EventSource('/__reload');
-        es.onmessage = () => window.location.reload();
+        window.__foundryReloadSource = es;
+
+        const close = () => {
+            if (window.__foundryReloadSource === es) {
+                window.__foundryReloadSource = null;
+            }
+            es.close();
+        };
+
+        es.onmessage = () => {
+            close();
+            window.location.reload();
+        };
+
+        window.addEventListener('pagehide', close, { once: true });
+        window.addEventListener('beforeunload', close, { once: true });
     })();
 </script>
 {{ end }}

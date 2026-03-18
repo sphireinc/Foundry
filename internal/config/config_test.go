@@ -13,6 +13,9 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Name == "" || cfg.Theme == "" || cfg.Server.Addr == "" {
 		t.Fatalf("expected defaults to be applied: %#v", cfg)
 	}
+	if cfg.Server.LiveReloadMode != "stream" {
+		t.Fatalf("expected live reload mode default to be stream, got %q", cfg.Server.LiveReloadMode)
+	}
 	if cfg.Admin.LocalOnly != true {
 		t.Fatalf("expected admin local only default to be true")
 	}
@@ -24,7 +27,7 @@ func TestApplyDefaults(t *testing.T) {
 func TestLoadValidateAndEditYAML(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "site.yaml")
-	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\nplugins:\n  enabled:\n    - toc\n")
+	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nserver:\n  addr: :8080\n  live_reload_mode: poll\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\nplugins:\n  enabled:\n    - toc\n")
 	if err := os.WriteFile(path, body, 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -60,6 +63,7 @@ func TestValidateAndSequenceHelpersErrors(t *testing.T) {
 	cfg := &Config{
 		Theme:   "..",
 		Plugins: PluginConfig{Enabled: []string{"../escape"}},
+		Server:  ServerConfig{LiveReloadMode: "invalid"},
 		Admin:   AdminConfig{Enabled: true},
 		Feed: FeedConfig{
 			RSSPath:     "rss.xml",
