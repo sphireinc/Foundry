@@ -204,6 +204,51 @@ func TestAdminIndexMethodAndErrorPaths(t *testing.T) {
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected method not allowed, got %d", rr.Code)
 	}
+
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/documents", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected documents method not allowed, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/document", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected document method not allowed, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/documents/save", strings.NewReader("{"))
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected save bad request, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/documents/preview", strings.NewReader("{"))
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected preview bad request, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/__admin/api/document?id=missing&include_drafts=1", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected document not found, got %d", rr.Code)
+	}
 }
 
 func TestHelpersAndHookWrapping(t *testing.T) {
@@ -228,6 +273,23 @@ func TestHelpersAndHookWrapping(t *testing.T) {
 	}
 	if _, ok := NewHooks(&config.Config{Admin: config.AdminConfig{Enabled: true}}, base).(hookSet); !ok {
 		t.Fatal("expected enabled admin hooks to wrap base hooks")
+	}
+
+	r := New(&config.Config{Admin: config.AdminConfig{Enabled: true}}, service.New(testConfig(t)))
+	before := len(r.registrars)
+	r.RegisterRegistrar(nil)
+	if len(r.registrars) != before {
+		t.Fatal("expected nil registrar to be ignored")
+	}
+
+	mux := http.NewServeMux()
+	WrapHooks(nil, nil).RegisterRoutes(mux)
+
+	empty := httptest.NewRecorder()
+	New(nil, nil).RegisterRoutes(nil)
+	writeJSON(empty, http.StatusCreated, map[string]string{"ok": "1"})
+	if empty.Code != http.StatusCreated || !strings.Contains(empty.Body.String(), "\"ok\":\"1\"") {
+		t.Fatalf("unexpected writeJSON response: %d %s", empty.Code, empty.Body.String())
 	}
 }
 

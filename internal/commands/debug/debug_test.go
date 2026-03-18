@@ -3,9 +3,11 @@ package debug
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -48,6 +50,9 @@ func TestDebugCommandMetadataAndDetectHooks(t *testing.T) {
 	if len(hooks) == 0 {
 		t.Fatal("expected detected hooks")
 	}
+	if implements[interface{ Missing() }](testDebugPlugin{}) {
+		t.Fatal("expected unrelated interface check to be false")
+	}
 }
 
 type testDebugPlugin struct{}
@@ -56,6 +61,59 @@ func (testDebugPlugin) Name() string { return "debug" }
 func (testDebugPlugin) OnBuildStarted() error {
 	return nil
 }
+
+func TestRunPluginsWithMissingEnabledPlugin(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{
+		PluginsDir:  root,
+		ContentDir:  t.TempDir(),
+		DefaultLang: "en",
+	}
+	cfg.ApplyDefaults()
+	cfg.Plugins.Enabled = []string{"broken"}
+	if err := os.MkdirAll(filepath.Join(root, "broken"), 0o755); err != nil {
+		t.Fatalf("mkdir plugin: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "broken", "plugin.yaml"), []byte("name: broken\nfoundry_api: v2\nmin_foundry_version: 0.1.0\n"), 0o644); err != nil {
+		t.Fatalf("write metadata: %v", err)
+	}
+	err := runPlugins(cfg)
+	if err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("expected plugin load error, got %v", err)
+	}
+}
+
+func TestRunPluginsWithRegisteredPlugin(t *testing.T) {
+	const name = "debug-test-plugin"
+	plugins.Register(name, func() plugins.Plugin { return testDebugPluginWithName(name) })
+
+	root := t.TempDir()
+	cfg := &config.Config{
+		PluginsDir:  root,
+		ContentDir:  t.TempDir(),
+		DefaultLang: "en",
+	}
+	cfg.ApplyDefaults()
+	cfg.Plugins.Enabled = []string{name}
+	if err := os.MkdirAll(filepath.Join(root, name), 0o755); err != nil {
+		t.Fatalf("mkdir plugin dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, name, "plugin.yaml"), []byte("name: "+name+"\nrepo: github.com/acme/"+name+"\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n"), 0o644); err != nil {
+		t.Fatalf("write metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, name, "plugin.go"), []byte("package "+strings.ReplaceAll(name, "-", "")+"\n"), 0o644); err != nil {
+		t.Fatalf("write plugin file: %v", err)
+	}
+
+	if err := runPlugins(cfg); err != nil {
+		t.Fatalf("expected registered plugin output, got %v", err)
+	}
+}
+
+type testDebugPluginWithName string
+
+func (p testDebugPluginWithName) Name() string          { return string(p) }
+func (p testDebugPluginWithName) OnBuildStarted() error { return nil }
 
 func testProjectConfig(t *testing.T, root string) *config.Config {
 	t.Helper()

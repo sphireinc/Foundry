@@ -12,6 +12,7 @@ import (
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/taxonomy"
 )
 
 func TestLoadCachesGraphsWithinTTL(t *testing.T) {
@@ -120,6 +121,102 @@ func TestDocumentQueriesPreviewAndStatus(t *testing.T) {
 	}
 	if len(svc.providers()) == 0 {
 		t.Fatal("expected status providers")
+	}
+}
+
+func TestServiceHelpersAndErrorPaths(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return nil, os.ErrNotExist
+	}))
+
+	if _, err := svc.load(context.Background(), true); err == nil {
+		t.Fatal("expected load error")
+	}
+
+	if _, err := svc.GetDocument(context.Background(), "", true); err == nil {
+		t.Fatal("expected empty document id error")
+	}
+
+	if _, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{SourcePath: "pages/test.txt", Raw: "x"}); err == nil {
+		t.Fatal("expected non-markdown save rejection")
+	}
+	if _, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{SourcePath: "../escape.md", Raw: "x"}); err == nil {
+		t.Fatal("expected path traversal rejection")
+	}
+	if _, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{SourcePath: "pages/test.md"}); err == nil {
+		t.Fatal("expected empty raw error")
+	}
+
+	if _, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{}); err == nil {
+		t.Fatal("expected empty preview error")
+	}
+	if _, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{Raw: "---\ntitle: [\n---\nbody"}); err == nil {
+		t.Fatal("expected frontmatter parse error")
+	}
+
+	if got := countWords(" one  two\nthree "); got != 3 {
+		t.Fatalf("unexpected word count: %d", got)
+	}
+	if !matchesDocumentQuery(&content.Document{Title: "Hello"}, "hell") {
+		t.Fatal("expected document query match")
+	}
+	if matchesDocumentQuery(&content.Document{Title: "Hello"}, "nope") {
+		t.Fatal("expected document query miss")
+	}
+
+	svc.RegisterStatusProvider(nil)
+}
+
+func TestStatusProvidersBranches(t *testing.T) {
+	cfg := testServiceConfig(t)
+	graph := content.NewSiteGraph(cfg)
+	now := time.Now()
+	doc := &content.Document{
+		ID:         "doc-1",
+		Type:       "page",
+		Lang:       "en",
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+		RawBody:    "# Hello",
+		HTMLBody:   template.HTML("<h1>Hello</h1>"),
+		Date:       &now,
+		Draft:      true,
+	}
+	graph.Add(doc)
+	graph.Taxonomies.Values = map[string]map[string][]taxonomy.Entry{
+		"tags": {"intro": {{DocumentID: doc.ID, URL: doc.URL, Lang: doc.Lang, Type: doc.Type, Title: doc.Title, Slug: doc.Slug}}},
+	}
+
+	if err := os.MkdirAll(filepath.Join(cfg.ThemesDir, cfg.Theme), 0o755); err != nil {
+		t.Fatalf("mkdir theme: %v", err)
+	}
+	if err := os.MkdirAll(cfg.PluginsDir, 0o755); err != nil {
+		t.Fatalf("mkdir plugins: %v", err)
+	}
+	cfg.Plugins.Enabled = []string{"missing-plugin"}
+
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return graph, nil
+	}))
+	status, err := svc.GetSystemStatus(context.Background())
+	if err != nil {
+		t.Fatalf("status failed: %v", err)
+	}
+	if status.Content.DraftCount != 1 {
+		t.Fatalf("expected draft count, got %#v", status.Content)
+	}
+	if len(status.Taxonomies) != 1 {
+		t.Fatalf("expected taxonomy status, got %#v", status.Taxonomies)
+	}
+	if len(status.Plugins) != 1 || status.Plugins[0].Enabled != true {
+		t.Fatalf("expected missing enabled plugin status, got %#v", status.Plugins)
+	}
+	if len(status.Checks) == 0 {
+		t.Fatal("expected health checks")
 	}
 }
 

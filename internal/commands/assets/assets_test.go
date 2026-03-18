@@ -10,7 +10,7 @@ import (
 
 func TestCommandMetadataAndRun(t *testing.T) {
 	cmd := command{}
-	if cmd.Name() != "assets" || !cmd.RequiresConfig() || len(cmd.Details()) != 3 {
+	if cmd.Name() != "assets" || cmd.Summary() == "" || cmd.Group() == "" || !cmd.RequiresConfig() || len(cmd.Details()) != 3 {
 		t.Fatalf("unexpected command metadata")
 	}
 
@@ -33,6 +33,13 @@ func TestCommandMetadataAndRun(t *testing.T) {
 	}
 	if err := cmd.Run(cfg, []string{"foundry", "assets", "missing"}); err == nil {
 		t.Fatal("expected unknown subcommand error")
+	}
+}
+
+func TestListAssetsNoFiles(t *testing.T) {
+	cfg := testAssetsCmdConfig(t)
+	if err := listAssets(cfg); err != nil {
+		t.Fatalf("list assets with no files: %v", err)
 	}
 }
 

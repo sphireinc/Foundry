@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"html/template"
 	"net/http"
@@ -9,10 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/deps"
+	"github.com/sphireinc/foundry/internal/diag"
 	"github.com/sphireinc/foundry/internal/renderer"
 	"github.com/sphireinc/foundry/internal/router"
 	"github.com/sphireinc/foundry/internal/theme"
@@ -20,10 +23,51 @@ import (
 
 type watchRecorder []string
 
+type stubLoader struct {
+	graph *content.SiteGraph
+	err   error
+}
+
+func (s stubLoader) Load(context.Context) (*content.SiteGraph, error) { return s.graph, s.err }
+
 func (w *watchRecorder) Add(path string) error {
 	*w = append(*w, path)
 	return nil
 }
+
+type hookRecorder struct {
+	started []string
+	graphs  int
+	err     error
+}
+
+func (h *hookRecorder) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/hook", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("hook")) })
+}
+func (h *hookRecorder) OnServerStarted(addr string) error {
+	h.started = append(h.started, addr)
+	return h.err
+}
+func (h *hookRecorder) OnRoutesAssigned(*content.SiteGraph) error {
+	h.graphs++
+	return h.err
+}
+func (h *hookRecorder) OnAssetsBuilding(*config.Config) error { return h.err }
+
+type responseWriterNoFlush struct {
+	header http.Header
+	body   strings.Builder
+	status int
+}
+
+func (w *responseWriterNoFlush) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+func (w *responseWriterNoFlush) Write(b []byte) (int, error) { return w.body.Write(b) }
+func (w *responseWriterNoFlush) WriteHeader(status int)      { w.status = status }
 
 func TestServerHelpersAndHandlers(t *testing.T) {
 	cfg := testServerConfig(t)
@@ -142,6 +186,142 @@ func TestServerChangeClassificationAndWatchHelpers(t *testing.T) {
 	}
 	if len(rec) < 2 {
 		t.Fatalf("expected directories to be added, got %v", rec)
+	}
+}
+
+func TestServerRebuildIncrementalAndNew(t *testing.T) {
+	cfg := testServerConfig(t)
+	writeServerTheme(t, cfg)
+
+	graph := content.NewSiteGraph(cfg)
+	doc := &content.Document{
+		ID:         "post-1",
+		Type:       "post",
+		Lang:       "en",
+		Title:      "Hello",
+		Slug:       "hello",
+		URL:        "/posts/hello/",
+		Layout:     "post",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "posts", "hello.md")),
+		HTMLBody:   template.HTML("<p>Hello</p>"),
+		Taxonomies: map[string][]string{"tags": {"go"}},
+	}
+	graph.Add(doc)
+
+	hooks := &hookRecorder{}
+	s := New(cfg, stubLoader{graph: graph}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), hooks, false)
+	if s.hooks == nil || s.reloadSignal == nil {
+		t.Fatal("expected server defaults to be initialized")
+	}
+
+	if err := s.rebuild(context.Background()); err != nil {
+		t.Fatalf("rebuild: %v", err)
+	}
+	if s.graph == nil || s.depGraph == nil || hooks.graphs != 1 {
+		t.Fatalf("expected rebuilt graph and depgraph: %#v %#v %#v", s.graph, s.depGraph, hooks)
+	}
+
+	if err := s.incrementalRebuild(context.Background(), deps.ChangeSet{Assets: []string{"asset.css"}}); err != nil {
+		t.Fatalf("asset-only incremental rebuild: %v", err)
+	}
+	if err := s.incrementalRebuild(context.Background(), deps.ChangeSet{Full: true}); err != nil {
+		t.Fatalf("full incremental rebuild: %v", err)
+	}
+	if err := s.incrementalRebuild(context.Background(), deps.ChangeSet{Sources: []string{doc.SourcePath}}); err != nil {
+		t.Fatalf("source incremental rebuild: %v", err)
+	}
+}
+
+func TestServerErrorAndUnavailablePaths(t *testing.T) {
+	cfg := testServerConfig(t)
+	writeServerTheme(t, cfg)
+
+	graph := content.NewSiteGraph(cfg)
+	doc := &content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       "en",
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+	}
+	graph.Add(doc)
+
+	s := &Server{
+		cfg:          cfg,
+		loader:       stubLoader{graph: graph},
+		router:       router.NewResolver(cfg),
+		renderer:     renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil),
+		hooks:        &hookRecorder{},
+		reloadSignal: make(chan struct{}, 1),
+	}
+
+	if err := (&Server{cfg: cfg, loader: stubLoader{err: os.ErrInvalid}, router: router.NewResolver(cfg), renderer: renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), hooks: &hookRecorder{}, reloadSignal: make(chan struct{}, 1)}).rebuild(context.Background()); diag.KindOf(err) != diag.KindBuild {
+		t.Fatalf("expected rebuild build error, got %v", err)
+	}
+	if err := (&Server{cfg: cfg, loader: stubLoader{graph: graph}, router: router.NewResolver(cfg), renderer: renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), hooks: &hookRecorder{err: os.ErrInvalid}, reloadSignal: make(chan struct{}, 1)}).rebuild(context.Background()); diag.KindOf(err) != diag.KindPlugin {
+		t.Fatalf("expected rebuild plugin error, got %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	(&Server{cfg: cfg}).handleRSS(rr, httptest.NewRequest(http.MethodGet, "/rss.xml", nil))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected rss unavailable, got %d", rr.Code)
+	}
+	rr = httptest.NewRecorder()
+	(&Server{cfg: cfg}).handleSitemap(rr, httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected sitemap unavailable, got %d", rr.Code)
+	}
+	rr = httptest.NewRecorder()
+	(&Server{}).handleDepsDebug(rr, httptest.NewRequest(http.MethodGet, "/__debug/deps", nil))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected deps debug unavailable, got %d", rr.Code)
+	}
+
+	w := &responseWriterNoFlush{}
+	s.handleReload(w, httptest.NewRequest(http.MethodGet, "/__reload", nil))
+	if w.status != http.StatusInternalServerError {
+		t.Fatalf("expected reload stream unsupported, got %d", w.status)
+	}
+}
+
+func TestListenAndServeLifecycleAndHookError(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Server.Addr = "127.0.0.1:0"
+	cfg.Server.LiveReload = true
+	cfg.Server.DebugRoutes = true
+	writeServerTheme(t, cfg)
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       "en",
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+	})
+
+	s := New(cfg, stubLoader{graph: graph}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), &hookRecorder{}, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	if err := s.ListenAndServe(ctx); err != nil {
+		t.Fatalf("listen and serve lifecycle: %v", err)
+	}
+
+	errSrv := New(cfg, stubLoader{graph: graph}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), &hookRecorder{err: os.ErrInvalid}, false)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	if err := errSrv.ListenAndServe(ctx2); diag.KindOf(err) != diag.KindPlugin {
+		t.Fatalf("expected hook error from listen and serve, got %v", err)
 	}
 }
 

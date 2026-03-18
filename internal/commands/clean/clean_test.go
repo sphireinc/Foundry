@@ -10,8 +10,11 @@ import (
 
 func TestCommandMetadataAndRun(t *testing.T) {
 	cmd := command{}
-	if cmd.Name() != "clean" || !cmd.RequiresConfig() {
+	if cmd.Name() != "clean" || cmd.Summary() == "" || cmd.Group() == "" || !cmd.RequiresConfig() {
 		t.Fatalf("unexpected command metadata")
+	}
+	if cmd.Details() != nil {
+		t.Fatal("expected nil details")
 	}
 
 	root := t.TempDir()
@@ -42,5 +45,22 @@ func TestCommandRejectsUnsafePath(t *testing.T) {
 	cfg := &config.Config{PublicDir: "."}
 	if err := cmd.Run(cfg, nil); err == nil {
 		t.Fatal("expected unsafe path error")
+	}
+}
+
+func TestCommandHandlesMissingPaths(t *testing.T) {
+	cmd := command{}
+	root := t.TempDir()
+	cfg := &config.Config{PublicDir: filepath.Join(root, "public")}
+	cfg.ApplyDefaults()
+
+	wd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(wd) }()
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	if err := cmd.Run(cfg, nil); err != nil {
+		t.Fatalf("run clean with missing paths: %v", err)
 	}
 }

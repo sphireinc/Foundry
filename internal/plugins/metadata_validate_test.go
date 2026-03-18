@@ -55,6 +55,37 @@ func TestValidationFailures(t *testing.T) {
 	}
 }
 
+func TestEnabledPluginStatusBranches(t *testing.T) {
+	root := t.TempDir()
+	if status := enabledPluginStatus(root, ""); status != "invalid name" {
+		t.Fatalf("unexpected empty-name status: %q", status)
+	}
+	if status := enabledPluginStatus(root, "missing"); status != "not installed" {
+		t.Fatalf("unexpected missing-metadata status: %q", status)
+	}
+
+	writePluginMetaFile(t, root, "api-missing", "name: api-missing\nmin_foundry_version: 0.1.0\n")
+	if status := enabledPluginStatus(root, "api-missing"); status != "api missing" {
+		t.Fatalf("unexpected api-missing status: %q", status)
+	}
+
+	writePluginMetaFile(t, root, "version-missing", "name: version-missing\nfoundry_api: v1\n")
+	if status := enabledPluginStatus(root, "version-missing"); status != "version missing" {
+		t.Fatalf("unexpected version-missing status: %q", status)
+	}
+
+	writePluginMetaFile(t, root, "code-missing", "name: code-missing\nrepo: github.com/acme/code-missing\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n")
+	if status := enabledPluginStatus(root, "code-missing"); status != "code missing" {
+		t.Fatalf("unexpected code-missing status: %q", status)
+	}
+
+	writePluginMetaFile(t, root, "enabled", "name: enabled\nrepo: github.com/acme/enabled\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n")
+	writePluginCodeFile(t, root, "enabled")
+	if status := enabledPluginStatus(root, "enabled"); status != "enabled" {
+		t.Fatalf("unexpected enabled status: %q", status)
+	}
+}
+
 func writePluginMetaFile(t *testing.T, root, name, body string) {
 	t.Helper()
 	dir := filepath.Join(root, name)

@@ -13,6 +13,51 @@ import (
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
+type rendererHooks struct {
+	failOn string
+}
+
+func (h rendererHooks) OnContext(*ViewData) error {
+	if h.failOn == "context" {
+		return os.ErrInvalid
+	}
+	return nil
+}
+func (h rendererHooks) OnAssets(_ *ViewData, a *AssetSet) error {
+	if h.failOn == "assets" {
+		return os.ErrInvalid
+	}
+	a.AddStyle("/app.css")
+	a.AddScript("/app.js", ScriptPositionHead)
+	a.AddScript("/body.js", ScriptPositionBodyEnd)
+	return nil
+}
+func (h rendererHooks) OnBeforeRender(*ViewData) error {
+	if h.failOn == "before" {
+		return os.ErrInvalid
+	}
+	return nil
+}
+func (h rendererHooks) OnAfterRender(_ string, html []byte) ([]byte, error) {
+	if h.failOn == "after" {
+		return nil, os.ErrInvalid
+	}
+	return append(html, []byte("<!--after-->")...), nil
+}
+func (h rendererHooks) OnAssetsBuilding(*config.Config) error {
+	if h.failOn == "assets-building" {
+		return os.ErrInvalid
+	}
+	return nil
+}
+func (h rendererHooks) OnHTMLSlots(_ *ViewData, s *Slots) error {
+	if h.failOn == "slots" {
+		return os.ErrInvalid
+	}
+	s.Add("body.end", "<div>slot</div>")
+	return nil
+}
+
 func TestBuildURLsRendersTaxonomyArchiveWithConfiguredLayout(t *testing.T) {
 	cfg := testRendererConfig(t)
 	writeRendererTheme(t, cfg)
@@ -61,6 +106,139 @@ func TestBuildURLsSkipsUnknownURLs(t *testing.T) {
 	}
 }
 
+func TestRendererHelpersAndRenderTemplate(t *testing.T) {
+	cfg := testRendererConfig(t)
+	cfg.Menus = map[string][]config.MenuItem{
+		"main": {
+			{Name: "Home", URL: "/"},
+			{Name: "Docs", URL: "docs"},
+		},
+	}
+	writeRendererTheme(t, cfg)
+
+	graph := content.NewSiteGraph(cfg)
+	doc := &content.Document{
+		ID:         "doc-1",
+		Type:       "page",
+		Lang:       cfg.DefaultLang,
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "post",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+		HTMLBody:   template.HTML("<p>Hello</p>"),
+		Fields:     map[string]any{"hero": "Hero"},
+	}
+	graph.Add(doc)
+
+	r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), rendererHooks{})
+	if got := r.taxonomyURL("en", "tags", "go"); got != "/tags/go/" {
+		t.Fatalf("unexpected default taxonomy URL: %q", got)
+	}
+	if got := r.taxonomyURL("fr", "tags", "go"); got != "/fr/tags/go/" {
+		t.Fatalf("unexpected translated taxonomy URL: %q", got)
+	}
+	if _, ok := r.findDocumentByID(graph, "missing"); ok {
+		t.Fatal("expected missing document lookup to fail")
+	}
+	if docs := r.documentsForLang(graph, "en"); len(docs) != 1 || docs[0].ID != "doc-1" {
+		t.Fatalf("unexpected documentsForLang: %#v", docs)
+	}
+	if !containsString([]string{"a", "b"}, "a") || containsString([]string{"a"}, "b") {
+		t.Fatal("unexpected containsString behavior")
+	}
+
+	slots := NewSlots()
+	slots.Add("body.end", "")
+	slots.Add("body.end", "<div>x</div>")
+	if !strings.Contains(string(slots.Render("body.end")), "x") || slots.Render("missing") != "" {
+		t.Fatalf("unexpected slot rendering: %q", slots.Render("body.end"))
+	}
+	if (*Slots)(nil).Render("x") != "" {
+		t.Fatal("expected nil slots render to be empty")
+	}
+
+	assets := NewAssetSet()
+	assets.AddStyle("")
+	assets.AddStyle("/app.css")
+	assets.AddStyle("/app.css")
+	assets.AddScript("", ScriptPositionHead)
+	assets.AddScript("/head.js", ScriptPositionHead)
+	assets.AddScript("/head.js", ScriptPositionHead)
+	assets.AddScript("/body.js", ScriptPositionBodyEnd)
+	assets.RenderInto(slots)
+	if rendered := string(slots.Render("head.end")); !strings.Contains(rendered, "app.css") || !strings.Contains(rendered, "head.js") {
+		t.Fatalf("unexpected head assets: %q", rendered)
+	}
+
+	if got := normalizeNavURL("docs"); got != "/docs/" {
+		t.Fatalf("unexpected normalized nav URL: %q", got)
+	}
+	if got := normalizeNavURL("https://example.com/x"); got != "https://example.com/x" {
+		t.Fatalf("unexpected external nav URL: %q", got)
+	}
+	if !navItemIsActive("/docs/", "/docs/page/") || !navItemIsActive("https://x", "https://x") || navItemIsActive("", "/") {
+		t.Fatal("unexpected nav active behavior")
+	}
+	if nav := parseNavigationData(map[string]any{"main": []any{map[string]any{"name": "Docs", "url": "docs"}, "bad"}}); len(nav) != 1 || nav[0].URL != "/docs/" {
+		t.Fatalf("unexpected parsed navigation: %#v", nav)
+	}
+	if nav := parseNavigationData("bad"); nav != nil {
+		t.Fatalf("expected nil navigation from bad input, got %#v", nav)
+	}
+
+	html, err := r.renderTemplate("post", "/about/", ViewData{
+		Site: cfg,
+		Page: doc,
+		Data: map[string]any{"navigation": map[string]any{"main": []any{map[string]any{"name": "Data", "url": "data"}}}},
+		Lang: "en", Title: "About",
+	})
+	if err != nil || !strings.Contains(string(html), "post About") || !strings.Contains(string(html), "<!--after-->") {
+		t.Fatalf("unexpected renderTemplate result: %v %q", err, string(html))
+	}
+}
+
+func TestRendererHookFailuresAndBuild(t *testing.T) {
+	cfg := testRendererConfig(t)
+	cfg.Build.CleanPublicDir = true
+	writeRendererTheme(t, cfg)
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "doc-1",
+		Type:       "post",
+		Lang:       cfg.DefaultLang,
+		Title:      "Hello",
+		Slug:       "hello",
+		URL:        "/posts/hello/",
+		Layout:     "post",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "posts", "hello.md")),
+		HTMLBody:   template.HTML("<p>Hello</p>"),
+		Taxonomies: map[string][]string{"tags": {"go"}},
+	})
+
+	failures := []string{"context", "assets", "slots", "before", "after"}
+	for _, failOn := range failures {
+		t.Run(failOn, func(t *testing.T) {
+			r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), rendererHooks{failOn: failOn})
+			if _, err := r.renderTemplate("post", "/posts/hello/", ViewData{Site: cfg, Page: graph.Documents[0], Lang: "en"}); err == nil {
+				t.Fatalf("expected renderTemplate failure for %s", failOn)
+			}
+		})
+	}
+
+	r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), rendererHooks{})
+	if err := r.Build(context.Background(), graph); err != nil {
+		t.Fatalf("build renderer output: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "posts", "hello", "index.html")); err != nil {
+		t.Fatalf("expected built page output: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "tags", "go", "index.html")); err != nil {
+		t.Fatalf("expected built taxonomy output: %v", err)
+	}
+}
+
 func testRendererConfig(t *testing.T) *config.Config {
 	t.Helper()
 
@@ -93,7 +271,7 @@ func writeRendererTheme(t *testing.T, cfg *config.Config) {
 
 	files := map[string]string{
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "base.html"):               `{{ define "base" }}{{ template "content" . }}{{ end }}`,
-		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "post.html"):               `{{ define "content" }}post {{ .Page.Title }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "post.html"):               `{{ define "content" }}post {{ .Page.Title }} {{ field .Page "hero" }} {{ pluginSlot "body.end" }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "index.html"):              `{{ define "content" }}index{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "taxonomy-term.html"):      `{{ define "content" }}taxonomy layout for {{ .TaxonomyName }}/{{ .TaxonomyTerm }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "head.html"):   `{{ define "head" }}{{ end }}`,

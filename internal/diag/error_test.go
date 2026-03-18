@@ -2,6 +2,7 @@ package diag
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -47,5 +48,37 @@ func TestWrapNilAndFallbacks(t *testing.T) {
 	}
 	if opOrFallback("", "fallback") != "fallback" {
 		t.Fatal("expected fallback op")
+	}
+}
+
+func TestAdditionalErrorBranches(t *testing.T) {
+	if (*Error)(nil).Error() != "" {
+		t.Fatal("expected nil error string")
+	}
+	if (*Error)(nil).Unwrap() != nil {
+		t.Fatal("expected nil unwrap")
+	}
+	if (&Error{Kind: KindUnknown}).Error() != "unknown" {
+		t.Fatal("expected kind-only error string")
+	}
+	if (&Error{Op: "op"}).Error() != "op" {
+		t.Fatal("expected op-only error string")
+	}
+	if (&Error{Err: errors.New("boom")}).Error() != "boom" {
+		t.Fatal("expected err-only error string")
+	}
+
+	cases := []Kind{KindConfig, KindPlugin, KindIO, KindDependency, KindBuild, KindServe, KindRender, KindInternal}
+	for _, kind := range cases {
+		msg := Present(New(kind, "problem"))
+		if !strings.Contains(msg, "problem") {
+			t.Fatalf("expected presentation for %s, got %q", kind, msg)
+		}
+	}
+	if Present(nil) != "" {
+		t.Fatal("expected empty presentation for nil")
+	}
+	if ExitCode(New(KindBuild, "x")) != 1 {
+		t.Fatal("expected non-usage exit code 1")
 	}
 }

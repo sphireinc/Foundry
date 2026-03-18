@@ -121,6 +121,35 @@ func TestPluginDepsNoDeclaredDependencies(t *testing.T) {
 	}
 }
 
+func TestPluginCommandUninstallAndTablePaths(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{
+		PluginsDir: filepath.Join(root, "plugins"),
+		ContentDir: filepath.Join(root, "content"),
+	}
+	cfg.ApplyDefaults()
+	cfg.Plugins.Enabled = []string{"alpha", "alpha", "missing"}
+	writePluginFixture(t, cfg.PluginsDir, "alpha", "github.com/acme/alpha", nil)
+	writeConfigFile(t, root, "plugins:\n  enabled:\n    - alpha\n")
+
+	project := plugins.NewProject(filepath.Join(root, "content", "config", "site.yaml"), cfg.PluginsDir, filepath.Join(root, "internal", "generated", "plugins_gen.go"), "example/module")
+	if err := printEnabledPluginTable(cfg, project); err != nil {
+		t.Fatalf("print enabled plugin table: %v", err)
+	}
+	if err := runUninstall(project, []string{"foundry", "plugin", "uninstall", "alpha"}); err != nil {
+		t.Fatalf("run uninstall: %v", err)
+	}
+	if err := runUninstall(project, []string{"foundry", "plugin", "uninstall"}); err == nil {
+		t.Fatal("expected uninstall usage error")
+	}
+	if err := runInstall(cfg, project, []string{"foundry", "plugin", "install"}); err == nil {
+		t.Fatal("expected install usage error")
+	}
+	if err := runUpdate(project, []string{"foundry", "plugin", "update", "missing"}); err == nil {
+		t.Fatal("expected update failure")
+	}
+}
+
 func writeConfigFile(t *testing.T, root, body string) {
 	t.Helper()
 	path := filepath.Join(root, "content", "config", "site.yaml")

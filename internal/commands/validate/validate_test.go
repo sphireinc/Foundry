@@ -46,6 +46,18 @@ func TestValidateCommandMetadata(t *testing.T) {
 	if cmd.Summary() == "" || cmd.Group() == "" || !cmd.RequiresConfig() {
 		t.Fatal("expected populated command metadata")
 	}
+	if cmd.Details() != nil {
+		t.Fatal("expected nil details")
+	}
+}
+
+func TestValidateRunFailsWhenThemeMissing(t *testing.T) {
+	root := t.TempDir()
+	cfg := testProjectConfig(t, root)
+	cmd := command{}
+	if err := cmd.Run(cfg, nil); err == nil {
+		t.Fatal("expected missing theme failure")
+	}
 }
 
 func testProjectConfig(t *testing.T, root string) *config.Config {

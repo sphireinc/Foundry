@@ -3,6 +3,7 @@ package plugins
 import (
 	"bytes"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,6 +184,93 @@ func TestProjectDependencyStatusAndValidationHelpers(t *testing.T) {
 	if installed, err := p.ListInstalled(); err != nil || len(installed) != 2 {
 		t.Fatalf("unexpected installed plugins: %#v %v", installed, err)
 	}
+}
+
+func TestProjectWrappersAndManagerHelpers(t *testing.T) {
+	root := t.TempDir()
+	writePluginMeta(t, root, "alpha", "github.com/acme/alpha", nil)
+	writePluginCode(t, root, "alpha")
+
+	p := NewProject(filepath.Join(root, "content", "config", "site.yaml"), root, filepath.Join(root, "internal", "generated", "plugins_gen.go"), "example/module")
+	if err := os.MkdirAll(filepath.Join(root, "content", "config"), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(p.ConfigPath, []byte("plugins:\n  enabled:\n    - alpha\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if err := p.Sync(); err != nil {
+		t.Fatalf("sync project: %v", err)
+	}
+	if err := p.Enable("alpha"); err != nil {
+		t.Fatalf("enable project: %v", err)
+	}
+	if err := p.Disable("alpha"); err != nil {
+		t.Fatalf("disable project: %v", err)
+	}
+	if err := p.Validate("alpha"); err != nil {
+		t.Fatalf("validate project: %v", err)
+	}
+	if err := p.Uninstall("alpha"); err != nil {
+		t.Fatalf("uninstall project: %v", err)
+	}
+	if _, err := p.Update("alpha"); err == nil {
+		t.Fatal("expected update failure after uninstall")
+	}
+	if _, err := p.Install("", ""); err == nil {
+		t.Fatal("expected install wrapper failure")
+	}
+}
+
+func TestRegisterAndNewManager(t *testing.T) {
+	name := "manager-test-plugin"
+	Register(name, func() Plugin { return &testPlugin{name: name, log: new([]string)} })
+
+	root := t.TempDir()
+	writePluginMeta(t, root, name, "github.com/acme/"+name, nil)
+	writePluginCode(t, root, name)
+
+	m, err := NewManager(root, []string{name})
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	if len(m.Plugins()) != 1 {
+		t.Fatalf("expected registered plugin instance, got %#v", m.Plugins())
+	}
+
+	mux := http.NewServeMux()
+	m.RegisterRoutes(mux)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected registered route response, got %d", rr.Code)
+	}
+
+	writePluginMeta(t, root, "dup", "github.com/acme/"+name, nil)
+	writePluginCode(t, root, "dup")
+	if _, err := NewManager(root, []string{name, "dup"}); err == nil {
+		t.Fatal("expected duplicate repo validation failure")
+	}
+}
+
+func TestRegisterPanicsForInvalidCases(t *testing.T) {
+	assertPanic := func(t *testing.T, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+		fn()
+	}
+
+	assertPanic(t, func() { Register("", func() Plugin { return &testPlugin{} }) })
+	assertPanic(t, func() { Register("nil-factory-plugin", nil) })
+
+	const dupName = "duplicate-registration-plugin"
+	Register(dupName, func() Plugin { return &testPlugin{name: dupName, log: new([]string)} })
+	assertPanic(t, func() { Register(dupName, func() Plugin { return &testPlugin{name: dupName, log: new([]string)} }) })
 }
 
 func writePluginMeta(t *testing.T, root, name, repo string, requires []string) {
