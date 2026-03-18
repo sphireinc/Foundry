@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: go-${{ github.workflow }}-${{ github.ref }}
@@ -45,3 +47,46 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+  coverage-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.25'
+        cache: true
+
+    - name: Sync generated plugin imports
+      run: go run ./cmd/plugin-sync
+
+    - name: Build HTML coverage report
+      run: |
+        mkdir -p docs/coverage
+        go test -coverprofile=coverage.out ./...
+        go tool cover -html=coverage.out -o docs/coverage/index.html
+        touch docs/.nojekyll
+
+    - name: Upload Pages artifact
+      uses: actions/upload-pages-artifact@v4
+      with:
+        path: docs
+
+  deploy-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: coverage-pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
