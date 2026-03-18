@@ -3,83 +3,136 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Foundry Docs</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #f6f3ea;
-      --panel: #fffaf0;
-      --text: #1f2933;
-      --muted: #52606d;
-      --accent: #0f766e;
-      --border: #d9d1c2;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      background:
-        radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 30%),
-        linear-gradient(180deg, var(--bg), #efe8da);
-      color: var(--text);
-    }
-
-    main {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 72px 24px;
-    }
-
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 32px;
-      box-shadow: 0 18px 40px rgba(31, 41, 51, 0.08);
-    }
-
-    h1 {
-      margin: 0 0 12px;
-      font-size: clamp(2rem, 4vw, 3rem);
-      line-height: 1.05;
-    }
-
-    p {
-      margin: 0 0 18px;
-      color: var(--muted);
-      font-size: 1.05rem;
-      line-height: 1.6;
-    }
-
-    a {
-      color: var(--accent);
-      font-weight: 700;
-      text-decoration-thickness: 0.08em;
-      text-underline-offset: 0.18em;
-    }
-
-    ul {
-      margin: 24px 0 0;
-      padding-left: 20px;
-    }
-
-    li + li {
-      margin-top: 10px;
-    }
-  </style>
+  <title>Foundry Pages</title>
+  <meta name="description" content="Foundry documentation, contract references, and the latest published coverage report.">
+  <link rel="stylesheet" href="./site.css">
 </head>
 <body>
-  <main>
-    <section class="panel">
-      <h1>Foundry Pages</h1>
-      <p>This site publishes project documentation and the latest Go test coverage report generated from the <code>main</code> branch.</p>
-      <ul>
-        <li><a href="./coverage/">Coverage Report</a></li>
-        <li><a href="./cli-contract.md">CLI Contract</a></li>
-      </ul>
-    </section>
-  </main>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="./">
+        <span class="brand-mark">F</span>
+        <span class="brand-copy">
+          <strong>Foundry Pages</strong>
+          <span>Project docs, references, and coverage</span>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="./getting-started/">Getting Started</a>
+        <a href="./contract/">CLI Contract</a>
+        <a href="./coverage/">Coverage</a>
+        <a href="https://github.com/sphireinc/foundry">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">GitHub Pages</div>
+        <h1>Foundry documentation that is actually useful.</h1>
+        <p>Foundry is a Markdown-driven CMS written in Go. This Pages site publishes the project overview, the CLI UX contract, and the latest HTML coverage report generated from <code>main</code>.</p>
+        <div class="hero-actions">
+          <a class="button" href="./getting-started/">Read the Overview</a>
+          <a class="button-ghost" href="./coverage/">Open Coverage</a>
+          <a class="button-ghost" href="./contract/">Read the Contract</a>
+        </div>
+        <div class="hero-stats">
+          <div class="stat">
+            <strong>Docs</strong>
+            <span>Project overview, setup guidance, and reference entry points.</span>
+          </div>
+          <div class="stat">
+            <strong>Coverage</strong>
+            <span>Fresh Go HTML coverage from the Pages deployment workflow.</span>
+          </div>
+          <div class="stat">
+            <strong>Contract</strong>
+            <span>CLI UX rules published as both styled HTML and raw Markdown.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>What belongs here</h2>
+            <p class="section-copy">GitHub Pages should answer the first few practical questions quickly: what Foundry is, how to start, where the CLI contract lives, and how healthy the codebase looks right now.</p>
+          </div>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <h3>Getting Started</h3>
+            <p>A concise project overview distilled from the main README, with installation, core directories, and the config areas most people need first.</p>
+            <div class="card-links">
+              <a href="./getting-started/">Open overview</a>
+              <a href="https://github.com/sphireinc/foundry/blob/main/README.md">Full README</a>
+            </div>
+          </article>
+          <article class="card">
+            <h3>CLI Contract</h3>
+            <p>The UX contract for Foundry commands, including wording rules, output conventions, validation scope, and mutation guidance.</p>
+            <div class="card-links">
+              <a href="./contract/">Styled contract</a>
+              <a href="./cli-contract.md">Raw Markdown</a>
+            </div>
+          </article>
+          <article class="card">
+            <h3>Coverage Report</h3>
+            <p>The HTML coverage report is generated on pushes to <code>main</code> and published into this Pages site under the existing workflow.</p>
+            <div class="card-links">
+              <a href="./coverage/">View coverage</a>
+              <a href="https://github.com/sphireinc/foundry/actions">GitHub Actions</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Foundry at a glance</h2>
+            <p class="section-copy">A few high-signal points from the project documentation that are worth exposing directly on the Pages landing page.</p>
+          </div>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>Markdown-first content</h3>
+            <p>Pages and posts live in files with frontmatter, version cleanly in Git, and can be extended with taxonomies, fields, and language-aware routing.</p>
+          </article>
+          <article class="feature">
+            <h3>Theme and plugin system</h3>
+            <p>Foundry keeps rendering isolated in themes and extension logic in plugins, with explicit hook points and generated plugin registration.</p>
+          </article>
+          <article class="feature">
+            <h3>Dependency-aware rebuilds</h3>
+            <p>The dependency graph now tracks taxonomy outputs too, which lets incremental rebuild planning target document and archive URLs more precisely.</p>
+          </article>
+          <article class="feature">
+            <h3>Admin and preview guardrails</h3>
+            <p>The admin surface now requires <code>admin.access_token</code>, Markdown raw HTML is config-controlled, and the preview/admin HTTP server uses timeouts.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Recommended Pages sections</h2>
+            <p class="section-copy">These are the parts of the repository that make the most sense to publish here instead of forcing readers through the full repo tree first.</p>
+          </div>
+        </div>
+        <ul class="list">
+          <li>Project overview and setup guidance from the README.</li>
+          <li>CLI UX contract in both rendered HTML and raw Markdown form.</li>
+          <li>Latest HTML test coverage report generated from CI.</li>
+          <li>Direct links back to the repository, workflow runs, and source documents.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Published from <code>docs/</code> via the existing GitHub Pages workflow.</span>
+      <span><a href="https://github.com/sphireinc/foundry">Repository</a></span>
+    </footer>
+  </div>
 </body>
 </html>

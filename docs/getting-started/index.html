@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foundry Overview</title>
+  <meta name="description" content="Getting started with Foundry, including the key ideas, directories, commands, and configuration groups.">
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="../">
+        <span class="brand-mark">F</span>
+        <span class="brand-copy">
+          <strong>Foundry Pages</strong>
+          <span>Overview and setup</span>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="../">Home</a>
+        <a href="../contract/">CLI Contract</a>
+        <a href="../coverage/">Coverage</a>
+        <a href="https://github.com/sphireinc/foundry/blob/main/README.md">README</a>
+      </nav>
+    </header>
+
+    <main class="content-card">
+      <div class="page-header">
+        <div class="eyebrow">Overview</div>
+        <h1 class="page-title">Foundry in one page</h1>
+        <p>Foundry is a Markdown-driven CMS written in Go. It keeps content file-based, themes isolated, plugins explicit, and rebuild planning dependency-aware.</p>
+      </div>
+
+      <div class="page-body">
+        <h2>Core ideas</h2>
+        <ul>
+          <li>Content lives in Markdown files with frontmatter.</li>
+          <li>Routes are assigned from structured content and language-aware conventions.</li>
+          <li>Themes own presentation through layouts and partials.</li>
+          <li>Plugins extend behavior through explicit hook interfaces.</li>
+          <li>A dependency graph supports incremental rebuilds for both documents and taxonomy archive outputs.</li>
+        </ul>
+
+        <h2>Key directories</h2>
+        <pre><code>content/   pages, posts, images, assets, uploads, config
+data/      structured data files exposed to rendering
+themes/    active theme layouts and assets
+plugins/   installed plugins
+public/    generated output
+docs/      GitHub Pages content and generated coverage output</code></pre>
+
+        <h2>Common commands</h2>
+        <pre><code>foundry version
+foundry build
+foundry serve
+foundry serve-preview
+foundry plugin list --enabled
+foundry theme list
+foundry routes check</code></pre>
+
+        <h2>Important config groups</h2>
+        <ul>
+          <li><strong>Admin:</strong> set <code>admin.access_token</code> whenever the admin surface is enabled.</li>
+          <li><strong>Security:</strong> <code>security.allow_unsafe_html</code> controls whether raw HTML is preserved in Markdown output.</li>
+          <li><strong>Server:</strong> preview/admin serving uses read, write, and idle timeouts by default.</li>
+          <li><strong>Taxonomies:</strong> default and custom taxonomies participate in rendering and incremental rebuild planning.</li>
+          <li><strong>Plugins:</strong> enabled plugins are validated and synced into generated registration code.</li>
+        </ul>
+
+        <h2>Recommended reading order</h2>
+        <ol>
+          <li>Read the <a href="https://github.com/sphireinc/foundry/blob/main/README.md">README</a> for the full architecture and workflow details.</li>
+          <li>Read the <a href="../contract/">CLI contract</a> before changing command UX.</li>
+          <li>Open the <a href="../coverage/">coverage report</a> if you want to see where tests are still thin.</li>
+        </ol>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>Source material is maintained in <code>README.md</code> and published here as a shorter entry point.</span>
+    </footer>
+  </div>
+</body>
+</html>
