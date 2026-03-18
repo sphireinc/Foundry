@@ -9,7 +9,9 @@
     </header>
 
     <article class="content-panel content-panel--article">
+        {{ pluginSlot "page.before_content" }}
         <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
+        {{ pluginSlot "page.after_content" }}
     </article>
 </section>
 {{ end }}

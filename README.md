@@ -201,6 +201,28 @@ Themes are responsible for:
 - taxonomy archive templates
 - theme-specific assets
 
+Launch themes are also expected to support the current minimum slot contract:
+
+- `head.end`
+- `body.start`
+- `body.end`
+- `page.before_main`
+- `page.after_main`
+- `page.before_content`
+- `page.after_content`
+- `post.before_header`
+- `post.after_header`
+- `post.before_content`
+- `post.after_content`
+- `post.sidebar.top`
+- `post.sidebar.overview`
+- `post.sidebar.bottom`
+
+Theme validation now checks both of these conditions:
+
+- the theme manifest declares the required slots
+- the corresponding layouts actually render those slots
+
 ## Plugins
 
 Plugins live under `plugins/<name>/` and are registered through generated imports.

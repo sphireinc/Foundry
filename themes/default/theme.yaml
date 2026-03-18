@@ -23,3 +23,6 @@ slots:
   - post.after_header
   - post.before_content
   - post.after_content
+  - post.sidebar.top
+  - post.sidebar.overview
+  - post.sidebar.bottom
