@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foundry Theme Authoring</title>
+  <meta name="description" content="How to scaffold, structure, and ship a Foundry theme.">
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="../">
+        <span class="brand-mark">F</span>
+        <span class="brand-copy">
+          <strong>Foundry</strong>
+          <span>Theme authoring</span>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="../">Home</a>
+        <a href="../getting-started/">Overview</a>
+        <a href="../plugins/">Plugins</a>
+        <a href="../architecture/">Architecture</a>
+        <a href="https://github.com/sphireinc/foundry/tree/main/themes">Themes</a>
+      </nav>
+    </header>
+
+    <main class="content-card">
+      <div class="page-header">
+        <div class="eyebrow">Authoring Guide</div>
+        <h1 class="page-title">Building a theme</h1>
+        <p>Foundry themes own presentation. A theme defines layouts, partials, theme assets, and a small manifest that describes the package.</p>
+      </div>
+
+      <div class="page-body">
+        <h2>Start with the scaffold</h2>
+        <pre><code>foundry theme scaffold editorial
+foundry theme validate editorial
+foundry theme switch editorial</code></pre>
+
+        <p>The scaffolded theme gives you the expected directory structure and the required base set of layouts and partials.</p>
+
+        <h2>Theme structure</h2>
+        <pre><code>themes/editorial/
+  theme.yaml
+  assets/
+    css/
+      base.css
+  layouts/
+    base.html
+    index.html
+    page.html
+    post.html
+    list.html
+    partials/
+      head.html
+      header.html
+      footer.html</code></pre>
+
+        <h2>Manifest fields</h2>
+        <p><code>theme.yaml</code> describes the theme and lists the layouts and slots it expects to support.</p>
+        <pre><code>name: editorial
+title: Editorial
+version: 0.1.0
+description: A Foundry theme.
+license: MIT
+min_foundry_version: 0.1.0
+layouts:
+  - base
+  - index
+  - page
+  - post
+  - list</code></pre>
+
+        <h2>Layout responsibilities</h2>
+        <ul>
+          <li><strong>base.html:</strong> wraps the page shell and usually includes shared head, header, footer, and plugin slots.</li>
+          <li><strong>index.html:</strong> renders the home page or language root page.</li>
+          <li><strong>page.html:</strong> renders page documents.</li>
+          <li><strong>post.html:</strong> renders post documents.</li>
+          <li><strong>list.html:</strong> renders list-style views such as taxonomy archives.</li>
+        </ul>
+
+        <h2>Theme and plugin interplay</h2>
+        <p>Theme templates should leave room for plugin-provided markup. The scaffold includes slot calls such as <code>head.end</code>, <code>body.start</code>, <code>body.end</code>, and post/page content-adjacent slots.</p>
+
+        <h2>Assets</h2>
+        <p>Put theme CSS and other theme-owned assets under <code>assets/</code>. During build or preview, Foundry copies theme assets into <code>public/theme/</code> and bundles discovered CSS into the main CSS output.</p>
+
+        <h2>Validation checklist</h2>
+        <ol>
+          <li>Run <code>foundry theme validate &lt;name&gt;</code>.</li>
+          <li>Preview with <code>foundry serve</code> or <code>foundry serve-preview</code>.</li>
+          <li>Confirm page, post, and taxonomy archive templates all render cleanly.</li>
+          <li>Check that plugin slots still have sensible placement.</li>
+        </ol>
+
+        <h2>Reference theme</h2>
+        <p>The default theme in the repository is the canonical reference for current layout expectations and slot placement.</p>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>Start from the scaffold, then compare against the default theme when you need a concrete reference.</span>
+    </footer>
+  </div>
+</body>
+</html>
