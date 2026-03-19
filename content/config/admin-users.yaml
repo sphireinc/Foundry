@@ -1,0 +1,6 @@
+users:
+  - username: admin
+    name: Admin
+    email: admin@example.com
+    role: admin
+    password_hash: pbkdf2-sha256$120000$6Y1KUJMigSnJl5uUOTi4zQ$FfY+HZFc5npy6MFHnDmLenr68QcEvpcXOO7bvunqsnI
