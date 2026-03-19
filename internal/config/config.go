@@ -30,10 +30,13 @@ type Config struct {
 }
 
 type AdminConfig struct {
-	Enabled     bool   `yaml:"enabled"`
-	Addr        string `yaml:"addr"`
-	LocalOnly   bool   `yaml:"local_only"`
-	AccessToken string `yaml:"access_token"`
+	Enabled           bool   `yaml:"enabled"`
+	Addr              string `yaml:"addr"`
+	LocalOnly         bool   `yaml:"local_only"`
+	AccessToken       string `yaml:"access_token"`
+	Theme             string `yaml:"theme"`
+	UsersFile         string `yaml:"users_file"`
+	SessionTTLMinutes int    `yaml:"session_ttl_minutes"`
 }
 
 type ServerConfig struct {
@@ -125,6 +128,15 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Admin.Addr == "" {
 		c.Admin.Addr = ""
+	}
+	if strings.TrimSpace(c.Admin.Theme) == "" {
+		c.Admin.Theme = "default"
+	}
+	if strings.TrimSpace(c.Admin.UsersFile) == "" {
+		c.Admin.UsersFile = "content/config/admin-users.yaml"
+	}
+	if c.Admin.SessionTTLMinutes <= 0 {
+		c.Admin.SessionTTLMinutes = 30
 	}
 	if !c.Admin.LocalOnly {
 		c.Admin.LocalOnly = true
