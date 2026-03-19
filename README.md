@@ -6,6 +6,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sphireinc/foundry)](https://goreportcard.com/report/github.com/sphireinc/foundry)
 ![Last Commit](https://img.shields.io/github/last-commit/sphireinc/foundry)
 
+<img src="logo.png" align="center"  alt="logo" width="400px" />
+
 Foundry is a Markdown-first CMS written in Go. It keeps content in files, renders through themes, extends through plugins, and supports both static output and local preview serving.
 
 The project is aimed at teams that want a file-based workflow without giving up CMS-style features such as taxonomies, fields, feeds, plugin hooks, and an admin surface.
