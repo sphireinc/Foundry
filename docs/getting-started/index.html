@@ -66,10 +66,11 @@ foundry routes check</code></pre>
 
         <p>If a page appears to stall during local preview, run <code>foundry serve --debug</code> to log request timing, slow-render warnings, memory snapshots, goroutine counts, active request counts, and process CPU time deltas.</p>
         <p>Live reload supports two transport modes. <code>stream</code> uses Server-Sent Events and is the default. <code>poll</code> checks a lightweight endpoint every 1.5 seconds and is the safer choice if your browser hits local connection limits while reloading.</p>
+        <p>Media files live under <code>content/images</code> and <code>content/uploads</code>. Reference them from Markdown with the <code>media:</code> scheme, for example <code>![Hero](media:images/hero.jpg)</code>, <code>![Demo](media:uploads/demo.mp4)</code>, or <code>[Spec PDF](media:uploads/spec.pdf)</code>.</p>
 
         <h2>Important config groups</h2>
         <ul>
-          <li><strong>Admin:</strong> set <code>admin.access_token</code> whenever the admin surface is enabled.</li>
+          <li><strong>Admin:</strong> set <code>admin.access_token</code> whenever the admin surface is enabled; <code>/__admin</code> serves a themeable shell and the token is required for <code>/__admin/api/...</code> requests.</li>
           <li><strong>Security:</strong> <code>security.allow_unsafe_html</code> controls whether raw HTML is preserved in Markdown output.</li>
           <li><strong>Server:</strong> preview/admin serving uses read, write, and idle timeouts by default, and live reload can run in <code>stream</code> or <code>poll</code> mode.</li>
           <li><strong>Taxonomies:</strong> default and custom taxonomies participate in rendering and incremental rebuild planning.</li>
