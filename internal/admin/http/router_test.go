@@ -589,7 +589,16 @@ func newTestRouter(t *testing.T, cfg *config.Config) *Router {
 func testConfig(t *testing.T) *config.Config {
 	t.Helper()
 	root := t.TempDir()
-	t.Chdir(root)
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
 	cfg := &config.Config{
 		Name:        "foundry",
 		Title:       "Foundry CMS",

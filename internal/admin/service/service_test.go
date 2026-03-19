@@ -312,7 +312,16 @@ func TestSaveMediaErrors(t *testing.T) {
 
 func TestManagementServices(t *testing.T) {
 	cfg := testServiceConfig(t)
-	t.Chdir(filepath.Dir(cfg.ContentDir))
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(filepath.Dir(cfg.ContentDir)); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
 	if err := os.WriteFile(filepath.Join(cfg.ContentDir, "config", "site.yaml"), []byte("theme: default\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n"), 0o644); err != nil {
 		t.Fatalf("write site config: %v", err)
 	}
