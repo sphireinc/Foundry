@@ -16,9 +16,10 @@ server:
   debug_routes: false
 
 admin:
-  enabled: false
+  enabled: true
   addr: ""
   local_only: true
+  theme: default
 
 build:
   clean_public_dir: true
