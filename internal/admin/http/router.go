@@ -16,6 +16,7 @@ type routeDef struct {
 	pattern string
 	handler http.Handler
 	public  bool
+	role    string
 }
 
 type Registrar func(*Router) []routeDef
@@ -77,6 +78,10 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 		for _, rd := range reg(r) {
 			if rd.public {
 				mux.Handle(rd.pattern, rd.handler)
+				continue
+			}
+			if strings.TrimSpace(rd.role) != "" {
+				mux.Handle(rd.pattern, r.auth.WrapRole(rd.handler, rd.role))
 				continue
 			}
 			mux.Handle(rd.pattern, r.auth.Wrap(rd.handler))

@@ -27,7 +27,7 @@ func (s *Service) ListUsers(ctx context.Context) ([]types.UserSummary, error) {
 			Username: user.Username,
 			Name:     user.Name,
 			Email:    user.Email,
-			Role:     user.Role,
+			Role:     normalizeUserRole(user.Role),
 			Disabled: user.Disabled,
 		})
 	}
@@ -45,6 +45,7 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 	if username == "" {
 		return nil, fmt.Errorf("username is required")
 	}
+	role := normalizeUserRole(req.Role)
 
 	var passwordHash string
 	if strings.TrimSpace(req.Password) != "" {
@@ -60,7 +61,7 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 			all[i].Username = username
 			all[i].Name = strings.TrimSpace(req.Name)
 			all[i].Email = strings.TrimSpace(req.Email)
-			all[i].Role = strings.TrimSpace(req.Role)
+			all[i].Role = role
 			all[i].Disabled = req.Disabled
 			if passwordHash != "" {
 				all[i].PasswordHash = passwordHash
@@ -77,7 +78,7 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 			Username:     username,
 			Name:         strings.TrimSpace(req.Name),
 			Email:        strings.TrimSpace(req.Email),
-			Role:         strings.TrimSpace(req.Role),
+			Role:         role,
 			PasswordHash: passwordHash,
 			Disabled:     req.Disabled,
 		})
@@ -90,7 +91,7 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 		Username: username,
 		Name:     strings.TrimSpace(req.Name),
 		Email:    strings.TrimSpace(req.Email),
-		Role:     strings.TrimSpace(req.Role),
+		Role:     role,
 		Disabled: req.Disabled,
 	}, nil
 }
@@ -252,4 +253,15 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func normalizeUserRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "admin":
+		return "admin"
+	case "editor":
+		return "editor"
+	default:
+		return "editor"
+	}
 }

@@ -369,6 +369,42 @@ func TestManagementEndpoints(t *testing.T) {
 	}
 }
 
+func TestEditorRoleCannotAccessAdminOnlyEndpoints(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Admin.AccessToken = ""
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", strings.NewReader(`{"username":"editor","password":"editor-password"}`))
+	loginReq.RemoteAddr = "127.0.0.1:10000"
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRR := httptest.NewRecorder()
+	mux.ServeHTTP(loginRR, loginReq)
+	if loginRR.Code != http.StatusOK {
+		t.Fatalf("expected editor login 200, got %d: %s", loginRR.Code, loginRR.Body.String())
+	}
+	cookie := loginRR.Result().Cookies()[0]
+
+	req := httptest.NewRequest(http.MethodGet, "/__admin/api/documents?include_drafts=1", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected editor document access 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/__admin/api/users", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.AddCookie(cookie)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected editor user-management access to be forbidden, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestAdminIndexMethodAndErrorPaths(t *testing.T) {
 	cfg := testConfig(t)
 	r := newTestRouter(t, cfg)
@@ -644,9 +680,13 @@ func testConfig(t *testing.T) *config.Config {
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
 	}
+	editorHash, err := users.HashPassword("editor-password")
+	if err != nil {
+		t.Fatalf("hash editor password: %v", err)
+	}
 	usersPath := filepath.Join(cfg.ContentDir, "config", "admin-users.yaml")
 	_ = os.MkdirAll(filepath.Dir(usersPath), 0o755)
-	if err := os.WriteFile(usersPath, []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: "+hash+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(usersPath, []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: "+hash+"\n  - username: editor\n    name: Editor User\n    email: editor@example.com\n    role: editor\n    password_hash: "+editorHash+"\n"), 0o644); err != nil {
 		t.Fatalf("write admin users file: %v", err)
 	}
 	cfg.Admin.UsersFile = usersPath

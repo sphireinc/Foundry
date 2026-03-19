@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -126,6 +127,9 @@ func TestLoginAndSessionCookieAuthentication(t *testing.T) {
 	if len(cookies) == 0 || cookies[0].Name != sessionCookieName {
 		t.Fatalf("expected session cookie, got %#v", cookies)
 	}
+	if cookies[0].Secure {
+		t.Fatal("expected non-TLS login cookie to be non-secure")
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -146,6 +150,73 @@ func TestLoginAndSessionCookieAuthentication(t *testing.T) {
 	}
 }
 
+func TestLoginSetsSecureCookieForTLSRequests(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.AccessToken = ""
+	m := New(cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.TLS = &tls.ConnectionState{}
+	rr := httptest.NewRecorder()
+
+	if _, err := m.Login(rr, req, "admin", "secret-password"); err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	cookies := rr.Result().Cookies()
+	if len(cookies) == 0 || !cookies[0].Secure {
+		t.Fatalf("expected secure cookie for TLS request, got %#v", cookies)
+	}
+}
+
+func TestLoginThrottlesRepeatedFailures(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.AccessToken = ""
+	m := New(cfg)
+
+	for i := 0; i < loginMaxFailures; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+		if _, err := m.Login(nil, req, "admin", "wrong-password"); err == nil {
+			t.Fatalf("expected login failure %d", i+1)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	if _, err := m.Login(nil, req, "admin", "secret-password"); err == nil || err.Error() != "too many login attempts; try again later" {
+		t.Fatalf("expected throttling error, got %v", err)
+	}
+}
+
+func TestWrapRoleRejectsInsufficientRole(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.AccessToken = ""
+	m := New(cfg)
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	loginReq.RemoteAddr = "127.0.0.1:12345"
+	loginRR := httptest.NewRecorder()
+	if _, err := m.Login(loginRR, loginReq, "editor", "editor-password"); err != nil {
+		t.Fatalf("editor login failed: %v", err)
+	}
+	cookies := loginRR.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected session cookie")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/__admin/api/users/save", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.AddCookie(cookies[0])
+	rr := httptest.NewRecorder()
+	m.WrapRole(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), "admin").ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected insufficient-role request to be forbidden, got %d", rr.Code)
+	}
+}
+
 func testAuthConfig(t *testing.T) *config.Config {
 	t.Helper()
 	root := t.TempDir()
@@ -158,7 +229,11 @@ func testAuthConfig(t *testing.T) *config.Config {
 	if err := os.MkdirAll(filepath.Dir(usersPath), 0o755); err != nil {
 		t.Fatalf("mkdir users file dir: %v", err)
 	}
-	body := []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: " + hash + "\n")
+	editorHash, err := users.HashPassword("editor-password")
+	if err != nil {
+		t.Fatalf("hash editor password: %v", err)
+	}
+	body := []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: " + hash + "\n  - username: editor\n    name: Editor User\n    email: editor@example.com\n    role: editor\n    password_hash: " + editorHash + "\n")
 	if err := os.WriteFile(usersPath, body, 0o644); err != nil {
 		t.Fatalf("write users file: %v", err)
 	}
