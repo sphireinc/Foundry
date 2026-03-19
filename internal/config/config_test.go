@@ -22,6 +22,12 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Admin.Theme != "default" {
 		t.Fatalf("expected admin theme default to be default, got %q", cfg.Admin.Theme)
 	}
+	if cfg.Admin.UsersFile != filepath.Join("content", "config", "admin-users.yaml") {
+		t.Fatalf("expected default admin users file, got %q", cfg.Admin.UsersFile)
+	}
+	if cfg.Admin.SessionTTLMinutes != 30 {
+		t.Fatalf("expected default admin session ttl, got %d", cfg.Admin.SessionTTLMinutes)
+	}
 	if cfg.Feed.RSSPath == "" || cfg.Feed.SitemapPath == "" {
 		t.Fatalf("expected feed defaults to be set")
 	}

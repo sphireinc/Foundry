@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 type Config struct {
 	Name        string                `yaml:"name"`
@@ -132,9 +135,6 @@ func (c *Config) ApplyDefaults() {
 	if strings.TrimSpace(c.Admin.Theme) == "" {
 		c.Admin.Theme = "default"
 	}
-	if strings.TrimSpace(c.Admin.UsersFile) == "" {
-		c.Admin.UsersFile = "content/config/admin-users.yaml"
-	}
 	if c.Admin.SessionTTLMinutes <= 0 {
 		c.Admin.SessionTTLMinutes = 30
 	}
@@ -146,6 +146,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.ContentDir == "" {
 		c.ContentDir = "content"
+	}
+	if strings.TrimSpace(c.Admin.UsersFile) == "" {
+		c.Admin.UsersFile = filepath.Join(c.ContentDir, "config", "admin-users.yaml")
 	}
 	if c.PublicDir == "" {
 		c.PublicDir = "public"
