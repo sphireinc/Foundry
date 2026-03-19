@@ -6,19 +6,133 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/sphireinc/foundry/internal/admin/users"
 	"github.com/sphireinc/foundry/internal/config"
 )
 
 type Middleware struct {
-	cfg *config.Config
+	cfg      *config.Config
+	sessions *SessionManager
 }
 
 func New(cfg *config.Config) *Middleware {
-	return &Middleware{cfg: cfg}
+	ttl := 30 * time.Minute
+	if cfg != nil && cfg.Admin.SessionTTLMinutes > 0 {
+		ttl = time.Duration(cfg.Admin.SessionTTLMinutes) * time.Minute
+	}
+	return &Middleware{
+		cfg:      cfg,
+		sessions: NewSessionManager(ttl),
+	}
+}
+
+type Identity struct {
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Role     string `json:"role,omitempty"`
 }
 
 func (m *Middleware) Authorize(r *http.Request) error {
+	_, _, err := m.authorizeRequest(r)
+	return err
+}
+
+func (m *Middleware) Authenticate(w http.ResponseWriter, r *http.Request) (*Identity, error) {
+	identity, sessionToken, err := m.authorizeRequest(r)
+	if err != nil {
+		return nil, err
+	}
+	if w != nil && sessionToken != "" {
+		m.setSessionCookie(w, sessionToken)
+	}
+	return identity, nil
+}
+
+func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, password string) (*Identity, error) {
+	if err := m.checkAccess(r); err != nil {
+		return nil, err
+	}
+
+	user, err := users.Find(m.cfg.Admin.UsersFile, username)
+	if err != nil {
+		return nil, fmt.Errorf("invalid username or password")
+	}
+	if user.Disabled || !users.VerifyPassword(user.PasswordHash, password) {
+		return nil, fmt.Errorf("invalid username or password")
+	}
+
+	identity := Identity{
+		Username: user.Username,
+		Name:     user.Name,
+		Email:    user.Email,
+		Role:     user.Role,
+	}
+	session, err := m.sessions.Issue(identity, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	m.setSessionCookie(w, session.Token)
+	return &identity, nil
+}
+
+func (m *Middleware) Logout(w http.ResponseWriter, r *http.Request) error {
+	if err := m.checkAccess(r); err != nil {
+		return err
+	}
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		m.sessions.Revoke(strings.TrimSpace(cookie.Value))
+	}
+	m.clearSessionCookie(w)
+	return nil
+}
+
+func (m *Middleware) SessionTTL() time.Duration {
+	if m == nil || m.sessions == nil {
+		return 30 * time.Minute
+	}
+	return m.sessions.TTL()
+}
+
+func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error) {
+	if m == nil || m.cfg == nil {
+		return nil, "", nil
+	}
+	if err := m.checkAccess(r); err != nil {
+		return nil, "", err
+	}
+
+	if sessionToken := extractSessionToken(r); sessionToken != "" {
+		session, ok := m.sessions.Authenticate(sessionToken, time.Now())
+		if ok {
+			return &Identity{
+				Username: session.Username,
+				Name:     session.Name,
+				Email:    session.Email,
+				Role:     session.Role,
+			}, session.Token, nil
+		}
+		return nil, "", fmt.Errorf("admin session expired")
+	}
+
+	token := strings.TrimSpace(m.cfg.Admin.AccessToken)
+	if token != "" && tokensEqual(extractAccessToken(r), token) {
+		return &Identity{
+			Username: "api-token",
+			Name:     "API Token",
+			Role:     "admin",
+		}, "", nil
+	}
+
+	if strings.TrimSpace(extractAccessToken(r)) != "" {
+		return nil, "", fmt.Errorf("invalid admin access token")
+	}
+	return nil, "", fmt.Errorf("admin login is required")
+}
+
+func (m *Middleware) checkAccess(r *http.Request) error {
 	if m == nil || m.cfg == nil {
 		return nil
 	}
@@ -27,13 +141,6 @@ func (m *Middleware) Authorize(r *http.Request) error {
 	}
 	if m.cfg.Admin.LocalOnly && !isLocalRequest(r) {
 		return fmt.Errorf("admin is restricted to local requests")
-	}
-	token := strings.TrimSpace(m.cfg.Admin.AccessToken)
-	if token == "" {
-		return fmt.Errorf("admin access token is required")
-	}
-	if !tokensEqual(extractAccessToken(r), token) {
-		return fmt.Errorf("invalid admin access token")
 	}
 	return nil
 }
@@ -84,6 +191,17 @@ func extractAccessToken(r *http.Request) string {
 	}
 
 	return ""
+}
+
+func extractSessionToken(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
 }
 
 func tokensEqual(got, want string) bool {

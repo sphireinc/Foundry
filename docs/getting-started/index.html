@@ -47,29 +47,32 @@
         </ul>
 
         <h2>Key directories</h2>
-        <pre><code>content/   pages, posts, images, assets, uploads, config
-data/      structured data files exposed to rendering
-themes/    active theme layouts and assets
-plugins/   installed plugins
-public/    generated output
-docs/      GitHub Pages content and generated coverage output</code></pre>
+        <pre><code>/content      pages, posts, images, assets, uploads, config
+/data         structured data files exposed to rendering
+/themes       active theme layouts and assets
+/plugins      installed plugins
+/public       generated output
+/docs         GitHub Pages content and generated coverage output</code></pre>
 
         <h2>Common commands</h2>
-        <pre><code>foundry version
+        <pre><code>foundry
+foundry version
 foundry build
 foundry serve
 foundry serve --debug
 foundry serve-preview
 foundry plugin list --enabled
 foundry theme list
-foundry routes check</code></pre>
+foundry routes check
+foundry admin hash-password your-password</code></pre>
 
-        <p>If a page appears to stall during local preview, run <code>foundry serve --debug</code> to log request timing, slow-render warnings, memory snapshots, goroutine counts, active request counts, and process CPU time deltas.</p>
-        <p>Live reload supports two transport modes. <code>stream</code> uses Server-Sent Events and is the default. <code>poll</code> checks a lightweight endpoint every 1.5 seconds and is the safer choice if your browser hits local connection limits while reloading.</p>
+        <p>If you want additional logging, run <code>foundry serve --debug</code> to log request timing, slow-render warnings, memory snapshots, goroutine counts, active request counts, connections, and process CPU time deltas.</p>
+        <p>Live reload supports two transport modes: <code>stream</code> uses Server-Sent-Events (sse) and is the default. <code>poll</code> checks a lightweight endpoint every 1.5 seconds and is the safer choice if your browser hits local connection limits while reloading.</p>
+        <p>Media files live under <code>content/images</code> and <code>content/uploads</code>. Reference them from Markdown with the <code>media:</code> scheme, for example <code>![Hero](media:images/hero.jpg)</code>, <code>![Demo](media:uploads/demo.mp4)</code>, or <code>[Spec PDF](media:uploads/spec.pdf)</code>.</p>
 
         <h2>Important config groups</h2>
         <ul>
-          <li><strong>Admin:</strong> set <code>admin.access_token</code> whenever the admin surface is enabled.</li>
+          <li><strong>Admin:</strong> <code>/__admin</code> serves a themeable shell with username/password login backed by <code>content/config/admin-users.yaml</code>; browser sessions expire after 30 minutes of inactivity by default.</li>
           <li><strong>Security:</strong> <code>security.allow_unsafe_html</code> controls whether raw HTML is preserved in Markdown output.</li>
           <li><strong>Server:</strong> preview/admin serving uses read, write, and idle timeouts by default, and live reload can run in <code>stream</code> or <code>poll</code> mode.</li>
           <li><strong>Taxonomies:</strong> default and custom taxonomies participate in rendering and incremental rebuild planning.</li>

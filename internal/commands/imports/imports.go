@@ -1,6 +1,7 @@
 package imports
 
 import (
+	_ "github.com/sphireinc/foundry/internal/commands/admin"
 	_ "github.com/sphireinc/foundry/internal/commands/assets"
 	_ "github.com/sphireinc/foundry/internal/commands/clean"
 	_ "github.com/sphireinc/foundry/internal/commands/config"

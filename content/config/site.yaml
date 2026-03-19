@@ -16,9 +16,13 @@ server:
   debug_routes: false
 
 admin:
-  enabled: false
+  enabled: true
   addr: ""
   local_only: true
+  access_token:
+  theme: default
+  users_file: "content/config/admin-users.yaml"
+  session_ttl_minutes: 30
 
 build:
   clean_public_dir: true

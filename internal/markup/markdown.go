@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sphireinc/foundry/internal/media"
 	"github.com/yuin/goldmark"
 	rendererhtml "github.com/yuin/goldmark/renderer/html"
 )
@@ -30,6 +31,7 @@ func MarkdownToHTML(input string, allowUnsafeHTML bool) (template.HTML, error) {
 	}
 
 	html := addHeadingIDs(buf.String())
+	html = media.RewriteHTML(html)
 	return template.HTML(html), nil
 }
 

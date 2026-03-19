@@ -24,3 +24,17 @@ func TestMarkdownToHTMLAllowsRawHTMLWhenConfigured(t *testing.T) {
 		t.Fatalf("expected raw html to be preserved, got %q", string(html))
 	}
 }
+
+func TestMarkdownToHTMLRewritesMediaReferences(t *testing.T) {
+	html, err := MarkdownToHTML("![Screenshot](media:images/shot.png)\n\n![Walkthrough](media:uploads/demo.mp4)\n\n[Download](media:uploads/spec.pdf)", false)
+	if err != nil {
+		t.Fatalf("render markdown: %v", err)
+	}
+
+	rendered := string(html)
+	for _, want := range []string{`<img src="/images/shot.png" alt="Screenshot">`, `<video controls preload="metadata" src="/uploads/demo.mp4" title="Walkthrough" aria-label="Walkthrough"></video>`, `<a href="/uploads/spec.pdf">Download</a>`} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected rendered html to contain %q, got %q", want, rendered)
+		}
+	}
+}

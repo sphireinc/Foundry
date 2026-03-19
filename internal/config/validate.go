@@ -64,6 +64,15 @@ func Validate(cfg *Config) []error {
 	if _, err := safepath.ValidatePathComponent("theme", cfg.Theme); err != nil {
 		errs = append(errs, err)
 	}
+	if _, err := safepath.ValidatePathComponent("admin.theme", cfg.Admin.Theme); err != nil {
+		errs = append(errs, err)
+	}
+	if strings.TrimSpace(cfg.Admin.UsersFile) == "" {
+		errs = append(errs, fmt.Errorf("admin.users_file must not be empty"))
+	}
+	if cfg.Admin.SessionTTLMinutes <= 0 {
+		errs = append(errs, fmt.Errorf("admin.session_ttl_minutes must be greater than zero"))
+	}
 	for _, name := range cfg.Plugins.Enabled {
 		if strings.TrimSpace(name) == "" {
 			continue
@@ -71,9 +80,6 @@ func Validate(cfg *Config) []error {
 		if _, err := safepath.ValidatePathComponent("plugin name", name); err != nil {
 			errs = append(errs, err)
 		}
-	}
-	if cfg.Admin.Enabled && strings.TrimSpace(cfg.Admin.AccessToken) == "" {
-		errs = append(errs, fmt.Errorf("admin.access_token must not be empty when admin is enabled"))
 	}
 
 	return errs

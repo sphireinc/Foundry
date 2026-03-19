@@ -14,11 +14,22 @@ func Load(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(b, &cfg); err != nil {
+	if err := UnmarshalYAML(b, &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
 	cfg.ApplyDefaults()
 
 	return &cfg, nil
+}
+
+func UnmarshalYAML(b []byte, cfg *Config) error {
+	if err := yaml.Unmarshal(b, cfg); err != nil {
+		return err
+	}
+	cfg.ApplyDefaults()
+	if errs := Validate(cfg); len(errs) > 0 {
+		return errs[0]
+	}
+	return nil
 }

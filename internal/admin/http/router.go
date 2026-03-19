@@ -2,6 +2,7 @@ package httpadmin
 
 import (
 	"net/http"
+	"strings"
 
 	adminauth "github.com/sphireinc/foundry/internal/admin/auth"
 	"github.com/sphireinc/foundry/internal/admin/service"
@@ -14,6 +15,7 @@ import (
 type routeDef struct {
 	pattern string
 	handler http.Handler
+	public  bool
 }
 
 type Registrar func(*Router) []routeDef
@@ -22,6 +24,7 @@ type Router struct {
 	cfg        *config.Config
 	service    *service.Service
 	auth       *adminauth.Middleware
+	ui         *adminui.Manager
 	registrars []Registrar
 }
 
@@ -30,11 +33,14 @@ func New(cfg *config.Config, svc *service.Service) *Router {
 		cfg:        cfg,
 		service:    svc,
 		auth:       adminauth.New(cfg),
+		ui:         adminui.NewManager(cfg),
 		registrars: make([]Registrar, 0),
 	}
 
+	r.RegisterRegistrar(registerAuthRoutes)
 	r.RegisterRegistrar(registerStatusRoutes)
 	r.RegisterRegistrar(registerDocumentRoutes)
+	r.RegisterRegistrar(registerManagementRoutes)
 	return r
 }
 
@@ -63,19 +69,34 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 		return
 	}
 
-	mux.Handle("/__admin", r.auth.Wrap(http.HandlerFunc(r.handleIndex)))
-	mux.Handle("/__admin/", r.auth.Wrap(http.HandlerFunc(r.handleIndex)))
+	mux.Handle("/__admin", http.HandlerFunc(r.handleIndex))
+	mux.Handle("/__admin/", http.HandlerFunc(r.handleIndex))
+	mux.Handle("/__admin/theme/", http.StripPrefix("/__admin/theme/", r.ui.AssetHandler()))
 
 	for _, reg := range r.registrars {
 		for _, rd := range reg(r) {
+			if rd.public {
+				mux.Handle(rd.pattern, rd.handler)
+				continue
+			}
 			mux.Handle(rd.pattern, r.auth.Wrap(rd.handler))
 		}
 	}
 }
 
 func (r *Router) handleIndex(w http.ResponseWriter, req *http.Request) {
+	if !strings.HasPrefix(req.URL.Path, "/__admin") || strings.HasPrefix(req.URL.Path, "/__admin/api/") || strings.HasPrefix(req.URL.Path, "/__admin/theme/") {
+		http.NotFound(w, req)
+		return
+	}
+
+	body, err := r.ui.RenderIndex()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(adminui.IndexHTML(r.cfg.Title)))
+	_, _ = w.Write(body)
 }
 
 func WrapHooks(base server.Hooks, admin *Router) server.Hooks {

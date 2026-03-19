@@ -19,6 +19,15 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Admin.LocalOnly != true {
 		t.Fatalf("expected admin local only default to be true")
 	}
+	if cfg.Admin.Theme != "default" {
+		t.Fatalf("expected admin theme default to be default, got %q", cfg.Admin.Theme)
+	}
+	if cfg.Admin.UsersFile != filepath.Join("content", "config", "admin-users.yaml") {
+		t.Fatalf("expected default admin users file, got %q", cfg.Admin.UsersFile)
+	}
+	if cfg.Admin.SessionTTLMinutes != 30 {
+		t.Fatalf("expected default admin session ttl, got %d", cfg.Admin.SessionTTLMinutes)
+	}
 	if cfg.Feed.RSSPath == "" || cfg.Feed.SitemapPath == "" {
 		t.Fatalf("expected feed defaults to be set")
 	}
@@ -62,9 +71,9 @@ func TestLoadValidateAndEditYAML(t *testing.T) {
 func TestValidateAndSequenceHelpersErrors(t *testing.T) {
 	cfg := &Config{
 		Theme:   "..",
+		Admin:   AdminConfig{Enabled: true, Theme: "../escape"},
 		Plugins: PluginConfig{Enabled: []string{"../escape"}},
 		Server:  ServerConfig{LiveReloadMode: "invalid"},
-		Admin:   AdminConfig{Enabled: true},
 		Feed: FeedConfig{
 			RSSPath:     "rss.xml",
 			SitemapPath: "rss.xml",
