@@ -9,16 +9,16 @@ import (
 
 func registerManagementRoutes(r *Router) []routeDef {
 	return []routeDef{
-		{pattern: "/__admin/api/users", handler: http.HandlerFunc(r.handleUsers)},
-		{pattern: "/__admin/api/users/save", handler: http.HandlerFunc(r.handleSaveUser)},
-		{pattern: "/__admin/api/users/delete", handler: http.HandlerFunc(r.handleDeleteUser)},
-		{pattern: "/__admin/api/config", handler: http.HandlerFunc(r.handleConfigDocument)},
-		{pattern: "/__admin/api/config/save", handler: http.HandlerFunc(r.handleSaveConfigDocument)},
-		{pattern: "/__admin/api/themes", handler: http.HandlerFunc(r.handleThemes)},
-		{pattern: "/__admin/api/themes/switch", handler: http.HandlerFunc(r.handleThemeSwitch)},
-		{pattern: "/__admin/api/plugins", handler: http.HandlerFunc(r.handlePlugins)},
-		{pattern: "/__admin/api/plugins/enable", handler: http.HandlerFunc(r.handleEnablePlugin)},
-		{pattern: "/__admin/api/plugins/disable", handler: http.HandlerFunc(r.handleDisablePlugin)},
+		{pattern: "/__admin/api/users", handler: http.HandlerFunc(r.handleUsers), role: "admin"},
+		{pattern: "/__admin/api/users/save", handler: http.HandlerFunc(r.handleSaveUser), role: "admin"},
+		{pattern: "/__admin/api/users/delete", handler: http.HandlerFunc(r.handleDeleteUser), role: "admin"},
+		{pattern: "/__admin/api/config", handler: http.HandlerFunc(r.handleConfigDocument), role: "admin"},
+		{pattern: "/__admin/api/config/save", handler: http.HandlerFunc(r.handleSaveConfigDocument), role: "admin"},
+		{pattern: "/__admin/api/themes", handler: http.HandlerFunc(r.handleThemes), role: "admin"},
+		{pattern: "/__admin/api/themes/switch", handler: http.HandlerFunc(r.handleThemeSwitch), role: "admin"},
+		{pattern: "/__admin/api/plugins", handler: http.HandlerFunc(r.handlePlugins), role: "admin"},
+		{pattern: "/__admin/api/plugins/enable", handler: http.HandlerFunc(r.handleEnablePlugin), role: "admin"},
+		{pattern: "/__admin/api/plugins/disable", handler: http.HandlerFunc(r.handleDisablePlugin), role: "admin"},
 	}
 }
 

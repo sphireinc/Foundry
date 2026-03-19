@@ -13,8 +13,9 @@ import (
 )
 
 type Middleware struct {
-	cfg      *config.Config
-	sessions *SessionManager
+	cfg            *config.Config
+	sessions       *SessionManager
+	loginThrottler *loginThrottler
 }
 
 func New(cfg *config.Config) *Middleware {
@@ -23,8 +24,9 @@ func New(cfg *config.Config) *Middleware {
 		ttl = time.Duration(cfg.Admin.SessionTTLMinutes) * time.Minute
 	}
 	return &Middleware{
-		cfg:      cfg,
-		sessions: NewSessionManager(ttl),
+		cfg:            cfg,
+		sessions:       NewSessionManager(ttl),
+		loginThrottler: newLoginThrottler(),
 	}
 }
 
@@ -46,7 +48,7 @@ func (m *Middleware) Authenticate(w http.ResponseWriter, r *http.Request) (*Iden
 		return nil, err
 	}
 	if w != nil && sessionToken != "" {
-		m.setSessionCookie(w, sessionToken)
+		m.setSessionCookie(w, r, sessionToken)
 	}
 	return identity, nil
 }
@@ -55,26 +57,32 @@ func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, pas
 	if err := m.checkAccess(r); err != nil {
 		return nil, err
 	}
+	if err := m.loginThrottler.Allow(r, username, time.Now()); err != nil {
+		return nil, err
+	}
 
 	user, err := users.Find(m.cfg.Admin.UsersFile, username)
 	if err != nil {
+		m.loginThrottler.Failure(r, username, time.Now())
 		return nil, fmt.Errorf("invalid username or password")
 	}
 	if user.Disabled || !users.VerifyPassword(user.PasswordHash, password) {
+		m.loginThrottler.Failure(r, username, time.Now())
 		return nil, fmt.Errorf("invalid username or password")
 	}
+	m.loginThrottler.Success(r, username)
 
 	identity := Identity{
 		Username: user.Username,
 		Name:     user.Name,
 		Email:    user.Email,
-		Role:     user.Role,
+		Role:     normalizeRole(user.Role),
 	}
 	session, err := m.sessions.Issue(identity, time.Now())
 	if err != nil {
 		return nil, err
 	}
-	m.setSessionCookie(w, session.Token)
+	m.setSessionCookie(w, r, session.Token)
 	return &identity, nil
 }
 
@@ -85,7 +93,7 @@ func (m *Middleware) Logout(w http.ResponseWriter, r *http.Request) error {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		m.sessions.Revoke(strings.TrimSpace(cookie.Value))
 	}
-	m.clearSessionCookie(w)
+	m.clearSessionCookie(w, r)
 	return nil
 }
 
@@ -111,7 +119,7 @@ func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error
 				Username: session.Username,
 				Name:     session.Name,
 				Email:    session.Email,
-				Role:     session.Role,
+				Role:     normalizeRole(session.Role),
 			}, session.Token, nil
 		}
 		return nil, "", fmt.Errorf("admin session expired")

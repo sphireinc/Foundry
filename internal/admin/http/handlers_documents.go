@@ -16,50 +16,62 @@ func registerDocumentRoutes(r *Router) []routeDef {
 		{
 			pattern: "/__admin/api/documents",
 			handler: http.HandlerFunc(r.handleDocuments),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/document",
 			handler: http.HandlerFunc(r.handleDocument),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/documents/create",
 			handler: http.HandlerFunc(r.handleCreateDocument),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/documents/save",
 			handler: http.HandlerFunc(r.handleSaveDocument),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/documents/status",
 			handler: http.HandlerFunc(r.handleDocumentStatus),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/documents/delete",
 			handler: http.HandlerFunc(r.handleDeleteDocument),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/documents/preview",
 			handler: http.HandlerFunc(r.handlePreviewDocument),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/media",
 			handler: http.HandlerFunc(r.handleMedia),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/media/detail",
 			handler: http.HandlerFunc(r.handleMediaDetail),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/media/upload",
 			handler: http.HandlerFunc(r.handleMediaUpload),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/media/metadata",
 			handler: http.HandlerFunc(r.handleMediaMetadata),
+			role:    "editor",
 		},
 		{
 			pattern: "/__admin/api/media/delete",
 			handler: http.HandlerFunc(r.handleMediaDelete),
+			role:    "editor",
 		},
 	}
 }
