@@ -2,11 +2,14 @@ package httpadmin
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
 )
+
+const adminMediaUploadLimit = 256 << 20
 
 func registerDocumentRoutes(r *Router) []routeDef {
 	return []routeDef{
@@ -19,12 +22,44 @@ func registerDocumentRoutes(r *Router) []routeDef {
 			handler: http.HandlerFunc(r.handleDocument),
 		},
 		{
+			pattern: "/__admin/api/documents/create",
+			handler: http.HandlerFunc(r.handleCreateDocument),
+		},
+		{
 			pattern: "/__admin/api/documents/save",
 			handler: http.HandlerFunc(r.handleSaveDocument),
 		},
 		{
+			pattern: "/__admin/api/documents/status",
+			handler: http.HandlerFunc(r.handleDocumentStatus),
+		},
+		{
+			pattern: "/__admin/api/documents/delete",
+			handler: http.HandlerFunc(r.handleDeleteDocument),
+		},
+		{
 			pattern: "/__admin/api/documents/preview",
 			handler: http.HandlerFunc(r.handlePreviewDocument),
+		},
+		{
+			pattern: "/__admin/api/media",
+			handler: http.HandlerFunc(r.handleMedia),
+		},
+		{
+			pattern: "/__admin/api/media/detail",
+			handler: http.HandlerFunc(r.handleMediaDetail),
+		},
+		{
+			pattern: "/__admin/api/media/upload",
+			handler: http.HandlerFunc(r.handleMediaUpload),
+		},
+		{
+			pattern: "/__admin/api/media/metadata",
+			handler: http.HandlerFunc(r.handleMediaMetadata),
+		},
+		{
+			pattern: "/__admin/api/media/delete",
+			handler: http.HandlerFunc(r.handleMediaDelete),
 		},
 	}
 }
@@ -94,6 +129,27 @@ func (r *Router) handleSaveDocument(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (r *Router) handleCreateDocument(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body admintypes.DocumentCreateRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	resp, err := r.service.CreateDocument(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (r *Router) handlePreviewDocument(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -112,6 +168,155 @@ func (r *Router) handlePreviewDocument(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDocumentStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body admintypes.DocumentStatusRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	resp, err := r.service.UpdateDocumentStatus(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDeleteDocument(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body admintypes.DocumentDeleteRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	resp, err := r.service.DeleteDocument(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleMedia(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	items, err := r.service.ListMedia(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (r *Router) handleMediaDetail(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	reference := strings.TrimSpace(req.URL.Query().Get("reference"))
+	if reference == "" {
+		writeJSONErrorMessage(w, http.StatusBadRequest, "missing required query parameter: reference")
+		return
+	}
+	item, err := r.service.GetMediaDetail(req.Context(), reference)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (r *Router) handleMediaUpload(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := req.ParseMultipartForm(adminMediaUploadLimit); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	file, header, err := req.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	defer file.Close()
+
+	body, err := io.ReadAll(io.LimitReader(file, adminMediaUploadLimit+1))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	resp, err := r.service.SaveMedia(
+		req.Context(),
+		req.FormValue("collection"),
+		req.FormValue("dir"),
+		header.Filename,
+		header.Header.Get("Content-Type"),
+		body,
+	)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleMediaDelete(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.MediaDeleteRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := r.service.DeleteMedia(req.Context(), body.Reference); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (r *Router) handleMediaMetadata(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.MediaMetadataSaveRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	resp, err := r.service.SaveMediaMetadata(req.Context(), body.Reference, body.Metadata)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 

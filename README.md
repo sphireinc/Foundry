@@ -111,6 +111,8 @@ content/
   pages/
     index.md
   posts/
+  images/
+  uploads/
 data/
 themes/
 plugins/
@@ -174,14 +176,37 @@ foundry serve-preview
 foundry plugin list --enabled
 foundry theme list
 foundry routes check
+foundry admin hash-password your-password
 ```
 
 ### Typical local workflow
 
 1. Update `content/config/site.yaml`.
 2. Add pages and posts under `content/pages` and `content/posts`.
-3. Run `foundry serve` during development.
-4. Run `foundry build` before publishing or checking generated output.
+3. Put images under `content/images` and videos or other uploaded files under `content/uploads`.
+4. Reference media from Markdown with the `media:` scheme.
+5. Run `foundry serve` during development.
+6. Run `foundry build` before publishing or checking generated output.
+
+Embedded media uses normal Markdown image syntax:
+
+```md
+![Hero image](media:images/hero/banner.jpg)
+![Walkthrough video](media:uploads/demo.mp4)
+```
+
+File links use normal Markdown link syntax:
+
+```md
+[Download the spec](media:uploads/spec-sheet.pdf)
+```
+
+Admin uploads return stable references in the same format, for example:
+
+```text
+media:images/posts/launch/diagram.png
+media:uploads/posts/launch/demo.mp4
+```
 
 If a page appears to hang during local preview, run `foundry serve --debug` to emit per-request timing plus runtime snapshots, including:
 
@@ -205,6 +230,8 @@ Content is loaded from:
 
 - `content/pages`
 - `content/posts`
+- `content/images`
+- `content/uploads`
 
 Language variants are represented by a leading language directory. For example:
 
@@ -230,6 +257,21 @@ Markdown files use frontmatter for metadata such as:
 - `fields`
 - arbitrary `params`
 
+### Multimedia
+
+Foundry supports images, video, audio, and downloadable files through the `media:` reference scheme.
+
+- `media:images/...` resolves to `/images/...`
+- `media:uploads/...` resolves to `/uploads/...`
+- `media:assets/...` resolves to `/assets/...`
+
+The renderer infers the output element from the target file extension:
+
+- image files render as `<img>`
+- video files render as `<video controls>`
+- audio files render as `<audio controls>`
+- other files remain standard links
+
 ## Configuration
 
 The main config file is typically:
@@ -250,12 +292,63 @@ Important config groups:
 
 ### Admin
 
-If admin is enabled, `admin.access_token` must be set.
+`/__admin` serves a themeable admin shell with a login form. The shell itself is public so the browser can load HTML, CSS, and JavaScript. Authenticated API access is session-based by default.
 
-Accepted request auth headers:
+Admin users live in a filesystem-backed YAML file, which defaults to:
+
+```text
+content/config/admin-users.yaml
+```
+
+Example:
+
+```yaml
+users:
+  - username: admin
+    name: Admin User
+    email: admin@example.com
+    role: admin
+    password_hash: pbkdf2-sha256$...
+```
+
+Generate a password hash with:
+
+```bash
+foundry admin hash-password "your-password"
+```
+
+Or generate a starter YAML snippet with:
+
+```bash
+foundry admin sample-user admin "Admin User" admin@example.com "your-password"
+```
+
+Browser sessions are stored in a secure cookie under `/__admin`, expire after 30 minutes of inactivity by default, and are renewed while the user remains active.
+
+`admin.access_token` is now optional. If set, it still works for API automation with:
 
 - `Authorization: Bearer <token>`
 - `X-Foundry-Admin-Token: <token>`
+
+Admin themes live under:
+
+```text
+themes/admin-themes/<name>/
+  index.html
+  assets/
+    admin.css
+    admin.js
+```
+
+Set the active admin theme with:
+
+```yaml
+admin:
+  enabled: true
+  theme: default
+  users_file: content/config/admin-users.yaml
+  session_ttl_minutes: 30
+```
 
 `admin.local_only` is a convenience restriction for local development. It should not be treated as the only security boundary in front of a reverse proxy.
 

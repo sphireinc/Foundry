@@ -13,6 +13,7 @@ type DocumentSummary struct {
 	SourcePath string              `json:"source_path"`
 	Summary    string              `json:"summary"`
 	Draft      bool                `json:"draft"`
+	Archived   bool                `json:"archived,omitempty"`
 	Date       *time.Time          `json:"date,omitempty"`
 	UpdatedAt  *time.Time          `json:"updated_at,omitempty"`
 	Taxonomies map[string][]string `json:"taxonomies,omitempty"`
@@ -75,6 +76,19 @@ type DocumentCreateResponse struct {
 	Archetype  string `json:"archetype"`
 	SourcePath string `json:"source_path"`
 	Created    bool   `json:"created"`
+	Raw        string `json:"raw,omitempty"`
+}
+
+type DocumentStatusRequest struct {
+	SourcePath string `json:"source_path"`
+	Status     string `json:"status"`
+}
+
+type DocumentStatusResponse struct {
+	SourcePath string `json:"source_path"`
+	Status     string `json:"status"`
+	Draft      bool   `json:"draft"`
+	Archived   bool   `json:"archived"`
 }
 
 type DocumentMoveRequest struct {
@@ -96,4 +110,42 @@ type DocumentDeleteResponse struct {
 	SourcePath string `json:"source_path"`
 	TrashPath  string `json:"trash_path"`
 	Operation  string `json:"operation"`
+}
+
+type MediaItem struct {
+	Collection string        `json:"collection"`
+	Path       string        `json:"path"`
+	Name       string        `json:"name"`
+	Reference  string        `json:"reference"`
+	PublicURL  string        `json:"public_url"`
+	Kind       string        `json:"kind"`
+	Size       int64         `json:"size"`
+	Metadata   MediaMetadata `json:"metadata,omitempty"`
+}
+
+type MediaUploadResponse struct {
+	MediaItem
+	Created bool `json:"created"`
+}
+
+type MediaDeleteRequest struct {
+	Reference string `json:"reference"`
+}
+
+type MediaMetadata struct {
+	Title       string   `json:"title,omitempty" yaml:"title,omitempty"`
+	Alt         string   `json:"alt,omitempty" yaml:"alt,omitempty"`
+	Caption     string   `json:"caption,omitempty" yaml:"caption,omitempty"`
+	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
+	Credit      string   `json:"credit,omitempty" yaml:"credit,omitempty"`
+	Tags        []string `json:"tags,omitempty" yaml:"tags,omitempty"`
+}
+
+type MediaDetailResponse struct {
+	MediaItem
+}
+
+type MediaMetadataSaveRequest struct {
+	Reference string        `json:"reference"`
+	Metadata  MediaMetadata `json:"metadata"`
 }

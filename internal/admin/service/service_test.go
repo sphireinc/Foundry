@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/sphireinc/foundry/internal/admin/types"
+	"github.com/sphireinc/foundry/internal/admin/users"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/taxonomy"
 )
 
@@ -88,6 +90,9 @@ func TestDocumentQueriesPreviewAndStatus(t *testing.T) {
 		Taxonomies: map[string][]string{"tags": {"intro"}},
 	}
 	graph.Add(doc)
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, "pages", "about.md"), []byte("---\ntitle: About\nslug: about\nlayout: page\n---\n\n# Hello"), 0o644); err != nil {
+		t.Fatalf("write about page: %v", err)
+	}
 
 	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
 		return graph, nil
@@ -101,12 +106,18 @@ func TestDocumentQueriesPreviewAndStatus(t *testing.T) {
 	if err != nil || detail.ID != "doc-1" {
 		t.Fatalf("get document: %v %#v", err, detail)
 	}
+	if !strings.Contains(detail.RawBody, "title: About") || !strings.Contains(detail.RawBody, "# Hello") {
+		t.Fatalf("expected full raw document with frontmatter, got %q", detail.RawBody)
+	}
 
 	preview, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{
-		Raw: "---\ntitle: Preview\nslug: preview\n---\n\n# Hello",
+		Raw: "---\ntitle: Preview\nslug: preview\n---\n\n# Hello\n\n![Clip](media:uploads/demo.mp4)",
 	})
 	if err != nil || preview.Title != "Preview" || !strings.Contains(preview.HTML, "<h1") {
 		t.Fatalf("preview document: %v %#v", err, preview)
+	}
+	if !strings.Contains(preview.HTML, `<video controls preload="metadata" src="/uploads/demo.mp4" title="Clip" aria-label="Clip"></video>`) {
+		t.Fatalf("expected preview html to rewrite media reference, got %q", preview.HTML)
 	}
 
 	status, err := svc.GetSystemStatus(context.Background())
@@ -247,6 +258,248 @@ func TestStatusProvidersBranches(t *testing.T) {
 	}
 }
 
+func TestMediaUploadAndListing(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	first, err := svc.SaveMedia(context.Background(), "", "posts/hello", "Hero Banner.PNG", "image/png", []byte("image"))
+	if err != nil {
+		t.Fatalf("save media: %v", err)
+	}
+	if first.Collection != "images" || first.Path != "posts/hello/hero-banner.png" || first.Reference != media.MustReference("images", "posts/hello/hero-banner.png") {
+		t.Fatalf("unexpected first upload response: %#v", first)
+	}
+
+	second, err := svc.SaveMedia(context.Background(), "uploads", "posts/hello", "clip.mp4", "video/mp4", []byte("video"))
+	if err != nil {
+		t.Fatalf("save second media: %v", err)
+	}
+	if second.Collection != "uploads" || second.Kind != "video" {
+		t.Fatalf("unexpected second upload response: %#v", second)
+	}
+
+	dupe, err := svc.SaveMedia(context.Background(), "images", "posts/hello", "hero banner.png", "image/png", []byte("dupe"))
+	if err != nil {
+		t.Fatalf("save duplicate media: %v", err)
+	}
+	if dupe.Path != "posts/hello/hero-banner-2.png" {
+		t.Fatalf("expected collision suffix, got %#v", dupe)
+	}
+
+	items, err := svc.ListMedia(context.Background())
+	if err != nil {
+		t.Fatalf("list media: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 media items, got %#v", items)
+	}
+}
+
+func TestSaveMediaErrors(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	if _, err := svc.SaveMedia(context.Background(), "bad", "", "clip.mp4", "video/mp4", []byte("x")); err == nil {
+		t.Fatal("expected invalid collection error")
+	}
+	if _, err := svc.SaveMedia(context.Background(), "uploads", "../escape", "clip.mp4", "video/mp4", []byte("x")); err == nil {
+		t.Fatal("expected invalid media dir error")
+	}
+	if _, err := svc.SaveMedia(context.Background(), "uploads", "", "clip.mp4", "video/mp4", nil); err == nil {
+		t.Fatal("expected empty media body error")
+	}
+}
+
+func TestManagementServices(t *testing.T) {
+	cfg := testServiceConfig(t)
+	t.Chdir(filepath.Dir(cfg.ContentDir))
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, "config", "site.yaml"), []byte("theme: default\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n"), 0o644); err != nil {
+		t.Fatalf("write site config: %v", err)
+	}
+	writeServiceTheme(t, cfg, "default")
+	writeServiceTheme(t, cfg, "alt")
+	writePluginMetadata(t, cfg, "alpha")
+	writePluginMetadata(t, cfg, "beta")
+	cfg.Plugins.Enabled = []string{"alpha"}
+
+	svc := New(cfg)
+
+	user, err := svc.SaveUser(context.Background(), types.UserSaveRequest{
+		Username: "editor",
+		Name:     "Editor User",
+		Email:    "editor@example.com",
+		Role:     "editor",
+		Password: "secret-password",
+	})
+	if err != nil || user.Username != "editor" {
+		t.Fatalf("save user: %v %#v", err, user)
+	}
+	updatedUser, err := svc.SaveUser(context.Background(), types.UserSaveRequest{
+		Username: "editor",
+		Name:     "Updated Editor",
+		Email:    "updated@example.com",
+		Role:     "admin",
+	})
+	if err != nil || updatedUser.Name != "Updated Editor" {
+		t.Fatalf("update user: %v %#v", err, updatedUser)
+	}
+	users, err := svc.ListUsers(context.Background())
+	if err != nil || len(users) < 2 {
+		t.Fatalf("list users: %v %#v", err, users)
+	}
+	if err := svc.DeleteUser(context.Background(), "editor"); err != nil {
+		t.Fatalf("delete user: %v", err)
+	}
+
+	configDoc, err := svc.LoadConfigDocument(context.Background())
+	if err != nil || !strings.Contains(configDoc.Raw, "theme: default") {
+		t.Fatalf("load config: %v %#v", err, configDoc)
+	}
+	savedConfig, err := svc.SaveConfigDocument(context.Background(), strings.Replace(configDoc.Raw, "theme: default", "theme: alt", 1))
+	if err != nil || !strings.Contains(savedConfig.Raw, "theme: alt") {
+		t.Fatalf("save config: %v %#v", err, savedConfig)
+	}
+
+	themes, err := svc.ListThemes(context.Background())
+	if err != nil || len(themes) < 2 {
+		t.Fatalf("list themes: %v %#v", err, themes)
+	}
+	if err := svc.SwitchTheme(context.Background(), "alt"); err != nil {
+		t.Fatalf("switch theme: %v", err)
+	}
+
+	pluginsList, err := svc.ListPlugins(context.Background())
+	if err != nil || len(pluginsList) == 0 {
+		t.Fatalf("list plugins: %v %#v", err, pluginsList)
+	}
+	if err := svc.EnablePlugin(context.Background(), "beta"); err != nil {
+		t.Fatalf("enable plugin: %v", err)
+	}
+	if err := svc.DisablePlugin(context.Background(), "alpha"); err != nil {
+		t.Fatalf("disable plugin: %v", err)
+	}
+
+	upload, err := svc.SaveMedia(context.Background(), "uploads", "docs", "guide.pdf", "application/pdf", []byte("pdf"))
+	if err != nil {
+		t.Fatalf("save media for delete: %v", err)
+	}
+	if err := svc.DeleteMedia(context.Background(), upload.Reference); err != nil {
+		t.Fatalf("delete media: %v", err)
+	}
+}
+
+func TestDocumentLifecycleServices(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	created, err := svc.CreateDocument(context.Background(), types.DocumentCreateRequest{
+		Kind:      "post",
+		Slug:      "launch-notes",
+		Lang:      "fr",
+		Archetype: "post",
+	})
+	if err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+	if created.SourcePath != "content/posts/fr/launch-notes.md" {
+		t.Fatalf("unexpected created source path: %#v", created)
+	}
+	createdFullPath := filepath.Join(filepath.Dir(cfg.ContentDir), filepath.FromSlash(created.SourcePath))
+
+	status, err := svc.UpdateDocumentStatus(context.Background(), types.DocumentStatusRequest{
+		SourcePath: created.SourcePath,
+		Status:     "archived",
+	})
+	if err != nil {
+		t.Fatalf("archive document: %v", err)
+	}
+	if !status.Draft || !status.Archived {
+		t.Fatalf("expected archived draft status, got %#v", status)
+	}
+
+	body, err := os.ReadFile(createdFullPath)
+	if err != nil {
+		t.Fatalf("read archived document: %v", err)
+	}
+	if !strings.Contains(string(body), "archived: true") {
+		t.Fatalf("expected archived frontmatter, got %q", string(body))
+	}
+
+	restore, err := svc.UpdateDocumentStatus(context.Background(), types.DocumentStatusRequest{
+		SourcePath: created.SourcePath,
+		Status:     "published",
+	})
+	if err != nil {
+		t.Fatalf("publish document: %v", err)
+	}
+	if restore.Draft || restore.Archived {
+		t.Fatalf("expected published document, got %#v", restore)
+	}
+
+	deleted, err := svc.DeleteDocument(context.Background(), types.DocumentDeleteRequest{SourcePath: created.SourcePath})
+	if err != nil {
+		t.Fatalf("soft delete document: %v", err)
+	}
+	if deleted.Operation != "soft_delete" || !strings.Contains(deleted.TrashPath, "/.trash/") {
+		t.Fatalf("unexpected delete response: %#v", deleted)
+	}
+	if _, err := os.Stat(createdFullPath); !os.IsNotExist(err) {
+		t.Fatalf("expected source path to move to trash, got err=%v", err)
+	}
+	deletedFullPath := filepath.Join(filepath.Dir(cfg.ContentDir), filepath.FromSlash(deleted.TrashPath))
+	if _, err := os.Stat(deletedFullPath); err != nil {
+		t.Fatalf("expected trash path to exist: %v", err)
+	}
+}
+
+func TestMediaMetadataServices(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	upload, err := svc.SaveMedia(context.Background(), "images", "posts/about", "diagram.png", "image/png", []byte("png"))
+	if err != nil {
+		t.Fatalf("save media: %v", err)
+	}
+
+	detail, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{
+		Title:       "Architecture diagram",
+		Alt:         "Diagram alt",
+		Caption:     "System overview",
+		Description: "Longer description",
+		Credit:      "Team",
+		Tags:        []string{"diagram", "architecture"},
+	})
+	if err != nil {
+		t.Fatalf("save media metadata: %v", err)
+	}
+	if detail.Metadata.Title != "Architecture diagram" || len(detail.Metadata.Tags) != 2 {
+		t.Fatalf("unexpected saved metadata: %#v", detail)
+	}
+
+	items, err := svc.ListMedia(context.Background())
+	if err != nil {
+		t.Fatalf("list media: %v", err)
+	}
+	if len(items) != 1 || items[0].Metadata.Alt != "Diagram alt" {
+		t.Fatalf("expected metadata in media list, got %#v", items)
+	}
+
+	gotDetail, err := svc.GetMediaDetail(context.Background(), upload.Reference)
+	if err != nil {
+		t.Fatalf("get media detail: %v", err)
+	}
+	if gotDetail.Metadata.Caption != "System overview" {
+		t.Fatalf("unexpected detail metadata: %#v", gotDetail)
+	}
+
+	if err := svc.DeleteMedia(context.Background(), upload.Reference); err != nil {
+		t.Fatalf("delete media: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", "diagram.png.meta.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("expected metadata sidecar removal, got err=%v", err)
+	}
+}
+
 func testServiceConfig(t *testing.T) *config.Config {
 	t.Helper()
 
@@ -271,5 +524,51 @@ func testServiceConfig(t *testing.T) *config.Config {
 	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, cfg.Content.PagesDir), 0o755); err != nil {
 		t.Fatalf("mkdir pages dir: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, "config"), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	hash, err := users.HashPassword("secret-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg.Admin.UsersFile = filepath.Join(cfg.ContentDir, "config", "admin-users.yaml")
+	if err := os.WriteFile(cfg.Admin.UsersFile, []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: "+hash+"\n"), 0o644); err != nil {
+		t.Fatalf("write users file: %v", err)
+	}
 	return cfg
+}
+
+func writeServiceTheme(t *testing.T, cfg *config.Config, name string) {
+	t.Helper()
+	root := filepath.Join(cfg.ThemesDir, name)
+	if err := os.MkdirAll(filepath.Join(root, "layouts", "partials"), 0o755); err != nil {
+		t.Fatalf("mkdir theme: %v", err)
+	}
+	files := map[string]string{
+		filepath.Join(root, "theme.yaml"):                         "name: " + name + "\ntitle: " + name + "\nversion: 0.1.0\nlayouts:\n  - base\n  - index\n  - page\n  - post\n  - list\nslots:\n  - head.end\n  - body.start\n  - body.end\n  - page.before_main\n  - page.after_main\n  - page.before_content\n  - page.after_content\n  - post.before_header\n  - post.after_header\n  - post.before_content\n  - post.after_content\n  - post.sidebar.top\n  - post.sidebar.overview\n  - post.sidebar.bottom\n",
+		filepath.Join(root, "layouts", "base.html"):               `{{ define "base" }}{{ pluginSlot "body.start" }}{{ pluginSlot "page.before_main" }}{{ template "content" . }}{{ pluginSlot "page.after_main" }}{{ pluginSlot "body.end" }}{{ end }}`,
+		filepath.Join(root, "layouts", "index.html"):              `{{ define "content" }}index{{ end }}`,
+		filepath.Join(root, "layouts", "page.html"):               `{{ define "content" }}{{ pluginSlot "page.before_content" }}{{ pluginSlot "page.after_content" }}{{ end }}`,
+		filepath.Join(root, "layouts", "post.html"):               `{{ define "content" }}{{ pluginSlot "post.before_header" }}{{ pluginSlot "post.after_header" }}{{ pluginSlot "post.before_content" }}{{ pluginSlot "post.after_content" }}{{ pluginSlot "post.sidebar.top" }}{{ pluginSlot "post.sidebar.overview" }}{{ pluginSlot "post.sidebar.bottom" }}{{ end }}`,
+		filepath.Join(root, "layouts", "list.html"):               `{{ define "content" }}list{{ end }}`,
+		filepath.Join(root, "layouts", "partials", "head.html"):   `{{ define "head" }}{{ pluginSlot "head.end" }}{{ end }}`,
+		filepath.Join(root, "layouts", "partials", "header.html"): `{{ define "header" }}{{ end }}`,
+		filepath.Join(root, "layouts", "partials", "footer.html"): `{{ define "footer" }}{{ end }}`,
+	}
+	for path, body := range files {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+}
+
+func writePluginMetadata(t *testing.T, cfg *config.Config, name string) {
+	t.Helper()
+	root := filepath.Join(cfg.PluginsDir, name)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("mkdir plugin: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "plugin.yaml"), []byte("name: "+name+"\ntitle: "+name+"\nversion: 0.1.0\nrepo: github.com/acme/"+name+"\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n"), 0o644); err != nil {
+		t.Fatalf("write plugin metadata: %v", err)
+	}
 }

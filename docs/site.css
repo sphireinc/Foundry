@@ -27,7 +27,7 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Roboto, Arial, sans-serif;
   background:
     radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 30%),
     radial-gradient(circle at top right, rgba(180, 83, 9, 0.08), transparent 24%),
@@ -102,11 +102,11 @@ pre {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 999px;
-  padding: 11px 16px;
-  font-size: 0.95rem;
-  font-weight: 700;
+  gap: 6px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 400;
   text-decoration: none;
 }
 
@@ -146,7 +146,7 @@ pre {
   width: 280px;
   height: 280px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(15, 118, 110, 0.18), transparent 65%);
+  /*background: radial-gradient(circle, rgba(15, 118, 110, 0.18), transparent 65%);*/
 }
 
 .eyebrow {

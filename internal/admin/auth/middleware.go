@@ -8,10 +8,11 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := m.Authorize(r); err != nil {
+		identity, err := m.Authenticate(w, r)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(withIdentity(r.Context(), identity)))
 	})
 }

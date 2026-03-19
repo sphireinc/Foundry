@@ -18,6 +18,7 @@ type FileSystem interface {
 	Stat(name string) (os.FileInfo, error)
 	MkdirAll(path string, perm os.FileMode) error
 	Rename(oldpath, newpath string) error
+	Remove(name string) error
 }
 
 type osFS struct{}
@@ -29,6 +30,7 @@ func (osFS) WriteFile(name string, data []byte, perm os.FileMode) error {
 func (osFS) Stat(name string) (os.FileInfo, error)        { return os.Stat(name) }
 func (osFS) MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
 func (osFS) Rename(oldpath, newpath string) error         { return os.Rename(oldpath, newpath) }
+func (osFS) Remove(name string) error                     { return os.Remove(name) }
 
 type GraphLoader func(context.Context, *config.Config, bool) (*content.SiteGraph, error)
 

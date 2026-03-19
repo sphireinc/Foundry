@@ -14,7 +14,6 @@
         <span class="brand-mark">F</span>
         <span class="brand-copy">
           <strong>Foundry</strong>
-          <span>Documentation and coverage</span>
         </span>
       </a>
       <nav class="nav">
@@ -32,8 +31,8 @@
     <main>
       <section class="hero">
         <div class="eyebrow">Project Documentation</div>
-        <h1>Foundry documentation, coverage, and CLI references.</h1>
-        <p>Foundry is a Markdown-first CMS written in Go. This site publishes the short-form project docs, the CLI contract, and the latest HTML coverage report generated from <code>main</code>.</p>
+        <h1>Foundry.</h1>
+        <p>Foundry is a Markdown-first CMS written in Go. Here you can find the project docs, the CLI contract, and the latest HTML coverage report generated from <code>main</code>.</p>
         <div class="hero-actions">
           <a class="button" href="./getting-started/">Read the Overview</a>
           <a class="button-ghost" href="./coverage/">Open Coverage</a>
@@ -41,16 +40,16 @@
         </div>
         <div class="hero-stats">
           <div class="stat">
-            <strong>Docs</strong>
+            <strong>Documentation</strong>
             <span>Overview, setup guidance, and the main reference links.</span>
           </div>
           <div class="stat">
             <strong>Coverage</strong>
-            <span>Current Go HTML coverage from the Pages deployment workflow.</span>
+            <span>Current raw Go coverage numbers.</span>
           </div>
           <div class="stat">
             <strong>Contract</strong>
-            <span>The CLI contract in both rendered HTML and raw Markdown.</span>
+            <span>The CLI contract.</span>
           </div>
         </div>
       </section>
@@ -59,7 +58,7 @@
         <div class="section-header">
           <div>
             <h2>What this site contains</h2>
-            <p class="section-copy">The goal is simple: make the first layer of project documentation easy to scan without forcing readers through the full repository first.</p>
+            <p class="section-copy">All the documentation you'll need to deploy Foundry, create new plugins, themes, and more.</p>
           </div>
         </div>
         <div class="grid">
@@ -117,8 +116,8 @@
       <section class="section">
         <div class="section-header">
           <div>
-            <h2>At a glance</h2>
-            <p class="section-copy">A few points worth surfacing directly from the project docs.</p>
+            <h2>Foundry At A Glance</h2>
+            <p class="section-copy"></p>
           </div>
         </div>
         <div class="feature-grid">
@@ -136,26 +135,9 @@
           </article>
           <article class="feature">
             <h3>Admin and preview guardrails</h3>
-            <p>The admin surface requires <code>admin.access_token</code>, raw HTML handling is config-controlled, the preview/admin server uses timeouts, and live reload supports both SSE and polling modes.</p>
+            <p>The admin surface supports filesystem-backed users, idle-expiring browser sessions, themeable admin UI assets, raw HTML handling is config-controlled, and the preview/admin server uses timeouts.</p>
           </article>
         </div>
-      </section>
-
-      <section class="section">
-        <div class="section-header">
-          <div>
-            <h2>Published here</h2>
-            <p class="section-copy">These are the parts of the repository that benefit from a direct published entry point.</p>
-          </div>
-        </div>
-        <ul class="list">
-          <li>Project overview and setup guidance from the README.</li>
-          <li>Architecture and package-orientation material for contributors.</li>
-          <li>Theme and plugin authoring guides grounded in the repo’s current scaffolding and hook model.</li>
-          <li>CLI UX contract in both rendered HTML and raw Markdown form.</li>
-          <li>Latest HTML test coverage report generated from CI.</li>
-          <li>Direct links back to the repository, workflow runs, and source documents.</li>
-        </ul>
       </section>
     </main>
 
