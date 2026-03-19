@@ -75,11 +75,93 @@ The dependency graph includes taxonomy archive outputs, so incremental rebuilds 
 
 ## Quick start
 
+### Prerequisites
+
+- Go `1.22` or newer
+- A working `PATH` that includes `$(go env GOPATH)/bin` if you install with `go install`
+
 ### Install
+
+Install the CLI:
 
 ```bash
 go install github.com/sphireinc/foundry/cmd/foundry@latest
 ```
+
+Verify the install:
+
+```bash
+foundry version
+```
+
+If you are working from a local checkout instead of a global install, you can run:
+
+```bash
+go run ./cmd/foundry version
+```
+
+### Start a site from the repo layout
+
+Foundry expects a file-based project layout. The quickest way to get running is to start with this shape:
+
+```text
+content/
+  config/
+    site.yaml
+  pages/
+    index.md
+  posts/
+data/
+themes/
+plugins/
+```
+
+Minimal `content/config/site.yaml`:
+
+```yaml
+title: My Site
+base_url: http://localhost:8080
+theme: default
+
+content_dir: content
+public_dir: public
+themes_dir: themes
+data_dir: data
+plugins_dir: plugins
+
+server:
+  addr: :8080
+  live_reload: true
+  live_reload_mode: stream
+```
+
+Minimal `content/pages/index.md`:
+
+```md
+---
+title: Home
+---
+
+# Hello from Foundry
+```
+
+### Run it
+
+Start the local preview server from the project root:
+
+```bash
+foundry serve
+```
+
+Then open `http://localhost:8080/`.
+
+To produce static output:
+
+```bash
+foundry build
+```
+
+Generated files will be written to `public/`.
 
 ### Common commands
 
@@ -96,10 +178,10 @@ foundry routes check
 
 ### Typical local workflow
 
-1. Configure the site in `content/config/site.yaml`.
+1. Update `content/config/site.yaml`.
 2. Add pages and posts under `content/pages` and `content/posts`.
 3. Run `foundry serve` during development.
-4. Run `foundry build` to generate static output in `public/`.
+4. Run `foundry build` before publishing or checking generated output.
 
 If a page appears to hang during local preview, run `foundry serve --debug` to emit per-request timing plus runtime snapshots, including:
 
