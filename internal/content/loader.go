@@ -12,6 +12,7 @@ import (
 	"github.com/sphireinc/foundry/internal/data"
 	"github.com/sphireinc/foundry/internal/fields"
 	"github.com/sphireinc/foundry/internal/i18n"
+	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
 )
 
@@ -98,7 +99,7 @@ func (l *Loader) loadSection(graph *SiteGraph, docType, root string) error {
 		if err != nil {
 			return fmt.Errorf("walk section: %w", err)
 		}
-		if info.IsDir() || filepath.Ext(path) != ".md" {
+		if info.IsDir() || filepath.Ext(path) != ".md" || lifecycle.IsDerivedPath(path) {
 			return nil
 		}
 

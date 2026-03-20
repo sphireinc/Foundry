@@ -17,6 +17,9 @@ func TestResolveReferenceAndKindDetection(t *testing.T) {
 	if _, err := ResolveReference("media:../escape.png"); err == nil {
 		t.Fatal("expected traversal rejection")
 	}
+	if _, err := ResolveReference("media:images/hero.version.20260319T143209Z.png"); err == nil {
+		t.Fatal("expected derived media reference rejection")
+	}
 	if _, err := ResolveReference("media:videos/demo.mp4"); err == nil {
 		t.Fatal("expected unsupported collection rejection")
 	}
