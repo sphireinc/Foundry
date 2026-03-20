@@ -31,11 +31,11 @@ func (m *Manager) RenderIndex() ([]byte, error) {
 	}
 
 	data := struct {
-		Title     string
-		AdminPath string
+		Title       string
+		AdminPath   string
 		DefaultLang string
-		ThemeName string
-		ThemeBase string
+		ThemeName   string
+		ThemeBase   string
 	}{
 		Title:       m.cfg.Title,
 		AdminPath:   m.cfg.AdminPath(),

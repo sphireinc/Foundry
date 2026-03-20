@@ -14,9 +14,9 @@ func (r *Router) logAudit(reqActor, action, outcome, target string, reqMetadata 
 		return
 	}
 	entry := admintypes.AuditEntry{
-		Action:  strings.TrimSpace(action),
-		Outcome: strings.TrimSpace(outcome),
-		Target:  strings.TrimSpace(target),
+		Action:   strings.TrimSpace(action),
+		Outcome:  strings.TrimSpace(outcome),
+		Target:   strings.TrimSpace(target),
 		Metadata: reqMetadata,
 	}
 	if reqActor != "" {
