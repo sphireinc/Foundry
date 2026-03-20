@@ -1,10 +1,12 @@
 tmp/
 public/
 bin/
+assessment-admin.txt
+assessment-product.txt
+assessment-roadmap.txt
+assessment-technical-debt.txt
 assessment-security.txt
 assessment-static-analysis.txt
-assessment-technical-debt.txt
-assessment-admin.txt
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,windows,macos,dotenv
