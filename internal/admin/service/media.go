@@ -20,8 +20,12 @@ import (
 
 const maxMediaUploadSize = 256 << 20
 
-func (s *Service) ListMedia(ctx context.Context) ([]types.MediaItem, error) {
+func (s *Service) ListMedia(ctx context.Context, query ...string) ([]types.MediaItem, error) {
 	_ = ctx
+	search := ""
+	if len(query) > 0 {
+		search = strings.ToLower(strings.TrimSpace(query[0]))
+	}
 
 	var items []types.MediaItem
 	for _, collection := range []string{"images", "uploads", "assets"} {
@@ -66,6 +70,9 @@ func (s *Service) ListMedia(ctx context.Context) ([]types.MediaItem, error) {
 			metadata, err := s.loadMediaMetadataFromPath(path)
 			if err != nil {
 				return err
+			}
+			if search != "" && !matchesMediaQuery(resolved.Path, ref, metadata, search) {
+				return nil
 			}
 
 			items = append(items, types.MediaItem{
@@ -194,6 +201,47 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 	}, nil
 }
 
+func (s *Service) ReplaceMedia(ctx context.Context, reference, contentType string, body []byte) (*types.MediaReplaceResponse, error) {
+	_ = ctx
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("media upload body is required")
+	}
+	if len(body) > maxMediaUploadSize {
+		return nil, fmt.Errorf("media upload exceeds %d bytes", maxMediaUploadSize)
+	}
+
+	item, fullPath, err := s.resolveMediaItem(reference)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	if err := s.versionFile(fullPath, now); err != nil {
+		return nil, err
+	}
+	if err := s.versionMediaMetadataForPrimary(fullPath, now); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err := s.fs.WriteFile(fullPath, body, 0o644); err != nil {
+		return nil, err
+	}
+
+	info, err := s.fs.Stat(fullPath)
+	if err != nil {
+		return nil, err
+	}
+	item.Size = info.Size()
+	if item.Kind == "" {
+		item.Kind = string(media.DetectKind(item.Path))
+	}
+
+	return &types.MediaReplaceResponse{
+		MediaItem: item,
+		Replaced:  true,
+	}, nil
+}
+
 func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metadata types.MediaMetadata, versionComment, actor string) (*types.MediaDetailResponse, error) {
 	_ = ctx
 
@@ -229,6 +277,28 @@ func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metad
 		return nil, err
 	}
 	return &types.MediaDetailResponse{MediaItem: item, UsedBy: usedBy}, nil
+}
+
+func matchesMediaQuery(pathValue, reference string, metadata types.MediaMetadata, query string) bool {
+	for _, candidate := range []string{
+		pathValue,
+		reference,
+		metadata.Title,
+		metadata.Alt,
+		metadata.Caption,
+		metadata.Description,
+		metadata.Credit,
+	} {
+		if strings.Contains(strings.ToLower(candidate), query) {
+			return true
+		}
+	}
+	for _, tag := range metadata.Tags {
+		if strings.Contains(strings.ToLower(tag), query) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) mediaRoot(collection string) (string, error) {

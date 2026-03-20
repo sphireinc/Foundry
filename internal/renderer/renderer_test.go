@@ -237,6 +237,13 @@ func TestRendererHookFailuresAndBuild(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "tags", "go", "index.html")); err != nil {
 		t.Fatalf("expected built taxonomy output: %v", err)
 	}
+	searchIndex, err := os.ReadFile(filepath.Join(cfg.PublicDir, "search.json"))
+	if err != nil {
+		t.Fatalf("expected search index output: %v", err)
+	}
+	if !strings.Contains(string(searchIndex), `"url": "/posts/hello/"`) {
+		t.Fatalf("expected search index to include rendered document, got %q", string(searchIndex))
+	}
 }
 
 func testRendererConfig(t *testing.T) *config.Config {

@@ -421,6 +421,36 @@ button.danger,
   overflow-wrap: anywhere;
 }
 
+.media-library-cell {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.media-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--wp-line);
+  background: #eef1f3;
+}
+
+.media-thumb.audio,
+.media-thumb.file,
+.media-thumb.placeholder {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--wp-muted);
+}
+
+.compact-inline-form {
+  grid-template-columns: minmax(0, 1.8fr) auto auto;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;

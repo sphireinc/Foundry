@@ -100,6 +100,11 @@ func registerDocumentRoutes(r *Router) []routeDef {
 			role:    "editor",
 		},
 		{
+			pattern: r.routePath("/api/media/replace"),
+			handler: http.HandlerFunc(r.handleMediaReplace),
+			role:    "editor",
+		},
+		{
 			pattern: r.routePath("/api/media/metadata"),
 			handler: http.HandlerFunc(r.handleMediaMetadata),
 			role:    "editor",
@@ -184,6 +189,7 @@ func (r *Router) handleSaveDocument(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "document.save", "success", resp.SourcePath, nil)
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -234,6 +240,7 @@ func (r *Router) handleRestoreDocument(w http.ResponseWriter, req *http.Request)
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "document.restore", "success", firstNonEmpty(resp.RestoredPath, resp.Path), nil)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -252,6 +259,7 @@ func (r *Router) handlePurgeDocument(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "document.purge", "success", resp.Path, nil)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -290,6 +298,7 @@ func (r *Router) handleCreateDocument(w http.ResponseWriter, req *http.Request) 
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "document.create", "success", resp.SourcePath, map[string]string{"kind": resp.Kind})
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -332,6 +341,7 @@ func (r *Router) handleDocumentStatus(w http.ResponseWriter, req *http.Request) 
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "document.status", "success", resp.SourcePath, map[string]string{"status": resp.Status})
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -353,6 +363,7 @@ func (r *Router) handleDeleteDocument(w http.ResponseWriter, req *http.Request) 
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "document.delete", "success", resp.SourcePath, map[string]string{"trash_path": resp.TrashPath})
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -363,7 +374,7 @@ func (r *Router) handleMedia(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	items, err := r.service.ListMedia(req.Context())
+	items, err := r.service.ListMedia(req.Context(), strings.TrimSpace(req.URL.Query().Get("q")))
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err)
 		return
@@ -459,7 +470,42 @@ func (r *Router) handleMediaUpload(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "media.upload", "success", resp.Reference, map[string]string{"created": boolString(resp.Created)})
 
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleMediaReplace(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := req.ParseMultipartForm(adminMediaUploadLimit); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	reference := strings.TrimSpace(req.FormValue("reference"))
+	if reference == "" {
+		writeJSONErrorMessage(w, http.StatusBadRequest, "reference is required")
+		return
+	}
+	file, header, err := req.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	defer file.Close()
+	body, err := io.ReadAll(io.LimitReader(file, adminMediaUploadLimit+1))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	resp, err := r.service.ReplaceMedia(req.Context(), reference, header.Header.Get("Content-Type"), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "media.replace", "success", resp.Reference, nil)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -477,6 +523,7 @@ func (r *Router) handleMediaDelete(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "media.delete", "success", body.Reference, nil)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -495,6 +542,7 @@ func (r *Router) handleMediaRestore(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "media.restore", "success", firstNonEmpty(resp.RestoredPath, resp.Path), nil)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -513,6 +561,7 @@ func (r *Router) handleMediaPurge(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "media.purge", "success", resp.Path, nil)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -532,6 +581,7 @@ func (r *Router) handleMediaMetadata(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	r.logAuditRequest(req, "media.metadata", "success", body.Reference, nil)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -553,6 +603,13 @@ func truthy(v string) bool {
 	default:
 		return false
 	}
+}
+
+func boolString(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

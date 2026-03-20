@@ -777,6 +777,13 @@ func TestMediaMetadataServices(t *testing.T) {
 	if len(gotDetail.UsedBy) != 0 {
 		t.Fatalf("expected no media usage, got %#v", gotDetail.UsedBy)
 	}
+	filtered, err := svc.ListMedia(context.Background(), "diagram alt")
+	if err != nil {
+		t.Fatalf("list filtered media: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].Reference != upload.Reference {
+		t.Fatalf("expected filtered media result, got %#v", filtered)
+	}
 	if _, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{
 		Title: "Updated diagram",
 	}, "update title", "Admin User"); err != nil {
@@ -825,6 +832,47 @@ func TestMediaMetadataServices(t *testing.T) {
 	}
 	if !foundTrash || !foundSidecarTrash {
 		t.Fatalf("expected trashed media and sidecar, got entries %#v", entries)
+	}
+}
+
+func TestReplaceMediaPreservesCanonicalReference(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	upload, err := svc.SaveMedia(context.Background(), "images", "posts/about", "diagram.png", "image/png", []byte("v1"))
+	if err != nil {
+		t.Fatalf("save media: %v", err)
+	}
+
+	replaced, err := svc.ReplaceMedia(context.Background(), upload.Reference, "image/png", []byte("v2"))
+	if err != nil {
+		t.Fatalf("replace media: %v", err)
+	}
+	if !replaced.Replaced || replaced.Reference != upload.Reference {
+		t.Fatalf("expected canonical reference to be preserved, got %#v", replaced)
+	}
+
+	body, err := os.ReadFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", "diagram.png"))
+	if err != nil {
+		t.Fatalf("read replaced media: %v", err)
+	}
+	if string(body) != "v2" {
+		t.Fatalf("expected replaced media body, got %q", string(body))
+	}
+
+	entries, err := os.ReadDir(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about"))
+	if err != nil {
+		t.Fatalf("read media dir: %v", err)
+	}
+	foundVersion := false
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "diagram.version.") && strings.HasSuffix(entry.Name(), ".png") {
+			foundVersion = true
+			break
+		}
+	}
+	if !foundVersion {
+		t.Fatal("expected replaced media to create a versioned file")
 	}
 }
 

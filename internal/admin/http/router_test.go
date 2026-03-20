@@ -367,6 +367,17 @@ func TestManagementEndpoints(t *testing.T) {
 	if rr := doReq(http.MethodGet, "/__admin/api/themes", ""); rr.Code != http.StatusOK {
 		t.Fatalf("expected themes 200, got %d: %s", rr.Code, rr.Body.String())
 	}
+	auditRR := doReq(http.MethodGet, "/__admin/api/audit", "")
+	if auditRR.Code != http.StatusOK {
+		t.Fatalf("expected audit 200, got %d: %s", auditRR.Code, auditRR.Body.String())
+	}
+	var auditEntries []admintypes.AuditEntry
+	if err := json.Unmarshal(auditRR.Body.Bytes(), &auditEntries); err != nil {
+		t.Fatalf("decode audit entries: %v", err)
+	}
+	if len(auditEntries) == 0 {
+		t.Fatal("expected audit log entries")
+	}
 }
 
 func TestDocumentAndMediaHistoryEndpoints(t *testing.T) {
