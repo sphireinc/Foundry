@@ -96,10 +96,15 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	}
 
 	created := false
+	now := time.Now()
 	if _, err := s.fs.Stat(sourcePath); err != nil {
 		created = true
 	} else {
-		if err := s.versionFile(sourcePath, time.Now()); err != nil {
+		if strings.TrimSpace(req.VersionComment) != "" || strings.TrimSpace(req.Actor) != "" {
+			if err := s.snapshotDocumentVersion(sourcePath, now, req.VersionComment, req.Actor); err != nil {
+				return nil, err
+			}
+		} else if err := s.versionFile(sourcePath, now); err != nil {
 			return nil, err
 		}
 	}

@@ -36,21 +36,30 @@ func IsTrashPath(path string) bool {
 }
 
 func ParsePath(path string) (string, State, bool) {
+	original, state, _, ok := ParsePathDetails(path)
+	return original, state, ok
+}
+
+func ParsePathDetails(path string) (string, State, time.Time, bool) {
 	dir := filepath.Dir(path)
 	base := filepath.Base(path)
 	stem, ext := splitStemAndExt(base)
 	match := derivedStemRE.FindStringSubmatch(stem)
 	if len(match) != 4 {
-		return "", "", false
+		return "", "", time.Time{}, false
 	}
 	original := filepath.Join(dir, match[1]+ext)
+	ts, err := time.Parse(TimestampFormat, match[3])
+	if err != nil {
+		return "", "", time.Time{}, false
+	}
 	switch match[2] {
 	case "version":
-		return original, StateVersion, true
+		return original, StateVersion, ts, true
 	case "trash":
-		return original, StateTrash, true
+		return original, StateTrash, ts, true
 	default:
-		return "", "", false
+		return "", "", time.Time{}, false
 	}
 }
 

@@ -87,12 +87,14 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--wp-line);
   border-radius: 4px;
   background: #fff;
+  font: inherit;
 }
 
 button {
@@ -113,6 +115,12 @@ button.ghost {
   background: white;
   color: var(--wp-text);
   border: 1px solid var(--wp-line);
+}
+
+button.active-toggle {
+  background: #edf4fb;
+  border-color: #95bfe6;
+  color: #0a4b78;
 }
 
 button.danger,
@@ -359,6 +367,79 @@ button.danger,
   overflow: auto;
 }
 
+.diff-viewer {
+  margin: 12px 0 0;
+  padding: 14px;
+  max-height: 360px;
+  overflow: auto;
+  background: #0f1720;
+  color: #d9e3ea;
+  border-radius: 4px;
+  border: 1px solid #22303d;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.diff-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.diff-split h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--wp-muted);
+}
+
+.diff-pane {
+  border: 1px solid #22303d;
+  border-radius: 4px;
+  overflow: auto;
+  background: #0f1720;
+}
+
+.diff-line {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  padding: 4px 10px;
+  color: #d9e3ea;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.diff-line:first-child {
+  border-top: 0;
+}
+
+.diff-line-number {
+  color: #6d8193;
+  text-align: right;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.diff-line code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-line.added {
+  background: rgba(22, 163, 74, 0.18);
+}
+
+.diff-line.removed {
+  background: rgba(220, 38, 38, 0.18);
+}
+
+.diff-line.changed {
+  background: rgba(245, 158, 11, 0.18);
+}
+
+.diff-line.empty {
+  color: #536373;
+}
+
 .preview-body > :first-child {
   margin-top: 0;
 }
@@ -384,6 +465,10 @@ button.danger,
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.inline-checkbox {
+  display: inline-flex;
 }
 
 .checkbox input {
@@ -445,6 +530,9 @@ code {
 @media (max-width: 1100px) {
   .cards,
   .layout-grid {
+    grid-template-columns: 1fr;
+  }
+  .diff-split {
     grid-template-columns: 1fr;
   }
 }

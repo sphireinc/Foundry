@@ -35,8 +35,10 @@ type DocumentListOptions struct {
 }
 
 type DocumentSaveRequest struct {
-	SourcePath string `json:"source_path"`
-	Raw        string `json:"raw"`
+	SourcePath     string `json:"source_path"`
+	Raw            string `json:"raw"`
+	VersionComment string `json:"version_comment,omitempty"`
+	Actor          string `json:"-"`
 }
 
 type DocumentSaveResponse struct {
@@ -112,6 +114,59 @@ type DocumentDeleteResponse struct {
 	Operation  string `json:"operation"`
 }
 
+type LifecycleState string
+
+const (
+	LifecycleStateCurrent LifecycleState = "current"
+	LifecycleStateVersion LifecycleState = "version"
+	LifecycleStateTrash   LifecycleState = "trash"
+)
+
+type DocumentHistoryEntry struct {
+	Path           string         `json:"path"`
+	OriginalPath   string         `json:"original_path"`
+	State          LifecycleState `json:"state"`
+	Timestamp      *time.Time     `json:"timestamp,omitempty"`
+	VersionComment string         `json:"version_comment,omitempty"`
+	Actor          string         `json:"actor,omitempty"`
+	Title          string         `json:"title"`
+	Slug           string         `json:"slug"`
+	Layout         string         `json:"layout"`
+	Summary        string         `json:"summary"`
+	Draft          bool           `json:"draft"`
+	Archived       bool           `json:"archived"`
+	Lang           string         `json:"lang"`
+	Size           int64          `json:"size"`
+}
+
+type DocumentHistoryResponse struct {
+	SourcePath string                 `json:"source_path"`
+	Entries    []DocumentHistoryEntry `json:"entries"`
+}
+
+type DocumentDiffRequest struct {
+	LeftPath  string `json:"left_path"`
+	RightPath string `json:"right_path"`
+}
+
+type DocumentDiffResponse struct {
+	LeftPath  string `json:"left_path"`
+	RightPath string `json:"right_path"`
+	LeftRaw   string `json:"left_raw"`
+	RightRaw  string `json:"right_raw"`
+	Diff      string `json:"diff"`
+}
+
+type DocumentLifecycleRequest struct {
+	Path string `json:"path"`
+}
+
+type DocumentLifecycleResponse struct {
+	Path         string `json:"path"`
+	RestoredPath string `json:"restored_path,omitempty"`
+	Operation    string `json:"operation"`
+}
+
 type MediaItem struct {
 	Collection string        `json:"collection"`
 	Path       string        `json:"path"`
@@ -143,9 +198,46 @@ type MediaMetadata struct {
 
 type MediaDetailResponse struct {
 	MediaItem
+	UsedBy []DocumentSummary `json:"used_by,omitempty"`
 }
 
 type MediaMetadataSaveRequest struct {
-	Reference string        `json:"reference"`
-	Metadata  MediaMetadata `json:"metadata"`
+	Reference      string        `json:"reference"`
+	Metadata       MediaMetadata `json:"metadata"`
+	VersionComment string        `json:"version_comment,omitempty"`
+	Actor          string        `json:"-"`
+}
+
+type MediaHistoryEntry struct {
+	Collection       string         `json:"collection"`
+	Path             string         `json:"path"`
+	OriginalPath     string         `json:"original_path"`
+	Reference        string         `json:"reference,omitempty"`
+	CurrentReference string         `json:"current_reference,omitempty"`
+	Name             string         `json:"name"`
+	PublicURL        string         `json:"public_url"`
+	Kind             string         `json:"kind"`
+	Size             int64          `json:"size"`
+	State            LifecycleState `json:"state"`
+	Timestamp        *time.Time     `json:"timestamp,omitempty"`
+	VersionComment   string         `json:"version_comment,omitempty"`
+	Actor            string         `json:"actor,omitempty"`
+	MetadataOnly     bool           `json:"metadata_only,omitempty"`
+	Metadata         MediaMetadata  `json:"metadata,omitempty"`
+}
+
+type MediaHistoryResponse struct {
+	Reference string              `json:"reference,omitempty"`
+	Path      string              `json:"path,omitempty"`
+	Entries   []MediaHistoryEntry `json:"entries"`
+}
+
+type MediaLifecycleRequest struct {
+	Path string `json:"path"`
+}
+
+type MediaLifecycleResponse struct {
+	Path         string `json:"path"`
+	RestoredPath string `json:"restored_path,omitempty"`
+	Operation    string `json:"operation"`
 }

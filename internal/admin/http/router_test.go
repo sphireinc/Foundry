@@ -369,6 +369,164 @@ func TestManagementEndpoints(t *testing.T) {
 	}
 }
 
+func TestDocumentAndMediaHistoryEndpoints(t *testing.T) {
+	cfg := testConfig(t)
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	doReq := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.RemoteAddr = "127.0.0.1:10000"
+		req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+		return rr
+	}
+
+	if rr := doReq(http.MethodPost, "/__admin/api/documents/save", `{"source_path":"pages/about.md","raw":"---\ntitle: About\nslug: about\nlayout: page\ndraft: false\n---\n\n# About v2","version_comment":"Polish the about page"}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected document save 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	historyRR := doReq(http.MethodGet, "/__admin/api/documents/history?source_path=pages/about.md", "")
+	if historyRR.Code != http.StatusOK {
+		t.Fatalf("expected document history 200, got %d: %s", historyRR.Code, historyRR.Body.String())
+	}
+	var docHistory admintypes.DocumentHistoryResponse
+	if err := json.Unmarshal(historyRR.Body.Bytes(), &docHistory); err != nil {
+		t.Fatalf("decode document history: %v", err)
+	}
+	if len(docHistory.Entries) != 2 {
+		t.Fatalf("expected 2 document history entries, got %#v", docHistory.Entries)
+	}
+	if docHistory.Entries[1].VersionComment != "Polish the about page" {
+		t.Fatalf("expected version comment, got %#v", docHistory.Entries[1])
+	}
+
+	diffReq := `{"left_path":"` + docHistory.Entries[1].Path + `","right_path":"` + docHistory.Entries[0].Path + `"}`
+	diffRR := doReq(http.MethodPost, "/__admin/api/documents/diff", diffReq)
+	if diffRR.Code != http.StatusOK {
+		t.Fatalf("expected document diff 200, got %d: %s", diffRR.Code, diffRR.Body.String())
+	}
+
+	if rr := doReq(http.MethodPost, "/__admin/api/documents/delete", `{"source_path":"pages/about.md"}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected document delete 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	trashRR := doReq(http.MethodGet, "/__admin/api/documents/trash", "")
+	if trashRR.Code != http.StatusOK {
+		t.Fatalf("expected document trash 200, got %d: %s", trashRR.Code, trashRR.Body.String())
+	}
+	var docTrash []admintypes.DocumentHistoryEntry
+	if err := json.Unmarshal(trashRR.Body.Bytes(), &docTrash); err != nil {
+		t.Fatalf("decode document trash: %v", err)
+	}
+	if len(docTrash) == 0 {
+		t.Fatal("expected trashed document entry")
+	}
+	restoreReq := `{"path":"` + docTrash[0].Path + `"}`
+	if rr := doReq(http.MethodPost, "/__admin/api/documents/restore", restoreReq); rr.Code != http.StatusOK {
+		t.Fatalf("expected document restore 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var mediaBody bytes.Buffer
+	writer := multipart.NewWriter(&mediaBody)
+	if err := writer.WriteField("collection", "images"); err != nil {
+		t.Fatalf("write media collection field: %v", err)
+	}
+	part, err := writer.CreateFormFile("file", "history.png")
+	if err != nil {
+		t.Fatalf("create media file: %v", err)
+	}
+	if _, err := part.Write([]byte("v1")); err != nil {
+		t.Fatalf("write media body: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close media writer: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/__admin/api/media/upload", &mediaBody)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected media upload 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var upload admintypes.MediaUploadResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &upload); err != nil {
+		t.Fatalf("decode media upload: %v", err)
+	}
+
+	var replaceBody bytes.Buffer
+	replaceWriter := multipart.NewWriter(&replaceBody)
+	if err := replaceWriter.WriteField("collection", "images"); err != nil {
+		t.Fatalf("write media collection field: %v", err)
+	}
+	part, err = replaceWriter.CreateFormFile("file", "history.png")
+	if err != nil {
+		t.Fatalf("create replace media file: %v", err)
+	}
+	if _, err := part.Write([]byte("v2")); err != nil {
+		t.Fatalf("write replace media body: %v", err)
+	}
+	if err := replaceWriter.Close(); err != nil {
+		t.Fatalf("close replace writer: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/media/upload", &replaceBody)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	req.Header.Set("Content-Type", replaceWriter.FormDataContentType())
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected media replace 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	mediaListRR := doReq(http.MethodGet, "/__admin/api/media", "")
+	if mediaListRR.Code != http.StatusOK {
+		t.Fatalf("expected media list 200, got %d: %s", mediaListRR.Code, mediaListRR.Body.String())
+	}
+	var mediaList []admintypes.MediaItem
+	if err := json.Unmarshal(mediaListRR.Body.Bytes(), &mediaList); err != nil {
+		t.Fatalf("decode media list: %v", err)
+	}
+	if len(mediaList) != 1 {
+		t.Fatalf("expected one current media item, got %#v", mediaList)
+	}
+
+	mediaHistoryRR := doReq(http.MethodGet, "/__admin/api/media/history?path="+filepath.ToSlash(filepath.Join("content", mediaList[0].Collection, mediaList[0].Path)), "")
+	if mediaHistoryRR.Code != http.StatusOK {
+		t.Fatalf("expected media history 200, got %d: %s", mediaHistoryRR.Code, mediaHistoryRR.Body.String())
+	}
+	var mediaHistory admintypes.MediaHistoryResponse
+	if err := json.Unmarshal(mediaHistoryRR.Body.Bytes(), &mediaHistory); err != nil {
+		t.Fatalf("decode media history: %v", err)
+	}
+	if len(mediaHistory.Entries) != 2 {
+		t.Fatalf("expected 2 media history entries, got %#v", mediaHistory.Entries)
+	}
+
+	if rr := doReq(http.MethodPost, "/__admin/api/media/delete", `{"reference":"`+mediaList[0].Reference+`"}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected media delete 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	mediaTrashRR := doReq(http.MethodGet, "/__admin/api/media/trash", "")
+	if mediaTrashRR.Code != http.StatusOK {
+		t.Fatalf("expected media trash 200, got %d: %s", mediaTrashRR.Code, mediaTrashRR.Body.String())
+	}
+	var mediaTrash []admintypes.MediaHistoryEntry
+	if err := json.Unmarshal(mediaTrashRR.Body.Bytes(), &mediaTrash); err != nil {
+		t.Fatalf("decode media trash: %v", err)
+	}
+	if len(mediaTrash) == 0 {
+		t.Fatal("expected trashed media entry")
+	}
+	if rr := doReq(http.MethodPost, "/__admin/api/media/restore", `{"path":"`+mediaTrash[0].Path+`"}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected media restore 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestEditorRoleCannotAccessAdminOnlyEndpoints(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Admin.AccessToken = ""

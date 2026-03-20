@@ -20,16 +20,27 @@
     session: null,
     status: null,
     documents: [],
+    documentTrash: [],
+    documentHistory: [],
+    documentHistoryPath: '',
+    documentDiff: null,
+    documentDiffMode: 'split',
+    selectedDocumentTrash: [],
     media: [],
+    mediaTrash: [],
+    mediaHistory: [],
+    mediaHistoryReference: '',
+    selectedMediaTrash: [],
     users: [],
     config: null,
     plugins: [],
     themes: [],
     section: sectionForPath(window.location.pathname),
-    documentEditor: { source_path: '', raw: '' },
+    documentEditor: { source_path: '', raw: '', version_comment: '' },
     documentPreview: null,
     selectedMediaReference: '',
     mediaDetail: null,
+    mediaVersionComment: '',
     userForm: { username: '', name: '', email: '', role: '', password: '', disabled: false },
     loadErrors: [],
     error: '',
@@ -38,6 +49,19 @@
   };
 
   const formatDate = (value) => value.toISOString().slice(0, 10);
+  const formatDateTime = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString();
+  };
+  const lifecycleLabel = (value) => {
+    switch (value) {
+      case 'version': return 'Version';
+      case 'trash': return 'Trash';
+      default: return 'Current';
+    }
+  };
 
   const buildDefaultMarkdown = (kind = 'post') => {
     const today = formatDate(new Date());
@@ -101,7 +125,7 @@
 
   const resetDocumentEditor = () => {
     const createKind = document.getElementById('document-create-kind')?.value || 'post';
-    state.documentEditor = { source_path: '', raw: buildDefaultMarkdown(createKind) };
+    state.documentEditor = { source_path: '', raw: buildDefaultMarkdown(createKind), version_comment: '' };
     state.documentPreview = null;
   };
 
@@ -109,6 +133,10 @@
     state.flash = message;
     state.error = '';
   };
+
+  const toggleSelection = (items, value, checked) => checked
+    ? Array.from(new Set([...items, value]))
+    : items.filter((item) => item !== value);
 
   const clearLoadErrors = () => {
     state.loadErrors = [];
@@ -142,6 +170,8 @@
     const items = [
       ['overview', 'Overview'],
       ['documents', 'Documents'],
+      ['history', 'History'],
+      ['trash', 'Trash'],
       ['media', 'Media'],
       ['users', 'Users'],
       ['config', 'Configuration'],
@@ -181,6 +211,97 @@
     return 'Published';
   };
 
+  const renderDocumentHistoryRows = (entries) => entries.map((entry) => `
+    <div class="table-row table-row-actions">
+      <span>
+        <strong>${escapeHTML(entry.title || entry.slug || entry.path)}</strong>
+        <div class="muted mono">${escapeHTML(entry.path)}</div>
+        ${entry.version_comment ? `<div class="muted">Note: ${escapeHTML(entry.version_comment)}</div>` : ''}
+        ${entry.actor ? `<div class="muted">By ${escapeHTML(entry.actor)}</div>` : ''}
+      </span>
+      <span>${escapeHTML(lifecycleLabel(entry.state))}</span>
+      <span>${escapeHTML(formatDateTime(entry.timestamp) || 'Current')}</span>
+      <span class="row-actions">
+        ${entry.state === 'current' ? '<span class="muted">Current</span>' : `
+          <button class="ghost small" data-restore-document="${escapeHTML(entry.path)}">Restore</button>
+          <button class="ghost small" data-diff-document="${escapeHTML(entry.path)}">Diff</button>
+          <button class="ghost small danger" data-purge-document="${escapeHTML(entry.path)}">Purge</button>`}
+      </span>
+    </div>`).join('');
+
+  const renderMediaHistoryRows = (entries) => entries.map((entry) => `
+    <div class="table-row table-row-actions">
+      <span>
+        <strong>${escapeHTML(entry.name || entry.path)}</strong>
+        <div class="muted mono">${escapeHTML(entry.path)}</div>
+        ${entry.metadata_only ? '<div class="muted">Metadata revision</div>' : ''}
+        ${entry.version_comment ? `<div class="muted">Note: ${escapeHTML(entry.version_comment)}</div>` : ''}
+        ${entry.actor ? `<div class="muted">By ${escapeHTML(entry.actor)}</div>` : ''}
+      </span>
+      <span>${escapeHTML(lifecycleLabel(entry.state))}</span>
+      <span>${escapeHTML(formatDateTime(entry.timestamp) || 'Current')}</span>
+      <span class="row-actions">
+        ${entry.state === 'current'
+          ? (entry.public_url ? `<a class="button-link ghost small" href="${escapeHTML(entry.public_url)}" target="_blank" rel="noreferrer">View</a>` : '<span class="muted">Current</span>')
+          : `
+            <button class="ghost small" data-restore-media-path="${escapeHTML(entry.path)}">Restore</button>
+            <button class="ghost small danger" data-purge-media-path="${escapeHTML(entry.path)}">Purge</button>`}
+      </span>
+    </div>`).join('');
+
+  const renderTrashSelectionRows = (entries, selected, kind) => entries.map((entry) => `
+    <div class="table-row table-row-actions">
+      <span>
+        <label class="checkbox inline-checkbox">
+          <input type="checkbox" ${selected.includes(entry.path) ? 'checked' : ''} data-select-trash="${escapeHTML(entry.path)}" data-trash-kind="${kind}">
+          <strong>${escapeHTML(entry.title || entry.name || entry.slug || entry.path)}</strong>
+        </label>
+        <div class="muted mono">${escapeHTML(entry.path)}</div>
+        ${entry.version_comment ? `<div class="muted">${escapeHTML(entry.version_comment)}</div>` : ''}
+      </span>
+      <span>${escapeHTML(lifecycleLabel(entry.state))}</span>
+      <span>${escapeHTML(formatDateTime(entry.timestamp) || 'Current')}</span>
+      <span class="row-actions">
+        ${kind === 'document'
+          ? `<button class="ghost small" data-restore-document="${escapeHTML(entry.path)}">Restore</button>
+             <button class="ghost small danger" data-purge-document="${escapeHTML(entry.path)}">Purge</button>`
+          : `<button class="ghost small" data-restore-media-path="${escapeHTML(entry.path)}">Restore</button>
+             <button class="ghost small danger" data-purge-media-path="${escapeHTML(entry.path)}">Purge</button>`}
+      </span>
+    </div>`).join('');
+
+  const renderSplitDiffPane = (leftRaw, rightRaw) => {
+    const leftLines = (leftRaw || '').replaceAll('\r\n', '\n').split('\n');
+    const rightLines = (rightRaw || '').replaceAll('\r\n', '\n').split('\n');
+    const total = Math.max(leftLines.length, rightLines.length);
+    const leftRows = [];
+    const rightRows = [];
+    for (let index = 0; index < total; index += 1) {
+      const left = leftLines[index] ?? '';
+      const right = rightLines[index] ?? '';
+      let leftClass = 'diff-line';
+      let rightClass = 'diff-line';
+      if (left !== right) {
+        if (left && !right) {
+          leftClass += ' removed';
+          rightClass += ' empty';
+        } else if (!left && right) {
+          leftClass += ' empty';
+          rightClass += ' added';
+        } else {
+          leftClass += ' changed';
+          rightClass += ' changed';
+        }
+      }
+      leftRows.push(`<div class="${leftClass}"><span class="diff-line-number">${index + 1}</span><code>${escapeHTML(left)}</code></div>`);
+      rightRows.push(`<div class="${rightClass}"><span class="diff-line-number">${index + 1}</span><code>${escapeHTML(right)}</code></div>`);
+    }
+    return `<div class="diff-split">
+      <section><h3>Previous</h3><div class="diff-pane">${leftRows.join('')}</div></section>
+      <section><h3>Current</h3><div class="diff-pane">${rightRows.join('')}</div></section>
+    </div>`;
+  };
+
   const renderDocuments = () => {
     const rows = state.documents.map((doc) => `
       <div class="table-row table-row-actions">
@@ -189,6 +310,7 @@
         <span>${escapeHTML(documentStatusLabel(doc))}</span>
         <span class="row-actions">
           <button class="ghost small" data-edit-document="${escapeHTML(doc.id)}">Edit</button>
+          <button class="ghost small" data-history-document="${escapeHTML(doc.source_path)}">History</button>
           <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|published">Publish</button>
           <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|draft">Draft</button>
           <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|archived">Archive</button>
@@ -212,6 +334,7 @@
         </form>
         <form id="document-save-form" class="stack">
           <label>Source Path<input id="document-source-path" type="text" value="${escapeHTML(state.documentEditor.source_path)}" placeholder="content/pages/about.md"></label>
+          <label>Version Comment<input id="document-version-comment" type="text" value="${escapeHTML(state.documentEditor.version_comment || '')}" placeholder="Explain what changed in this revision"></label>
           <label>Raw Markdown<textarea id="document-raw" rows="18" spellcheck="false">${escapeHTML(state.documentEditor.raw)}</textarea></label>
           <div class="toolbar">
             <button type="submit">Save Document</button>
@@ -224,15 +347,32 @@
     const preview = state.documentPreview
       ? `<div class="panel-pad preview-body">${state.documentPreview.html}</div>`
       : `<div class="panel-pad empty-state">Use Preview to render the current Markdown body.</div>`;
+    const historyRows = renderDocumentHistoryRows(state.documentHistory);
+    const trashRows = renderDocumentHistoryRows(state.documentTrash);
+    const diffBody = state.documentDiff
+      ? `<div class="panel-pad stack">
+          <div class="toolbar">
+            <button type="button" class="ghost small ${state.documentDiffMode === 'split' ? 'active-toggle' : ''}" data-diff-mode="split">Split View</button>
+            <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">Unified Diff</button>
+          </div>
+          <div class="status-line mono">${escapeHTML(state.documentDiff.left_path)} -> ${escapeHTML(state.documentDiff.right_path)}</div>
+          ${state.documentDiffMode === 'split'
+            ? renderSplitDiffPane(state.documentDiff.left_raw, state.documentDiff.right_raw)
+            : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`}
+        </div>`
+      : `<div class="panel-pad empty-state">Select a version or trashed document and choose Diff to compare it against the current file.</div>`;
 
     return `
       <div class="layout-grid">
         <div class="stack">
           ${panel('Documents', `<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents available.</div>'}</div>`, `${state.documents.length} documents`)}
+          ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed`)}
         </div>
         <div class="stack">
           ${panel('Editor', editor, 'Create, edit, publish, archive, or soft-delete Markdown content')}
           ${panel('Preview', preview, state.documentPreview ? state.documentPreview.title || state.documentPreview.slug || 'Rendered preview' : 'No preview yet')}
+          ${panel('History', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${historyRows || '<div class="panel-pad empty-state">Select a document to inspect version and trash history.</div>'}</div>`, state.documentHistoryPath || 'No document selected')}
+          ${panel('Diff', diffBody, 'Line-based diff against the current version')}
         </div>
       </div>`;
   };
@@ -245,6 +385,7 @@
         <span>${escapeHTML(item.metadata?.title || item.metadata?.alt || '')}</span>
         <span class="row-actions">
           <button class="ghost small" data-edit-media="${escapeHTML(item.reference)}">Details</button>
+          <button class="ghost small" data-history-media-path="${escapeHTML(`content/${item.collection}/${item.path}`)}">History</button>
           <a class="button-link ghost small" href="${escapeHTML(item.public_url)}" target="_blank" rel="noreferrer">View</a>
           <button class="ghost small danger" data-delete-media="${escapeHTML(item.reference)}">Delete</button>
         </span>
@@ -252,6 +393,8 @@
 
     const detail = state.mediaDetail;
     const metadata = detail?.metadata || {};
+    const historyRows = renderMediaHistoryRows(state.mediaHistory);
+    const trashRows = renderMediaHistoryRows(state.mediaTrash);
     return `
       <div class="layout-grid">
         <div class="stack">
@@ -264,6 +407,7 @@
             </form>
           `, 'Uploads return stable media: references that can be used in Markdown')}
           ${panel('Library', `<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media found yet.</div>'}</div>`, `${state.media.length} media items`)}
+          ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed`)}
         </div>
         <div class="stack">
           ${panel('Selected Media', `
@@ -277,13 +421,60 @@
                 <label>Description<textarea id="media-description" rows="5">${escapeHTML(metadata.description || '')}</textarea></label>
                 <label>Credit<input id="media-credit" type="text" value="${escapeHTML(metadata.credit || '')}"></label>
                 <label>Tags<input id="media-tags" type="text" value="${escapeHTML((metadata.tags || []).join(', '))}" placeholder="product, hero, launch"></label>
+                <label>Version Comment<input id="media-version-comment" type="text" value="${escapeHTML(state.mediaVersionComment || '')}" placeholder="Explain what changed in this metadata revision"></label>
                 <button type="submit" ${detail ? '' : 'disabled'}>Save Metadata</button>
               </form>
             </div>
           `, 'Metadata is stored beside the file as .meta.yaml')}
+          ${panel('Used By', `
+            <div class="table table-four">
+              <div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Path</span></div>
+              ${detail?.used_by?.length
+                ? detail.used_by.map((doc) => `
+                  <div class="table-row">
+                    <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></span>
+                    <span>${escapeHTML(doc.type)}</span>
+                    <span>${escapeHTML(documentStatusLabel(doc))}</span>
+                    <span class="mono"><button class="ghost small" data-edit-document-path="${escapeHTML(doc.source_path)}">Open</button> ${escapeHTML(doc.source_path)}</span>
+                  </div>`).join('')
+                : '<div class="panel-pad empty-state">No documents reference this media yet.</div>'}
+            </div>
+          `, 'Documents currently referencing this media: reference')}
+          ${panel('History', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${historyRows || '<div class="panel-pad empty-state">Select a media item to inspect version and trash history.</div>'}</div>`, state.mediaHistoryReference || 'No media selected')}
         </div>
       </div>`;
   };
+
+  const renderHistory = () => `
+    <div class="layout-grid">
+      <div class="stack">
+        ${panel('Document History', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderDocumentHistoryRows(state.documentHistory) || '<div class="panel-pad empty-state">Choose History from a document to inspect revisions and restore points.</div>'}</div>`, state.documentHistoryPath || 'No document selected')}
+        ${panel('Media History', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderMediaHistoryRows(state.mediaHistory) || '<div class="panel-pad empty-state">Choose History from a media item to inspect revisions and restore points.</div>'}</div>`, state.mediaHistoryReference || 'No media selected')}
+      </div>
+      <div class="stack">
+        ${panel('Document Diff', state.documentDiff
+          ? `<div class="panel-pad stack">
+              <div class="toolbar">
+                <button type="button" class="ghost small ${state.documentDiffMode === 'split' ? 'active-toggle' : ''}" data-diff-mode="split">Split View</button>
+                <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">Unified Diff</button>
+              </div>
+              ${state.documentDiffMode === 'split'
+                ? renderSplitDiffPane(state.documentDiff.left_raw, state.documentDiff.right_raw)
+                : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`}
+            </div>`
+          : '<div class="panel-pad empty-state">Select a document version and choose Diff to review the changes.</div>', 'Side-by-side and unified views are both available')}
+      </div>
+    </div>`;
+
+  const renderTrash = () => `
+    <div class="layout-grid">
+      <div class="stack">
+        ${panel('Document Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderTrashSelectionRows(state.documentTrash, state.selectedDocumentTrash, 'document') || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed documents`, `<div class="toolbar"><button class="ghost small" type="button" id="document-trash-select-all">Select All</button><button class="ghost small" type="button" id="document-trash-restore-selected" ${state.selectedDocumentTrash.length ? '' : 'disabled'}>Restore Selected</button><button class="ghost small danger" type="button" id="document-trash-purge-selected" ${state.selectedDocumentTrash.length ? '' : 'disabled'}>Purge Selected</button></div>`)}
+      </div>
+      <div class="stack">
+        ${panel('Media Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderTrashSelectionRows(state.mediaTrash, state.selectedMediaTrash, 'media') || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed media items`, `<div class="toolbar"><button class="ghost small" type="button" id="media-trash-select-all">Select All</button><button class="ghost small" type="button" id="media-trash-restore-selected" ${state.selectedMediaTrash.length ? '' : 'disabled'}>Restore Selected</button><button class="ghost small danger" type="button" id="media-trash-purge-selected" ${state.selectedMediaTrash.length ? '' : 'disabled'}>Purge Selected</button></div>`)}
+      </div>
+    </div>`;
 
   const renderUsers = () => {
     const rows = state.users.map((user) => `
@@ -357,6 +548,8 @@
   const renderSection = () => {
     switch (state.section) {
       case 'documents': return renderDocuments();
+      case 'history': return renderHistory();
+      case 'trash': return renderTrash();
       case 'media': return renderMedia();
       case 'users': return renderUsers();
       case 'config': return renderConfig();
@@ -406,6 +599,49 @@
     });
   };
 
+  const loadDocumentHistory = async (sourcePath, rerender = true) => {
+    try {
+      const history = await request(`/api/documents/history?source_path=${encodeURIComponent(sourcePath)}`);
+      state.documentHistoryPath = history.source_path || sourcePath;
+      state.documentHistory = Array.isArray(history.entries) ? history.entries : [];
+      if (rerender) {
+        navigate('history');
+      }
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  };
+
+  const loadDocumentDiff = async (leftPath, rightPath, rerender = true) => {
+    try {
+      state.documentDiff = await request('/api/documents/diff', {
+        method: 'POST',
+        body: JSON.stringify({ left_path: leftPath, right_path: rightPath })
+      });
+      if (rerender) {
+        navigate('history');
+      }
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  };
+
+  const loadMediaHistory = async (path, rerender = true) => {
+    try {
+      const history = await request(`/api/media/history?path=${encodeURIComponent(path)}`);
+      state.mediaHistoryReference = history.path || path;
+      state.mediaHistory = Array.isArray(history.entries) ? history.entries : [];
+      if (rerender) {
+        navigate('history');
+      }
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  };
+
   const bindDashboardEvents = () => {
     root.querySelectorAll('[data-section]').forEach((element) => {
       element.addEventListener('click', (event) => {
@@ -437,7 +673,7 @@
             archetype: document.getElementById('document-create-archetype').value
           })
         });
-        state.documentEditor = { source_path: created.source_path, raw: created.raw || '' };
+        state.documentEditor = { source_path: created.source_path, raw: created.raw || '', version_comment: '' };
         setFlash('Document created.');
         await fetchAll(false);
         navigate('documents');
@@ -454,12 +690,14 @@
           method: 'POST',
           body: JSON.stringify({
             source_path: document.getElementById('document-source-path').value,
-            raw: document.getElementById('document-raw').value
+            raw: document.getElementById('document-raw').value,
+            version_comment: document.getElementById('document-version-comment').value
           })
         });
         state.documentEditor = {
           source_path: document.getElementById('document-source-path').value,
-          raw: document.getElementById('document-raw').value
+          raw: document.getElementById('document-raw').value,
+          version_comment: ''
         };
         setFlash('Document saved.');
         await fetchAll(false);
@@ -497,7 +735,7 @@
       button.addEventListener('click', async () => {
         try {
           const detail = await request(`/api/document?id=${encodeURIComponent(button.dataset.editDocument)}&include_drafts=1`);
-          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body };
+          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
           state.documentPreview = null;
           setFlash('Document loaded.');
           navigate('documents');
@@ -505,6 +743,12 @@
           state.error = error.message || String(error);
           render();
         }
+      });
+    });
+
+    root.querySelectorAll('[data-history-document]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        await loadDocumentHistory(button.dataset.historyDocument);
       });
     });
 
@@ -526,9 +770,71 @@
       });
     });
 
+    root.querySelectorAll('[data-restore-document]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          if (!window.confirm(`Restore ${button.dataset.restoreDocument} as the current document?`)) return;
+          const restored = await request('/api/documents/restore', {
+            method: 'POST',
+            body: JSON.stringify({ path: button.dataset.restoreDocument })
+          });
+          setFlash('Document restored.');
+          await fetchAll(false);
+          await loadDocumentHistory(restored.restored_path || restored.path, false);
+          const detail = await request(`/api/document?id=${encodeURIComponent(restored.restored_path || restored.path)}&include_drafts=1`);
+          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
+          navigate('documents');
+        } catch (error) {
+          state.error = error.message || String(error);
+          render();
+        }
+      });
+    });
+
+    root.querySelectorAll('[data-purge-document]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          if (!window.confirm(`Permanently purge ${button.dataset.purgeDocument}? This cannot be undone.`)) return;
+          await request('/api/documents/purge', {
+            method: 'POST',
+            body: JSON.stringify({ path: button.dataset.purgeDocument })
+          });
+          setFlash('Document version purged.');
+          await fetchAll(false);
+          if (state.documentHistoryPath) {
+            await loadDocumentHistory(state.documentHistoryPath, false);
+          }
+          navigate('history');
+        } catch (error) {
+          state.error = error.message || String(error);
+          render();
+        }
+      });
+    });
+
+    root.querySelectorAll('[data-diff-document]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const currentPath = state.documentHistory.find((entry) => entry.state === 'current')?.path;
+        if (!currentPath) {
+          state.error = 'Load document history before requesting a diff.';
+          render();
+          return;
+        }
+        await loadDocumentDiff(button.dataset.diffDocument, currentPath);
+      });
+    });
+
+    root.querySelectorAll('[data-diff-mode]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.documentDiffMode = button.dataset.diffMode;
+        render();
+      });
+    });
+
     root.querySelectorAll('[data-delete-document]').forEach((button) => {
       button.addEventListener('click', async () => {
         try {
+          if (!window.confirm(`Move ${button.dataset.deleteDocument} to trash?`)) return;
           await request('/api/documents/delete', {
             method: 'POST',
             body: JSON.stringify({ source_path: button.dataset.deleteDocument })
@@ -536,7 +842,7 @@
           resetDocumentEditor();
           setFlash('Document moved to trash.');
           await fetchAll(false);
-          navigate('documents');
+          navigate('trash');
         } catch (error) {
           state.error = error.message || String(error);
           render();
@@ -575,6 +881,12 @@
       });
     });
 
+    root.querySelectorAll('[data-history-media-path]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        await loadMediaHistory(button.dataset.historyMediaPath);
+      });
+    });
+
     document.getElementById('media-metadata-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!state.selectedMediaReference) return;
@@ -583,6 +895,7 @@
           method: 'POST',
           body: JSON.stringify({
             reference: state.selectedMediaReference,
+            version_comment: document.getElementById('media-version-comment').value,
             metadata: {
               title: document.getElementById('media-title').value,
               alt: document.getElementById('media-alt').value,
@@ -593,6 +906,7 @@
             }
           })
         });
+        state.mediaVersionComment = '';
         setFlash('Media metadata saved.');
         await fetchAll(false);
         navigate('media');
@@ -605,6 +919,7 @@
     root.querySelectorAll('[data-delete-media]').forEach((button) => {
       button.addEventListener('click', async () => {
         try {
+          if (!window.confirm(`Move ${button.dataset.deleteMedia} to trash?`)) return;
           await request('/api/media/delete', {
             method: 'POST',
             body: JSON.stringify({ reference: button.dataset.deleteMedia })
@@ -615,7 +930,55 @@
           }
           setFlash('Media deleted.');
           await fetchAll(false);
-          navigate('media');
+          navigate('trash');
+        } catch (error) {
+          state.error = error.message || String(error);
+          render();
+        }
+      });
+    });
+
+    root.querySelectorAll('[data-restore-media-path]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          if (!window.confirm(`Restore ${button.dataset.restoreMediaPath} as the current media file?`)) return;
+          const restored = await request('/api/media/restore', {
+            method: 'POST',
+            body: JSON.stringify({ path: button.dataset.restoreMediaPath })
+          });
+          setFlash('Media restored.');
+          await fetchAll(false);
+          if (restored.restored_path) {
+            const restoredMedia = state.media.find((item) => item.path && (`content/${item.collection}/${item.path}` === restored.restored_path));
+            if (restoredMedia) {
+              await loadMediaHistory(`content/${restoredMedia.collection}/${restoredMedia.path}`, false);
+            } else {
+              state.mediaHistory = [];
+              state.mediaHistoryReference = '';
+            }
+          }
+          navigate('history');
+        } catch (error) {
+          state.error = error.message || String(error);
+          render();
+        }
+      });
+    });
+
+    root.querySelectorAll('[data-purge-media-path]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          if (!window.confirm(`Permanently purge ${button.dataset.purgeMediaPath}? This cannot be undone.`)) return;
+          await request('/api/media/purge', {
+            method: 'POST',
+            body: JSON.stringify({ path: button.dataset.purgeMediaPath })
+          });
+          setFlash('Media version purged.');
+          await fetchAll(false);
+          if (state.mediaHistoryReference) {
+            await loadMediaHistory(state.mediaHistoryReference, false);
+          }
+          navigate('history');
         } catch (error) {
           state.error = error.message || String(error);
           render();
@@ -638,6 +1001,113 @@
         setFlash(`Editing ${user.username}.`);
         navigate('users');
       });
+    });
+
+    root.querySelectorAll('[data-edit-document-path]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          const detail = await request(`/api/document?id=${encodeURIComponent(button.dataset.editDocumentPath)}&include_drafts=1`);
+          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
+          state.documentPreview = null;
+          setFlash('Document loaded.');
+          navigate('documents');
+        } catch (error) {
+          state.error = error.message || String(error);
+          render();
+        }
+      });
+    });
+
+    root.querySelectorAll('[data-select-trash]').forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        if (checkbox.dataset.trashKind === 'document') {
+          state.selectedDocumentTrash = toggleSelection(state.selectedDocumentTrash, checkbox.dataset.selectTrash, checkbox.checked);
+        } else {
+          state.selectedMediaTrash = toggleSelection(state.selectedMediaTrash, checkbox.dataset.selectTrash, checkbox.checked);
+        }
+        render();
+      });
+    });
+
+    document.getElementById('document-trash-select-all')?.addEventListener('click', () => {
+      state.selectedDocumentTrash = state.selectedDocumentTrash.length === state.documentTrash.length ? [] : state.documentTrash.map((entry) => entry.path);
+      render();
+    });
+
+    document.getElementById('media-trash-select-all')?.addEventListener('click', () => {
+      state.selectedMediaTrash = state.selectedMediaTrash.length === state.mediaTrash.length ? [] : state.mediaTrash.map((entry) => entry.path);
+      render();
+    });
+
+    document.getElementById('document-trash-restore-selected')?.addEventListener('click', async () => {
+      if (!state.selectedDocumentTrash.length || !window.confirm(`Restore ${state.selectedDocumentTrash.length} selected document(s)?`)) return;
+      try {
+        let lastRestoredPath = '';
+        for (const path of state.selectedDocumentTrash) {
+          const restored = await request('/api/documents/restore', { method: 'POST', body: JSON.stringify({ path }) });
+          lastRestoredPath = restored.restored_path || restored.path;
+        }
+        state.selectedDocumentTrash = [];
+        await fetchAll(false);
+        if (lastRestoredPath) {
+          await loadDocumentHistory(lastRestoredPath, false);
+          const detail = await request(`/api/document?id=${encodeURIComponent(lastRestoredPath)}&include_drafts=1`);
+          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
+        }
+        setFlash('Selected documents restored.');
+        navigate('documents');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+
+    document.getElementById('document-trash-purge-selected')?.addEventListener('click', async () => {
+      if (!state.selectedDocumentTrash.length || !window.confirm(`Permanently purge ${state.selectedDocumentTrash.length} selected document(s)?`)) return;
+      try {
+        for (const path of state.selectedDocumentTrash) {
+          await request('/api/documents/purge', { method: 'POST', body: JSON.stringify({ path }) });
+        }
+        state.selectedDocumentTrash = [];
+        await fetchAll(false);
+        setFlash('Selected documents purged.');
+        navigate('trash');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+
+    document.getElementById('media-trash-restore-selected')?.addEventListener('click', async () => {
+      if (!state.selectedMediaTrash.length || !window.confirm(`Restore ${state.selectedMediaTrash.length} selected media item(s)?`)) return;
+      try {
+        for (const path of state.selectedMediaTrash) {
+          await request('/api/media/restore', { method: 'POST', body: JSON.stringify({ path }) });
+        }
+        state.selectedMediaTrash = [];
+        await fetchAll(false);
+        setFlash('Selected media restored.');
+        navigate('trash');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+
+    document.getElementById('media-trash-purge-selected')?.addEventListener('click', async () => {
+      if (!state.selectedMediaTrash.length || !window.confirm(`Permanently purge ${state.selectedMediaTrash.length} selected media item(s)?`)) return;
+      try {
+        for (const path of state.selectedMediaTrash) {
+          await request('/api/media/purge', { method: 'POST', body: JSON.stringify({ path }) });
+        }
+        state.selectedMediaTrash = [];
+        await fetchAll(false);
+        setFlash('Selected media purged.');
+        navigate('trash');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
     });
 
     document.getElementById('user-save-form')?.addEventListener('submit', async (event) => {
@@ -788,6 +1258,7 @@
     try {
       state.mediaDetail = await request(`/api/media/detail?reference=${encodeURIComponent(reference)}`);
       state.selectedMediaReference = reference;
+      state.mediaVersionComment = '';
       setFlash('Media loaded.');
       if (rerender) {
         navigate('media');
@@ -808,7 +1279,9 @@
       const results = await Promise.allSettled([
         request('/api/status'),
         request('/api/documents?include_drafts=1'),
+        request('/api/documents/trash'),
         request('/api/media'),
+        request('/api/media/trash'),
         request('/api/users'),
         request('/api/config'),
         request('/api/plugins'),
@@ -827,11 +1300,15 @@
 
       assignResult(0, 'status', (value) => { state.status = value; }, () => { state.status = null; });
       assignResult(1, 'documents', (value) => { state.documents = Array.isArray(value) ? value : []; }, () => { state.documents = []; });
-      assignResult(2, 'media', (value) => { state.media = Array.isArray(value) ? value : []; }, () => { state.media = []; });
-      assignResult(3, 'users', (value) => { state.users = Array.isArray(value) ? value : []; }, () => { state.users = []; });
-      assignResult(4, 'config', (value) => { state.config = value; }, () => { state.config = null; });
-      assignResult(5, 'plugins', (value) => { state.plugins = Array.isArray(value) ? value : []; }, () => { state.plugins = []; });
-      assignResult(6, 'themes', (value) => { state.themes = Array.isArray(value) ? value : []; }, () => { state.themes = []; });
+      assignResult(2, 'document trash', (value) => { state.documentTrash = Array.isArray(value) ? value : []; }, () => { state.documentTrash = []; });
+      assignResult(3, 'media', (value) => { state.media = Array.isArray(value) ? value : []; }, () => { state.media = []; });
+      assignResult(4, 'media trash', (value) => { state.mediaTrash = Array.isArray(value) ? value : []; }, () => { state.mediaTrash = []; });
+      assignResult(5, 'users', (value) => { state.users = Array.isArray(value) ? value : []; }, () => { state.users = []; });
+      assignResult(6, 'config', (value) => { state.config = value; }, () => { state.config = null; });
+      assignResult(7, 'plugins', (value) => { state.plugins = Array.isArray(value) ? value : []; }, () => { state.plugins = []; });
+      assignResult(8, 'themes', (value) => { state.themes = Array.isArray(value) ? value : []; }, () => { state.themes = []; });
+      state.selectedDocumentTrash = state.selectedDocumentTrash.filter((path) => state.documentTrash.some((entry) => entry.path === path));
+      state.selectedMediaTrash = state.selectedMediaTrash.filter((path) => state.mediaTrash.some((entry) => entry.path === path));
 
       if (state.selectedMediaReference) {
         const matching = state.media.find((item) => item.reference === state.selectedMediaReference);
@@ -840,6 +1317,22 @@
         } else {
           state.selectedMediaReference = '';
           state.mediaDetail = null;
+          state.mediaVersionComment = '';
+        }
+      }
+      if (state.documentHistoryPath) {
+        const stillPresent = state.documents.some((doc) => doc.source_path === state.documentHistoryPath) || state.documentTrash.some((entry) => entry.path === state.documentHistoryPath || entry.original_path === state.documentHistoryPath);
+        if (!stillPresent) {
+          state.documentHistoryPath = '';
+          state.documentHistory = [];
+          state.documentDiff = null;
+        }
+      }
+      if (state.mediaHistoryReference) {
+        const stillPresent = state.media.some((item) => `content/${item.collection}/${item.path}` === state.mediaHistoryReference);
+        if (!stillPresent && !state.mediaHistory.some((entry) => entry.path === state.mediaHistoryReference || entry.original_path === state.mediaHistoryReference)) {
+          state.mediaHistoryReference = '';
+          state.mediaHistory = [];
         }
       }
     } catch (error) {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	adminauth "github.com/sphireinc/foundry/internal/admin/auth"
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
 )
 
@@ -34,6 +35,31 @@ func registerDocumentRoutes(r *Router) []routeDef {
 			role:    "editor",
 		},
 		{
+			pattern: "/__admin/api/documents/history",
+			handler: http.HandlerFunc(r.handleDocumentHistory),
+			role:    "editor",
+		},
+		{
+			pattern: "/__admin/api/documents/trash",
+			handler: http.HandlerFunc(r.handleDocumentTrash),
+			role:    "editor",
+		},
+		{
+			pattern: "/__admin/api/documents/restore",
+			handler: http.HandlerFunc(r.handleRestoreDocument),
+			role:    "editor",
+		},
+		{
+			pattern: "/__admin/api/documents/purge",
+			handler: http.HandlerFunc(r.handlePurgeDocument),
+			role:    "editor",
+		},
+		{
+			pattern: "/__admin/api/documents/diff",
+			handler: http.HandlerFunc(r.handleDocumentDiff),
+			role:    "editor",
+		},
+		{
 			pattern: "/__admin/api/documents/status",
 			handler: http.HandlerFunc(r.handleDocumentStatus),
 			role:    "editor",
@@ -59,6 +85,16 @@ func registerDocumentRoutes(r *Router) []routeDef {
 			role:    "editor",
 		},
 		{
+			pattern: "/__admin/api/media/history",
+			handler: http.HandlerFunc(r.handleMediaHistory),
+			role:    "editor",
+		},
+		{
+			pattern: "/__admin/api/media/trash",
+			handler: http.HandlerFunc(r.handleMediaTrash),
+			role:    "editor",
+		},
+		{
 			pattern: "/__admin/api/media/upload",
 			handler: http.HandlerFunc(r.handleMediaUpload),
 			role:    "editor",
@@ -71,6 +107,16 @@ func registerDocumentRoutes(r *Router) []routeDef {
 		{
 			pattern: "/__admin/api/media/delete",
 			handler: http.HandlerFunc(r.handleMediaDelete),
+			role:    "editor",
+		},
+		{
+			pattern: "/__admin/api/media/restore",
+			handler: http.HandlerFunc(r.handleMediaRestore),
+			role:    "editor",
+		},
+		{
+			pattern: "/__admin/api/media/purge",
+			handler: http.HandlerFunc(r.handleMediaPurge),
 			role:    "editor",
 		},
 	}
@@ -131,6 +177,7 @@ func (r *Router) handleSaveDocument(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	body.Actor = actorLabel(req)
 
 	resp, err := r.service.SaveDocument(req.Context(), body)
 	if err != nil {
@@ -138,6 +185,91 @@ func (r *Router) handleSaveDocument(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDocumentHistory(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sourcePath := strings.TrimSpace(req.URL.Query().Get("source_path"))
+	if sourcePath == "" {
+		writeJSONErrorMessage(w, http.StatusBadRequest, "missing required query parameter: source_path")
+		return
+	}
+	resp, err := r.service.GetDocumentHistory(req.Context(), sourcePath)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDocumentTrash(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := r.service.ListDocumentTrash(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleRestoreDocument(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.DocumentLifecycleRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	resp, err := r.service.RestoreDocument(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handlePurgeDocument(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.DocumentLifecycleRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	resp, err := r.service.PurgeDocument(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDocumentDiff(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.DocumentDiffRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	resp, err := r.service.DiffDocument(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -257,6 +389,40 @@ func (r *Router) handleMediaDetail(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (r *Router) handleMediaHistory(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	identifier := strings.TrimSpace(req.URL.Query().Get("reference"))
+	if identifier == "" {
+		identifier = strings.TrimSpace(req.URL.Query().Get("path"))
+	}
+	if identifier == "" {
+		writeJSONErrorMessage(w, http.StatusBadRequest, "missing required query parameter: reference or path")
+		return
+	}
+	resp, err := r.service.GetMediaHistory(req.Context(), identifier)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleMediaTrash(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := r.service.ListMediaTrash(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (r *Router) handleMediaUpload(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -314,6 +480,42 @@ func (r *Router) handleMediaDelete(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (r *Router) handleMediaRestore(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.MediaLifecycleRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	resp, err := r.service.RestoreMedia(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleMediaPurge(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.MediaLifecycleRequest
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	resp, err := r.service.PurgeMedia(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (r *Router) handleMediaMetadata(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -324,12 +526,24 @@ func (r *Router) handleMediaMetadata(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
-	resp, err := r.service.SaveMediaMetadata(req.Context(), body.Reference, body.Metadata)
+	body.Actor = actorLabel(req)
+	resp, err := r.service.SaveMediaMetadata(req.Context(), body.Reference, body.Metadata, body.VersionComment, body.Actor)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func actorLabel(req *http.Request) string {
+	identity, ok := adminauth.IdentityFromContext(req.Context())
+	if !ok {
+		return ""
+	}
+	if name := strings.TrimSpace(identity.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(identity.Username)
 }
 
 func truthy(v string) bool {
