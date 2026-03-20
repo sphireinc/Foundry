@@ -357,6 +357,21 @@ admin:
 
 `admin.local_only` is a convenience restriction for local development. It should not be treated as the only security boundary in front of a reverse proxy.
 
+The default admin theme now includes:
+
+- a structured frontmatter editor that stays in sync with raw Markdown
+- media-picker insertion for stable `media:` references
+- document and media history/trash views with restore and purge actions
+- media replacement while preserving the canonical reference path
+- an audit log view
+- keyboard shortcuts:
+  - `Cmd/Ctrl+S` save the current form
+  - `Cmd/Ctrl+Enter` preview the current document
+  - `Shift+/` toggle shortcut help
+  - `g d`, `g m`, `g u`, `g a` jump to Documents, Media, Users, and Audit
+
+The admin UI also includes breadcrumbs, toast notifications, unsaved-change warnings, clearer error panels, and client-side pagination/sorting for the major management tables.
+
 ### Security
 
 `security.allow_unsafe_html` controls whether raw HTML in Markdown is preserved in rendered output.
@@ -373,6 +388,17 @@ admin:
 Use `poll` if your browser or proxy environment is sensitive to long-lived local connections.
 
 The preview/admin server uses explicit read, write, and idle timeouts by default.
+
+Static builds now also emit a frontend search index at:
+
+```text
+public/search.json
+```
+
+`foundry validate` now checks for:
+
+- broken `media:` references
+- broken internal links to routes and static files
 
 ## Themes
 

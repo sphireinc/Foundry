@@ -209,6 +209,15 @@ button.danger,
   color: var(--wp-muted);
 }
 
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--wp-muted);
+  font-size: 0.85rem;
+}
+
 .wp-topbar-actions {
   display: flex;
   align-items: center;
@@ -226,10 +235,64 @@ button.danger,
   font-size: 0.88rem;
 }
 
+.dirty-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #8a4b00;
+  border: 1px solid #edc58f;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
 .wp-content {
   padding: 24px 28px 32px;
   display: grid;
   gap: 20px;
+}
+
+.toast-stack {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+}
+
+.toast {
+  min-width: 260px;
+  max-width: 420px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+  color: white;
+  font-weight: 600;
+}
+
+.toast.success { background: #0f7a43; }
+.toast.info { background: #2271b1; }
+.toast.error { background: #b32d2e; }
+
+.shortcut-help {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 25;
+  width: min(320px, calc(100vw - 36px));
+  padding: 14px;
+  border-radius: 6px;
+  background: #1d2327;
+  color: #f6f7f7;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.2);
+  display: grid;
+  gap: 8px;
+}
+
+.shortcut-help code {
+  color: #f6f7f7;
 }
 
 .layout-grid {
@@ -457,6 +520,26 @@ button.danger,
   gap: 10px;
 }
 
+.table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 0;
+}
+
+.table-controls label {
+  display: inline-grid;
+  min-width: 180px;
+}
+
+.table-paging {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.88rem;
@@ -624,6 +707,11 @@ button.small {
 
 .error-panel {
   border-color: #f0c7c7;
+}
+
+.warning-panel {
+  border-color: #e5d18d;
+  background: #fffaf0;
 }
 
 .mono {

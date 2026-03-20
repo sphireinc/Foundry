@@ -7,6 +7,18 @@
   const adminBaseEscaped = adminBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const adminBasePattern = new RegExp(`^${adminBaseEscaped}/?`);
   const frontmatterFieldNames = ['title', 'slug', 'layout', 'date', 'summary', 'tags', 'categories', 'draft', 'archived', 'lang'];
+  const sectionTitles = {
+    overview: 'Overview',
+    documents: 'Documents',
+    history: 'History',
+    trash: 'Trash',
+    media: 'Media',
+    audit: 'Audit',
+    users: 'Users',
+    config: 'Configuration',
+    plugins: 'Plugins',
+    themes: 'Themes'
+  };
   const sectionForPath = (pathname) => {
     const path = pathname.replace(/\/+$/, '');
     if (path === adminBase || path === '') return 'overview';
@@ -50,6 +62,18 @@
     mediaDetail: null,
     mediaVersionComment: '',
     userForm: { username: '', name: '', email: '', role: '', password: '', disabled: false },
+    dirty: { document: false, media: false, user: false, config: false },
+    snapshots: { document: '', media: '', user: '', config: '' },
+    toasts: [],
+    keyboardHelp: false,
+    tables: {
+      documents: { page: 1, pageSize: 10, sort: 'title', dir: 'asc' },
+      media: { page: 1, pageSize: 10, sort: 'name', dir: 'asc' },
+      users: { page: 1, pageSize: 10, sort: 'username', dir: 'asc' },
+      audit: { page: 1, pageSize: 15, sort: 'timestamp', dir: 'desc' },
+      plugins: { page: 1, pageSize: 10, sort: 'name', dir: 'asc' },
+      themes: { page: 1, pageSize: 10, sort: 'name', dir: 'asc' }
+    },
     loadErrors: [],
     error: '',
     flash: '',
@@ -388,6 +412,9 @@
   };
 
   const navigate = (section) => {
+    if (section !== state.section && !confirmNavigation()) {
+      return;
+    }
     state.section = section;
     const nextPath = section === 'overview' ? adminBase : `${adminBase}/${section}`;
     if (window.location.pathname !== nextPath) {
@@ -409,6 +436,132 @@
   const setFlash = (message) => {
     state.flash = message;
     state.error = '';
+    pushToast(message, 'success');
+  };
+
+  const setError = (message) => {
+    state.error = message;
+    if (message) {
+      pushToast(message, 'error');
+    }
+  };
+
+  const pushToast = (message, tone = 'info') => {
+    if (!String(message || '').trim()) return;
+    const id = Date.now() + Math.random();
+    state.toasts = [...state.toasts.slice(-3), { id, message: String(message), tone }];
+    window.setTimeout(() => {
+      state.toasts = state.toasts.filter((toast) => toast.id !== id);
+      render();
+    }, tone === 'error' ? 6500 : 3500);
+  };
+
+  const markDirty = (key, next = true) => {
+    state.dirty[key] = next;
+  };
+
+  const snapshotValue = (key, value) => {
+    state.snapshots[key] = JSON.stringify(value ?? '');
+    state.dirty[key] = false;
+  };
+
+  const dirtyMessage = () => Object.entries(state.dirty).filter(([, value]) => value).map(([key]) => key).join(', ');
+
+  const hasUnsavedChanges = () => Object.values(state.dirty).some(Boolean);
+
+  const confirmNavigation = () => {
+    if (!hasUnsavedChanges()) return true;
+    return window.confirm(`You have unsaved changes in: ${dirtyMessage()}. Leave this view?`);
+  };
+
+  const compareSnapshot = (key, value) => {
+    state.dirty[key] = state.snapshots[key] !== JSON.stringify(value ?? '');
+  };
+
+  const updateTablePage = (name, page) => {
+    const table = state.tables[name];
+    if (!table) return;
+    table.page = Math.max(1, page);
+  };
+
+  const sortItems = (items, tableName, valueFor) => {
+    const table = state.tables[tableName];
+    if (!table) return items;
+    return [...items].sort((left, right) => {
+      const a = String(valueFor(left, table.sort) ?? '').toLowerCase();
+      const b = String(valueFor(right, table.sort) ?? '').toLowerCase();
+      if (a === b) return 0;
+      const cmp = a < b ? -1 : 1;
+      return table.dir === 'asc' ? cmp : -cmp;
+    });
+  };
+
+  const paginateItems = (items, tableName) => {
+    const table = state.tables[tableName];
+    if (!table) return { items, totalPages: 1, page: 1 };
+    const totalPages = Math.max(1, Math.ceil(items.length / table.pageSize));
+    table.page = Math.min(table.page, totalPages);
+    const start = (table.page - 1) * table.pageSize;
+    return { items: items.slice(start, start + table.pageSize), totalPages, page: table.page };
+  };
+
+  const renderTableControls = (tableName, totalCount, totalPages) => {
+    const table = state.tables[tableName];
+    if (!table) return '';
+    const choices = {
+      documents: ['title', 'type', 'status', 'lang'],
+      media: ['name', 'kind', 'reference'],
+      users: ['username', 'name', 'email'],
+      audit: ['timestamp', 'action', 'actor', 'outcome'],
+      plugins: ['name', 'status', 'version'],
+      themes: ['name', 'version', 'valid']
+    }[tableName] || [table.sort];
+    const options = Array.from(new Set([table.sort, ...choices])).map((choice) => `<option value="${escapeHTML(choice)}" ${table.sort === choice ? 'selected' : ''}>${escapeHTML(choice)}</option>`).join('');
+    return `<div class="table-controls">
+      <label>Sort
+        <select data-table-sort="${tableName}">
+          ${options}
+        </select>
+      </label>
+      <button type="button" class="ghost small" data-table-dir="${tableName}">${table.dir === 'asc' ? 'Asc' : 'Desc'}</button>
+      <div class="table-paging">
+        <button type="button" class="ghost small" data-table-page="${tableName}|prev" ${table.page <= 1 ? 'disabled' : ''}>Prev</button>
+        <span class="muted">Page ${table.page} / ${totalPages} • ${totalCount} items</span>
+        <button type="button" class="ghost small" data-table-page="${tableName}|next" ${table.page >= totalPages ? 'disabled' : ''}>Next</button>
+      </div>
+    </div>`;
+  };
+
+  const renderBreadcrumbs = () => {
+    const trail = ['Admin', sectionTitles[state.section] || 'Overview'];
+    if (state.section === 'documents' && state.documentEditor.source_path) {
+      trail.push(state.documentEditor.source_path);
+    } else if (state.section === 'media' && state.selectedMediaReference) {
+      trail.push(state.selectedMediaReference);
+    } else if (state.section === 'history' && state.documentHistoryPath) {
+      trail.push(state.documentHistoryPath);
+    } else if (state.section === 'users' && state.userForm.username) {
+      trail.push(state.userForm.username);
+    }
+    return `<nav class="breadcrumbs">${trail.map((part, index) => `${index ? '<span>/</span>' : ''}<span>${escapeHTML(part)}</span>`).join(' ')}</nav>`;
+  };
+
+  const renderToasts = () => {
+    if (!state.toasts.length) return '';
+    return `<div class="toast-stack">${state.toasts.map((toast) => `<div class="toast ${escapeHTML(toast.tone)}">${escapeHTML(toast.message)}</div>`).join('')}</div>`;
+  };
+
+  const renderKeyboardHelp = () => {
+    if (!state.keyboardHelp) return '';
+    return `<div class="shortcut-help">
+      <strong>Keyboard Shortcuts</strong>
+      <div><code>Cmd/Ctrl+S</code> Save current form</div>
+      <div><code>Cmd/Ctrl+Enter</code> Preview current document</div>
+      <div><code>Shift+/</code> Toggle shortcut help</div>
+      <div><code>g d</code> Documents</div>
+      <div><code>g m</code> Media</div>
+      <div><code>g u</code> Users</div>
+    </div>`;
   };
 
   const toggleSelection = (items, value, checked) => checked
@@ -609,7 +762,16 @@
       ].join(' ').toLowerCase();
       return haystack.includes(mediaQuery);
     }).slice(0, 10);
-    const rows = state.documents.map((doc) => `
+    const sortedDocuments = sortItems(state.documents, 'documents', (doc, field) => {
+      switch (field) {
+        case 'type': return doc.type;
+        case 'status': return documentStatusLabel(doc);
+        case 'lang': return doc.lang;
+        default: return doc.title || doc.slug || doc.id;
+      }
+    });
+    const pagedDocuments = paginateItems(sortedDocuments, 'documents');
+    const rows = pagedDocuments.items.map((doc) => `
       <div class="table-row table-row-actions">
         <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong><div class="muted mono">${escapeHTML(doc.source_path)}</div></span>
         <span>${escapeHTML(doc.type)}</span>
@@ -732,7 +894,7 @@
     return `
       <div class="layout-grid">
         <div class="stack">
-          ${panel('Documents', `<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search.</div>'}</div>`, `${state.documents.length} documents`)}
+          ${panel('Documents', `${renderTableControls('documents', state.documents.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search. Try a broader query or create a new page/post.</div>'}</div>`, `${state.documents.length} documents`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed`)}
         </div>
         <div class="stack">
@@ -745,7 +907,15 @@
   };
 
   const renderMedia = () => {
-    const rows = state.media.map((item) => `
+    const sortedMedia = sortItems(state.media, 'media', (item, field) => {
+      switch (field) {
+        case 'kind': return item.kind;
+        case 'reference': return item.reference;
+        default: return item.name;
+      }
+    });
+    const pagedMedia = paginateItems(sortedMedia, 'media');
+    const rows = pagedMedia.items.map((item) => `
       <div class="table-row table-row-actions">
         <span class="media-library-cell">${mediaThumb(item)}<span><strong>${escapeHTML(item.name)}</strong><div class="muted mono">${escapeHTML(item.reference)}</div></span></span>
         <span>${escapeHTML(item.kind)}</span>
@@ -779,7 +949,7 @@
               </div>
             </form>
           `, 'Uploads return stable media: references that can be used in Markdown')}
-          ${panel('Library', `<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media found yet.</div>'}</div>`, `${state.media.length} media items`)}
+          ${panel('Library', `${renderTableControls('media', state.media.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media matched the current search. Upload a file or clear the filter.</div>'}</div>`, `${state.media.length} media items`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed`)}
         </div>
         <div class="stack">
@@ -844,18 +1014,30 @@
     </div>`;
 
   const renderAudit = () => panel('Audit Log', `
+    ${(() => {
+      const sortedAudit = sortItems(state.audit, 'audit', (entry, field) => {
+        switch (field) {
+          case 'action': return entry.action;
+          case 'actor': return entry.actor;
+          case 'outcome': return entry.outcome;
+          default: return entry.timestamp;
+        }
+      });
+      const pagedAudit = paginateItems(sortedAudit, 'audit');
+      return `${renderTableControls('audit', state.audit.length, pagedAudit.totalPages)}
     <div class="table table-four">
       <div class="table-head"><span>Action</span><span>Actor</span><span>Outcome</span><span>Details</span></div>
-      ${state.audit.length
-        ? state.audit.map((entry) => `
+      ${pagedAudit.items.length
+        ? pagedAudit.items.map((entry) => `
           <div class="table-row">
             <span><strong>${escapeHTML(entry.action)}</strong><div class="muted">${escapeHTML(formatDateTime(entry.timestamp))}</div></span>
             <span>${escapeHTML(entry.actor || '-')}</span>
             <span>${escapeHTML(entry.outcome || '-')}</span>
             <span><div>${escapeHTML(entry.target || '-')}</div>${entry.remote_addr ? `<div class="muted mono">${escapeHTML(entry.remote_addr)}</div>` : ''}</span>
           </div>`).join('')
-        : '<div class="panel-pad empty-state">No audit log entries yet.</div>'}
-    </div>`, `${state.audit.length} recent events`);
+        : '<div class="panel-pad empty-state">No audit log entries yet. Activity will appear here after logins and admin actions.</div>'}
+    </div>`;
+    })()}`, `${state.audit.length} recent events`);
 
   const renderTrash = () => `
     <div class="layout-grid">
@@ -868,7 +1050,15 @@
     </div>`;
 
   const renderUsers = () => {
-    const rows = state.users.map((user) => `
+    const sortedUsers = sortItems(state.users, 'users', (user, field) => {
+      switch (field) {
+        case 'name': return user.name;
+        case 'email': return user.email;
+        default: return user.username;
+      }
+    });
+    const pagedUsers = paginateItems(sortedUsers, 'users');
+    const rows = pagedUsers.items.map((user) => `
       <div class="table-row table-row-actions">
         <span><strong>${escapeHTML(user.username)}</strong></span>
         <span>${escapeHTML(user.name || '')}</span>
@@ -881,7 +1071,7 @@
     return `
       <div class="layout-grid">
         <div class="stack">
-          ${panel('Users', `<div class="table table-four"><div class="table-head"><span>Username</span><span>Name</span><span>Email</span><span>Actions</span></div>${rows.join('')}</div>`, `${state.users.length} users`)}
+          ${panel('Users', `${renderTableControls('users', state.users.length, pagedUsers.totalPages)}<div class="table table-four"><div class="table-head"><span>Username</span><span>Name</span><span>Email</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No users found.</div>'}</div>`, `${state.users.length} users`)}
         </div>
         <div class="stack">
           ${panel('User Editor', `
@@ -909,7 +1099,9 @@
     </form>`, state.config?.path || 'content/config/site.yaml');
 
   const renderPlugins = () => {
-    const rows = state.plugins.map((plugin) => `
+    const sortedPlugins = sortItems(state.plugins, 'plugins', (plugin, field) => field === 'version' ? plugin.version : field === 'status' ? plugin.status : plugin.name);
+    const pagedPlugins = paginateItems(sortedPlugins, 'plugins');
+    const rows = pagedPlugins.items.map((plugin) => `
       <div class="table-row table-row-actions">
         <span><strong>${escapeHTML(plugin.title || plugin.name)}</strong></span>
         <span>${escapeHTML(plugin.version || '-')}</span>
@@ -920,11 +1112,13 @@
             : `<button class="ghost small" data-enable-plugin="${escapeHTML(plugin.name)}">Enable</button>`}
         </span>
       </div>`);
-    return panel('Plugins', `<div class="table table-four"><div class="table-head"><span>Plugin</span><span>Version</span><span>Status</span><span>Action</span></div>${rows.join('')}</div>`, `${state.plugins.length} plugins`);
+    return panel('Plugins', `${renderTableControls('plugins', state.plugins.length, pagedPlugins.totalPages)}<div class="table table-four"><div class="table-head"><span>Plugin</span><span>Version</span><span>Status</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No plugins found.</div>'}</div>`, `${state.plugins.length} plugins`);
   };
 
   const renderThemes = () => {
-    const rows = state.themes.map((theme) => `
+    const sortedThemes = sortItems(state.themes, 'themes', (theme, field) => field === 'version' ? theme.version : field === 'valid' ? String(theme.valid) : theme.name);
+    const pagedThemes = paginateItems(sortedThemes, 'themes');
+    const rows = pagedThemes.items.map((theme) => `
       <div class="table-row table-row-actions">
         <span><strong>${escapeHTML(theme.title || theme.name)}</strong></span>
         <span>${escapeHTML(theme.version || '-')}</span>
@@ -933,7 +1127,7 @@
           ${theme.current ? '<span class="muted">Current</span>' : `<button class="ghost small" data-switch-theme="${escapeHTML(theme.name)}">Activate</button>`}
         </span>
       </div>`);
-    return panel('Themes', `<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.join('')}</div>`, `${state.themes.length} frontend themes`);
+    return panel('Themes', `${renderTableControls('themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>`, `${state.themes.length} frontend themes`);
   };
 
   const renderSection = () => {
@@ -1042,6 +1236,31 @@
       });
     });
 
+    root.querySelectorAll('[data-table-sort]').forEach((select) => {
+      select.addEventListener('change', () => {
+        state.tables[select.dataset.tableSort].sort = select.value;
+        updateTablePage(select.dataset.tableSort, 1);
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-table-dir]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const table = state.tables[button.dataset.tableDir];
+        table.dir = table.dir === 'asc' ? 'desc' : 'asc';
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-table-page]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const [name, step] = button.dataset.tablePage.split('|');
+        const next = state.tables[name].page + (step === 'next' ? 1 : -1);
+        updateTablePage(name, next);
+        render();
+      });
+    });
+
     document.getElementById('logout')?.addEventListener('click', async () => {
       try {
         await request('/api/logout', { method: 'POST' });
@@ -1056,14 +1275,17 @@
     document.getElementById('document-source-path')?.addEventListener('input', () => {
       state.documentEditor.source_path = document.getElementById('document-source-path').value;
       syncStructuredEditorFromRaw();
+      compareSnapshot('document', state.documentEditor);
     });
 
     document.getElementById('document-version-comment')?.addEventListener('input', () => {
       state.documentEditor.version_comment = document.getElementById('document-version-comment').value;
+      compareSnapshot('document', state.documentEditor);
     });
 
     document.getElementById('document-raw')?.addEventListener('input', () => {
       syncStructuredEditorFromRaw();
+      compareSnapshot('document', state.documentEditor);
     });
 
     ['document-frontmatter-title', 'document-frontmatter-slug', 'document-frontmatter-layout', 'document-frontmatter-date', 'document-frontmatter-summary', 'document-frontmatter-tags', 'document-frontmatter-categories', 'document-frontmatter-draft', 'document-frontmatter-archived', 'document-frontmatter-lang']
@@ -1078,6 +1300,7 @@
             }
           }
           syncRawFromStructuredEditor();
+          compareSnapshot('document', state.documentEditor);
         });
       });
 
@@ -1107,6 +1330,7 @@
           })
         });
         state.documentEditor = { source_path: created.source_path, raw: created.raw || '', version_comment: '' };
+        snapshotValue('document', state.documentEditor);
         setFlash('Document created.');
         await fetchAll(false);
         navigate('documents');
@@ -1147,6 +1371,7 @@
           raw: document.getElementById('document-raw').value,
           version_comment: ''
         };
+        snapshotValue('document', state.documentEditor);
         setFlash('Document saved.');
         await fetchAll(false);
         navigate('documents');
@@ -1175,6 +1400,7 @@
 
     document.getElementById('document-reset-button')?.addEventListener('click', () => {
       resetDocumentEditor();
+      snapshotValue('document', state.documentEditor);
       setFlash('Editor reset.');
       render();
     });
@@ -1184,6 +1410,7 @@
         try {
           const detail = await request(`/api/document?id=${encodeURIComponent(button.dataset.editDocument)}&include_drafts=1`);
           state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
+          snapshotValue('document', state.documentEditor);
           state.documentPreview = null;
           setFlash('Document loaded.');
           navigate('documents');
@@ -1231,6 +1458,7 @@
           await loadDocumentHistory(restored.restored_path || restored.path, false);
           const detail = await request(`/api/document?id=${encodeURIComponent(restored.restored_path || restored.path)}&include_drafts=1`);
           state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
+          snapshotValue('document', state.documentEditor);
           navigate('documents');
         } catch (error) {
           state.error = error.message || String(error);
@@ -1324,7 +1552,7 @@
     });
 
     document.getElementById('media-search-apply')?.addEventListener('click', async () => {
-      state.mediaQuery = document.getElementById('media-search-query').value.trim();
+        state.mediaQuery = document.getElementById('media-search-query').value.trim();
       await fetchAll();
       navigate('media');
     });
@@ -1375,6 +1603,11 @@
           })
         });
         state.mediaVersionComment = '';
+        snapshotValue('media', {
+          reference: state.selectedMediaReference,
+          metadata: state.mediaDetail.metadata,
+          versionComment: ''
+        });
         setFlash('Media metadata saved.');
         await fetchAll(false);
         navigate('media');
@@ -1616,6 +1849,7 @@
           })
         });
         resetUserForm();
+        snapshotValue('user', state.userForm);
         setFlash('User saved.');
         await fetchAll(false);
         navigate('users');
@@ -1627,6 +1861,7 @@
 
     document.getElementById('user-reset-button')?.addEventListener('click', () => {
       resetUserForm();
+      snapshotValue('user', state.userForm);
       setFlash('User form reset.');
       render();
     });
@@ -1657,6 +1892,7 @@
           body: JSON.stringify({ raw: document.getElementById('config-raw').value })
         });
         setFlash('Configuration saved.');
+        snapshotValue('config', document.getElementById('config-raw').value);
         await fetchAll(false);
         navigate('config');
       } catch (error) {
@@ -1706,12 +1942,49 @@
         }
       });
     });
+
+    ['media-title', 'media-alt', 'media-caption', 'media-description', 'media-credit', 'media-tags', 'media-version-comment'].forEach((id) => {
+      document.getElementById(id)?.addEventListener('input', () => {
+        compareSnapshot('media', {
+          reference: state.selectedMediaReference,
+          metadata: {
+            title: document.getElementById('media-title')?.value || '',
+            alt: document.getElementById('media-alt')?.value || '',
+            caption: document.getElementById('media-caption')?.value || '',
+            description: document.getElementById('media-description')?.value || '',
+            credit: document.getElementById('media-credit')?.value || '',
+            tags: parseTagInput(document.getElementById('media-tags')?.value || '')
+          },
+          versionComment: document.getElementById('media-version-comment')?.value || ''
+        });
+      });
+    });
+
+    ['user-username', 'user-name', 'user-email', 'user-role', 'user-password', 'user-disabled'].forEach((id) => {
+      const node = document.getElementById(id);
+      node?.addEventListener(node.type === 'checkbox' ? 'change' : 'input', () => {
+        compareSnapshot('user', {
+          username: document.getElementById('user-username')?.value || '',
+          name: document.getElementById('user-name')?.value || '',
+          email: document.getElementById('user-email')?.value || '',
+          role: document.getElementById('user-role')?.value || '',
+          password: document.getElementById('user-password')?.value || '',
+          disabled: !!document.getElementById('user-disabled')?.checked
+        });
+      });
+    });
+
+    document.getElementById('config-raw')?.addEventListener('input', () => {
+      compareSnapshot('config', document.getElementById('config-raw').value);
+    });
   };
 
   const renderDashboard = () => {
-    const topMessage = state.error || summarizeLoadErrors() || state.flash || 'WordPress-style admin shell for managing content, media, users, configuration, themes, and plugins.';
+    const topMessage = summarizeLoadErrors() || 'WordPress-style admin shell for managing content, media, users, configuration, themes, and plugins.';
     root.innerHTML = `
       <div class="wp-shell">
+        ${renderToasts()}
+        ${renderKeyboardHelp()}
         <aside class="wp-sidebar">
           <div class="wp-brand">Foundry</div>
           <nav class="wp-nav">${shellNav()}</nav>
@@ -1720,20 +1993,28 @@
         <div class="wp-main">
           <header class="wp-topbar">
             <div>
-              <h1>${escapeHTML(state.section.charAt(0).toUpperCase() + state.section.slice(1))}</h1>
+              ${renderBreadcrumbs()}
+              <h1>${escapeHTML(sectionTitles[state.section] || state.section.charAt(0).toUpperCase() + state.section.slice(1))}</h1>
               <p>${escapeHTML(topMessage)}</p>
             </div>
             <div class="wp-topbar-actions">
+              ${hasUnsavedChanges() ? `<span class="dirty-pill">Unsaved: ${escapeHTML(dirtyMessage())}</span>` : ''}
+              <button class="ghost" id="shortcut-help-toggle">Shortcuts</button>
               <div class="chrome-user"><strong>${escapeHTML(state.session?.name || state.session?.username || '')}</strong><span>${escapeHTML(state.session?.email || '')}</span></div>
               <button class="ghost" id="logout">Log Out</button>
             </div>
           </header>
           <main class="wp-content">
-            ${state.error ? `<div class="panel error-panel"><div class="panel-pad"><div class="error">${escapeHTML(state.error)}</div></div></div>` : ''}
+            ${state.error ? `<div class="panel error-panel"><div class="panel-pad"><strong>Action Failed</strong><div class="error">${escapeHTML(state.error)}</div></div></div>` : ''}
+            ${state.loadErrors.length ? `<div class="panel warning-panel"><div class="panel-pad"><strong>Partial Admin Load</strong><div class="muted">${escapeHTML(summarizeLoadErrors())}</div></div></div>` : ''}
             ${renderSection()}
           </main>
         </div>
       </div>`;
+    document.getElementById('shortcut-help-toggle')?.addEventListener('click', () => {
+      state.keyboardHelp = !state.keyboardHelp;
+      render();
+    });
     bindDashboardEvents();
   };
 
@@ -1750,6 +2031,11 @@
       state.mediaDetail = await request(`/api/media/detail?reference=${encodeURIComponent(reference)}`);
       state.selectedMediaReference = reference;
       state.mediaVersionComment = '';
+      snapshotValue('media', {
+        reference,
+        metadata: state.mediaDetail.metadata || {},
+        versionComment: ''
+      });
       setFlash('Media loaded.');
       if (rerender) {
         navigate('media');
@@ -1828,9 +2114,15 @@
           state.mediaHistory = [];
         }
       }
+      snapshotValue('config', state.config?.raw || '');
+      snapshotValue('user', state.userForm);
+      if (!state.documentEditor.raw) {
+        state.documentEditor.raw = buildDefaultMarkdown('post');
+      }
+      snapshotValue('document', state.documentEditor);
     } catch (error) {
       state.session = null;
-      state.error = error.message || String(error);
+      setError(error.message || String(error));
     } finally {
       state.loading = false;
       if (rerender) {
@@ -1840,12 +2132,59 @@
   };
 
   window.addEventListener('popstate', () => {
+    if (!confirmNavigation()) {
+      window.history.pushState({}, '', state.section === 'overview' ? adminBase : `${adminBase}/${state.section}`);
+      return;
+    }
     state.section = sectionForPath(window.location.pathname);
     render();
   });
 
+  window.addEventListener('beforeunload', (event) => {
+    if (!hasUnsavedChanges()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
+  let pendingGoto = '';
+  window.addEventListener('keydown', (event) => {
+    if (!state.session?.authenticated) return;
+    const isMac = /Mac|iPhone|iPad/.test(window.navigator.platform);
+    const modifier = isMac ? event.metaKey : event.ctrlKey;
+    if (modifier && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      if (state.section === 'documents') document.getElementById('document-save-form')?.requestSubmit();
+      if (state.section === 'config') document.getElementById('config-save-form')?.requestSubmit();
+      if (state.section === 'users') document.getElementById('user-save-form')?.requestSubmit();
+      if (state.section === 'media') document.getElementById('media-metadata-form')?.requestSubmit();
+      return;
+    }
+    if (modifier && event.key === 'Enter' && state.section === 'documents') {
+      event.preventDefault();
+      document.getElementById('document-preview-button')?.click();
+      return;
+    }
+    if (event.shiftKey && event.key === '?') {
+      event.preventDefault();
+      state.keyboardHelp = !state.keyboardHelp;
+      render();
+      return;
+    }
+    if (event.key.toLowerCase() === 'g') {
+      pendingGoto = 'g';
+      window.setTimeout(() => { pendingGoto = ''; }, 800);
+      return;
+    }
+    if (pendingGoto === 'g') {
+      const map = { d: 'documents', m: 'media', u: 'users', a: 'audit' };
+      const next = map[event.key.toLowerCase()];
+      if (next) {
+        event.preventDefault();
+        pendingGoto = '';
+        navigate(next);
+      }
+    }
+  });
+
   fetchAll();
-  if (!state.documentEditor.raw) {
-    state.documentEditor.raw = buildDefaultMarkdown('post');
-  }
 })();
