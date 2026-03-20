@@ -2,10 +2,12 @@ package renderer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -14,6 +16,8 @@ import (
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/theme"
 )
+
+var stripHTMLTagsRE = regexp.MustCompile(`<[^>]+>`)
 
 type Hooks interface {
 	OnContext(*ViewData) error
@@ -203,6 +207,10 @@ func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
 		return err
 	}
 
+	if err := r.writeSearchIndex(graph); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -224,6 +232,10 @@ func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls
 		if err := r.writeRenderedURL(url, html); err != nil {
 			return err
 		}
+	}
+
+	if err := r.writeSearchIndex(graph); err != nil {
+		return err
 	}
 
 	return nil
@@ -330,6 +342,89 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 	}
 
 	return nil, os.ErrNotExist
+}
+
+type searchIndexEntry struct {
+	Title      string              `json:"title"`
+	URL        string              `json:"url"`
+	Summary    string              `json:"summary,omitempty"`
+	Content    string              `json:"content,omitempty"`
+	Type       string              `json:"type"`
+	Lang       string              `json:"lang"`
+	Layout     string              `json:"layout,omitempty"`
+	Tags       []string            `json:"tags,omitempty"`
+	Categories []string            `json:"categories,omitempty"`
+	Taxonomies map[string][]string `json:"taxonomies,omitempty"`
+}
+
+func (r *Renderer) writeSearchIndex(graph *content.SiteGraph) error {
+	if r == nil || r.cfg == nil || graph == nil {
+		return nil
+	}
+	items := make([]searchIndexEntry, 0, len(graph.Documents))
+	for _, doc := range graph.Documents {
+		if doc == nil || doc.Draft || documentArchived(doc) {
+			continue
+		}
+		items = append(items, searchIndexEntry{
+			Title:      doc.Title,
+			URL:        doc.URL,
+			Summary:    doc.Summary,
+			Content:    normalizeSearchContent(doc),
+			Type:       doc.Type,
+			Lang:       doc.Lang,
+			Layout:     doc.Layout,
+			Tags:       append([]string{}, doc.Taxonomies["tags"]...),
+			Categories: append([]string{}, doc.Taxonomies["categories"]...),
+			Taxonomies: cloneTaxonomies(doc.Taxonomies),
+		})
+	}
+	body, err := json.MarshalIndent(items, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal search index: %w", err)
+	}
+	path := filepath.Join(r.cfg.PublicDir, "search.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir search index dir: %w", err)
+	}
+	if err := os.WriteFile(path, append(body, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write search index: %w", err)
+	}
+	return nil
+}
+
+func normalizeSearchContent(doc *content.Document) string {
+	if doc == nil {
+		return ""
+	}
+	text := strings.TrimSpace(doc.RawBody)
+	if text == "" {
+		text = strings.TrimSpace(stripHTMLTagsRE.ReplaceAllString(string(doc.HTMLBody), " "))
+	}
+	return strings.Join(strings.Fields(text), " ")
+}
+
+func cloneTaxonomies(in map[string][]string) map[string][]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(in))
+	for key, values := range in {
+		out[key] = append([]string{}, values...)
+	}
+	return out
+}
+
+func documentArchived(doc *content.Document) bool {
+	if doc == nil || doc.Params == nil {
+		return false
+	}
+	value, ok := doc.Params["archived"]
+	if !ok {
+		return false
+	}
+	flag, ok := value.(bool)
+	return ok && flag
 }
 
 func (r *Renderer) prepareBuild(cleanPublicDir, syncAssets bool) error {

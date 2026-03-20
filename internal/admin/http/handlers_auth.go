@@ -42,9 +42,11 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 
 	identity, err := r.auth.Login(w, req, strings.TrimSpace(body.Username), body.Password)
 	if err != nil {
+		r.logAudit(strings.TrimSpace(body.Username), "login", "failure", strings.TrimSpace(body.Username), map[string]string{"error": err.Error()})
 		writeJSONError(w, http.StatusForbidden, err)
 		return
 	}
+	r.logAudit(firstNonEmpty(identity.Name, identity.Username), "login", "success", identity.Username, nil)
 
 	writeJSON(w, http.StatusOK, admintypes.SessionResponse{
 		Authenticated: true,
@@ -63,9 +65,11 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := r.auth.Logout(w, req); err != nil {
+		r.logAuditRequest(req, "logout", "failure", "", map[string]string{"error": err.Error()})
 		writeJSONError(w, http.StatusForbidden, err)
 		return
 	}
+	r.logAuditRequest(req, "logout", "success", "", nil)
 
 	writeJSON(w, http.StatusOK, admintypes.SessionResponse{})
 }

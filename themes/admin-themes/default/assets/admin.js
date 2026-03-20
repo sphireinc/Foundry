@@ -23,6 +23,7 @@
   const state = {
     session: null,
     status: null,
+    documentQuery: '',
     documents: [],
     documentTrash: [],
     documentHistory: [],
@@ -31,6 +32,7 @@
     documentDiffMode: 'split',
     selectedDocumentTrash: [],
     media: [],
+    mediaQuery: '',
     mediaPickerQuery: '',
     mediaTrash: [],
     mediaHistory: [],
@@ -40,6 +42,7 @@
     config: null,
     plugins: [],
     themes: [],
+    audit: [],
     section: sectionForPath(window.location.pathname),
     documentEditor: { source_path: '', raw: '', version_comment: '' },
     documentPreview: null,
@@ -440,6 +443,21 @@
     }
   };
 
+  const mediaThumb = (item) => {
+    if (!item) return '<span class="media-thumb placeholder">-</span>';
+    const url = escapeHTML(item.public_url);
+    switch (item.kind) {
+      case 'image':
+        return `<img class="media-thumb" src="${url}" alt="${escapeHTML(item.metadata?.alt || item.name)}">`;
+      case 'video':
+        return `<video class="media-thumb" src="${url}" muted preload="metadata"></video>`;
+      case 'audio':
+        return `<div class="media-thumb audio">AUDIO</div>`;
+      default:
+        return `<div class="media-thumb file">FILE</div>`;
+    }
+  };
+
   const shellNav = () => {
     const items = [
       ['overview', 'Overview'],
@@ -447,6 +465,7 @@
       ['history', 'History'],
       ['trash', 'Trash'],
       ['media', 'Media'],
+      ['audit', 'Audit'],
       ['users', 'Users'],
       ['config', 'Configuration'],
       ['plugins', 'Plugins'],
@@ -619,6 +638,11 @@
           <label>Archetype<input id="document-create-archetype" type="text" placeholder="post"></label>
           <button type="submit">Create Document</button>
         </form>
+        <form id="document-search-form" class="inline-form compact-inline-form">
+          <label class="frontmatter-span-2">Search Documents<input id="document-search-query" type="search" value="${escapeHTML(state.documentQuery)}" placeholder="Search title, slug, URL, summary, tags, or path"></label>
+          <button type="submit">Search</button>
+          <button type="button" class="ghost" id="document-search-clear">Clear</button>
+        </form>
         <form id="document-save-form" class="stack">
           <div class="editor-grid">
             <div class="stack">
@@ -708,7 +732,7 @@
     return `
       <div class="layout-grid">
         <div class="stack">
-          ${panel('Documents', `<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents available.</div>'}</div>`, `${state.documents.length} documents`)}
+          ${panel('Documents', `<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search.</div>'}</div>`, `${state.documents.length} documents`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed`)}
         </div>
         <div class="stack">
@@ -723,12 +747,13 @@
   const renderMedia = () => {
     const rows = state.media.map((item) => `
       <div class="table-row table-row-actions">
-        <span><strong>${escapeHTML(item.name)}</strong><div class="muted mono">${escapeHTML(item.reference)}</div></span>
+        <span class="media-library-cell">${mediaThumb(item)}<span><strong>${escapeHTML(item.name)}</strong><div class="muted mono">${escapeHTML(item.reference)}</div></span></span>
         <span>${escapeHTML(item.kind)}</span>
         <span>${escapeHTML(item.metadata?.title || item.metadata?.alt || '')}</span>
         <span class="row-actions">
           <button class="ghost small" data-edit-media="${escapeHTML(item.reference)}">Details</button>
           <button class="ghost small" data-history-media-path="${escapeHTML(`content/${item.collection}/${item.path}`)}">History</button>
+          <button class="ghost small" data-prepare-media-replace="${escapeHTML(item.reference)}">Replace</button>
           <a class="button-link ghost small" href="${escapeHTML(item.public_url)}" target="_blank" rel="noreferrer">View</a>
           <button class="ghost small danger" data-delete-media="${escapeHTML(item.reference)}">Delete</button>
         </span>
@@ -743,10 +768,15 @@
         <div class="stack">
           ${panel('Upload Media', `
             <form id="media-upload-form" class="panel-pad stack">
+              <label>Search Library<input id="media-search-query" type="search" value="${escapeHTML(state.mediaQuery)}" placeholder="Search name, reference, metadata, or tags"></label>
               <label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="uploads">uploads</option></select></label>
               <label>Directory<input id="media-dir" type="text" placeholder="posts/launch"></label>
               <label>File<input id="media-file" type="file"></label>
-              <button type="submit">Upload Media</button>
+              <div class="toolbar">
+                <button type="submit">Upload Media</button>
+                <button type="button" class="ghost" id="media-search-apply">Search</button>
+                <button type="button" class="ghost" id="media-search-clear">Clear</button>
+              </div>
             </form>
           `, 'Uploads return stable media: references that can be used in Markdown')}
           ${panel('Library', `<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media found yet.</div>'}</div>`, `${state.media.length} media items`)}
@@ -765,7 +795,11 @@
                 <label>Credit<input id="media-credit" type="text" value="${escapeHTML(metadata.credit || '')}"></label>
                 <label>Tags<input id="media-tags" type="text" value="${escapeHTML((metadata.tags || []).join(', '))}" placeholder="product, hero, launch"></label>
                 <label>Version Comment<input id="media-version-comment" type="text" value="${escapeHTML(state.mediaVersionComment || '')}" placeholder="Explain what changed in this metadata revision"></label>
-                <button type="submit" ${detail ? '' : 'disabled'}>Save Metadata</button>
+                <label>Replace File<input id="media-replace-file" type="file" ${detail ? '' : 'disabled'}></label>
+                <div class="toolbar">
+                  <button type="submit" ${detail ? '' : 'disabled'}>Save Metadata</button>
+                  <button type="button" class="ghost" id="media-replace-button" ${detail ? '' : 'disabled'}>Replace Media</button>
+                </div>
               </form>
             </div>
           `, 'Metadata is stored beside the file as .meta.yaml')}
@@ -808,6 +842,20 @@
           : '<div class="panel-pad empty-state">Select a document version and choose Diff to review the changes.</div>', 'Side-by-side and unified views are both available')}
       </div>
     </div>`;
+
+  const renderAudit = () => panel('Audit Log', `
+    <div class="table table-four">
+      <div class="table-head"><span>Action</span><span>Actor</span><span>Outcome</span><span>Details</span></div>
+      ${state.audit.length
+        ? state.audit.map((entry) => `
+          <div class="table-row">
+            <span><strong>${escapeHTML(entry.action)}</strong><div class="muted">${escapeHTML(formatDateTime(entry.timestamp))}</div></span>
+            <span>${escapeHTML(entry.actor || '-')}</span>
+            <span>${escapeHTML(entry.outcome || '-')}</span>
+            <span><div>${escapeHTML(entry.target || '-')}</div>${entry.remote_addr ? `<div class="muted mono">${escapeHTML(entry.remote_addr)}</div>` : ''}</span>
+          </div>`).join('')
+        : '<div class="panel-pad empty-state">No audit log entries yet.</div>'}
+    </div>`, `${state.audit.length} recent events`);
 
   const renderTrash = () => `
     <div class="layout-grid">
@@ -894,6 +942,7 @@
       case 'history': return renderHistory();
       case 'trash': return renderTrash();
       case 'media': return renderMedia();
+      case 'audit': return renderAudit();
       case 'users': return renderUsers();
       case 'config': return renderConfig();
       case 'plugins': return renderPlugins();
@@ -1065,6 +1114,21 @@
         state.error = error.message || String(error);
         render();
       }
+    });
+
+    document.getElementById('document-search-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      state.documentQuery = document.getElementById('document-search-query').value.trim();
+      await fetchAll();
+      navigate('documents');
+    });
+
+    document.getElementById('document-search-clear')?.addEventListener('click', async () => {
+      state.documentQuery = '';
+      const input = document.getElementById('document-search-query');
+      if (input) input.value = '';
+      await fetchAll();
+      navigate('documents');
     });
 
     document.getElementById('document-save-form')?.addEventListener('submit', async (event) => {
@@ -1259,9 +1323,29 @@
       }
     });
 
+    document.getElementById('media-search-apply')?.addEventListener('click', async () => {
+      state.mediaQuery = document.getElementById('media-search-query').value.trim();
+      await fetchAll();
+      navigate('media');
+    });
+
+    document.getElementById('media-search-clear')?.addEventListener('click', async () => {
+      state.mediaQuery = '';
+      const input = document.getElementById('media-search-query');
+      if (input) input.value = '';
+      await fetchAll();
+      navigate('media');
+    });
+
     root.querySelectorAll('[data-edit-media]').forEach((button) => {
       button.addEventListener('click', async () => {
         await loadMediaDetail(button.dataset.editMedia);
+      });
+    });
+
+    root.querySelectorAll('[data-prepare-media-replace]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        await loadMediaDetail(button.dataset.prepareMediaReplace);
       });
     });
 
@@ -1293,6 +1377,29 @@
         state.mediaVersionComment = '';
         setFlash('Media metadata saved.');
         await fetchAll(false);
+        navigate('media');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+
+    document.getElementById('media-replace-button')?.addEventListener('click', async () => {
+      if (!state.selectedMediaReference) return;
+      const file = document.getElementById('media-replace-file').files[0];
+      if (!file) {
+        state.error = 'Choose a file to replace the current media.';
+        render();
+        return;
+      }
+      try {
+        const formData = new FormData();
+        formData.append('reference', state.selectedMediaReference);
+        formData.append('file', file);
+        await request('/api/media/replace', { method: 'POST', body: formData });
+        setFlash('Media replaced.');
+        await fetchAll(false);
+        await loadMediaDetail(state.selectedMediaReference, false);
         navigate('media');
       } catch (error) {
         state.error = error.message || String(error);
@@ -1662,14 +1769,15 @@
 
       const results = await Promise.allSettled([
         request('/api/status'),
-        request('/api/documents?include_drafts=1'),
+        request(`/api/documents?include_drafts=1${state.documentQuery ? `&q=${encodeURIComponent(state.documentQuery)}` : ''}`),
         request('/api/documents/trash'),
-        request('/api/media'),
+        request(`/api/media${state.mediaQuery ? `?q=${encodeURIComponent(state.mediaQuery)}` : ''}`),
         request('/api/media/trash'),
         request('/api/users'),
         request('/api/config'),
         request('/api/plugins'),
-        request('/api/themes')
+        request('/api/themes'),
+        request('/api/audit')
       ]);
 
       const assignResult = (index, label, onSuccess, fallback) => {
@@ -1691,6 +1799,7 @@
       assignResult(6, 'config', (value) => { state.config = value; }, () => { state.config = null; });
       assignResult(7, 'plugins', (value) => { state.plugins = Array.isArray(value) ? value : []; }, () => { state.plugins = []; });
       assignResult(8, 'themes', (value) => { state.themes = Array.isArray(value) ? value : []; }, () => { state.themes = []; });
+      assignResult(9, 'audit log', (value) => { state.audit = Array.isArray(value) ? value : []; }, () => { state.audit = []; });
       state.selectedDocumentTrash = state.selectedDocumentTrash.filter((path) => state.documentTrash.some((entry) => entry.path === path));
       state.selectedMediaTrash = state.selectedMediaTrash.filter((path) => state.mediaTrash.some((entry) => entry.path === path));
 

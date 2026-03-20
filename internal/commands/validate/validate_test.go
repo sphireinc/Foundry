@@ -38,6 +38,20 @@ func TestValidateRunFailsOnDuplicateRoute(t *testing.T) {
 	}
 }
 
+func TestValidateRunFailsOnBrokenMediaAndInternalLinks(t *testing.T) {
+	root := t.TempDir()
+	cfg := testProjectConfig(t, root)
+	if _, err := theme.Scaffold(cfg.ThemesDir, cfg.Theme); err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	writeMarkdown(t, filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "about.md"), "---\ntitle: About\nslug: about\nlayout: page\n---\n\n[Broken page](/missing/)\n\n![Missing media](media:images/missing.png)")
+
+	cmd := command{}
+	if err := cmd.Run(cfg, nil); err == nil {
+		t.Fatal("expected broken media/internal link validation failure")
+	}
+}
+
 func TestValidateCommandMetadata(t *testing.T) {
 	cmd := command{}
 	if cmd.Name() != "validate" {

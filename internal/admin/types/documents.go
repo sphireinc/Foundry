@@ -201,6 +201,11 @@ type MediaDetailResponse struct {
 	UsedBy []DocumentSummary `json:"used_by,omitempty"`
 }
 
+type MediaReplaceResponse struct {
+	MediaItem
+	Replaced bool `json:"replaced"`
+}
+
 type MediaMetadataSaveRequest struct {
 	Reference      string        `json:"reference"`
 	Metadata       MediaMetadata `json:"metadata"`
