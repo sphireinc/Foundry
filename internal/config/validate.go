@@ -35,6 +35,9 @@ func Validate(cfg *Config) []error {
 	require("content.uploads_dir", cfg.Content.UploadsDir)
 	require("content.default_layout_page", cfg.Content.DefaultLayoutPage)
 	require("content.default_layout_post", cfg.Content.DefaultLayoutPost)
+	if cfg.Content.MaxVersionsPerFile <= 0 {
+		errs = append(errs, fmt.Errorf("content.max_versions_per_file must be greater than zero"))
+	}
 
 	require("server.addr", cfg.Server.Addr)
 	require("feed.rss_path", cfg.Feed.RSSPath)

@@ -28,6 +28,9 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Admin.SessionTTLMinutes != 30 {
 		t.Fatalf("expected default admin session ttl, got %d", cfg.Admin.SessionTTLMinutes)
 	}
+	if cfg.Content.MaxVersionsPerFile != 10 {
+		t.Fatalf("expected default content max versions, got %d", cfg.Content.MaxVersionsPerFile)
+	}
 	if cfg.Feed.RSSPath == "" || cfg.Feed.SitemapPath == "" {
 		t.Fatalf("expected feed defaults to be set")
 	}

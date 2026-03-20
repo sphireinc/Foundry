@@ -17,8 +17,12 @@ func TestSyncCopiesAssetsAndBuildsBundle(t *testing.T) {
 	cfg := testAssetsConfig(t)
 	writeFile(t, filepath.Join(cfg.ContentDir, cfg.Content.AssetsDir, "css", "content.css"), "body { color: red; }")
 	writeFile(t, filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "logo.txt"), "img")
+	writeFile(t, filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "logo.version.20260319T143209Z.txt"), "old img")
+	writeFile(t, filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "logo.trash.20260319T143210Z.txt"), "trashed img")
+	writeFile(t, filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "logo.txt.meta.yaml"), "title: Logo")
 	writeFile(t, filepath.Join(cfg.ContentDir, cfg.Content.UploadsDir, "file.txt"), "upload")
 	writeFile(t, filepath.Join(cfg.ThemesDir, cfg.Theme, "assets", "css", "base.css"), "html { color: black; }")
+	writeFile(t, filepath.Join(cfg.ThemesDir, cfg.Theme, "assets", "css", "base.version.20260319T143209Z.css"), "old theme")
 	writeFile(t, filepath.Join(cfg.PluginsDir, "toc", "assets", "toc.css"), ".toc {}")
 
 	hooks := &assetHooks{}
@@ -41,6 +45,14 @@ func TestSyncCopiesAssetsAndBuildsBundle(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(cfg.PublicDir, rel)); err != nil {
 			t.Fatalf("expected copied asset %s: %v", rel, err)
 		}
+	}
+	for _, rel := range []string{"images/logo.version.20260319T143209Z.txt", "images/logo.trash.20260319T143210Z.txt", "images/logo.txt.meta.yaml"} {
+		if _, err := os.Stat(filepath.Join(cfg.PublicDir, rel)); !os.IsNotExist(err) {
+			t.Fatalf("expected derived asset %s to be skipped, err=%v", rel, err)
+		}
+	}
+	if strings.Contains(body, "base.version.20260319T143209Z.css") {
+		t.Fatalf("expected versioned css file to be skipped, got %q", body)
 	}
 }
 

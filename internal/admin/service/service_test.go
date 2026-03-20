@@ -61,6 +61,26 @@ func TestSaveDocumentInvalidatesGraphCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("save document failed: %v", err)
 	}
+	_, err = svc.SaveDocument(context.Background(), types.DocumentSaveRequest{
+		SourcePath: filepath.Join("pages", "cache-test.md"),
+		Raw:        "---\ntitle: Cache Test\nslug: cache-test\n---\n\nUpdated Body",
+	})
+	if err != nil {
+		t.Fatalf("save document second version failed: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(cfg.ContentDir, "pages"))
+	if err != nil {
+		t.Fatalf("read page dir: %v", err)
+	}
+	var foundVersion bool
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "cache-test.version.") {
+			foundVersion = true
+		}
+	}
+	if !foundVersion {
+		t.Fatal("expected versioned cache-test document after overwrite")
+	}
 
 	if _, err := svc.load(context.Background(), true); err != nil {
 		t.Fatalf("load after save failed: %v", err)
@@ -282,16 +302,29 @@ func TestMediaUploadAndListing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("save duplicate media: %v", err)
 	}
-	if dupe.Path != "posts/hello/hero-banner-2.png" {
-		t.Fatalf("expected collision suffix, got %#v", dupe)
+	if dupe.Path != "posts/hello/hero-banner.png" || dupe.Created {
+		t.Fatalf("expected overwrite with stable path, got %#v", dupe)
+	}
+	entries, err := os.ReadDir(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "hello"))
+	if err != nil {
+		t.Fatalf("read media dir: %v", err)
+	}
+	var foundVersion bool
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "hero-banner.version.") {
+			foundVersion = true
+		}
+	}
+	if !foundVersion {
+		t.Fatal("expected media overwrite to create versioned file")
 	}
 
 	items, err := svc.ListMedia(context.Background())
 	if err != nil {
 		t.Fatalf("list media: %v", err)
 	}
-	if len(items) != 3 {
-		t.Fatalf("expected 3 media items, got %#v", items)
+	if len(items) != 2 {
+		t.Fatalf("expected 2 current media items, got %#v", items)
 	}
 }
 
@@ -449,7 +482,7 @@ func TestDocumentLifecycleServices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("soft delete document: %v", err)
 	}
-	if deleted.Operation != "soft_delete" || !strings.Contains(deleted.TrashPath, "/.trash/") {
+	if deleted.Operation != "soft_delete" || !strings.Contains(deleted.TrashPath, ".trash.") {
 		t.Fatalf("unexpected delete response: %#v", deleted)
 	}
 	if _, err := os.Stat(createdFullPath); !os.IsNotExist(err) {
@@ -500,12 +533,73 @@ func TestMediaMetadataServices(t *testing.T) {
 	if gotDetail.Metadata.Caption != "System overview" {
 		t.Fatalf("unexpected detail metadata: %#v", gotDetail)
 	}
+	if _, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{
+		Title: "Updated diagram",
+	}); err != nil {
+		t.Fatalf("update media metadata: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about"))
+	if err != nil {
+		t.Fatalf("read media dir: %v", err)
+	}
+	var foundMetadataVersion bool
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "diagram.version.") && strings.HasSuffix(entry.Name(), ".png.meta.yaml") {
+			foundMetadataVersion = true
+		}
+	}
+	if !foundMetadataVersion {
+		t.Fatal("expected metadata update to create versioned sidecar")
+	}
 
 	if err := svc.DeleteMedia(context.Background(), upload.Reference); err != nil {
 		t.Fatalf("delete media: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", "diagram.png.meta.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("expected metadata sidecar removal, got err=%v", err)
+	entries, err = os.ReadDir(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about"))
+	if err != nil {
+		t.Fatalf("read media dir: %v", err)
+	}
+	var foundTrash, foundSidecarTrash bool
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "diagram.trash.") && strings.HasSuffix(entry.Name(), ".png") {
+			foundTrash = true
+		}
+		if strings.HasPrefix(entry.Name(), "diagram.trash.") && strings.HasSuffix(entry.Name(), ".png.meta.yaml") {
+			foundSidecarTrash = true
+		}
+	}
+	if !foundTrash || !foundSidecarTrash {
+		t.Fatalf("expected trashed media and sidecar, got entries %#v", entries)
+	}
+}
+
+func TestVersionRetentionLimit(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.Content.MaxVersionsPerFile = 2
+	svc := New(cfg)
+
+	for i := 0; i < 4; i++ {
+		_, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{
+			SourcePath: "pages/retention.md",
+			Raw:        "---\ntitle: Retention\nslug: retention\n---\n\nVersion " + strings.Repeat("x", i+1),
+		})
+		if err != nil {
+			t.Fatalf("save document %d: %v", i, err)
+		}
+	}
+
+	entries, err := os.ReadDir(filepath.Join(cfg.ContentDir, "pages"))
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	var versions int
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "retention.version.") {
+			versions++
+		}
+	}
+	if versions != 2 {
+		t.Fatalf("expected 2 retained versions, got %d", versions)
 	}
 }
 

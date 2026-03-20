@@ -12,6 +12,7 @@ import (
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/i18n"
+	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
 	"github.com/sphireinc/foundry/internal/safepath"
 	"gopkg.in/yaml.v3"
@@ -97,6 +98,10 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	created := false
 	if _, err := s.fs.Stat(sourcePath); err != nil {
 		created = true
+	} else {
+		if err := s.versionFile(sourcePath, time.Now()); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.fs.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
@@ -235,23 +240,8 @@ func (s *Service) DeleteDocument(ctx context.Context, req types.DocumentDeleteRe
 		return nil, err
 	}
 
-	contentRoot, err := filepath.Abs(s.cfg.ContentDir)
+	trashPath, err := s.trashFile(sourcePath, time.Now())
 	if err != nil {
-		return nil, err
-	}
-	relPath, err := filepath.Rel(contentRoot, sourcePath)
-	if err != nil {
-		return nil, err
-	}
-	ext := filepath.Ext(relPath)
-	base := strings.TrimSuffix(filepath.Base(relPath), ext)
-	trashDir := filepath.Join(contentRoot, ".trash", filepath.Dir(relPath))
-	trashName := fmt.Sprintf("%s-%s%s", base, time.Now().UTC().Format("20060102T150405"), ext)
-	trashPath := filepath.Join(trashDir, trashName)
-	if err := s.fs.MkdirAll(filepath.Dir(trashPath), 0o755); err != nil {
-		return nil, err
-	}
-	if err := s.fs.Rename(sourcePath, trashPath); err != nil {
 		return nil, err
 	}
 	s.invalidateGraphCache()
@@ -522,6 +512,9 @@ func (s *Service) resolveContentPath(path string) (string, error) {
 	}
 	if filepath.Ext(full) != ".md" {
 		return "", fmt.Errorf("source path must point to a markdown file")
+	}
+	if lifecycle.IsDerivedPath(full) {
+		return "", fmt.Errorf("source path must point to a current markdown file")
 	}
 	if err := ensureNoSymlinkEscape(contentRoot, full); err != nil {
 		return "", err

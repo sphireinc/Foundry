@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/admin/users"
@@ -237,10 +238,11 @@ func (s *Service) DeleteMedia(ctx context.Context, reference string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.fs.Remove(fullPath); err != nil {
+	now := time.Now()
+	if _, err := s.trashFile(fullPath, now); err != nil {
 		return err
 	}
-	if err := s.fs.Remove(mediaMetadataPath(fullPath)); err != nil && !os.IsNotExist(err) {
+	if err := s.trashMediaMetadataForPrimary(fullPath, now); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
