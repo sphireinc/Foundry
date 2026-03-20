@@ -25,6 +25,9 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Admin.UsersFile != filepath.Join("content", "config", "admin-users.yaml") {
 		t.Fatalf("expected default admin users file, got %q", cfg.Admin.UsersFile)
 	}
+	if cfg.AdminPath() != "/__admin" {
+		t.Fatalf("expected default admin path, got %q", cfg.AdminPath())
+	}
 	if cfg.Admin.SessionTTLMinutes != 30 {
 		t.Fatalf("expected default admin session ttl, got %d", cfg.Admin.SessionTTLMinutes)
 	}
@@ -92,5 +95,53 @@ func TestValidateAndSequenceHelpersErrors(t *testing.T) {
 	}
 	if _, err := findSequenceAtPath(nil, []string{"plugins"}); err == nil {
 		t.Fatal("expected root nil error")
+	}
+}
+
+func TestAdminPathNormalizationAndValidation(t *testing.T) {
+	cfg := &Config{
+		Theme:       "default",
+		DefaultLang: "en",
+		ContentDir:  "content",
+		PublicDir:   "public",
+		ThemesDir:   "themes",
+		DataDir:     "data",
+		PluginsDir:  "plugins",
+		Admin: AdminConfig{
+			Path:              "cms-admin/",
+			Theme:             "default",
+			UsersFile:         filepath.Join("content", "config", "admin-users.yaml"),
+			SessionTTLMinutes: 30,
+		},
+		Server: ServerConfig{
+			Addr:           ":8080",
+			LiveReloadMode: "stream",
+		},
+		Content: ContentConfig{
+			PagesDir:           "pages",
+			PostsDir:           "posts",
+			ImagesDir:          "images",
+			AssetsDir:          "assets",
+			UploadsDir:         "uploads",
+			MaxVersionsPerFile: 10,
+			DefaultLayoutPage:  "page",
+			DefaultLayoutPost:  "post",
+		},
+		Feed: FeedConfig{
+			RSSPath:     "/rss.xml",
+			SitemapPath: "/sitemap.xml",
+		},
+	}
+	cfg.ApplyDefaults()
+	if cfg.AdminPath() != "/cms-admin" {
+		t.Fatalf("expected normalized admin path, got %q", cfg.AdminPath())
+	}
+	if errs := Validate(cfg); len(errs) != 0 {
+		t.Fatalf("expected custom admin path to validate, got %v", errs)
+	}
+
+	cfg.Admin.Path = "/bad path"
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected invalid admin path errors")
 	}
 }

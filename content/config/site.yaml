@@ -18,6 +18,7 @@ server:
 admin:
   enabled: true
   addr: ""
+  path: "/__adminz"
   local_only: true
   access_token:
   theme: default

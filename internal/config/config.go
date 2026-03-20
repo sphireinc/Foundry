@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -35,6 +36,7 @@ type Config struct {
 type AdminConfig struct {
 	Enabled           bool   `yaml:"enabled"`
 	Addr              string `yaml:"addr"`
+	Path              string `yaml:"path"`
 	LocalOnly         bool   `yaml:"local_only"`
 	AccessToken       string `yaml:"access_token"`
 	Theme             string `yaml:"theme"`
@@ -133,6 +135,7 @@ func (c *Config) ApplyDefaults() {
 	if c.Admin.Addr == "" {
 		c.Admin.Addr = ""
 	}
+	c.Admin.Path = normalizeAdminPath(c.Admin.Path)
 	if strings.TrimSpace(c.Admin.Theme) == "" {
 		c.Admin.Theme = "default"
 	}
@@ -227,4 +230,34 @@ func (c *Config) ApplyDefaults() {
 	if c.Feed.RSSDescription == "" {
 		c.Feed.RSSDescription = c.Title
 	}
+}
+
+func (c *Config) AdminPath() string {
+	if c == nil {
+		return defaultAdminPath
+	}
+	return normalizeAdminPath(c.Admin.Path)
+}
+
+const defaultAdminPath = "/__admin"
+
+func normalizeAdminPath(value string) string {
+	value = strings.TrimSpace(strings.ReplaceAll(value, `\`, "/"))
+	if value == "" {
+		return defaultAdminPath
+	}
+	if !strings.HasPrefix(value, "/") {
+		value = "/" + value
+	}
+	value = path.Clean(value)
+	if value == "." || value == "" {
+		return defaultAdminPath
+	}
+	if value != "/" {
+		value = strings.TrimRight(value, "/")
+	}
+	if value == "/" {
+		return defaultAdminPath
+	}
+	return value
 }

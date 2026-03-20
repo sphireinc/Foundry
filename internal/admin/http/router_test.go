@@ -686,6 +686,40 @@ func TestAdminIndexMethodAndErrorPaths(t *testing.T) {
 	}
 }
 
+func TestAdminCustomPathRoutesAndAssets(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Admin.Path = "/cms-admin"
+	cfg.ApplyDefaults()
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/cms-admin", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `data-admin-base="/cms-admin"`) || !strings.Contains(rr.Body.String(), "/cms-admin/theme/admin.js") {
+		t.Fatalf("unexpected custom admin index response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/cms-admin/theme/admin.css", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unexpected custom theme asset response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/cms-admin/api/status", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected custom admin status route to work, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestHelpersAndHookWrapping(t *testing.T) {
 	if !truthy("yes") || truthy("no") {
 		t.Fatal("unexpected truthy helper behavior")

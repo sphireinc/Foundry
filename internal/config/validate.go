@@ -2,10 +2,14 @@ package config
 
 import (
 	"fmt"
+	"path"
+	"regexp"
 	"strings"
 
 	"github.com/sphireinc/foundry/internal/safepath"
 )
+
+var adminPathSegmentRE = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 func Validate(cfg *Config) []error {
 	if cfg == nil {
@@ -66,6 +70,28 @@ func Validate(cfg *Config) []error {
 	}
 	if _, err := safepath.ValidatePathComponent("theme", cfg.Theme); err != nil {
 		errs = append(errs, err)
+	}
+	adminPath := cfg.AdminPath()
+	if !strings.HasPrefix(adminPath, "/") {
+		errs = append(errs, fmt.Errorf("admin.path must start with '/'"))
+	}
+	if adminPath == "/" {
+		errs = append(errs, fmt.Errorf("admin.path must not be '/'"))
+	}
+	if path.Clean(adminPath) != adminPath {
+		errs = append(errs, fmt.Errorf("admin.path must be normalized"))
+	}
+	for _, part := range strings.Split(strings.TrimPrefix(adminPath, "/"), "/") {
+		if strings.TrimSpace(part) == "" {
+			continue
+		}
+		if _, err := safepath.ValidatePathComponent("admin.path", part); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !adminPathSegmentRE.MatchString(part) {
+			errs = append(errs, fmt.Errorf("admin.path segments may only contain letters, numbers, '.', '_' or '-'"))
+		}
 	}
 	if _, err := safepath.ValidatePathComponent("admin.theme", cfg.Admin.Theme); err != nil {
 		errs = append(errs, err)
