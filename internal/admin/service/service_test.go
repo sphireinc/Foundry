@@ -278,6 +278,247 @@ func TestStatusProvidersBranches(t *testing.T) {
 	}
 }
 
+func TestDocumentHistoryRestorePurgeAndDiff(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	created, err := svc.CreateDocument(context.Background(), types.DocumentCreateRequest{
+		Kind: "page",
+		Slug: "history-page",
+		Lang: "en",
+	})
+	if err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+
+	if _, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{
+		SourcePath:     created.SourcePath,
+		Raw:            "---\ntitle: History Page\nslug: history-page\nlayout: page\ndraft: false\n---\n\n# Updated\n",
+		VersionComment: "Refine the page copy",
+		Actor:          "Admin User",
+	}); err != nil {
+		t.Fatalf("save document update: %v", err)
+	}
+
+	history, err := svc.GetDocumentHistory(context.Background(), created.SourcePath)
+	if err != nil {
+		t.Fatalf("get document history: %v", err)
+	}
+	if len(history.Entries) != 2 {
+		t.Fatalf("expected current and one version, got %#v", history.Entries)
+	}
+	if history.Entries[0].State != types.LifecycleStateCurrent || history.Entries[1].State != types.LifecycleStateVersion {
+		t.Fatalf("unexpected history states: %#v", history.Entries)
+	}
+	if history.Entries[1].VersionComment != "Refine the page copy" {
+		t.Fatalf("expected version comment, got %#v", history.Entries[1])
+	}
+	if history.Entries[1].Actor != "Admin User" {
+		t.Fatalf("expected version actor, got %#v", history.Entries[1])
+	}
+
+	diff, err := svc.DiffDocument(context.Background(), types.DocumentDiffRequest{
+		LeftPath:  history.Entries[1].Path,
+		RightPath: history.Entries[0].Path,
+	})
+	if err != nil {
+		t.Fatalf("diff document: %v", err)
+	}
+	if !strings.Contains(diff.Diff, "-# History Page") || !strings.Contains(diff.Diff, "+# Updated") {
+		t.Fatalf("unexpected diff output: %s", diff.Diff)
+	}
+
+	deleted, err := svc.DeleteDocument(context.Background(), types.DocumentDeleteRequest{SourcePath: created.SourcePath})
+	if err != nil {
+		t.Fatalf("delete document: %v", err)
+	}
+	trash, err := svc.ListDocumentTrash(context.Background())
+	if err != nil {
+		t.Fatalf("list document trash: %v", err)
+	}
+	if len(trash) != 1 || trash[0].State != types.LifecycleStateTrash {
+		t.Fatalf("unexpected document trash: %#v", trash)
+	}
+
+	restored, err := svc.RestoreDocument(context.Background(), types.DocumentLifecycleRequest{Path: deleted.TrashPath})
+	if err != nil {
+		t.Fatalf("restore document: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(cfg.ContentDir, "pages", "history-page.md"))
+	if err != nil {
+		t.Fatalf("read restored document: %v", err)
+	}
+	if !strings.Contains(string(raw), "# Updated") {
+		t.Fatalf("expected restored document contents, got %q", string(raw))
+	}
+
+	history, err = svc.GetDocumentHistory(context.Background(), restored.RestoredPath)
+	if err != nil {
+		t.Fatalf("get restored document history: %v", err)
+	}
+	if len(history.Entries) < 2 {
+		t.Fatalf("expected history after restore, got %#v", history.Entries)
+	}
+
+	versionPath := ""
+	for _, entry := range history.Entries {
+		if entry.State == types.LifecycleStateVersion {
+			versionPath = entry.Path
+			break
+		}
+	}
+	if versionPath == "" {
+		t.Fatalf("expected version entry after restore, got %#v", history.Entries)
+	}
+	if _, err := svc.PurgeDocument(context.Background(), types.DocumentLifecycleRequest{Path: versionPath}); err != nil {
+		t.Fatalf("purge document version: %v", err)
+	}
+	history, err = svc.GetDocumentHistory(context.Background(), restored.RestoredPath)
+	if err != nil {
+		t.Fatalf("get document history after purge: %v", err)
+	}
+	for _, entry := range history.Entries {
+		if entry.Path == versionPath {
+			t.Fatalf("expected version to be purged, history=%#v", history.Entries)
+		}
+	}
+}
+
+func TestMediaHistoryRestoreAndPurge(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	upload, err := svc.SaveMedia(context.Background(), "images", "posts/history", "diagram.png", "image/png", []byte("v1"))
+	if err != nil {
+		t.Fatalf("save media: %v", err)
+	}
+	if _, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{Title: "Diagram v1"}, "initial metadata", "Admin User"); err != nil {
+		t.Fatalf("save media metadata: %v", err)
+	}
+	if _, err := svc.SaveMedia(context.Background(), "images", "posts/history", "diagram.png", "image/png", []byte("v2")); err != nil {
+		t.Fatalf("save media replacement: %v", err)
+	}
+	if _, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{Title: "Diagram current"}, "refresh metadata", "Admin User"); err != nil {
+		t.Fatalf("save current media metadata: %v", err)
+	}
+	items, err := svc.ListMedia(context.Background())
+	if err != nil {
+		t.Fatalf("list media: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one current media item, got %#v", items)
+	}
+
+	history, err := svc.GetMediaHistory(context.Background(), filepath.Join("content", "images", items[0].Path))
+	if err != nil {
+		t.Fatalf("get media history: %v", err)
+	}
+	if len(history.Entries) < 2 {
+		t.Fatalf("expected media history entries, got %#v", history.Entries)
+	}
+	var metadataHistoryFound bool
+	for _, entry := range history.Entries {
+		if entry.MetadataOnly {
+			metadataHistoryFound = true
+		}
+	}
+	if !metadataHistoryFound {
+		t.Fatalf("expected metadata history entry, got %#v", history.Entries)
+	}
+
+	if err := svc.DeleteMedia(context.Background(), upload.Reference); err != nil {
+		t.Fatalf("delete media: %v", err)
+	}
+	trash, err := svc.ListMediaTrash(context.Background())
+	if err != nil {
+		t.Fatalf("list media trash: %v", err)
+	}
+	if len(trash) != 1 || trash[0].State != types.LifecycleStateTrash {
+		t.Fatalf("unexpected media trash entries: %#v", trash)
+	}
+
+	restored, err := svc.RestoreMedia(context.Background(), types.MediaLifecycleRequest{Path: trash[0].Path})
+	if err != nil {
+		t.Fatalf("restore media: %v", err)
+	}
+	restoredPath := filepath.Join(filepath.Dir(cfg.ContentDir), restored.RestoredPath)
+	if _, err := os.Stat(restoredPath); err != nil {
+		t.Fatalf("expected restored media file to exist: %v", err)
+	}
+	sidecarBody, err := os.ReadFile(restoredPath + ".meta.yaml")
+	if err != nil {
+		t.Fatalf("expected restored media metadata sidecar: %v", err)
+	}
+	if !strings.Contains(string(sidecarBody), "Diagram current") {
+		t.Fatalf("expected restored metadata sidecar contents, got %q", string(sidecarBody))
+	}
+
+	history, err = svc.GetMediaHistory(context.Background(), filepath.Join("content", "images", items[0].Path))
+	if err != nil {
+		t.Fatalf("get media history after restore: %v", err)
+	}
+	versionPath := ""
+	for _, entry := range history.Entries {
+		if entry.State == types.LifecycleStateVersion {
+			versionPath = entry.Path
+			break
+		}
+	}
+	if versionPath == "" {
+		t.Fatalf("expected version entry after restore, got %#v", history.Entries)
+	}
+	if _, err := svc.PurgeMedia(context.Background(), types.MediaLifecycleRequest{Path: versionPath}); err != nil {
+		t.Fatalf("purge media: %v", err)
+	}
+	history, err = svc.GetMediaHistory(context.Background(), upload.Reference)
+	if err != nil {
+		t.Fatalf("get media history after purge: %v", err)
+	}
+	for _, entry := range history.Entries {
+		if entry.Path == versionPath {
+			t.Fatalf("expected media version to be purged, history=%#v", history.Entries)
+		}
+	}
+}
+
+func TestGetMediaDetailIncludesUsage(t *testing.T) {
+	cfg := testServiceConfig(t)
+	uploadPath := filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", "diagram.png")
+	if err := os.MkdirAll(filepath.Dir(uploadPath), 0o755); err != nil {
+		t.Fatalf("mkdir media dir: %v", err)
+	}
+	if err := os.WriteFile(uploadPath, []byte("png"), 0o644); err != nil {
+		t.Fatalf("write media: %v", err)
+	}
+	docPath := filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "about.md")
+	if err := os.WriteFile(docPath, []byte("---\ntitle: About\nslug: about\nlayout: page\n---\n\n![Diagram](media:images/posts/about/diagram.png)\n"), 0o644); err != nil {
+		t.Fatalf("write document: %v", err)
+	}
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "doc-1",
+		Type:       "page",
+		Lang:       "en",
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(docPath),
+	})
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return graph, nil
+	}))
+
+	detail, err := svc.GetMediaDetail(context.Background(), "media:images/posts/about/diagram.png")
+	if err != nil {
+		t.Fatalf("get media detail: %v", err)
+	}
+	if len(detail.UsedBy) != 1 || detail.UsedBy[0].SourcePath != "content/pages/about.md" {
+		t.Fatalf("expected usage entry, got %#v", detail.UsedBy)
+	}
+}
+
 func TestMediaUploadAndListing(t *testing.T) {
 	cfg := testServiceConfig(t)
 	svc := New(cfg)
@@ -510,7 +751,7 @@ func TestMediaMetadataServices(t *testing.T) {
 		Description: "Longer description",
 		Credit:      "Team",
 		Tags:        []string{"diagram", "architecture"},
-	})
+	}, "annotate media", "Admin User")
 	if err != nil {
 		t.Fatalf("save media metadata: %v", err)
 	}
@@ -533,9 +774,12 @@ func TestMediaMetadataServices(t *testing.T) {
 	if gotDetail.Metadata.Caption != "System overview" {
 		t.Fatalf("unexpected detail metadata: %#v", gotDetail)
 	}
+	if len(gotDetail.UsedBy) != 0 {
+		t.Fatalf("expected no media usage, got %#v", gotDetail.UsedBy)
+	}
 	if _, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{
 		Title: "Updated diagram",
-	}); err != nil {
+	}, "update title", "Admin User"); err != nil {
 		t.Fatalf("update media metadata: %v", err)
 	}
 	entries, err := os.ReadDir(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about"))
@@ -543,13 +787,24 @@ func TestMediaMetadataServices(t *testing.T) {
 		t.Fatalf("read media dir: %v", err)
 	}
 	var foundMetadataVersion bool
+	var foundMetadataComment bool
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), "diagram.version.") && strings.HasSuffix(entry.Name(), ".png.meta.yaml") {
 			foundMetadataVersion = true
+			body, err := os.ReadFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", entry.Name()))
+			if err != nil {
+				t.Fatalf("read metadata version sidecar: %v", err)
+			}
+			if strings.Contains(string(body), "version_comment: update title") {
+				foundMetadataComment = true
+			}
 		}
 	}
 	if !foundMetadataVersion {
 		t.Fatal("expected metadata update to create versioned sidecar")
+	}
+	if !foundMetadataComment {
+		t.Fatal("expected metadata update to store version comment in the versioned sidecar")
 	}
 
 	if err := svc.DeleteMedia(context.Background(), upload.Reference); err != nil {
@@ -626,6 +881,9 @@ func testServiceConfig(t *testing.T) *config.Config {
 	cfg.ApplyDefaults()
 	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, cfg.Content.PagesDir), 0o755); err != nil {
 		t.Fatalf("mkdir pages dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, cfg.Content.PostsDir), 0o755); err != nil {
+		t.Fatalf("mkdir posts dir: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, "config"), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)

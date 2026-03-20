@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/lifecycle"
 )
 
@@ -26,6 +28,52 @@ func (s *Service) versionFile(path string, now time.Time) error {
 		return err
 	}
 	if err := s.fs.Rename(path, versionPath); err != nil {
+		return err
+	}
+	return s.pruneVersions(path)
+}
+
+func (s *Service) snapshotDocumentVersion(path string, now time.Time, comment, actor string) error {
+	if err := lifecycle.ValidateCurrentPath(path); err != nil {
+		return err
+	}
+	raw, err := s.fs.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	fm, body, err := content.ParseDocument(raw)
+	if err != nil {
+		return err
+	}
+	comment = strings.TrimSpace(comment)
+	if comment != "" {
+		if fm.Params == nil {
+			fm.Params = make(map[string]any)
+		}
+		fm.Params["version_comment"] = comment
+		fm.Params["versioned_at"] = now.UTC().Format(time.RFC3339)
+	}
+	actor = strings.TrimSpace(actor)
+	if actor != "" {
+		if fm.Params == nil {
+			fm.Params = make(map[string]any)
+		}
+		fm.Params["version_actor"] = actor
+	}
+	versionPath, err := s.uniqueDerivedPath(func(ts time.Time) string {
+		return lifecycle.BuildVersionPath(path, ts)
+	}, now)
+	if err != nil {
+		return err
+	}
+	rendered, err := marshalDocument(fm, body)
+	if err != nil {
+		return err
+	}
+	if err := s.fs.WriteFile(versionPath, rendered, 0o644); err != nil {
 		return err
 	}
 	return s.pruneVersions(path)

@@ -106,7 +106,11 @@ func (s *Service) GetMediaDetail(ctx context.Context, reference string) (*types.
 		return nil, err
 	}
 	item.Metadata = metadata
-	return &types.MediaDetailResponse{MediaItem: item}, nil
+	usedBy, err := s.mediaUsage(reference)
+	if err != nil {
+		return nil, err
+	}
+	return &types.MediaDetailResponse{MediaItem: item, UsedBy: usedBy}, nil
 }
 
 func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, contentType string, body []byte) (*types.MediaUploadResponse, error) {
@@ -190,7 +194,7 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 	}, nil
 }
 
-func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metadata types.MediaMetadata) (*types.MediaDetailResponse, error) {
+func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metadata types.MediaMetadata, versionComment, actor string) (*types.MediaDetailResponse, error) {
 	_ = ctx
 
 	item, path, err := s.resolveMediaItem(reference)
@@ -199,15 +203,16 @@ func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metad
 	}
 	metadata = normalizeMediaMetadata(metadata)
 	sidecar := mediaMetadataPath(path)
+	now := time.Now()
 	if mediaMetadataEmpty(metadata) {
-		if err := s.versionMediaMetadataForPrimary(path, time.Now()); err != nil {
+		if err := s.snapshotMediaMetadataVersion(path, now, versionComment, actor); err != nil {
 			return nil, err
 		}
 		if err := s.fs.Remove(sidecar); err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
 	} else {
-		if err := s.versionMediaMetadataForPrimary(path, time.Now()); err != nil {
+		if err := s.snapshotMediaMetadataVersion(path, now, versionComment, actor); err != nil {
 			return nil, err
 		}
 		body, err := yaml.Marshal(metadata)
@@ -219,7 +224,11 @@ func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metad
 		}
 	}
 	item.Metadata = metadata
-	return &types.MediaDetailResponse{MediaItem: item}, nil
+	usedBy, err := s.mediaUsage(reference)
+	if err != nil {
+		return nil, err
+	}
+	return &types.MediaDetailResponse{MediaItem: item, UsedBy: usedBy}, nil
 }
 
 func (s *Service) mediaRoot(collection string) (string, error) {
@@ -316,6 +325,13 @@ func normalizeMediaMetadata(metadata types.MediaMetadata) types.MediaMetadata {
 	return metadata
 }
 
+type mediaMetadataDocument struct {
+	types.MediaMetadata `yaml:",inline"`
+	VersionComment      string `yaml:"version_comment,omitempty"`
+	VersionedAt         string `yaml:"versioned_at,omitempty"`
+	VersionActor        string `yaml:"version_actor,omitempty"`
+}
+
 func mediaMetadataEmpty(metadata types.MediaMetadata) bool {
 	return metadata.Title == "" &&
 		metadata.Alt == "" &&
@@ -340,6 +356,47 @@ func (s *Service) versionMediaMetadataForPrimary(primaryPath string, now time.Ti
 		return err
 	}
 	if err := s.fs.Rename(sidecar, versionPath); err != nil {
+		return err
+	}
+	return s.pruneVersions(sidecar)
+}
+
+func (s *Service) snapshotMediaMetadataVersion(primaryPath string, now time.Time, versionComment, actor string) error {
+	sidecar := mediaMetadataPath(primaryPath)
+	body, err := s.fs.ReadFile(sidecar)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	versionPath, err := s.uniqueDerivedPath(func(ts time.Time) string {
+		return mediaMetadataVersionPath(primaryPath, ts)
+	}, now)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(versionComment) == "" {
+		if strings.TrimSpace(actor) == "" {
+			if err := s.fs.WriteFile(versionPath, body, 0o644); err != nil {
+				return err
+			}
+			return s.pruneVersions(sidecar)
+		}
+	}
+
+	var metadataDoc mediaMetadataDocument
+	if err := yaml.Unmarshal(body, &metadataDoc); err != nil {
+		return err
+	}
+	metadataDoc.VersionComment = strings.TrimSpace(versionComment)
+	metadataDoc.VersionedAt = now.UTC().Format(time.RFC3339)
+	metadataDoc.VersionActor = strings.TrimSpace(actor)
+	versionBody, err := yaml.Marshal(metadataDoc)
+	if err != nil {
+		return err
+	}
+	if err := s.fs.WriteFile(versionPath, versionBody, 0o644); err != nil {
 		return err
 	}
 	return s.pruneVersions(sidecar)
