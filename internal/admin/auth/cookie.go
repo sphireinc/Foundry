@@ -14,7 +14,7 @@ func (m *Middleware) setSessionCookie(w http.ResponseWriter, r *http.Request, to
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
-		Path:     "/__admin",
+		Path:     m.adminPath(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   requestIsHTTPS(r),
@@ -29,7 +29,7 @@ func (m *Middleware) clearSessionCookie(w http.ResponseWriter, r *http.Request) 
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
-		Path:     "/__admin",
+		Path:     m.adminPath(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   requestIsHTTPS(r),
@@ -48,4 +48,11 @@ func requestIsHTTPS(r *http.Request) bool {
 		return true
 	}
 	return strings.Contains(strings.ToLower(r.Header.Get("Forwarded")), "proto=https")
+}
+
+func (m *Middleware) adminPath() string {
+	if m == nil || m.cfg == nil {
+		return "/__admin"
+	}
+	return m.cfg.AdminPath()
 }

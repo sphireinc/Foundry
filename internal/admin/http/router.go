@@ -70,9 +70,9 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 		return
 	}
 
-	mux.Handle("/__admin", http.HandlerFunc(r.handleIndex))
-	mux.Handle("/__admin/", http.HandlerFunc(r.handleIndex))
-	mux.Handle("/__admin/theme/", http.StripPrefix("/__admin/theme/", r.ui.AssetHandler()))
+	mux.Handle(r.adminBasePath(), http.HandlerFunc(r.handleIndex))
+	mux.Handle(r.adminBasePath()+"/", http.HandlerFunc(r.handleIndex))
+	mux.Handle(r.themeBasePath()+"/", http.StripPrefix(r.themeBasePath()+"/", r.ui.AssetHandler()))
 
 	for _, reg := range r.registrars {
 		for _, rd := range reg(r) {
@@ -90,7 +90,7 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (r *Router) handleIndex(w http.ResponseWriter, req *http.Request) {
-	if !strings.HasPrefix(req.URL.Path, "/__admin") || strings.HasPrefix(req.URL.Path, "/__admin/api/") || strings.HasPrefix(req.URL.Path, "/__admin/theme/") {
+	if !strings.HasPrefix(req.URL.Path, r.adminBasePath()) || strings.HasPrefix(req.URL.Path, r.apiBasePath()+"/") || strings.HasPrefix(req.URL.Path, r.themeBasePath()+"/") {
 		http.NotFound(w, req)
 		return
 	}
@@ -102,6 +102,32 @@ func (r *Router) handleIndex(w http.ResponseWriter, req *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(body)
+}
+
+func (r *Router) adminBasePath() string {
+	if r == nil || r.cfg == nil {
+		return "/__admin"
+	}
+	return r.cfg.AdminPath()
+}
+
+func (r *Router) apiBasePath() string {
+	return r.adminBasePath() + "/api"
+}
+
+func (r *Router) themeBasePath() string {
+	return r.adminBasePath() + "/theme"
+}
+
+func (r *Router) routePath(suffix string) string {
+	suffix = strings.TrimSpace(suffix)
+	if suffix == "" || suffix == "/" {
+		return r.adminBasePath()
+	}
+	if !strings.HasPrefix(suffix, "/") {
+		suffix = "/" + suffix
+	}
+	return r.adminBasePath() + suffix
 }
 
 func WrapHooks(base server.Hooks, admin *Router) server.Hooks {

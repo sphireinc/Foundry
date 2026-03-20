@@ -9,16 +9,16 @@ import (
 
 func registerManagementRoutes(r *Router) []routeDef {
 	return []routeDef{
-		{pattern: "/__admin/api/users", handler: http.HandlerFunc(r.handleUsers), role: "admin"},
-		{pattern: "/__admin/api/users/save", handler: http.HandlerFunc(r.handleSaveUser), role: "admin"},
-		{pattern: "/__admin/api/users/delete", handler: http.HandlerFunc(r.handleDeleteUser), role: "admin"},
-		{pattern: "/__admin/api/config", handler: http.HandlerFunc(r.handleConfigDocument), role: "admin"},
-		{pattern: "/__admin/api/config/save", handler: http.HandlerFunc(r.handleSaveConfigDocument), role: "admin"},
-		{pattern: "/__admin/api/themes", handler: http.HandlerFunc(r.handleThemes), role: "admin"},
-		{pattern: "/__admin/api/themes/switch", handler: http.HandlerFunc(r.handleThemeSwitch), role: "admin"},
-		{pattern: "/__admin/api/plugins", handler: http.HandlerFunc(r.handlePlugins), role: "admin"},
-		{pattern: "/__admin/api/plugins/enable", handler: http.HandlerFunc(r.handleEnablePlugin), role: "admin"},
-		{pattern: "/__admin/api/plugins/disable", handler: http.HandlerFunc(r.handleDisablePlugin), role: "admin"},
+		{pattern: r.routePath("/api/users"), handler: http.HandlerFunc(r.handleUsers), role: "admin"},
+		{pattern: r.routePath("/api/users/save"), handler: http.HandlerFunc(r.handleSaveUser), role: "admin"},
+		{pattern: r.routePath("/api/users/delete"), handler: http.HandlerFunc(r.handleDeleteUser), role: "admin"},
+		{pattern: r.routePath("/api/config"), handler: http.HandlerFunc(r.handleConfigDocument), role: "admin"},
+		{pattern: r.routePath("/api/config/save"), handler: http.HandlerFunc(r.handleSaveConfigDocument), role: "admin"},
+		{pattern: r.routePath("/api/themes"), handler: http.HandlerFunc(r.handleThemes), role: "admin"},
+		{pattern: r.routePath("/api/themes/switch"), handler: http.HandlerFunc(r.handleThemeSwitch), role: "admin"},
+		{pattern: r.routePath("/api/plugins"), handler: http.HandlerFunc(r.handlePlugins), role: "admin"},
+		{pattern: r.routePath("/api/plugins/enable"), handler: http.HandlerFunc(r.handleEnablePlugin), role: "admin"},
+		{pattern: r.routePath("/api/plugins/disable"), handler: http.HandlerFunc(r.handleDisablePlugin), role: "admin"},
 	}
 }
 

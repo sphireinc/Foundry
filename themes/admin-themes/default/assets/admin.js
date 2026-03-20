@@ -3,10 +3,12 @@
   if (!root) return;
 
   const adminBase = root.dataset.adminBase || '/__admin';
+  const adminBaseEscaped = adminBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const adminBasePattern = new RegExp(`^${adminBaseEscaped}/?`);
   const sectionForPath = (pathname) => {
     const path = pathname.replace(/\/+$/, '');
-    if (path === '/__admin' || path === '') return 'overview';
-    return path.replace(/^\/__admin\/?/, '') || 'overview';
+    if (path === adminBase || path === '') return 'overview';
+    return path.replace(adminBasePattern, '') || 'overview';
   };
 
   const escapeHTML = (value) => String(value ?? '')
@@ -112,7 +114,7 @@
 
   const navigate = (section) => {
     state.section = section;
-    const nextPath = section === 'overview' ? '/__admin' : `/__admin/${section}`;
+    const nextPath = section === 'overview' ? adminBase : `${adminBase}/${section}`;
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, '', nextPath);
     }
@@ -178,7 +180,7 @@
       ['plugins', 'Plugins'],
       ['themes', 'Themes']
     ];
-    return items.map(([key, label]) => `<a class="wp-nav-item${state.section === key ? ' active' : ''}" href="/__admin/${key === 'overview' ? '' : key}" data-section="${key}">${label}</a>`).join('');
+    return items.map(([key, label]) => `<a class="wp-nav-item${state.section === key ? ' active' : ''}" href="${adminBase}/${key === 'overview' ? '' : key}" data-section="${key}">${label}</a>`).join('');
   };
 
   const panel = (title, body, subtitle = '', actions = '') => `

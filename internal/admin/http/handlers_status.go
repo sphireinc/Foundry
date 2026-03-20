@@ -9,7 +9,7 @@ import (
 func registerStatusRoutes(r *Router) []routeDef {
 	return []routeDef{
 		{
-			pattern: "/__admin/api/status",
+			pattern: r.routePath("/api/status"),
 			handler: http.HandlerFunc(r.handleStatus),
 		},
 	}

@@ -12,17 +12,17 @@ import (
 func registerAuthRoutes(r *Router) []routeDef {
 	return []routeDef{
 		{
-			pattern: "/__admin/api/login",
+			pattern: r.routePath("/api/login"),
 			handler: http.HandlerFunc(r.handleLogin),
 			public:  true,
 		},
 		{
-			pattern: "/__admin/api/logout",
+			pattern: r.routePath("/api/logout"),
 			handler: http.HandlerFunc(r.handleLogout),
 			public:  true,
 		},
 		{
-			pattern: "/__admin/api/session",
+			pattern: r.routePath("/api/session"),
 			handler: http.HandlerFunc(r.handleSession),
 		},
 	}

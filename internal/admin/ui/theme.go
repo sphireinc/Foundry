@@ -37,9 +37,9 @@ func (m *Manager) RenderIndex() ([]byte, error) {
 		ThemeBase string
 	}{
 		Title:     m.cfg.Title,
-		AdminPath: "/__admin",
+		AdminPath: m.cfg.AdminPath(),
 		ThemeName: m.themeName(),
-		ThemeBase: "/__admin/theme",
+		ThemeBase: m.cfg.AdminPath() + "/theme",
 	}
 
 	var buf bytes.Buffer

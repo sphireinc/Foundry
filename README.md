@@ -296,7 +296,7 @@ Important config groups:
 
 ### Admin
 
-`/__admin` serves a themeable admin shell with a login form. The shell itself is public so the browser can load HTML, CSS, and JavaScript. Authenticated API access is session-based by default.
+`admin.path` controls where the themeable admin shell is mounted. By default it is `/__admin`. The shell itself is public so the browser can load HTML, CSS, and JavaScript. Authenticated API access is session-based by default.
 
 Admin users live in a filesystem-backed YAML file, which defaults to:
 
@@ -327,7 +327,7 @@ Or generate a starter YAML snippet with:
 foundry admin sample-user admin "Admin User" admin@example.com "your-password"
 ```
 
-Browser sessions are stored in a secure cookie under `/__admin`, expire after 30 minutes of inactivity by default, and are renewed while the user remains active.
+Browser sessions are stored in a secure cookie scoped to `admin.path`, expire after 30 minutes of inactivity by default, and are renewed while the user remains active.
 
 `admin.access_token` is now optional. If set, it still works for API automation with:
 
@@ -349,6 +349,7 @@ Set the active admin theme with:
 ```yaml
 admin:
   enabled: true
+  path: /__admin
   theme: default
   users_file: content/config/admin-users.yaml
   session_ttl_minutes: 30
@@ -483,4 +484,3 @@ go run ./cmd/plugin-sync
 ```
 
 The main CI workflow also verifies formatting, syncs generated plugin imports, builds the project, runs tests, and publishes the coverage report to GitHub Pages on `main`.
-

@@ -72,7 +72,7 @@ foundry admin hash-password your-password</code></pre>
 
         <h2>Important config groups</h2>
         <ul>
-          <li><strong>Admin:</strong> <code>/__admin</code> serves a themeable shell with username/password login backed by <code>content/config/admin-users.yaml</code>; browser sessions expire after 30 minutes of inactivity by default.</li>
+          <li><strong>Admin:</strong> <code>admin.path</code> controls the mount point for the themeable admin shell and defaults to <code>/__admin</code>; username/password login is backed by <code>content/config/admin-users.yaml</code>, and browser sessions expire after 30 minutes of inactivity by default.</li>
           <li><strong>Security:</strong> <code>security.allow_unsafe_html</code> controls whether raw HTML is preserved in Markdown output.</li>
           <li><strong>Server:</strong> preview/admin serving uses read, write, and idle timeouts by default, and live reload can run in <code>stream</code> or <code>poll</code> mode.</li>
           <li><strong>Taxonomies:</strong> default and custom taxonomies participate in rendering and incremental rebuild planning.</li>
