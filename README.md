@@ -484,15 +484,3 @@ go run ./cmd/plugin-sync
 
 The main CI workflow also verifies formatting, syncs generated plugin imports, builds the project, runs tests, and publishes the coverage report to GitHub Pages on `main`.
 
-## Status
-
-Foundry already has a coherent runtime and tooling model:
-
-- file-based content
-- theme-based rendering
-- plugin hook system
-- admin service
-- preview server
-- dependency-aware rebuild planning
-
-The remaining work is mostly around hardening, expanding plugin/runtime depth, and continuing to improve developer ergonomics rather than inventing the core architecture from scratch.
