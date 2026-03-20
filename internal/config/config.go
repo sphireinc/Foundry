@@ -65,6 +65,7 @@ type ContentConfig struct {
 	ImagesDir            string `yaml:"images_dir"`
 	AssetsDir            string `yaml:"assets_dir"`
 	UploadsDir           string `yaml:"uploads_dir"`
+	MaxVersionsPerFile   int    `yaml:"max_versions_per_file"`
 	DefaultLayoutPage    string `yaml:"default_layout_page"`
 	DefaultLayoutPost    string `yaml:"default_layout_post"`
 	DefaultPageSlugIndex string `yaml:"default_page_slug_index"`
@@ -184,6 +185,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Content.UploadsDir == "" {
 		c.Content.UploadsDir = "uploads"
+	}
+	if c.Content.MaxVersionsPerFile <= 0 {
+		c.Content.MaxVersionsPerFile = 10
 	}
 	if c.Content.DefaultLayoutPage == "" {
 		c.Content.DefaultLayoutPage = "page"

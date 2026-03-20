@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/safepath"
 )
 
@@ -185,6 +186,9 @@ func listFiles(root, ext string) ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
+		if shouldSkipAssetPath(path) {
+			return nil
+		}
 		if strings.EqualFold(filepath.Ext(path), ext) {
 			out = append(out, path)
 		}
@@ -230,9 +234,17 @@ func copyDirIfExists(src, dst string) error {
 		if info.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
+		if shouldSkipAssetPath(path) {
+			return nil
+		}
 
 		return copyFile(path, target, info.Mode())
 	})
+}
+
+func shouldSkipAssetPath(path string) bool {
+	base := filepath.Base(path)
+	return strings.HasSuffix(strings.ToLower(base), ".meta.yaml") || lifecycle.IsDerivedPath(path)
 }
 
 func copyFile(src, dst string, mode os.FileMode) error {

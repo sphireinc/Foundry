@@ -208,5 +208,11 @@ func testLoaderConfig(t *testing.T) *config.Config {
 	if err := os.WriteFile(filepath.Join(cfg.ContentDir, cfg.Content.PostsDir, "hello.md"), []byte(post), 0o644); err != nil {
 		t.Fatalf("write post: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "about.version.20260319T143209Z.md"), []byte(page), 0o644); err != nil {
+		t.Fatalf("write page version: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "about.trash.20260319T143210Z.md"), []byte(page), 0o644); err != nil {
+		t.Fatalf("write page trash: %v", err)
+	}
 	return cfg
 }

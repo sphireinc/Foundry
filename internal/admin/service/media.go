@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/admin/types"
+	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/safepath"
 	"gopkg.in/yaml.v3"
@@ -41,7 +43,7 @@ func (s *Service) ListMedia(ctx context.Context) ([]types.MediaItem, error) {
 			if d.IsDir() {
 				return nil
 			}
-			if isMediaMetadataFile(path) {
+			if isMediaMetadataFile(path) || lifecycle.IsDerivedPath(path) {
 				return nil
 			}
 
@@ -146,12 +148,21 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 		return nil, err
 	}
 
-	finalName, created, err := s.nextAvailableFilename(targetDir, safeName)
-	if err != nil {
+	fullPath := filepath.Join(targetDir, safeName)
+	finalName := safeName
+	created := true
+	if _, err := s.fs.Stat(fullPath); err == nil {
+		created = false
+		if err := s.versionFile(fullPath, time.Now()); err != nil {
+			return nil, err
+		}
+		if err := s.versionMediaMetadataForPrimary(fullPath, time.Now()); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
-	fullPath := filepath.Join(targetDir, finalName)
 	if err := s.fs.WriteFile(fullPath, body, 0o644); err != nil {
 		return nil, err
 	}
@@ -189,10 +200,16 @@ func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metad
 	metadata = normalizeMediaMetadata(metadata)
 	sidecar := mediaMetadataPath(path)
 	if mediaMetadataEmpty(metadata) {
+		if err := s.versionMediaMetadataForPrimary(path, time.Now()); err != nil {
+			return nil, err
+		}
 		if err := s.fs.Remove(sidecar); err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
 	} else {
+		if err := s.versionMediaMetadataForPrimary(path, time.Now()); err != nil {
+			return nil, err
+		}
 		body, err := yaml.Marshal(metadata)
 		if err != nil {
 			return nil, err
@@ -231,6 +248,9 @@ func (s *Service) resolveMediaItem(reference string) (types.MediaItem, string, e
 	if err := ensureNoSymlinkEscape(root, fullPath); err != nil {
 		return types.MediaItem{}, "", err
 	}
+	if lifecycle.IsDerivedPath(fullPath) {
+		return types.MediaItem{}, "", fmt.Errorf("media reference must point to a current media file")
+	}
 	info, err := s.fs.Stat(fullPath)
 	if err != nil {
 		return types.MediaItem{}, "", err
@@ -265,6 +285,14 @@ func mediaMetadataPath(path string) string {
 	return path + ".meta.yaml"
 }
 
+func mediaMetadataVersionPath(primaryPath string, now time.Time) string {
+	return lifecycle.BuildVersionPath(primaryPath, now) + ".meta.yaml"
+}
+
+func mediaMetadataTrashPath(primaryPath string, now time.Time) string {
+	return lifecycle.BuildTrashPath(primaryPath, now) + ".meta.yaml"
+}
+
 func isMediaMetadataFile(path string) bool {
 	return strings.HasSuffix(strings.ToLower(path), ".meta.yaml")
 }
@@ -297,6 +325,43 @@ func mediaMetadataEmpty(metadata types.MediaMetadata) bool {
 		len(metadata.Tags) == 0
 }
 
+func (s *Service) versionMediaMetadataForPrimary(primaryPath string, now time.Time) error {
+	sidecar := mediaMetadataPath(primaryPath)
+	if _, err := s.fs.Stat(sidecar); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	versionPath, err := s.uniqueDerivedPath(func(ts time.Time) string {
+		return mediaMetadataVersionPath(primaryPath, ts)
+	}, now)
+	if err != nil {
+		return err
+	}
+	if err := s.fs.Rename(sidecar, versionPath); err != nil {
+		return err
+	}
+	return s.pruneVersions(sidecar)
+}
+
+func (s *Service) trashMediaMetadataForPrimary(primaryPath string, now time.Time) error {
+	sidecar := mediaMetadataPath(primaryPath)
+	if _, err := s.fs.Stat(sidecar); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	trashPath, err := s.uniqueDerivedPath(func(ts time.Time) string {
+		return mediaMetadataTrashPath(primaryPath, ts)
+	}, now)
+	if err != nil {
+		return err
+	}
+	return s.fs.Rename(sidecar, trashPath)
+}
+
 func cleanMediaDir(value string) (string, error) {
 	value = strings.TrimSpace(strings.ReplaceAll(value, `\`, "/"))
 	value = strings.Trim(value, "/")
@@ -308,22 +373,4 @@ func cleanMediaDir(value string) (string, error) {
 		return "", fmt.Errorf("invalid media dir: path must stay inside the media root")
 	}
 	return strings.TrimPrefix(cleaned, "/"), nil
-}
-
-func (s *Service) nextAvailableFilename(root, base string) (string, bool, error) {
-	candidate := base
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	for i := 0; ; i++ {
-		if i > 0 {
-			candidate = fmt.Sprintf("%s-%d%s", name, i+1, ext)
-		}
-		path := filepath.Join(root, candidate)
-		if _, err := s.fs.Stat(path); err != nil {
-			if os.IsNotExist(err) {
-				return candidate, i == 0, nil
-			}
-			return "", false, err
-		}
-	}
 }

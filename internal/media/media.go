@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/sphireinc/foundry/internal/lifecycle"
 )
 
 type Kind string
@@ -219,6 +221,9 @@ func cleanRelativePath(value string) (string, error) {
 	cleaned = strings.TrimPrefix(cleaned, "/")
 	if cleaned == "" || cleaned == "." {
 		return "", fmt.Errorf("media path cannot be empty")
+	}
+	if lifecycle.IsDerivedPath(cleaned) {
+		return "", fmt.Errorf("media path must reference a current media file")
 	}
 	return cleaned, nil
 }
