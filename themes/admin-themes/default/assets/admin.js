@@ -3,8 +3,10 @@
   if (!root) return;
 
   const adminBase = root.dataset.adminBase || '/__admin';
+  const defaultLang = root.dataset.defaultLang || 'en';
   const adminBaseEscaped = adminBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const adminBasePattern = new RegExp(`^${adminBaseEscaped}/?`);
+  const frontmatterFieldNames = ['title', 'slug', 'layout', 'date', 'summary', 'tags', 'categories', 'draft', 'archived', 'lang'];
   const sectionForPath = (pathname) => {
     const path = pathname.replace(/\/+$/, '');
     if (path === adminBase || path === '') return 'overview';
@@ -29,6 +31,7 @@
     documentDiffMode: 'split',
     selectedDocumentTrash: [],
     media: [],
+    mediaPickerQuery: '',
     mediaTrash: [],
     mediaHistory: [],
     mediaHistoryReference: '',
@@ -74,7 +77,9 @@
         'slug: ',
         'layout: page',
         'draft: false',
-        'summary: ',
+        'summary: ""',
+        'tags: []',
+        'categories: []',
         '---',
         '',
         '# Title',
@@ -87,7 +92,7 @@
       'slug: ',
       'layout: post',
       'draft: true',
-      'summary: ',
+      'summary: ""',
       `date: ${today}`,
       'tags: []',
       'categories: []',
@@ -96,6 +101,273 @@
       '# Title',
       ''
     ].join('\n');
+  };
+
+  const slugify = (value) => String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  const parseBool = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+    return false;
+  };
+
+  const stripQuotes = (value) => {
+    const trimmed = String(value || '').trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith('\'') && trimmed.endsWith('\''))) {
+      return trimmed.slice(1, -1);
+    }
+    return trimmed;
+  };
+
+  const parseInlineList = (value) => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed || trimmed === '[]') return [];
+    const inner = trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed;
+    return inner.split(',').map((item) => stripQuotes(item)).map((item) => item.trim()).filter(Boolean);
+  };
+
+  const inferLangFromSourcePath = (sourcePath) => {
+    const normalized = String(sourcePath || '').replaceAll('\\', '/').replace(/^content\//, '');
+    const parts = normalized.split('/').filter(Boolean);
+    if (parts.length >= 3 && (parts[0] === 'pages' || parts[0] === 'posts')) {
+      return parts[1];
+    }
+    return defaultLang;
+  };
+
+  const splitDocumentRaw = (raw) => {
+    const normalized = String(raw || '').replaceAll('\r\n', '\n');
+    const lines = normalized.split('\n');
+    if (lines[0] !== '---') {
+      return { hasFrontmatter: false, frontmatter: '', body: normalized };
+    }
+    for (let index = 1; index < lines.length; index += 1) {
+      if (lines[index] === '---') {
+        return {
+          hasFrontmatter: true,
+          frontmatter: lines.slice(1, index).join('\n'),
+          body: lines.slice(index + 1).join('\n')
+        };
+      }
+    }
+    return { hasFrontmatter: false, frontmatter: '', body: normalized };
+  };
+
+  const parseDocumentEditor = (raw, sourcePath = '') => {
+    const split = splitDocumentRaw(raw);
+    const fields = {
+      title: '',
+      slug: '',
+      layout: sourcePath.includes('/pages/') ? 'page' : 'post',
+      date: '',
+      summary: '',
+      tags: [],
+      categories: [],
+      draft: true,
+      archived: false,
+      lang: inferLangFromSourcePath(sourcePath)
+    };
+    const extraLines = [];
+    const lines = split.frontmatter ? split.frontmatter.split('\n') : [];
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+      if (!match) {
+        extraLines.push(line);
+        continue;
+      }
+
+      const key = match[1].toLowerCase();
+      const value = match[2];
+      if ((key === 'tags' || key === 'categories') && value.trim() === '') {
+        const items = [];
+        let next = index + 1;
+        while (next < lines.length && /^\s*-\s+/.test(lines[next])) {
+          items.push(stripQuotes(lines[next].replace(/^\s*-\s+/, '')));
+          next += 1;
+        }
+        if (next !== index + 1) {
+          fields[key] = items;
+          index = next - 1;
+          continue;
+        }
+      }
+
+      switch (key) {
+        case 'title':
+        case 'slug':
+        case 'layout':
+        case 'date':
+        case 'summary':
+          fields[key] = stripQuotes(value);
+          break;
+        case 'draft':
+        case 'archived':
+          fields[key] = parseBool(value);
+          break;
+        case 'tags':
+        case 'categories':
+          fields[key] = parseInlineList(value);
+          break;
+        case 'lang':
+        case 'language':
+          fields.lang = stripQuotes(value) || inferLangFromSourcePath(sourcePath);
+          break;
+        default:
+          extraLines.push(line);
+      }
+    }
+
+    return {
+      ...split,
+      fields,
+      extraLines
+    };
+  };
+
+  const quoteYAML = (value) => {
+    const stringValue = String(value ?? '');
+    if (stringValue === '') return '""';
+    if (/^[A-Za-z0-9._/-]+$/.test(stringValue)) return stringValue;
+    return JSON.stringify(stringValue);
+  };
+
+  const renderYAMLList = (items) => `[${items.map((item) => quoteYAML(item)).join(', ')}]`;
+
+  const buildDocumentRaw = (fields, body, extraLines = []) => {
+    const normalized = {
+      title: String(fields.title || '').trim(),
+      slug: String(fields.slug || '').trim(),
+      layout: String(fields.layout || '').trim() || 'post',
+      date: String(fields.date || '').trim(),
+      summary: String(fields.summary || ''),
+      tags: Array.isArray(fields.tags) ? fields.tags.filter(Boolean) : [],
+      categories: Array.isArray(fields.categories) ? fields.categories.filter(Boolean) : [],
+      draft: !!fields.draft,
+      archived: !!fields.archived,
+      lang: String(fields.lang || '').trim()
+    };
+    const lines = [
+      '---',
+      `title: ${quoteYAML(normalized.title)}`,
+      `slug: ${quoteYAML(normalized.slug)}`,
+      `layout: ${quoteYAML(normalized.layout)}`,
+      `draft: ${normalized.draft ? 'true' : 'false'}`,
+      `summary: ${quoteYAML(normalized.summary)}`
+    ];
+    if (normalized.date) lines.push(`date: ${quoteYAML(normalized.date)}`);
+    lines.push(`tags: ${renderYAMLList(normalized.tags)}`);
+    lines.push(`categories: ${renderYAMLList(normalized.categories)}`);
+    if (normalized.archived) lines.push('archived: true');
+    if (normalized.lang && normalized.lang !== defaultLang) lines.push(`lang: ${quoteYAML(normalized.lang)}`);
+    extraLines.filter((line) => String(line).trim() !== '').forEach((line) => lines.push(line));
+    lines.push('---', '', String(body || '').replaceAll('\r\n', '\n'));
+    return lines.join('\n');
+  };
+
+  const parseTagInput = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+
+  const editorElements = () => ({
+    sourcePath: document.getElementById('document-source-path'),
+    versionComment: document.getElementById('document-version-comment'),
+    raw: document.getElementById('document-raw'),
+    title: document.getElementById('document-frontmatter-title'),
+    slug: document.getElementById('document-frontmatter-slug'),
+    layout: document.getElementById('document-frontmatter-layout'),
+    date: document.getElementById('document-frontmatter-date'),
+    summary: document.getElementById('document-frontmatter-summary'),
+    tags: document.getElementById('document-frontmatter-tags'),
+    categories: document.getElementById('document-frontmatter-categories'),
+    draft: document.getElementById('document-frontmatter-draft'),
+    archived: document.getElementById('document-frontmatter-archived'),
+    lang: document.getElementById('document-frontmatter-lang')
+  });
+
+  const setStructuredFields = (parsed) => {
+    const elements = editorElements();
+    if (!elements.raw) return;
+    elements.title && (elements.title.value = parsed.fields.title || '');
+    elements.slug && (elements.slug.value = parsed.fields.slug || '');
+    elements.layout && (elements.layout.value = parsed.fields.layout || 'post');
+    elements.date && (elements.date.value = parsed.fields.date || '');
+    elements.summary && (elements.summary.value = parsed.fields.summary || '');
+    elements.tags && (elements.tags.value = (parsed.fields.tags || []).join(', '));
+    elements.categories && (elements.categories.value = (parsed.fields.categories || []).join(', '));
+    elements.draft && (elements.draft.checked = !!parsed.fields.draft);
+    elements.archived && (elements.archived.checked = !!parsed.fields.archived);
+    elements.lang && (elements.lang.value = parsed.fields.lang || inferLangFromSourcePath(elements.sourcePath?.value || state.documentEditor.source_path));
+  };
+
+  const syncStructuredEditorFromRaw = () => {
+    const elements = editorElements();
+    if (!elements.raw) return;
+    state.documentEditor.raw = elements.raw.value;
+    if (elements.sourcePath) {
+      state.documentEditor.source_path = elements.sourcePath.value;
+    }
+    if (elements.versionComment) {
+      state.documentEditor.version_comment = elements.versionComment.value;
+    }
+    setStructuredFields(parseDocumentEditor(elements.raw.value, elements.sourcePath?.value || state.documentEditor.source_path));
+  };
+
+  const syncRawFromStructuredEditor = () => {
+    const elements = editorElements();
+    if (!elements.raw) return;
+    const parsed = parseDocumentEditor(elements.raw.value, elements.sourcePath?.value || state.documentEditor.source_path);
+    const nextFields = {
+      title: elements.title?.value || '',
+      slug: elements.slug?.value || '',
+      layout: elements.layout?.value || parsed.fields.layout || 'post',
+      date: elements.date?.value || '',
+      summary: elements.summary?.value || '',
+      tags: parseTagInput(elements.tags?.value || ''),
+      categories: parseTagInput(elements.categories?.value || ''),
+      draft: !!elements.draft?.checked,
+      archived: !!elements.archived?.checked,
+      lang: elements.lang?.value || defaultLang
+    };
+    const rebuilt = buildDocumentRaw(nextFields, parsed.body, parsed.extraLines);
+    elements.raw.value = rebuilt;
+    state.documentEditor.raw = rebuilt;
+    if (elements.sourcePath) state.documentEditor.source_path = elements.sourcePath.value;
+    if (elements.versionComment) state.documentEditor.version_comment = elements.versionComment.value;
+  };
+
+  const insertIntoMarkdown = (snippet) => {
+    const elements = editorElements();
+    if (!elements.raw) return;
+    const textarea = elements.raw;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    const prefix = start > 0 && !textarea.value.slice(0, start).endsWith('\n') ? '\n' : '';
+    const suffix = end < textarea.value.length && !textarea.value.slice(end).startsWith('\n') ? '\n' : '';
+    const nextValue = textarea.value.slice(0, start) + prefix + snippet + suffix + textarea.value.slice(end);
+    textarea.value = nextValue;
+    state.documentEditor.raw = nextValue;
+    textarea.focus();
+    const cursor = start + prefix.length + snippet.length;
+    textarea.setSelectionRange(cursor, cursor);
+    syncStructuredEditorFromRaw();
+  };
+
+  const mediaSnippet = (item, mode = 'auto') => {
+    if (!item) return '';
+    const label = item.metadata?.alt || item.metadata?.title || item.name;
+    if (mode === 'link') {
+      return `[${label}](${item.reference})`;
+    }
+    return item.kind === 'file'
+      ? `[${label}](${item.reference})`
+      : `![${label}](${item.reference})`;
   };
 
   const request = async (path, options = {}) => {
@@ -305,6 +577,19 @@
   };
 
   const renderDocuments = () => {
+    const editorDocument = parseDocumentEditor(state.documentEditor.raw, state.documentEditor.source_path);
+    const mediaQuery = state.mediaPickerQuery.trim().toLowerCase();
+    const mediaMatches = state.media.filter((item) => {
+      if (!mediaQuery) return true;
+      const haystack = [
+        item.name,
+        item.reference,
+        item.metadata?.title,
+        item.metadata?.alt,
+        item.path
+      ].join(' ').toLowerCase();
+      return haystack.includes(mediaQuery);
+    }).slice(0, 10);
     const rows = state.documents.map((doc) => `
       <div class="table-row table-row-actions">
         <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong><div class="muted mono">${escapeHTML(doc.source_path)}</div></span>
@@ -335,9 +620,65 @@
           <button type="submit">Create Document</button>
         </form>
         <form id="document-save-form" class="stack">
-          <label>Source Path<input id="document-source-path" type="text" value="${escapeHTML(state.documentEditor.source_path)}" placeholder="content/pages/about.md"></label>
-          <label>Version Comment<input id="document-version-comment" type="text" value="${escapeHTML(state.documentEditor.version_comment || '')}" placeholder="Explain what changed in this revision"></label>
-          <label>Raw Markdown<textarea id="document-raw" rows="18" spellcheck="false">${escapeHTML(state.documentEditor.raw)}</textarea></label>
+          <div class="editor-grid">
+            <div class="stack">
+              <label>Source Path<input id="document-source-path" type="text" value="${escapeHTML(state.documentEditor.source_path)}" placeholder="content/pages/about.md"></label>
+              <label>Version Comment<input id="document-version-comment" type="text" value="${escapeHTML(state.documentEditor.version_comment || '')}" placeholder="Explain what changed in this revision"></label>
+              <div class="frontmatter-card">
+                <div class="frontmatter-card-header">
+                  <div>
+                    <strong>Structured Frontmatter</strong>
+                    <div class="muted">Edit the common content fields without leaving raw Markdown.</div>
+                  </div>
+                </div>
+                <div class="frontmatter-grid">
+                  <label>Title<input id="document-frontmatter-title" data-frontmatter-field="title" type="text" value="${escapeHTML(editorDocument.fields.title)}"></label>
+                  <label>Slug<input id="document-frontmatter-slug" data-frontmatter-field="slug" type="text" value="${escapeHTML(editorDocument.fields.slug)}"></label>
+                  <label>Layout
+                    <select id="document-frontmatter-layout" data-frontmatter-field="layout">
+                      <option value="page" ${editorDocument.fields.layout === 'page' ? 'selected' : ''}>page</option>
+                      <option value="post" ${editorDocument.fields.layout === 'post' ? 'selected' : ''}>post</option>
+                      ${editorDocument.fields.layout && !['page', 'post'].includes(editorDocument.fields.layout) ? `<option value="${escapeHTML(editorDocument.fields.layout)}" selected>${escapeHTML(editorDocument.fields.layout)}</option>` : ''}
+                    </select>
+                  </label>
+                  <label>Date<input id="document-frontmatter-date" data-frontmatter-field="date" type="text" value="${escapeHTML(editorDocument.fields.date || '')}" placeholder="2026-03-07"></label>
+                  <label class="frontmatter-span-2">Summary<textarea id="document-frontmatter-summary" data-frontmatter-field="summary" rows="3">${escapeHTML(editorDocument.fields.summary || '')}</textarea></label>
+                  <label>Tags<input id="document-frontmatter-tags" data-frontmatter-field="tags" type="text" value="${escapeHTML((editorDocument.fields.tags || []).join(', '))}" placeholder="go, cms, architecture"></label>
+                  <label>Categories<input id="document-frontmatter-categories" data-frontmatter-field="categories" type="text" value="${escapeHTML((editorDocument.fields.categories || []).join(', '))}" placeholder="engineering"></label>
+                  <label>Language<input id="document-frontmatter-lang" data-frontmatter-field="lang" type="text" value="${escapeHTML(editorDocument.fields.lang || defaultLang)}" placeholder="${escapeHTML(defaultLang)}"></label>
+                  <label class="checkbox"><input id="document-frontmatter-draft" data-frontmatter-field="draft" type="checkbox" ${editorDocument.fields.draft ? 'checked' : ''}> Draft</label>
+                  <label class="checkbox"><input id="document-frontmatter-archived" data-frontmatter-field="archived" type="checkbox" ${editorDocument.fields.archived ? 'checked' : ''}> Archived</label>
+                </div>
+              </div>
+            </div>
+            <div class="stack">
+              <label>Raw Markdown<textarea id="document-raw" rows="20" spellcheck="false">${escapeHTML(state.documentEditor.raw)}</textarea></label>
+              <div class="media-picker">
+                <div class="media-picker-header">
+                  <div>
+                    <strong>Media Picker</strong>
+                    <div class="muted">Insert stable <code>media:</code> references at the cursor.</div>
+                  </div>
+                  <input id="document-media-picker-query" type="search" value="${escapeHTML(state.mediaPickerQuery)}" placeholder="Search media">
+                </div>
+                <div class="media-picker-list">
+                  ${mediaMatches.length
+                    ? mediaMatches.map((item) => `
+                      <div class="media-picker-row">
+                        <div class="media-picker-meta">
+                          <strong>${escapeHTML(item.name)}</strong>
+                          <div class="muted mono">${escapeHTML(item.reference)}</div>
+                        </div>
+                        <div class="row-actions">
+                          <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="auto">Insert</button>
+                          <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="link">Insert Link</button>
+                        </div>
+                      </div>`).join('')
+                    : '<div class="empty-state">No media matched your search.</div>'}
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="toolbar">
             <button type="submit">Save Document</button>
             <button type="button" class="ghost" id="document-preview-button">Preview</button>
@@ -661,6 +1002,47 @@
       state.flash = '';
       state.error = '';
       render();
+    });
+
+    document.getElementById('document-source-path')?.addEventListener('input', () => {
+      state.documentEditor.source_path = document.getElementById('document-source-path').value;
+      syncStructuredEditorFromRaw();
+    });
+
+    document.getElementById('document-version-comment')?.addEventListener('input', () => {
+      state.documentEditor.version_comment = document.getElementById('document-version-comment').value;
+    });
+
+    document.getElementById('document-raw')?.addEventListener('input', () => {
+      syncStructuredEditorFromRaw();
+    });
+
+    ['document-frontmatter-title', 'document-frontmatter-slug', 'document-frontmatter-layout', 'document-frontmatter-date', 'document-frontmatter-summary', 'document-frontmatter-tags', 'document-frontmatter-categories', 'document-frontmatter-draft', 'document-frontmatter-archived', 'document-frontmatter-lang']
+      .forEach((id) => {
+        const field = document.getElementById(id);
+        if (!field) return;
+        field.addEventListener(field.type === 'checkbox' ? 'change' : 'input', () => {
+          if (id === 'document-frontmatter-title') {
+            const slugField = document.getElementById('document-frontmatter-slug');
+            if (slugField && !slugField.value.trim()) {
+              slugField.value = slugify(field.value);
+            }
+          }
+          syncRawFromStructuredEditor();
+        });
+      });
+
+    document.getElementById('document-media-picker-query')?.addEventListener('input', (event) => {
+      state.mediaPickerQuery = event.target.value;
+      render();
+    });
+
+    root.querySelectorAll('[data-insert-media]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const item = state.media.find((entry) => entry.reference === button.dataset.insertMedia);
+        if (!item) return;
+        insertIntoMarkdown(mediaSnippet(item, button.dataset.insertMode || 'auto'));
+      });
     });
 
     document.getElementById('document-create-form')?.addEventListener('submit', async (event) => {

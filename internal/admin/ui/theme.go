@@ -33,13 +33,15 @@ func (m *Manager) RenderIndex() ([]byte, error) {
 	data := struct {
 		Title     string
 		AdminPath string
+		DefaultLang string
 		ThemeName string
 		ThemeBase string
 	}{
-		Title:     m.cfg.Title,
-		AdminPath: m.cfg.AdminPath(),
-		ThemeName: m.themeName(),
-		ThemeBase: m.cfg.AdminPath() + "/theme",
+		Title:       m.cfg.Title,
+		AdminPath:   m.cfg.AdminPath(),
+		DefaultLang: m.cfg.DefaultLang,
+		ThemeName:   m.themeName(),
+		ThemeBase:   m.cfg.AdminPath() + "/theme",
 	}
 
 	var buf bytes.Buffer
@@ -122,7 +124,7 @@ const defaultIndexTemplate = `<!doctype html>
   <link rel="stylesheet" href="{{ .ThemeBase }}/admin.css">
 </head>
 <body>
-  <div id="app" data-admin-base="{{ .AdminPath }}" data-theme="{{ .ThemeName }}">
+  <div id="app" data-admin-base="{{ .AdminPath }}" data-default-lang="{{ .DefaultLang }}" data-theme="{{ .ThemeName }}">
     <noscript>Foundry admin requires JavaScript.</noscript>
   </div>
   <script src="{{ .ThemeBase }}/admin.js"></script>

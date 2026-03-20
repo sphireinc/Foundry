@@ -351,6 +351,76 @@ button.danger,
   align-items: end;
 }
 
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.25fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.frontmatter-card,
+.media-picker {
+  border: 1px solid var(--wp-line);
+  border-radius: 4px;
+  background: #f6f7f7;
+}
+
+.frontmatter-card-header,
+.media-picker-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 14px 0;
+}
+
+.frontmatter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.frontmatter-span-2 {
+  grid-column: span 2;
+}
+
+.media-picker-header input[type="search"] {
+  max-width: 260px;
+}
+
+.media-picker-list {
+  display: grid;
+  gap: 0;
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 10px;
+  border-top: 1px solid var(--wp-line);
+}
+
+.media-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px 14px;
+  align-items: center;
+  border-top: 1px solid var(--wp-line);
+}
+
+.media-picker-row:first-child {
+  border-top: 0;
+}
+
+.media-picker-meta {
+  min-width: 0;
+}
+
+.media-picker-meta strong,
+.media-picker-meta .mono {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -484,6 +554,10 @@ button.small {
   .inline-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 940px) {
@@ -500,6 +574,14 @@ button.small {
   .layout-grid,
   .cards {
     grid-template-columns: 1fr;
+  }
+
+  .frontmatter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .frontmatter-span-2 {
+    grid-column: auto;
   }
 
   .table-head,
