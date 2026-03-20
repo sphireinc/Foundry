@@ -24,6 +24,9 @@ func TestRenderIndexEscapesTitle(t *testing.T) {
 	if !strings.Contains(html, "&lt;script&gt;alert(1)&lt;/script&gt; Admin") {
 		t.Fatalf("expected escaped title in output, got %q", html)
 	}
+	if !strings.Contains(html, `data-default-lang="en"`) {
+		t.Fatalf("expected default lang data attribute in output, got %q", html)
+	}
 }
 
 func TestManagerLoadsFilesystemThemeWhenPresent(t *testing.T) {
@@ -53,5 +56,19 @@ func TestManagerLoadsFilesystemThemeWhenPresent(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "studio theme") {
 		t.Fatalf("expected custom theme html, got %q", string(body))
+	}
+}
+
+func TestDefaultAdminThemeAssetsIncludeStructuredEditor(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "..", "themes", "admin-themes", "default", "assets", "admin.js"))
+	if err != nil {
+		t.Fatalf("read default admin theme js: %v", err)
+	}
+	source := string(body)
+	if !strings.Contains(source, "Structured Frontmatter") {
+		t.Fatalf("expected structured frontmatter UI in admin.js")
+	}
+	if !strings.Contains(source, "Insert stable <code>media:</code> references at the cursor.") {
+		t.Fatalf("expected media picker UI in admin.js")
 	}
 }
