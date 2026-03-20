@@ -206,7 +206,7 @@ func (s *Service) ListMediaTrash(ctx context.Context) ([]types.MediaHistoryEntry
 			}
 			entry, err := s.mediaHistoryEntry(path)
 			if err != nil {
-				return err
+				return nil
 			}
 			entries = append(entries, entry)
 			return nil
@@ -434,19 +434,22 @@ func (s *Service) mediaHistoryEntry(path string) (types.MediaHistoryEntry, error
 	if err != nil {
 		return types.MediaHistoryEntry{}, err
 	}
-	metadata, versionComment, actor, err := s.loadMediaHistoryMetadata(path)
-	if err != nil {
-		return types.MediaHistoryEntry{}, err
-	}
-	ref, currentRef, resolved, err := s.mediaReferenceInfoForPath(path)
-	if err != nil {
-		return types.MediaHistoryEntry{}, err
-	}
-
 	originalPath, state, ts, ok := lifecycle.ParsePathDetails(path)
 	if !ok {
 		originalPath = path
 		state = lifecycle.StateCurrent
+	}
+	metadata, versionComment, actor, err := s.loadMediaHistoryMetadata(path)
+	if err != nil {
+		// History/trash views should remain usable even when an optional sidecar is
+		// missing or malformed.
+		metadata = types.MediaMetadata{}
+		versionComment = ""
+		actor = ""
+	}
+	ref, currentRef, resolved, err := s.mediaHistoryReferenceInfo(path, originalPath, state)
+	if err != nil {
+		return types.MediaHistoryEntry{}, err
 	}
 	var timestamp *time.Time
 	if !ts.IsZero() {
@@ -494,7 +497,7 @@ func (s *Service) mediaMetadataHistoryEntry(path string) (types.MediaHistoryEntr
 		timestamp = &ts
 	}
 	primaryOriginal := strings.TrimSuffix(originalPath, ".meta.yaml")
-	_, currentRef, resolved, err := s.mediaReferenceInfoForPath(primaryOriginal)
+	_, currentRef, resolved, err := s.mediaHistoryReferenceInfo(primaryOriginal, primaryOriginal, lifecycle.StateCurrent)
 	if err != nil {
 		return types.MediaHistoryEntry{}, err
 	}
@@ -667,6 +670,22 @@ func (s *Service) mediaReferenceInfoForPath(fullPath string) (string, string, me
 		return reference, currentReference, resolved, nil
 	}
 	return "", "", media.Reference{}, fmt.Errorf("media path must stay inside a media collection root")
+}
+
+func (s *Service) mediaHistoryReferenceInfo(path, originalPath string, state lifecycle.State) (string, string, media.Reference, error) {
+	_, currentReference, currentResolved, err := s.mediaReferenceInfoForPath(originalPath)
+	if err != nil {
+		return "", "", media.Reference{}, err
+	}
+	if state == lifecycle.StateCurrent {
+		return currentReference, currentReference, currentResolved, nil
+	}
+
+	reference, _, derivedResolved, err := s.mediaReferenceInfoForPath(path)
+	if err != nil {
+		return currentReference, currentReference, currentResolved, nil
+	}
+	return reference, currentReference, derivedResolved, nil
 }
 
 func (s *Service) restoreMediaMetadata(oldPrimaryPath, restoredPrimaryPath string) error {

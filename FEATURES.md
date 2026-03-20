@@ -14,7 +14,7 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Document summaries, detail views, and raw source access** in the admin and CLI
 - **Draft and published workflows** built directly into content state
 - **Archived content support** without deleting the source document state
-- **Soft delete with trash recovery pathing**, moving deleted content into a `.trash` area instead of hard-deleting it
+- **In-place soft delete and versioning** using `*.trash.<timestamp>.*` and `*.version.<timestamp>.*` file conventions
 
 ## Authoring and editorial workflow
 
@@ -22,11 +22,16 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Create new posts from the admin**
 - **Create content from archetypes/templates**
 - **Optional language selection at document creation time**
+- **Structured frontmatter editor** in the admin for title, slug, layout, date, summary, tags, categories, language, draft, and archived state
 - **Edit raw Markdown directly** from the admin
+- **Two-way sync between structured fields and raw frontmatter**
+- **Version comments** captured alongside document revisions
 - **Live document preview** before publishing
 - **Save content back to the filesystem** with validation and safe path handling
 - **Document listing with filters** for drafts, type, language, and text query
 - **Status switching** between published, draft, and archived
+- **Document history, diff, restore, and purge flows** in the admin
+- **Trash and history views** for editorial recovery workflows
 - **Word count support** in preview responses and plugin data
 
 ## Multilingual and routing features
@@ -75,8 +80,12 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Filename sanitization for uploaded media**
 - **Media library in admin**
 - **Media detail views in admin**
+- **Media thumbnails and previews** for images, video, audio, and files
 - **Editable media metadata** including title, alt text, caption, description, credit, and tags
 - **Metadata sidecars for media records**
+- **Media history, restore, and purge flows**
+- **Media replacement** that preserves canonical `media:` references
+- **Where-used detection** for media references across documents
 - **Media deletion from admin**
 - **Asset pipeline for content assets, theme assets, images, uploads, and plugin assets**
 - **Bundled CSS output** into a single Foundry stylesheet
@@ -93,6 +102,7 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Optional browser auto-open** on local serve
 - **Preview server diagnostics** and debug output for route and timing inspection
 - **Explicit server read, write, and idle timeouts**
+- **Frontend search index generation** written to `public/search.json`
 
 ## SEO and syndication
 
@@ -118,6 +128,10 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **User listing, create/update, disable, and delete from the admin**
 - **Dashboard-style system overview** including content counts, draft counts, users, themes, plugins, and media
 - **System status endpoint** with health and configuration visibility
+- **Audit log view** for authentication and admin-management activity
+- **Keyboard shortcuts** for save, preview, shortcut help, and section jumps
+- **Unsaved-change warnings, toasts, breadcrumbs, and better error surfaces**
+- **Client-side pagination, filtering, and sorting** across major admin tables
 
 ## Security and operational safeguards
 
@@ -131,6 +145,7 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Safe path validation** across themes, plugins, content operations, and assets
 - **Supply-chain-conscious plugin installation rules** restricted to GitHub sources
 - **Optional unsafe HTML toggle** for Markdown rendering when explicitly enabled
+- **Validation for broken `media:` references and broken internal links**
 
 ## Theme system
 

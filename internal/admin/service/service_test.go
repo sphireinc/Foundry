@@ -481,6 +481,40 @@ func TestMediaHistoryRestoreAndPurge(t *testing.T) {
 	}
 }
 
+func TestListMediaTrashForRootUploadWithoutMetadata(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	upload, err := svc.SaveMedia(context.Background(), "images", "", "1768917471861.png", "image/png", []byte("img"))
+	if err != nil {
+		t.Fatalf("save media: %v", err)
+	}
+
+	if err := svc.DeleteMedia(context.Background(), upload.Reference); err != nil {
+		t.Fatalf("delete media: %v", err)
+	}
+
+	trash, err := svc.ListMediaTrash(context.Background())
+	if err != nil {
+		t.Fatalf("list media trash: %v", err)
+	}
+	if len(trash) != 1 {
+		t.Fatalf("expected one media trash entry, got %#v", trash)
+	}
+	if trash[0].State != types.LifecycleStateTrash {
+		t.Fatalf("expected trash state, got %#v", trash[0])
+	}
+	if trash[0].Collection != "images" {
+		t.Fatalf("expected images collection, got %#v", trash[0])
+	}
+	if trash[0].CurrentReference != upload.Reference {
+		t.Fatalf("expected current reference %q, got %#v", upload.Reference, trash[0])
+	}
+	if !strings.Contains(trash[0].Path, "1768917471861.trash.") || !strings.HasSuffix(trash[0].Path, ".png") {
+		t.Fatalf("expected trash path for numeric root upload, got %#v", trash[0])
+	}
+}
+
 func TestGetMediaDetailIncludesUsage(t *testing.T) {
 	cfg := testServiceConfig(t)
 	uploadPath := filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", "diagram.png")

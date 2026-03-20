@@ -71,4 +71,7 @@ func TestDefaultAdminThemeAssetsIncludeStructuredEditor(t *testing.T) {
 	if !strings.Contains(source, "Insert stable <code>media:</code> references at the cursor.") {
 		t.Fatalf("expected media picker UI in admin.js")
 	}
+	if !strings.Contains(source, "Keyboard Shortcuts") || !strings.Contains(source, "data-table-sort") {
+		t.Fatalf("expected admin polish controls in admin.js")
+	}
 }
