@@ -1,0 +1,13 @@
+services:
+  foundry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: foundry
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: ["foundry", "--config-overlay", "content/config/site.docker.yaml", "serve"]
+    restart: unless-stopped

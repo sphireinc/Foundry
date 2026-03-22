@@ -61,6 +61,37 @@ func TestUpdateInstalledRejectsInvalidCases(t *testing.T) {
 	}
 }
 
+func TestRollbackInstalledAndDiagnose(t *testing.T) {
+	root := t.TempDir()
+	writePluginMetaFile(t, root, "alpha", "name: alpha\nrepo: github.com/acme/alpha\nfoundry_api: v1\nmin_foundry_version: 0.1.0\ncompatibility_version: v1\nconfig_schema:\n  - name: accent\n    type: text\n")
+	writePluginCodeFile(t, root, "alpha")
+
+	if _, err := backupInstalled(root, "alpha"); err != nil {
+		t.Fatalf("backup installed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "alpha"), 0o755); err != nil {
+		t.Fatalf("recreate plugin dir: %v", err)
+	}
+	writePluginMetaFile(t, root, "alpha", "name: alpha\nrepo: github.com/acme/alpha\nfoundry_api: v1\nmin_foundry_version: 0.1.0\ncompatibility_version: v1\n")
+	writePluginCodeFile(t, root, "alpha")
+
+	meta, err := RollbackInstalled(root, "alpha")
+	if err != nil {
+		t.Fatalf("rollback installed: %v", err)
+	}
+	if meta.Name != "alpha" {
+		t.Fatalf("unexpected rollback metadata: %#v", meta)
+	}
+	if has, err := HasRollback(root, "alpha"); err != nil || !has {
+		t.Fatalf("expected rollback snapshots to remain available, got %v %v", has, err)
+	}
+
+	report := DiagnoseInstalled(root, meta, true)
+	if !report.Healthy || report.Status != "enabled" {
+		t.Fatalf("expected healthy enabled plugin, got %#v", report)
+	}
+}
+
 func TestManageHelpersValidation(t *testing.T) {
 	if _, err := ListInstalled(filepath.Join(t.TempDir(), "missing")); err != nil {
 		t.Fatalf("expected missing plugins dir to be empty list, got %v", err)

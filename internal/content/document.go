@@ -10,6 +10,7 @@ type Document struct {
 	Type       string
 	Lang       string
 	IsDefault  bool
+	Status     string
 	Title      string
 	Slug       string
 	URL        string
@@ -20,8 +21,11 @@ type Document struct {
 	HTMLBody   template.HTML
 	Summary    string
 	Date       *time.Time
+	CreatedAt  *time.Time
 	UpdatedAt  *time.Time
 	Draft      bool
+	Author     string
+	LastEditor string
 	Params     map[string]any
 	Fields     map[string]any
 	Taxonomies map[string][]string
@@ -34,7 +38,10 @@ type FrontMatter struct {
 	Draft      bool                `yaml:"draft"`
 	Summary    string              `yaml:"summary"`
 	Date       *time.Time          `yaml:"date"`
+	CreatedAt  *time.Time          `yaml:"created_at,omitempty"`
 	UpdatedAt  *time.Time          `yaml:"updated_at"`
+	Author     string              `yaml:"author,omitempty"`
+	LastEditor string              `yaml:"last_editor,omitempty"`
 	Fields     map[string]any      `yaml:"fields"`
 	Tags       []string            `yaml:"tags"`
 	Categories []string            `yaml:"categories"`

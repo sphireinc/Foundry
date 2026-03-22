@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -25,12 +26,17 @@ type File struct {
 }
 
 type User struct {
-	Username     string `yaml:"username"`
-	Name         string `yaml:"name"`
-	Email        string `yaml:"email"`
-	Role         string `yaml:"role,omitempty"`
-	PasswordHash string `yaml:"password_hash"`
-	Disabled     bool   `yaml:"disabled,omitempty"`
+	Username          string    `yaml:"username"`
+	Name              string    `yaml:"name"`
+	Email             string    `yaml:"email"`
+	Role              string    `yaml:"role,omitempty"`
+	Capabilities      []string  `yaml:"capabilities,omitempty"`
+	PasswordHash      string    `yaml:"password_hash"`
+	Disabled          bool      `yaml:"disabled,omitempty"`
+	TOTPEnabled       bool      `yaml:"totp_enabled,omitempty"`
+	TOTPSecret        string    `yaml:"totp_secret,omitempty"`
+	ResetTokenHash    string    `yaml:"reset_token_hash,omitempty"`
+	ResetTokenExpires time.Time `yaml:"reset_token_expires,omitempty"`
 }
 
 func Load(path string) ([]User, error) {
@@ -49,7 +55,10 @@ func Load(path string) ([]User, error) {
 		user.Username = strings.TrimSpace(user.Username)
 		user.Name = strings.TrimSpace(user.Name)
 		user.Email = strings.TrimSpace(user.Email)
+		user.Role = strings.TrimSpace(user.Role)
 		user.PasswordHash = strings.TrimSpace(user.PasswordHash)
+		user.TOTPSecret = strings.TrimSpace(user.TOTPSecret)
+		user.ResetTokenHash = strings.TrimSpace(user.ResetTokenHash)
 		if user.Username == "" {
 			continue
 		}
@@ -86,6 +95,7 @@ func Save(path string, entries []User) error {
 }
 
 func HashPassword(password string) (string, error) {
+	// TODO: this is all from Flight Manager, I should revisit this for security
 	password = strings.TrimSpace(password)
 	if password == "" {
 		return "", fmt.Errorf("password cannot be empty")
@@ -107,6 +117,7 @@ func HashPassword(password string) (string, error) {
 }
 
 func VerifyPassword(encodedHash, password string) bool {
+	// TODO: See HashPassword
 	parts := strings.Split(strings.TrimSpace(encodedHash), "$")
 	if len(parts) != 4 || parts[0] != hashAlgorithm {
 		return false
@@ -147,6 +158,7 @@ func parsePositiveInt(raw string) (int, error) {
 }
 
 func pbkdf2SHA256(password, salt []byte, iterations, keyLen int) []byte {
+	// TODO: See HashPassword
 	hLen := 32
 	blocks := (keyLen + hLen - 1) / hLen
 	out := make([]byte, 0, blocks*hLen)
@@ -169,6 +181,7 @@ func pbkdf2SHA256(password, salt []byte, iterations, keyLen int) []byte {
 }
 
 func hmacSHA256(key, data []byte) []byte {
+	// TODO: See HashPassword
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write(data)
 	return mac.Sum(nil)

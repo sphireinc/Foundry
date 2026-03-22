@@ -77,6 +77,91 @@ Two graph types matter:
 
 The dependency graph includes taxonomy archive outputs, so incremental rebuilds can target both document pages and taxonomy pages.
 
+## Formatting
+
+Foundry uses:
+
+- `go fmt` for Go code
+- `prettier` for JS, CSS, HTML, and Markdown assets/docs
+
+Install the formatter tooling once:
+
+```bash
+npm install
+```
+
+Then run:
+
+```bash
+make fmt
+make fmt-web
+make fmt-all
+```
+
+## Official JavaScript SDKs
+
+Foundry now ships two official framework-agnostic JavaScript SDKs under `sdk/`:
+
+- `sdk/admin`
+- `sdk/frontend`
+
+They exist to give admin frontends, plugin UIs, and JS-powered themes a supported client contract instead of forcing each consumer to hand-roll fetch logic against unstable internal endpoints.
+
+The Admin SDK targets the authenticated admin API under `admin.path + /api`.
+
+The Frontend SDK targets the public Foundry platform surface under `/__foundry`, with a live JSON API in preview/server mode and generated static artifacts under `public/__foundry/` for built sites.
+
+The shared SDK core handles:
+
+- request construction
+- normalized JSON/error handling
+- capability discovery helpers
+- common client configuration
+
+The current official browser entrypoints are:
+
+```text
+/__foundry/sdk/admin/index.js
+/__foundry/sdk/frontend/index.js
+```
+
+Example:
+
+```js
+import { createAdminClient } from '/__foundry/sdk/admin/index.js';
+import { createFrontendClient } from '/__foundry/sdk/frontend/index.js';
+
+const admin = createAdminClient({ baseURL: '/__admin' });
+const frontend = createFrontendClient({ mode: 'auto' });
+```
+
+Current capability discovery endpoints:
+
+- admin: `<admin.path>/api/capabilities`
+- frontend: `/__foundry/api/capabilities`
+
+Built sites also emit frontend SDK data artifacts under:
+
+```text
+public/__foundry/
+  capabilities.json
+  site.json
+  navigation.json
+  routes.json
+  collections.json
+  search.json
+  preview.json
+  content/<id>.json
+  sdk/...
+```
+
+The shipped themes use these SDKs too:
+
+- the default admin theme imports the Admin SDK from `/__foundry/sdk/admin/index.js`
+- the default frontend theme boots a small SDK-based runtime from `/theme/js/foundry-theme.js`
+
+Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals.
+
 ## Quick start
 
 ### Prerequisites
@@ -122,7 +207,7 @@ themes/
 plugins/
 ```
 
-Minimal `content/config/site.yaml`:
+Minimal `content/config/site.yaml` (though you can just cope the `example.site.yaml`):
 
 ```yaml
 title: My Site
@@ -169,11 +254,21 @@ foundry build
 
 Generated files will be written to `public/`.
 
+For preview-oriented output that includes non-published workflow states:
+
+```bash
+foundry build --preview
+```
+
+That also writes a preview manifest at `public/preview-links.json`.
+
 ### Common commands
 
 ```bash
 foundry version
 foundry build
+foundry build --preview
+foundry build --env preview --target production
 foundry serve
 foundry serve --debug
 foundry serve-preview
@@ -187,7 +282,7 @@ foundry admin hash-password your-password
 
 1. Update `content/config/site.yaml`.
 2. Add pages and posts under `content/pages` and `content/posts`.
-3. Put images under `content/images` and videos or other uploaded files under `content/uploads`.
+3. Put media under the dedicated collection roots: `content/images`, `content/videos`, `content/audio`, and `content/documents`.
 4. Reference media from Markdown with the `media:` scheme.
 5. Run `foundry serve` during development.
 6. Run `foundry build` before publishing or checking generated output.
@@ -196,20 +291,21 @@ Embedded media uses normal Markdown image syntax:
 
 ```md
 ![Hero image](media:images/hero/banner.jpg)
-![Walkthrough video](media:uploads/demo.mp4)
+![Walkthrough video](media:videos/demo.mp4)
 ```
 
 File links use normal Markdown link syntax:
 
 ```md
-[Download the spec](media:uploads/spec-sheet.pdf)
+[Download the spec](media:documents/spec-sheet.pdf)
 ```
 
 Admin uploads return stable references in the same format, for example:
 
 ```text
 media:images/posts/launch/diagram.png
-media:uploads/posts/launch/demo.mp4
+media:videos/posts/launch/demo.mp4
+media:documents/posts/launch/spec-sheet.pdf
 ```
 
 If a page appears to hang during local preview, run `foundry serve --debug` to emit per-request timing plus runtime snapshots, including:
@@ -223,6 +319,55 @@ If a page appears to hang during local preview, run `foundry serve --debug` to e
 
 If live reload causes browser connection stalls in development, switch `server.live_reload_mode` from `stream` to `poll`. `stream` uses Server-Sent Events and refreshes immediately. `poll` trades a small delay for simpler connection behavior.
 
+## Deploy and operations
+
+Foundry supports environment-specific config overlays and named deploy targets.
+
+If `content/config/site.preview.yaml` exists, it can be layered on top of the base config with:
+
+```bash
+foundry build --env preview
+```
+
+Named targets are configured under `deploy.targets` and applied with:
+
+```bash
+foundry build --target production
+foundry build --env staging --target edge
+```
+
+If `deploy.default_target` is set, Foundry applies that target automatically when no explicit `--target` flag is provided.
+
+`foundry doctor` now reports timing breakdowns for:
+
+- plugin config hooks
+- content/data loading
+- route assignment
+- route hooks
+- asset sync
+- renderer
+- feed generation
+
+`foundry validate` now checks:
+
+- broken internal links
+- broken `media:` references
+- missing layout templates
+- orphaned media
+- duplicate URLs
+- duplicate type/lang slug combinations
+- taxonomy inconsistencies
+
+The content command set also includes portability and migration helpers:
+
+```bash
+foundry content export bundle.zip
+foundry content import markdown ./legacy-markdown
+foundry content import wordpress ./wordpress.xml
+foundry content migrate layout page landing --dry-run
+foundry content migrate field-rename marketing old_field new_field --dry-run
+```
+
 ## Content model
 
 Foundry currently supports two primary document types:
@@ -235,7 +380,9 @@ Content is loaded from:
 - `content/pages`
 - `content/posts`
 - `content/images`
-- `content/uploads`
+- `content/videos`
+- `content/audio`
+- `content/documents`
 
 Language variants are represented by a leading language directory. For example:
 
@@ -263,7 +410,7 @@ Markdown files use frontmatter for metadata such as:
 
 ### Multimedia
 
-Foundry supports images, video, audio, and downloadable files through the `media:` reference scheme.
+Foundry supports images, video, audo, and downloadable files through the `media:` reference scheme.
 
 - `media:images/...` resolves to `/images/...`
 - `media:uploads/...` resolves to `/uploads/...`
@@ -298,7 +445,7 @@ Important config groups:
 
 `admin.path` controls where the themeable admin shell is mounted. By default it is `/__admin`. The shell itself is public so the browser can load HTML, CSS, and JavaScript. Authenticated API access is session-based by default.
 
-Admin users live in a filesystem-backed YAML file, which defaults to:
+Admin users live in a filesystem-backed YAM file, which defaults to:
 
 ```text
 content/config/admin-users.yaml
@@ -338,11 +485,46 @@ Admin themes live under:
 
 ```text
 themes/admin-themes/<name>/
+  admin-theme.yaml
   index.html
   assets/
     admin.css
     admin.js
 ```
+
+`admin-theme.yaml` is the admin-theme manifest. It now supports:
+
+- `admin_api`
+- `sdk_version`
+- `compatibility_version`
+- `components`
+- `widget_slots`
+- `screenshots`
+
+Both shipped themes now declare and validate against the current SDK contract:
+
+- frontend theme `sdk_version: v1`
+- admin theme `sdk_version: v1`
+
+The current stable admin-theme component contract is:
+
+- `shell`
+- `login`
+- `navigation`
+- `documents`
+- `media`
+- `users`
+- `config`
+- `plugins`
+- `themes`
+- `audit`
+
+The current stable admin-theme widget-slot contract is:
+
+- `overview.after`
+- `documents.sidebar`
+- `media.sidebar`
+- `plugins.sidebar`
 
 Set the active admin theme with:
 
@@ -357,20 +539,24 @@ admin:
 
 `admin.local_only` is a convenience restriction for local development. It should not be treated as the only security boundary in front of a reverse proxy.
 
-The default admin theme now includes:
+The dfault admin theme now includes:
 
 - a structured frontmatter editor that stays in sync with raw Markdown
 - media-picker insertion for stable `media:` references
 - document and media history/trash views with restore and purge actions
+- restore-preview flows that load a diff before a document restore is committed
 - media replacement while preserving the canonical reference path
 - an audit log view
+- dedicated user-security flows for password reset tokens, TOTP setup/disable, and session revocation
+- a Debug page with runtime, content, storage, integrity, activity, and persisted build-report visibility when `admin.debug.pprof` is enabled
 - keyboard shortcuts:
   - `Cmd/Ctrl+S` save the current form
   - `Cmd/Ctrl+Enter` preview the current document
+  - `Cmd/Ctrl+K` open the command palette
   - `Shift+/` toggle shortcut help
   - `g d`, `g m`, `g u`, `g a` jump to Documents, Media, Users, and Audit
 
-The admin UI also includes breadcrumbs, toast notifications, unsaved-change warnings, clearer error panels, and client-side pagination/sorting for the major management tables.
+The admin UI also includes breadcrumbs, toast notifications, unsaved-change warnings, clearer error panels, a command palette for fast navigation and creation shortcuts, review/scheduled overview queues, and client-side pagination/sorting for the major management tables.
 
 ### Security
 
@@ -394,6 +580,8 @@ Static builds now also emit a frontend search index at:
 ```text
 public/search.json
 ```
+
+The generated and live search surfaces now include snippets, and the search APIs apply simple weighted ranking so title and summary matches are promoted ahead of body-only matches.
 
 `foundry validate` now checks for:
 
@@ -430,6 +618,13 @@ Themes are responsible for:
 - taxonomy archive templates
 - theme-specific assets
 
+Theme manifests now support richer metadata:
+
+- `supported_layouts`
+- `config_schema`
+- `screenshots`
+- `compatibility_version`
+
 Launch themes are also expected to support the current minimum slot contract:
 
 - `head.end`
@@ -452,6 +647,12 @@ Theme validation now checks both of these conditions:
 - the theme manifest declares the required slots
 - the corresponding layouts actually render those slots
 
+It also checks:
+
+- required layouts and partials
+- template references to missing partials/layouts
+- template parse failures with diagnostics suitable for admin reporting
+
 ## Plugins
 
 Plugins live under `plugins/<name>/` and are registered through generated imports.
@@ -464,7 +665,20 @@ Current plugin capabilities include:
 - asset injection
 - plugin validation and dependency checks
 
+Plugin manifests now also support:
+
+- `dependencies`
+- `compatibility_version`
+- `config_schema`
+- `screenshots`
+
 Plugin installation is intentionally conservative now: install sources are restricted to GitHub over `https` or `git@github.com`. Installing a plugin still means trusting third-party code, so treat it as a supply-chain boundary.
+
+Plugin management is safer now:
+
+- updates keep rollback snapshots under `plugins/.rollback/<name>/...`
+- plugins can be rolled back to the latest preserved snapshot
+- admin plugin records now include health/diagnostic reporting, dependency/config metadata, and rollback availability
 
 ## Incremental rebuilds
 

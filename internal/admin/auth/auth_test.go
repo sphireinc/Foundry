@@ -115,7 +115,7 @@ func TestLoginAndSessionCookieAuthentication(t *testing.T) {
 	loginReq.RemoteAddr = "127.0.0.1:12345"
 	rr := httptest.NewRecorder()
 
-	identity, err := m.Login(rr, loginReq, "admin", "secret-password")
+	identity, err := m.Login(rr, loginReq, "admin", "secret-password", "")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestLoginSetsSecureCookieForTLSRequests(t *testing.T) {
 	req.TLS = &tls.ConnectionState{}
 	rr := httptest.NewRecorder()
 
-	if _, err := m.Login(rr, req, "admin", "secret-password"); err != nil {
+	if _, err := m.Login(rr, req, "admin", "secret-password", ""); err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
 	cookies := rr.Result().Cookies()
@@ -177,14 +177,14 @@ func TestLoginThrottlesRepeatedFailures(t *testing.T) {
 	for i := 0; i < loginMaxFailures; i++ {
 		req := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
 		req.RemoteAddr = "127.0.0.1:12345"
-		if _, err := m.Login(nil, req, "admin", "wrong-password"); err == nil {
+		if _, err := m.Login(nil, req, "admin", "wrong-password", ""); err == nil {
 			t.Fatalf("expected login failure %d", i+1)
 		}
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
-	if _, err := m.Login(nil, req, "admin", "secret-password"); err == nil || err.Error() != "too many login attempts; try again later" {
+	if _, err := m.Login(nil, req, "admin", "secret-password", ""); err == nil || err.Error() != "too many login attempts; try again later" {
 		t.Fatalf("expected throttling error, got %v", err)
 	}
 }
@@ -197,7 +197,7 @@ func TestWrapRoleRejectsInsufficientRole(t *testing.T) {
 	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
 	loginReq.RemoteAddr = "127.0.0.1:12345"
 	loginRR := httptest.NewRecorder()
-	if _, err := m.Login(loginRR, loginReq, "editor", "editor-password"); err != nil {
+	if _, err := m.Login(loginRR, loginReq, "editor", "editor-password", ""); err != nil {
 		t.Fatalf("editor login failed: %v", err)
 	}
 	cookies := loginRR.Result().Cookies()

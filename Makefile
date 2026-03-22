@@ -23,6 +23,8 @@ help:
 	@echo "make test            Run tests"
 	@echo "make lint            Run go vet"
 	@echo "make fmt             Format Go code"
+	@echo "make fmt-web         Format JS/CSS/HTML/Markdown with Prettier"
+	@echo "make fmt-all         Format Go and web/docs assets"
 	@echo ""
 
 .PHONY: plugins-sync
@@ -77,6 +79,13 @@ release:
 .PHONY: fmt
 fmt:
 	$(GO) fmt ./...
+
+.PHONY: fmt-web
+fmt-web:
+	npm run fmt:web
+
+.PHONY: fmt-all
+fmt-all: fmt fmt-web
 
 .PHONY: lint
 lint:

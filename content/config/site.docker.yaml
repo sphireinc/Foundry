@@ -1,0 +1,5 @@
+server:
+  addr: ":8080"
+
+admin:
+  local_only: false

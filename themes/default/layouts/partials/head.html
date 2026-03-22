@@ -1,12 +1,19 @@
 {{ define "head" }}
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>{{ .Title }}{{ if .Site.SEO.DefaultTitleSep }} {{ .Site.SEO.DefaultTitleSep }} {{ end }}{{ .Site.Title }}</title>
-    <meta name="description" content="{{ if .Page }}{{ .Page.Summary }}{{ else }}{{ .Site.Title }}{{ end }}">
-    <link rel="alternate" type="application/rss+xml" title="RSS" href="{{ .Site.Feed.RSSPath }}">
-    <link rel="sitemap" type="application/xml" href="{{ .Site.Feed.SitemapPath }}">
-    <link rel="stylesheet" href="/assets/css/foundry.bundle.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>
+    {{ .Title }}{{ if .Site.SEO.DefaultTitleSep }} {{ .Site.SEO.DefaultTitleSep }} {{ end }}{{
+    .Site.Title }}
+  </title>
+  <meta
+    name="description"
+    content="{{ if .Page }}{{ .Page.Summary }}{{ else }}{{ .Site.Title }}{{ end }}"
+  />
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="{{ .Site.Feed.RSSPath }}" />
+  <link rel="sitemap" type="application/xml" href="{{ .Site.Feed.SitemapPath }}" />
+  <link rel="stylesheet" href="/assets/css/foundry.bundle.css" />
+  <script type="module" src="/theme/js/foundry-theme.js"></script>
   {{ pluginSlot "head.end" }}
 </head>
 {{ end }}

@@ -1,13 +1,20 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/sphireinc/foundry/internal/cliout"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/ops"
 	"github.com/sphireinc/foundry/internal/plugins"
+	"github.com/sphireinc/foundry/internal/renderer"
+	"github.com/sphireinc/foundry/internal/router"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -94,6 +101,55 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 		add("plugins", true, fmt.Sprintf("%d enabled", len(cfg.Plugins.Enabled)))
 	}
 
+	pmStart := time.Now()
+	pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	if err == nil {
+		err = pm.OnConfigLoaded(cfg)
+	}
+	pluginTiming := time.Since(pmStart)
+	if err != nil {
+		add("timing.plugin_config", false, err.Error())
+	} else {
+		add("timing.plugin_config", true, pluginTiming.String())
+
+		tempCfg := *cfg
+		tempCfg.PublicDir = filepath.Join(cfg.DataDir, ".doctor-public")
+		loader := content.NewLoader(&tempCfg, pm, true)
+		resolver := router.NewResolver(&tempCfg)
+		graph, timing, graphErr := ops.LoadGraphWithTiming(context.Background(), loader, resolver, pm)
+		if graphErr != nil {
+			add("timing.loader_router", false, graphErr.Error())
+		} else {
+			add("timing.loader", true, timing.Loader.String())
+			add("timing.router", true, timing.Router.String())
+			add("timing.route_hooks", true, timing.RouteHooks.String())
+
+			rendererEngine := renderer.New(&tempCfg, theme.NewManager(tempCfg.ThemesDir, tempCfg.Theme), pm)
+			renderMetrics, renderErr := ops.BuildRendererWithTiming(context.Background(), rendererEngine, graph)
+			if renderErr != nil {
+				add("timing.renderer", false, renderErr.Error())
+			} else {
+				add("timing.assets", true, renderMetrics.Assets.String())
+				add("timing.renderer", true, renderMetrics.Renderer.String())
+			}
+			feedMetrics, feedErr := ops.BuildFeedsWithTiming(&tempCfg, graph)
+			if feedErr != nil {
+				add("timing.feed", false, feedErr.Error())
+			} else {
+				add("timing.feed", true, feedMetrics.Feed.String())
+			}
+
+			report := ops.AnalyzeSite(&tempCfg, graph)
+			add("diagnostics.broken_links", len(report.BrokenInternalLinks) == 0, fmt.Sprintf("%d issue(s)", len(report.BrokenInternalLinks)))
+			add("diagnostics.broken_media", len(report.BrokenMediaRefs) == 0, fmt.Sprintf("%d issue(s)", len(report.BrokenMediaRefs)))
+			add("diagnostics.templates", len(report.MissingTemplates) == 0, fmt.Sprintf("%d issue(s)", len(report.MissingTemplates)))
+			add("diagnostics.orphaned_media", len(report.OrphanedMedia) == 0, fmt.Sprintf("%d issue(s)", len(report.OrphanedMedia)))
+			add("diagnostics.duplicate_routes", len(report.DuplicateURLs) == 0, fmt.Sprintf("%d issue(s)", len(report.DuplicateURLs)))
+			add("diagnostics.duplicate_slugs", len(report.DuplicateSlugs) == 0, fmt.Sprintf("%d issue(s)", len(report.DuplicateSlugs)))
+			add("diagnostics.taxonomies", len(report.TaxonomyInconsistency) == 0, fmt.Sprintf("%d issue(s)", len(report.TaxonomyInconsistency)))
+		}
+	}
+
 	genPath := filepath.Join("internal", "generated", "plugins_gen.go")
 	if _, err := os.Stat(genPath); err != nil {
 		if os.IsNotExist(err) {
@@ -106,18 +162,14 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 	}
 
 	for _, r := range results {
-		status := "OK"
-		if !r.ok {
-			status = "FAIL"
-		}
-		fmt.Printf("[%s] %-14s %s\n", status, r.label, r.msg)
+		fmt.Printf("[%s] %-20s %s\n", cliout.StatusLabel(r.ok), cliout.Label(r.label), r.msg)
 	}
 
 	if failures > 0 {
 		return fmt.Errorf("doctor found %d problem(s)", failures)
 	}
 
-	fmt.Println("doctor OK")
+	cliout.Successf("doctor OK")
 	return nil
 }
 

@@ -1,90 +1,129 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Foundry CLI Contract</title>
-  <meta name="description" content="The Foundry CLI contract, rendered for GitHub Pages and linked to the raw Markdown source.">
-  <link rel="stylesheet" href="../site.css">
-</head>
-<body>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="../">
-        <span class="brand-mark">F</span>
-        <span class="brand-copy">
-          <strong>Foundry</strong>
-          <span>CLI contract</span>
-        </span>
-      </a>
-      <nav class="nav">
-        <a href="../">Home</a>
-        <a href="../getting-started/">Getting Started</a>
-        <a href="../architecture/">Architecture</a>
-        <a href="../plugins/">Plugins</a>
-        <a href="../themes/">Themes</a>
-        <a href="../contract/">CLI Contract</a>
-        <a href="../coverage/">Coverage</a>
-        <a href="https://github.com/sphireinc/foundry">GitHub</a>
-      </nav>
-    </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry CLI Contract</title>
+    <meta
+      name="description"
+      content="The Foundry CLI contract, rendered for GitHub Pages and linked to the raw Markdown source."
+    />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark">F</span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>CLI contract</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
 
-    <main class="content-card">
-      <div class="page-header">
-        <div class="eyebrow">Reference</div>
-        <h1 class="page-title">Foundry CLI UX Contract</h1>
-        <p>This page publishes the contract stored in <code>docs/cli-contract.md</code>. It should be the default reference before changing command naming, output shape, validation scope, or mutation messaging.</p>
-      </div>
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Reference</div>
+          <h1 class="page-title">Foundry CLI UX Contract</h1>
+          <p>
+            This page publishes the contract stored in <code>docs/cli-contract.md</code>. It should
+            be the default reference before changing command naming, output shape, validation scope,
+            or mutation messaging.
+          </p>
+        </div>
 
-      <div class="page-body">
-        <h2>Core position</h2>
-        <p>Foundry commands should optimize for simplicity, determinism, and consistent human-readable output. New commands should follow the existing contract instead of inventing one-off styles.</p>
+        <div class="page-body">
+          <h2>Core position</h2>
+          <p>
+            Foundry commands should optimize for simplicity, determinism, and consistent
+            human-readable output. New commands should follow the existing contract instead of
+            inventing one-off styles.
+          </p>
 
-        <h2>Command shape</h2>
-        <pre><code>foundry &lt;command&gt; &lt;subcommand&gt; [options]</code></pre>
-        <p>Examples include <code>foundry version</code>, <code>foundry plugin list --enabled</code>, <code>foundry theme scaffold editorial</code>, and <code>foundry routes check</code>.</p>
+          <h2>Command shape</h2>
+          <pre><code>foundry &lt;command&gt; &lt;subcommand&gt; [options]</code></pre>
+          <p>
+            Examples include <code>foundry version</code>,
+            <code>foundry plugin list --enabled</code>,
+            <code>foundry theme scaffold editorial</code>, and <code>foundry routes check</code>.
+          </p>
 
-        <h2>Output modes</h2>
-        <h3>Tabular output</h3>
-        <p>Commands that show multiple rows should prefer aligned tables. Existing examples include plugin lists, theme lists, routes lists, and content lists.</p>
+          <h2>Output modes</h2>
+          <h3>Tabular output</h3>
+          <p>
+            Commands that show multiple rows should prefer aligned tables. Existing examples include
+            plugin lists, theme lists, routes lists, and content lists.
+          </p>
 
-        <h3>Marker output</h3>
-        <p>Status-oriented commands should use explicit markers such as <code>[OK]</code> and <code>[FAIL]</code>. Existing examples include plugin validation, doctor, validate, and routes check.</p>
+          <h3>Marker output</h3>
+          <p>
+            Status-oriented commands should use explicit markers such as <code>[OK]</code> and
+            <code>[FAIL]</code>. Existing examples include plugin validation, doctor, validate, and
+            routes check.
+          </p>
 
-        <h3>Mutators</h3>
-        <p>Commands that change project state should clearly say what changed and print <code>Next steps:</code> when the user still has follow-up work.</p>
+          <h3>Mutators</h3>
+          <p>
+            Commands that change project state should clearly say what changed and print
+            <code>Next steps:</code> when the user still has follow-up work.
+          </p>
 
-        <h2>Preferred wording</h2>
-        <ul>
-          <li>Prefer <code>foundry ...</code> over <code>make ...</code> in user-facing guidance.</li>
-          <li>Keep success lines direct and terse.</li>
-          <li>Keep failure messages direct and specific.</li>
-          <li>Do not print <code>Next steps:</code> for read-only commands.</li>
-        </ul>
+          <h2>Preferred wording</h2>
+          <ul>
+            <li>
+              Prefer <code>foundry ...</code> over <code>make ...</code> in user-facing guidance.
+            </li>
+            <li>Keep success lines direct and terse.</li>
+            <li>Keep failure messages direct and specific.</li>
+            <li>Do not print <code>Next steps:</code> for read-only commands.</li>
+          </ul>
 
-        <h2>Config requirements</h2>
-        <p>Commands should not require project config unless they actually need it. <code>foundry version</code> is the model for config-free commands; <code>foundry build</code> is the model for config-bound commands.</p>
+          <h2>Config requirements</h2>
+          <p>
+            Commands should not require project config unless they actually need it.
+            <code>foundry version</code> is the model for config-free commands;
+            <code>foundry build</code> is the model for config-bound commands.
+          </p>
 
-        <h2>Validation scope</h2>
-        <ol>
-          <li><code>config</code> validates config only.</li>
-          <li><code>plugin validate</code> validates plugins.</li>
-          <li><code>routes check</code> validates routes.</li>
-          <li><code>validate</code> validates the overall project.</li>
-          <li><code>doctor</code> checks project plus environment health.</li>
-        </ol>
+          <h2>Validation scope</h2>
+          <ol>
+            <li><code>config</code> validates config only.</li>
+            <li><code>plugin validate</code> validates plugins.</li>
+            <li><code>routes check</code> validates routes.</li>
+            <li><code>validate</code> validates the overall project.</li>
+            <li><code>doctor</code> checks project plus environment health.</li>
+          </ol>
 
-        <h2>Human-first output</h2>
-        <p>Default CLI output should stay optimized for humans. Machine-readable formats such as <code>--json</code> can exist, but they are not the primary interface.</p>
+          <h2>Human-first output</h2>
+          <p>
+            Default CLI output should stay optimized for humans. Machine-readable formats such as
+            <code>--json</code> can exist, but they are not the primary interface.
+          </p>
 
-        <h2>Source document</h2>
-        <p>The canonical source is <a href="../cli-contract.md">docs/cli-contract.md</a>. Update that file when the contract changes.</p>
-      </div>
-    </main>
+          <h2>Source document</h2>
+          <p>
+            The canonical source is <a href="../cli-contract.md">docs/cli-contract.md</a>. Update
+            that file when the contract changes.
+          </p>
+        </div>
+      </main>
 
-    <footer class="footer">
-      <span>Rendered from the current contract source in <code>docs/cli-contract.md</code>.</span>
-    </footer>
-  </div>
-</body>
+      <footer class="footer">
+        <span>Rendered from the current contract source in <code>docs/cli-contract.md</code>.</span>
+      </footer>
+    </div>
+  </body>
 </html>

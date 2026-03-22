@@ -1,12 +1,19 @@
 tmp/
 public/
 bin/
+node_modules
+
+### Foundry specific files
+.jsonl
+assessment-*.txt
+
 assessment-admin.txt
 assessment-product.txt
 assessment-roadmap.txt
 assessment-technical-debt.txt
 assessment-security.txt
 assessment-static-analysis.txt
+assessment-esm.txt
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,windows,macos,dotenv

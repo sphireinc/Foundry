@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sphireinc/foundry/internal/cliout"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/consts"
@@ -66,7 +67,7 @@ func runList(cfg *config.Config) error {
 	}
 
 	if len(themes) == 0 {
-		fmt.Println("no themes installed")
+		cliout.Println(cliout.Warning("no themes installed"))
 		return nil
 	}
 
@@ -110,7 +111,7 @@ func runList(cfg *config.Config) error {
 		}
 	}
 
-	fmt.Printf("%-*s  %-*s  %-20s  %s\n", nameWidth, "NAME", versionWidth, "VERSION", "TITLE", "STATUS")
+	fmt.Printf("%-*s  %-*s  %-20s  %s\n", nameWidth, cliout.Label("NAME"), versionWidth, cliout.Label("VERSION"), cliout.Label("TITLE"), cliout.Label("STATUS"))
 	for _, row := range rows {
 		fmt.Printf("%-*s  %-*s  %-20s  %s\n", nameWidth, row.Name, versionWidth, row.Version, row.Title, row.Status)
 	}
@@ -138,10 +139,10 @@ func runValidate(cfg *config.Config, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Theme %q is valid\n", name)
-	fmt.Printf("Title: %s\n", manifest.Title)
-	fmt.Printf("Version: %s\n", manifest.Version)
-	fmt.Printf("Min Foundry Version: %s\n", manifest.MinFoundryVersion)
+	cliout.Successf("Theme %q is valid", name)
+	fmt.Printf("%s %s\n", cliout.Label("Title:"), manifest.Title)
+	fmt.Printf("%s %s\n", cliout.Label("Version:"), manifest.Version)
+	fmt.Printf("%s %s\n", cliout.Label("Min Foundry Version:"), manifest.MinFoundryVersion)
 	return nil
 }
 
@@ -156,7 +157,7 @@ func runScaffold(cfg *config.Config, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Scaffolded theme %q at %s\n", name, path)
+	cliout.Successf("Scaffolded theme %q at %s", name, path)
 	return nil
 }
 
@@ -174,8 +175,8 @@ func runSwitch(cfg *config.Config, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Switched theme to %q\n", name)
-	fmt.Println("Next steps:")
+	cliout.Successf("Switched theme to %q", name)
+	cliout.Println(cliout.Heading("Next steps:"))
 	fmt.Println("1. Run foundry build or foundry serve")
 	return nil
 }

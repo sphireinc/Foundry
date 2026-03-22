@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry Configuration Reference</title>
+    <meta
+      name="description"
+      content="A key-by-key reference for content/config/site.yaml in Foundry."
+    />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark">F</span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>Configuration reference</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
+
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Configuration Reference</div>
+          <h1 class="page-title">Configuration</h1>
+          <p>
+            This page is the canonical reference for Foundry's site config. It explains what each
+            config group is for, what each key does, and where examples are useful it shows the
+            expected YAML shape directly.
+          </p>
+        </div>
+
+        <div class="page-body">
+          <h2>What this file does</h2>
+          <p>
+            <code>content/config/site.yaml</code> is the main runtime config for a Foundry site. It
+            controls site identity, serving, admin behavior, build output, content layout,
+            taxonomies, fields, plugin activation, deploy targets, feeds, and theme-facing values.
+          </p>
+          <p>
+            Foundry also supports environment overlays such as
+            <code>content/config/site.preview.yaml</code>. Those files are layered on top of the
+            base config when you run commands like <code>foundry build --env preview</code>.
+          </p>
+          <p>
+            If you want a full explicit config with every current default written out, start from
+            <code>content/config/example.site.yaml</code>.
+          </p>
+
+          <h2>Minimal example</h2>
+          <pre><code>name: "foundry"
+title: "Foundry CMS"
+base_url: "http://localhost:8080"
+theme: "default"
+
+server:
+  addr: ":8080"
+  live_reload: true
+
+admin:
+  enabled: true
+  path: "/__admin"
+  theme: "default"
+
+content:
+  pages_dir: "pages"
+  posts_dir: "posts"</code></pre>
+
+          <h2>Top-level keys</h2>
+          <p>These keys define the overall site identity and root directory layout.</p>
+          <ul>
+            <li>
+              <strong><code>name</code></strong
+              >: machine-oriented site identifier used in status output and metadata.
+              <strong>Default: </strong><code>foundry</code>.
+            </li>
+            <li>
+              <strong><code>title</code></strong
+              >: human-facing site title. <strong>Default: </strong><code>Foundry CMS</code>.
+            </li>
+            <li>
+              <strong><code>base_url</code></strong
+              >: canonical site base URL used for absolute links, feeds, preview manifests, and
+              deploy output. <strong>Default: </strong>empty.
+            </li>
+            <li>
+              <strong><code>theme</code></strong
+              >: active frontend theme name under <code>themes/</code>. <strong>Default: </strong
+              ><code>default</code>.
+            </li>
+            <li>
+              <strong><code>environment</code></strong
+              >: environment label such as <code>default</code>, <code>preview</code>, or
+              <code>production</code>. <strong>Default: </strong><code>default</code>.
+            </li>
+            <li>
+              <strong><code>default_lang</code></strong
+              >: default language code for content routing. <strong>Default: </strong
+              ><code>en</code>.
+            </li>
+            <li>
+              <strong><code>content_dir</code></strong
+              >: root content directory. <strong>Default: </strong><code>content</code>.
+            </li>
+            <li>
+              <strong><code>public_dir</code></strong
+              >: build output directory. <strong>Default: </strong><code>public</code>.
+            </li>
+            <li>
+              <strong><code>themes_dir</code></strong
+              >: theme root directory. <strong>Default: </strong><code>themes</code>.
+            </li>
+            <li>
+              <strong><code>data_dir</code></strong
+              >: runtime data directory used for state files and structured data.
+              <strong>Default: </strong><code>data</code>.
+            </li>
+            <li>
+              <strong><code>plugins_dir</code></strong
+              >: plugin installation directory. <strong>Default: </strong><code>plugins</code>.
+            </li>
+          </ul>
+
+          <h2><code>server</code></h2>
+          <p>This group controls the preview server and live reload behavior.</p>
+          <ul>
+            <li>
+              <strong><code>addr</code></strong
+              >: bind address for the preview server. <strong>Default: </strong><code>:8080</code>.
+            </li>
+            <li>
+              <strong><code>live_reload</code></strong
+              >: enables or disables live reload. <strong>Default: </strong><code>false</code>.
+            </li>
+            <li>
+              <strong><code>live_reload_mode</code></strong
+              >: reload transport. Use <code>stream</code> for Server-Sent Events or
+              <code>poll</code> when browser connection limits make SSE unreliable.
+              <strong>Default: </strong><code>stream</code>.
+            </li>
+            <li>
+              <strong><code>auto_open_browser</code></strong
+              >: automatically opens the preview URL after startup. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>debug_routes</code></strong
+              >: enables extra debug-only route output where supported. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+          </ul>
+          <pre><code>server:
+  addr: ":8080"
+  live_reload: true
+  live_reload_mode: "poll"
+  auto_open_browser: false
+  debug_routes: false</code></pre>
+
+          <h2><code>admin</code></h2>
+          <p>
+            This group controls the admin shell, admin auth, persistent session state, and
+            admin-only debug features.
+          </p>
+          <ul>
+            <li>
+              <strong><code>enabled</code></strong
+              >: enables or disables the admin surface. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>addr</code></strong
+              >: reserved for a separate admin bind address. The current server mounts admin under
+              the main HTTP server. <strong>Default: </strong>empty.
+            </li>
+            <li>
+              <strong><code>path</code></strong
+              >: admin mount path. <strong>Default: </strong><code>/__admin</code>.
+            </li>
+            <li>
+              <strong><code>local_only</code></strong
+              >: rejects forwarded or non-local admin access when true. <strong>Default: </strong
+              ><code>true</code>.
+            </li>
+            <li>
+              <strong><code>access_token</code></strong
+              >: optional API token for automation or non-browser admin access.
+              <strong>Default: </strong>empty.
+            </li>
+            <li>
+              <strong><code>theme</code></strong
+              >: active admin theme under <code>themes/admin-themes/</code>.
+              <strong>Default: </strong><code>default</code>.
+            </li>
+            <li>
+              <strong><code>users_file</code></strong
+              >: filesystem-backed user database file. <strong>Default: </strong
+              ><code>content/config/admin-users.yaml</code>.
+            </li>
+            <li>
+              <strong><code>session_store_file</code></strong
+              >: persistent session store file. <strong>Default: </strong
+              ><code>data/admin/sessions.yaml</code>.
+            </li>
+            <li>
+              <strong><code>lock_file</code></strong
+              >: persistent document lock file used by editor locking. <strong>Default: </strong
+              ><code>data/admin/locks.yaml</code>.
+            </li>
+            <li>
+              <strong><code>session_ttl_minutes</code></strong
+              >: idle browser session timeout. <strong>Default: </strong><code>30</code>.
+            </li>
+            <li>
+              <strong><code>password_min_length</code></strong
+              >: minimum password length for save and reset flows. <strong>Default: </strong
+              ><code>12</code>.
+            </li>
+            <li>
+              <strong><code>password_reset_ttl_minutes</code></strong
+              >: password reset token lifetime. <strong>Default: </strong><code>30</code>.
+            </li>
+            <li>
+              <strong><code>totp_issuer</code></strong
+              >: issuer string embedded in TOTP setup URIs. <strong>Default: </strong
+              ><code>Foundry</code>.
+            </li>
+          </ul>
+
+          <h3><code>admin.debug</code></h3>
+          <ul>
+            <li>
+              <strong><code>pprof</code></strong
+              >: enables authenticated <code>net/http/pprof</code> access and the admin Debug page
+              runtime summary. <strong>Default: </strong><code>false</code>.
+            </li>
+          </ul>
+
+          <pre><code>admin:
+  enabled: true
+  addr: ""
+  path: "/__admin"
+  local_only: true
+  access_token: ""
+  theme: "default"
+  users_file: "content/config/admin-users.yaml"
+  session_store_file: "data/admin/sessions.yaml"
+  lock_file: "data/admin/locks.yaml"
+  session_ttl_minutes: 30
+  password_min_length: 12
+  password_reset_ttl_minutes: 30
+  totp_issuer: "Foundry"
+  debug:
+    pprof: true</code></pre>
+
+          <h2><code>build</code></h2>
+          <p>This group controls the shape of static build output.</p>
+          <ul>
+            <li>
+              <strong><code>clean_public_dir</code></strong
+              >: removes <code>public/</code> before a build. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>include_drafts</code></strong
+              >: includes draft content in build output. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>minify_html</code></strong
+              >: minifies rendered HTML. <strong>Default: </strong><code>false</code>.
+            </li>
+            <li>
+              <strong><code>copy_assets</code></strong
+              >: copies content-owned static assets into output. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>copy_images</code></strong
+              >: copies image media into output. <strong>Default: </strong><code>false</code>.
+            </li>
+            <li>
+              <strong><code>copy_uploads</code></strong
+              >: copies legacy uploads plus the current non-image media collections where
+              applicable. <strong>Default: </strong><code>false</code>.
+            </li>
+          </ul>
+
+          <h2><code>content</code></h2>
+          <p>
+            This group defines directory names under <code>content/</code> and a few core content
+            defaults.
+          </p>
+          <ul>
+            <li>
+              <strong><code>pages_dir</code></strong
+              >: page document directory. <strong>Default: </strong><code>pages</code>.
+            </li>
+            <li>
+              <strong><code>posts_dir</code></strong
+              >: post document directory. <strong>Default: </strong><code>posts</code>.
+            </li>
+            <li>
+              <strong><code>images_dir</code></strong
+              >: image media directory. <strong>Default: </strong><code>images</code>.
+            </li>
+            <li>
+              <strong><code>videos_dir</code></strong
+              >: video media directory. <strong>Default: </strong><code>videos</code>.
+            </li>
+            <li>
+              <strong><code>audio_dir</code></strong
+              >: audio media directory. <strong>Default: </strong><code>audio</code>.
+            </li>
+            <li>
+              <strong><code>documents_dir</code></strong
+              >: document-like media directory. <strong>Default: </strong><code>documents</code>.
+            </li>
+            <li>
+              <strong><code>assets_dir</code></strong
+              >: content-owned static asset directory. <strong>Default: </strong
+              ><code>assets</code>.
+            </li>
+            <li>
+              <strong><code>uploads_dir</code></strong
+              >: legacy upload directory retained for compatibility. <strong>Default: </strong
+              ><code>uploads</code>.
+            </li>
+            <li>
+              <strong><code>max_versions_per_file</code></strong
+              >: maximum retained filesystem versions per file before pruning.
+              <strong>Default: </strong><code>10</code>.
+            </li>
+            <li>
+              <strong><code>default_layout_page</code></strong
+              >: default layout for pages. <strong>Default: </strong><code>page</code>.
+            </li>
+            <li>
+              <strong><code>default_layout_post</code></strong
+              >: default layout for posts. <strong>Default: </strong><code>post</code>.
+            </li>
+            <li>
+              <strong><code>default_page_slug_index</code></strong
+              >: slug used for section-index pages. <strong>Default: </strong><code>index</code>.
+            </li>
+          </ul>
+          <pre><code>content:
+  pages_dir: "pages"
+  posts_dir: "posts"
+  images_dir: "images"
+  videos_dir: "videos"
+  audio_dir: "audio"
+  documents_dir: "documents"
+  assets_dir: "assets"
+  uploads_dir: "uploads"
+  max_versions_per_file: 10
+  default_layout_page: "page"
+  default_layout_post: "post"
+  default_page_slug_index: "index"</code></pre>
+
+          <h2><code>permalinks</code></h2>
+          <p>
+            This group defines the route templates used when Foundry assigns URLs to pages and
+            posts.
+          </p>
+          <ul>
+            <li>
+              <strong><code>page_default</code></strong
+              >: default-language page route pattern.
+            </li>
+            <li>
+              <strong><code>page_i18n</code></strong
+              >: non-default-language page route pattern.
+            </li>
+            <li>
+              <strong><code>post_default</code></strong
+              >: default-language post route pattern.
+            </li>
+            <li>
+              <strong><code>post_i18n</code></strong
+              >: non-default-language post route pattern.
+            </li>
+          </ul>
+          <pre><code>permalinks:
+  page_<strong>Default: </strong>"/:slug/"
+  page_i18n: "/:lang/:slug/"
+  post_<strong>Default: </strong>"/posts/:slug/"
+  post_i18n: "/:lang/posts/:slug/"</code></pre>
+
+          <h2><code>taxonomies</code></h2>
+          <p>This group enables taxonomy rendering and defines which taxonomies exist.</p>
+          <ul>
+            <li>
+              <strong><code>enabled</code></strong
+              >: enables taxonomy support. <strong>Default: </strong><code>false</code>.
+            </li>
+            <li>
+              <strong><code>default_set</code></strong
+              >: taxonomy names enabled by default for content. <strong>Default: </strong
+              ><code>[tags, categories]</code>.
+            </li>
+            <li>
+              <strong><code>definitions</code></strong
+              >: per-taxonomy definitions keyed by taxonomy name. <strong>Default: </strong
+              ><code>{}</code>.
+            </li>
+          </ul>
+          <p>Each taxonomy definition supports:</p>
+          <ul>
+            <li>
+              <strong><code>title</code></strong
+              >: human title for the taxonomy.
+            </li>
+            <li>
+              <strong><code>labels</code></strong
+              >: per-language label map.
+            </li>
+            <li>
+              <strong><code>archive_layout</code></strong
+              >: optional archive layout override.
+            </li>
+            <li>
+              <strong><code>term_layout</code></strong
+              >: layout used for individual term pages.
+            </li>
+            <li>
+              <strong><code>order</code></strong
+              >: ordering hint such as <code>alpha</code>.
+            </li>
+          </ul>
+          <pre><code>taxonomies:
+  enabled: true
+  default_set:
+    - tags
+    - categories
+  definitions:
+    tags:
+      title: "Tags"
+      labels:
+        en: "Tags"
+        es: "Etiquetas"
+      archive_layout: "list"
+      term_layout: "list"
+      order: "alpha"
+    categories:
+      title: "Categories"
+      labels:
+        en: "Categories"
+      archive_layout: "list"
+      term_layout: "list"</code></pre>
+
+          <h2><code>plugins</code></h2>
+          <p>This group controls which installed plugins are enabled for the site.</p>
+          <ul>
+            <li>
+              <strong><code>enabled</code></strong
+              >: list of plugin names to enable. <strong>Default: </strong>empty list.
+            </li>
+          </ul>
+          <pre><code>plugins:
+  enabled:
+    - toc
+    - relatedposts
+    - readingtime</code></pre>
+
+          <h2><code>fields</code></h2>
+          <p>This group enables schema-driven fields and validation for content types.</p>
+          <ul>
+            <li>
+              <strong><code>enabled</code></strong
+              >: enables schema-backed field support. <strong>Default: </strong><code>false</code>.
+            </li>
+            <li>
+              <strong><code>allow_anything</code></strong
+              >: accepts undeclared field data even when schemas exist. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>schemas</code></strong
+              >: map of schema definitions keyed by schema name or document kind.
+              <strong>Default: </strong><code>{}</code>.
+            </li>
+          </ul>
+          <p>
+            Each schema contains a <code>fields</code> list. Each field supports keys such as
+            <code>name</code>, <code>label</code>, <code>type</code>, <code>required</code>,
+            <code>default</code>, <code>enum</code>, <code>fields</code>, <code>item</code>,
+            <code>help</code>, and <code>placeholder</code>.
+          </p>
+          <pre><code>fields:
+  enabled: true
+  allow_anything: false
+  schemas:
+    post:
+      fields:
+        - name: hero_style
+          label: "Hero Style"
+          type: "select"
+          enum:
+            - "standard"
+            - "feature"
+          help: "Choose the post hero treatment."
+        - name: hero
+          label: "Hero"
+          type: "object"
+          fields:
+            - name: image
+              type: "text"
+              placeholder: "media:images/hero.jpg"
+            - name: eyebrow
+              type: "text"
+        - name: authors
+          label: "Authors"
+          type: "list"
+          item:
+            name: "author"
+            type: "object"
+            fields:
+              - name: name
+                type: "text"
+                required: true
+              - name: role
+                type: "text"</code></pre>
+
+          <h2><code>seo</code></h2>
+          <p>This group controls SEO-oriented output defaults.</p>
+          <ul>
+            <li>
+              <strong><code>enabled</code></strong
+              >: enables SEO-related handling where supported. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>default_title_sep</code></strong
+              >: default title separator when combining page and site titles.
+              <strong>Default: </strong>empty.
+            </li>
+          </ul>
+
+          <h2><code>cache</code></h2>
+          <p>This group controls cache-related behavior where supported by the current runtime.</p>
+          <ul>
+            <li>
+              <strong><code>enabled</code></strong
+              >: enables cache-related behavior. <strong>Default: </strong><code>false</code>.
+            </li>
+          </ul>
+
+          <h2><code>security</code></h2>
+          <p>This group controls security-sensitive rendering behavior.</p>
+          <ul>
+            <li>
+              <strong><code>allow_unsafe_html</code></strong
+              >: preserves raw HTML from Markdown when true. Leave this <code>false</code> unless
+              you intentionally trust raw HTML in content. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+          </ul>
+
+          <h2><code>feed</code></h2>
+          <p>This group controls RSS and sitemap output.</p>
+          <ul>
+            <li>
+              <strong><code>rss_path</code></strong
+              >: RSS route path. <strong>Default: </strong><code>/rss.xml</code>.
+            </li>
+            <li>
+              <strong><code>sitemap_path</code></strong
+              >: sitemap route path. <strong>Default: </strong><code>/sitemap.xml</code>.
+            </li>
+            <li>
+              <strong><code>rss_limit</code></strong
+              >: maximum number of items in the RSS feed. <strong>Default: </strong><code>50</code>.
+            </li>
+            <li>
+              <strong><code>rss_title</code></strong
+              >: feed title. <strong>Default: </strong>the site title.
+            </li>
+            <li>
+              <strong><code>rss_description</code></strong
+              >: feed description. <strong>Default: </strong>the site title.
+            </li>
+          </ul>
+          <pre><code>feed:
+  rss_path: "/rss.xml"
+  sitemap_path: "/sitemap.xml"
+  rss_limit: 50
+  rss_title: "Foundry CMS"
+  rss_description: "Foundry CMS"</code></pre>
+
+          <h2><code>deploy</code></h2>
+          <p>
+            This group defines named deploy targets that can override selected config values during
+            builds.
+          </p>
+          <ul>
+            <li>
+              <strong><code>default_target</code></strong
+              >: target name to use by default. <strong>Default: </strong>empty.
+            </li>
+            <li>
+              <strong><code>targets</code></strong
+              >: map of named deploy targets. <strong>Default: </strong><code>{}</code>.
+            </li>
+          </ul>
+          <p>Each deploy target supports:</p>
+          <ul>
+            <li>
+              <strong><code>base_url</code></strong
+              >: override canonical base URL.
+            </li>
+            <li>
+              <strong><code>public_dir</code></strong
+              >: override output directory.
+            </li>
+            <li>
+              <strong><code>theme</code></strong
+              >: override frontend theme.
+            </li>
+            <li>
+              <strong><code>include_drafts</code></strong
+              >: override build draft inclusion.
+            </li>
+            <li>
+              <strong><code>environment</code></strong
+              >: override environment label.
+            </li>
+            <li>
+              <strong><code>preview</code></strong
+              >: when true, forces preview-style draft inclusion.
+            </li>
+            <li>
+              <strong><code>live_reload_mode</code></strong
+              >: override live reload transport for the target.
+            </li>
+          </ul>
+          <pre><code>deploy:
+  default_target: "production"
+  targets:
+    production:
+      base_url: "https://example.com"
+      public_dir: "public-prod"
+      theme: "default"
+      include_drafts: false
+      environment: "production"
+      preview: false
+      live_reload_mode: "stream"
+    preview:
+      base_url: "https://preview.example.com"
+      public_dir: "public-preview"
+      include_drafts: true
+      environment: "preview"
+      preview: true
+      live_reload_mode: "poll"</code></pre>
+
+          <h2><code>params</code></h2>
+          <p>
+            This is a free-form map of site-level values exposed to themes, templates, and plugins.
+          </p>
+          <ul>
+            <li>
+              <strong><code>params</code></strong
+              >: arbitrary key-value data. <strong>Default: </strong><code>{}</code>.
+            </li>
+          </ul>
+          <pre><code>params:
+  company_name: "Sphire"
+  support_email: "support@example.com"
+  home_eyebrow: "Launch Week"</code></pre>
+
+          <h2><code>menus</code></h2>
+          <p>
+            This group defines named menus. Each menu contains items with <code>name</code> and
+            <code>url</code>.
+          </p>
+          <ul>
+            <li>
+              <strong><code>menus</code></strong
+              >: menu map keyed by menu name. <strong>Default: </strong><code>{}</code>.
+            </li>
+            <li>
+              <strong><code>name</code></strong
+              >: item label shown in the UI.
+            </li>
+            <li>
+              <strong><code>url</code></strong
+              >: destination URL.
+            </li>
+          </ul>
+          <pre><code>menus:
+  main:
+    - name: "Home"
+      url: "/"
+    - name: "Docs"
+      url: "/docs/"
+  footer:
+    - name: "RSS"
+      url: "/rss.xml"
+    - name: "GitHub"
+      url: "https://github.com/sphireinc/foundry"</code></pre>
+
+          <h2>Defaults and examples</h2>
+          <ul>
+            <li>
+              Use <code>content/config/example.site.yaml</code> when you want every current default
+              spelled out explicitly.
+            </li>
+            <li>
+              Keep <code>content/config/site.yaml</code> focused on the values you are actually
+              overriding.
+            </li>
+            <li>
+              Use overlays like <code>content/config/site.preview.yaml</code> or named deploy
+              targets when a setting should only change for preview or production builds.
+            </li>
+            <li>
+              When a group contains nested structures like <code>taxonomies.definitions</code>,
+              <code>fields.schemas</code>, or <code>deploy.targets</code>, prefer full YAML snippets
+              over terse one-line docs so the expected shape stays obvious.
+            </li>
+          </ul>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span
+          >This page tracks the config surface defined in
+          <code>internal/config/config.go</code>.</span
+        >
+      </footer>
+    </div>
+  </body>
+</html>

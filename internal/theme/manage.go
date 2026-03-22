@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/consts"
 	"github.com/sphireinc/foundry/internal/safepath"
 	"gopkg.in/yaml.v3"
 )
@@ -18,15 +19,20 @@ type Info struct {
 }
 
 type Manifest struct {
-	Name              string   `yaml:"name"`
-	Title             string   `yaml:"title"`
-	Version           string   `yaml:"version"`
-	Description       string   `yaml:"description"`
-	Author            string   `yaml:"author"`
-	License           string   `yaml:"license"`
-	MinFoundryVersion string   `yaml:"min_foundry_version"`
-	Layouts           []string `yaml:"layouts"`
-	Slots             []string `yaml:"slots"`
+	Name                 string                          `yaml:"name"`
+	Title                string                          `yaml:"title"`
+	Version              string                          `yaml:"version"`
+	Description          string                          `yaml:"description"`
+	Author               string                          `yaml:"author"`
+	License              string                          `yaml:"license"`
+	MinFoundryVersion    string                          `yaml:"min_foundry_version"`
+	SDKVersion           string                          `yaml:"sdk_version,omitempty"`
+	CompatibilityVersion string                          `yaml:"compatibility_version,omitempty"`
+	Layouts              []string                        `yaml:"layouts"`
+	SupportedLayouts     []string                        `yaml:"supported_layouts,omitempty"`
+	Slots                []string                        `yaml:"slots"`
+	Screenshots          []string                        `yaml:"screenshots,omitempty"`
+	ConfigSchema         []foundryconfig.FieldDefinition `yaml:"config_schema,omitempty"`
 }
 
 var requiredLaunchSlots = []string{
@@ -121,73 +127,46 @@ func LoadManifest(themesDir, name string) (*Manifest, error) {
 	if strings.TrimSpace(m.Version) == "" {
 		m.Version = "0.0.0"
 	}
+	if strings.TrimSpace(m.SDKVersion) == "" {
+		m.SDKVersion = consts.FrontendSDKVersion
+	}
+	if strings.TrimSpace(m.CompatibilityVersion) == "" {
+		m.CompatibilityVersion = consts.FrontendCompatibility
+	}
 
 	return &m, nil
 }
 
+func (m *Manifest) RequiredLayouts() []string {
+	if m == nil {
+		return []string{"base", "index", "page", "post", "list"}
+	}
+	if len(m.SupportedLayouts) > 0 {
+		return append([]string(nil), m.SupportedLayouts...)
+	}
+	if len(m.Layouts) > 0 {
+		return append([]string(nil), m.Layouts...)
+	}
+	return []string{"base", "index", "page", "post", "list"}
+}
+
 func ValidateInstalled(themesDir, name string) error {
-	var err error
-	name, err = safepath.ValidatePathComponent("theme name", name)
+	result, err := ValidateInstalledDetailed(themesDir, name)
 	if err != nil {
 		return err
 	}
-
-	root := filepath.Join(themesDir, name)
-	info, err := os.Stat(root)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("theme %q does not exist", name)
-		}
-		return err
+	if result.Valid {
+		return nil
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("theme path %q is not a directory", root)
-	}
-
-	manifest, err := LoadManifest(themesDir, name)
-	if err != nil {
-		return err
-	}
-
-	if strings.TrimSpace(manifest.Name) != name {
-		return fmt.Errorf("theme manifest name %q must match directory %q", manifest.Name, name)
-	}
-
-	requiredLayouts := manifest.Layouts
-	if len(requiredLayouts) == 0 {
-		requiredLayouts = []string{"base", "index", "page", "post", "list"}
-	}
-
-	for _, layout := range requiredLayouts {
-		path := filepath.Join(root, "layouts", layout+".html")
-		if _, err := os.Stat(path); err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("missing required theme layout: %s", path)
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Severity == "error" {
+			if diagnostic.Path != "" {
+				return fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message)
 			}
-			return err
+			return fmt.Errorf("%s", diagnostic.Message)
 		}
 	}
-
-	requiredPartials := []string{
-		filepath.Join(root, "layouts", "partials", "head.html"),
-		filepath.Join(root, "layouts", "partials", "header.html"),
-		filepath.Join(root, "layouts", "partials", "footer.html"),
-	}
-
-	for _, path := range requiredPartials {
-		if _, err := os.Stat(path); err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("missing required theme partial: %s", path)
-			}
-			return err
-		}
-	}
-
-	if err := validateRequiredLaunchSlots(root, manifest); err != nil {
-		return err
-	}
-
-	return nil
+	return fmt.Errorf("theme validation failed")
 }
 
 func Scaffold(themesDir, name string) (string, error) {
@@ -256,12 +235,27 @@ description: A Foundry theme.
 author: Unknown
 license: MIT
 min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
 layouts:
   - base
   - index
   - page
   - post
   - list
+supported_layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+screenshots:
+  - screenshots/home.png
+config_schema:
+  - name: accent_color
+    label: Accent Color
+    type: text
+    default: "#0c7c59"
 slots:
   - head.end
   - body.start

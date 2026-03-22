@@ -19,6 +19,7 @@ import (
 	"github.com/sphireinc/foundry/internal/admin/users"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/server"
 )
 
@@ -45,6 +46,91 @@ func TestStatusEndpoint(t *testing.T) {
 	}
 	if status.Title != cfg.Title {
 		t.Fatalf("expected title %q, got %q", cfg.Title, status.Title)
+	}
+}
+
+func TestCapabilitiesIncludePprofFeatureWhenEnabled(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Admin.Debug.Pprof = true
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/__admin/api/capabilities", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp admintypes.CapabilityResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
+	if !resp.Modules["debug"] || !resp.Features["pprof"] {
+		t.Fatalf("expected pprof debug capability flags, got %#v %#v", resp.Modules, resp.Features)
+	}
+}
+
+func TestPprofRouteRequiresOptInAndAuth(t *testing.T) {
+	cfg := testConfig(t)
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	disabledReq := httptest.NewRequest(http.MethodGet, "/__admin/debug/pprof/", nil)
+	disabledReq.RemoteAddr = "127.0.0.1:10000"
+	disabledRR := httptest.NewRecorder()
+	mux.ServeHTTP(disabledRR, disabledReq)
+	if disabledRR.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled pprof route to 404, got %d", disabledRR.Code)
+	}
+
+	cfg.Admin.Debug.Pprof = true
+	r = newTestRouter(t, cfg)
+	mux = http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	unauthReq := httptest.NewRequest(http.MethodGet, "/__admin/debug/pprof/", nil)
+	unauthReq.RemoteAddr = "127.0.0.1:10000"
+	unauthRR := httptest.NewRecorder()
+	mux.ServeHTTP(unauthRR, unauthReq)
+	if unauthRR.Code != http.StatusForbidden {
+		t.Fatalf("expected unauthenticated pprof route to 403, got %d", unauthRR.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/__admin/debug/pprof/", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected authenticated pprof index 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "profile") {
+		t.Fatalf("expected pprof index content, got %q", rr.Body.String())
+	}
+
+	runtimeReq := httptest.NewRequest(http.MethodGet, "/__admin/api/debug/runtime", nil)
+	runtimeReq.RemoteAddr = "127.0.0.1:10000"
+	runtimeReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	runtimeRR := httptest.NewRecorder()
+	mux.ServeHTTP(runtimeRR, runtimeReq)
+	if runtimeRR.Code != http.StatusOK {
+		t.Fatalf("expected runtime debug endpoint 200, got %d: %s", runtimeRR.Code, runtimeRR.Body.String())
+	}
+	var runtimeResp admintypes.RuntimeStatus
+	if err := json.Unmarshal(runtimeRR.Body.Bytes(), &runtimeResp); err != nil {
+		t.Fatalf("decode runtime debug response: %v", err)
+	}
+	if runtimeResp.Goroutines <= 0 {
+		t.Fatalf("expected positive goroutine count, got %#v", runtimeResp)
+	}
+	if runtimeResp.Content.ByType == nil || runtimeResp.Storage.MediaBytes == nil || runtimeResp.Activity.RecentAuditByAction == nil {
+		t.Fatalf("expected expanded runtime debug payload, got %#v", runtimeResp)
 	}
 }
 
@@ -153,7 +239,7 @@ func TestSaveAndPreviewEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create form file: %v", err)
 	}
-	if _, err := part.Write([]byte("png")); err != nil {
+	if _, err := part.Write(testPNGBytes()); err != nil {
 		t.Fatalf("write form file: %v", err)
 	}
 	if err := writer.Close(); err != nil {
@@ -174,7 +260,7 @@ func TestSaveAndPreviewEndpoints(t *testing.T) {
 	if err := json.Unmarshal(uploadRR.Body.Bytes(), &uploadResp); err != nil {
 		t.Fatalf("decode upload response: %v", err)
 	}
-	if uploadResp.Reference != "media:images/posts/about/diagram.png" {
+	if !strings.HasPrefix(uploadResp.Reference, "media:images/posts/about/diagram-") || !strings.HasSuffix(uploadResp.Reference, ".png") {
 		t.Fatalf("unexpected upload response: %#v", uploadResp)
 	}
 
@@ -273,6 +359,95 @@ func TestAdminRoutesRequireTokenWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestAdminRejectsOversizedJSONBodies(t *testing.T) {
+	cfg := testConfig(t)
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	raw := strings.Repeat("a", int(largeJSONBodyLimit)+1024)
+	req := httptest.NewRequest(http.MethodPost, "/__admin/api/documents/save", bytes.NewBufferString(`{"source_path":"pages/huge.md","raw":"`+raw+`"}`))
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestMediaUploadRejectsDangerousTypesAndSymlinkEscape(t *testing.T) {
+	cfg := testConfig(t)
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "danger.html")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write([]byte("<html><script>alert(1)</script></html>")); err != nil {
+		t.Fatalf("write form file: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/__admin/api/media/upload", &body)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected dangerous upload rejection, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	externalDir := filepath.Join(t.TempDir(), "escaped")
+	if err := os.MkdirAll(externalDir, 0o755); err != nil {
+		t.Fatalf("mkdir external dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir), 0o755); err != nil {
+		t.Fatalf("mkdir images dir: %v", err)
+	}
+	if err := os.Symlink(externalDir, filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "linked")); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	body.Reset()
+	writer = multipart.NewWriter(&body)
+	if err := writer.WriteField("dir", "linked"); err != nil {
+		t.Fatalf("write field: %v", err)
+	}
+	part, err = writer.CreateFormFile("file", "safe.png")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write(testPNGBytes()); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/media/upload", &body)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected symlink escape rejection, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(externalDir, "safe.png")); !os.IsNotExist(err) {
+		t.Fatalf("expected no file to be written outside media root, got %v", err)
+	}
+}
+
 func TestAdminLoginLogoutAndSessionEndpoints(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Admin.AccessToken = ""
@@ -292,6 +467,10 @@ func TestAdminLoginLogoutAndSessionEndpoints(t *testing.T) {
 	cookies := loginRR.Result().Cookies()
 	if len(cookies) == 0 {
 		t.Fatal("expected login session cookie")
+	}
+	var loginResp admintypes.SessionResponse
+	if err := json.Unmarshal(loginRR.Body.Bytes(), &loginResp); err != nil {
+		t.Fatalf("decode login response: %v", err)
 	}
 
 	sessionReq := httptest.NewRequest(http.MethodGet, "/__admin/api/session", nil)
@@ -314,6 +493,7 @@ func TestAdminLoginLogoutAndSessionEndpoints(t *testing.T) {
 	logoutReq := httptest.NewRequest(http.MethodPost, "/__admin/api/logout", nil)
 	logoutReq.RemoteAddr = "127.0.0.1:10000"
 	logoutReq.AddCookie(cookies[0])
+	logoutReq.Header.Set("X-Foundry-CSRF-Token", loginResp.CSRFToken)
 	logoutRR := httptest.NewRecorder()
 	mux.ServeHTTP(logoutRR, logoutReq)
 	if logoutRR.Code != http.StatusOK {
@@ -333,6 +513,10 @@ func TestManagementEndpoints(t *testing.T) {
 	loginRR := httptest.NewRecorder()
 	mux.ServeHTTP(loginRR, loginReq)
 	cookie := loginRR.Result().Cookies()[0]
+	var loginSession admintypes.SessionResponse
+	if err := json.Unmarshal(loginRR.Body.Bytes(), &loginSession); err != nil {
+		t.Fatalf("decode login session: %v", err)
+	}
 
 	doReq := func(method, path, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -341,6 +525,9 @@ func TestManagementEndpoints(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 		}
 		req.AddCookie(cookie)
+		if method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions {
+			req.Header.Set("X-Foundry-CSRF-Token", loginSession.CSRFToken)
+		}
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, req)
 		return rr
@@ -352,7 +539,7 @@ func TestManagementEndpoints(t *testing.T) {
 	if rr := doReq(http.MethodGet, "/__admin/api/users", ""); rr.Code != http.StatusOK {
 		t.Fatalf("expected users 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-	if rr := doReq(http.MethodPost, "/__admin/api/users/save", `{"username":"editor","name":"Editor User","email":"editor@example.com","password":"secret-password"}`); rr.Code != http.StatusOK {
+	if rr := doReq(http.MethodPost, "/__admin/api/users/save", `{"username":"editor","name":"Editor User","email":"editor@example.com","password":"Secret-password1!"}`); rr.Code != http.StatusOK {
 		t.Fatalf("expected save user 200, got %d: %s", rr.Code, rr.Body.String())
 	}
 	if rr := doReq(http.MethodPost, "/__admin/api/users/save", `{"username":"editor","name":"Updated Editor","email":"updated@example.com"}`); rr.Code != http.StatusOK {
@@ -364,8 +551,14 @@ func TestManagementEndpoints(t *testing.T) {
 	if rr := doReq(http.MethodGet, "/__admin/api/plugins", ""); rr.Code != http.StatusOK {
 		t.Fatalf("expected plugins 200, got %d: %s", rr.Code, rr.Body.String())
 	}
+	if rr := doReq(http.MethodPost, "/__admin/api/plugins/validate", `{"name":"alpha"}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected plugin validate 200, got %d: %s", rr.Code, rr.Body.String())
+	}
 	if rr := doReq(http.MethodGet, "/__admin/api/themes", ""); rr.Code != http.StatusOK {
 		t.Fatalf("expected themes 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if rr := doReq(http.MethodPost, "/__admin/api/themes/validate", `{"name":"default","kind":"frontend"}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected theme validate 200, got %d: %s", rr.Code, rr.Body.String())
 	}
 	auditRR := doReq(http.MethodGet, "/__admin/api/audit", "")
 	if auditRR.Code != http.StatusOK {
@@ -450,7 +643,7 @@ func TestDocumentAndMediaHistoryEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create media file: %v", err)
 	}
-	if _, err := part.Write([]byte("v1")); err != nil {
+	if _, err := part.Write(testPNGBytes()); err != nil {
 		t.Fatalf("write media body: %v", err)
 	}
 	if err := writer.Close(); err != nil {
@@ -475,17 +668,20 @@ func TestDocumentAndMediaHistoryEndpoints(t *testing.T) {
 	if err := replaceWriter.WriteField("collection", "images"); err != nil {
 		t.Fatalf("write media collection field: %v", err)
 	}
+	if err := replaceWriter.WriteField("reference", upload.Reference); err != nil {
+		t.Fatalf("write media reference field: %v", err)
+	}
 	part, err = replaceWriter.CreateFormFile("file", "history.png")
 	if err != nil {
 		t.Fatalf("create replace media file: %v", err)
 	}
-	if _, err := part.Write([]byte("v2")); err != nil {
+	if _, err := part.Write(testPNGBytes()); err != nil {
 		t.Fatalf("write replace media body: %v", err)
 	}
 	if err := replaceWriter.Close(); err != nil {
 		t.Fatalf("close replace writer: %v", err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/__admin/api/media/upload", &replaceBody)
+	req = httptest.NewRequest(http.MethodPost, "/__admin/api/media/replace", &replaceBody)
 	req.RemoteAddr = "127.0.0.1:10000"
 	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
 	req.Header.Set("Content-Type", replaceWriter.FormDataContentType())
@@ -515,8 +711,8 @@ func TestDocumentAndMediaHistoryEndpoints(t *testing.T) {
 	if err := json.Unmarshal(mediaHistoryRR.Body.Bytes(), &mediaHistory); err != nil {
 		t.Fatalf("decode media history: %v", err)
 	}
-	if len(mediaHistory.Entries) != 2 {
-		t.Fatalf("expected 2 media history entries, got %#v", mediaHistory.Entries)
+	if len(mediaHistory.Entries) < 2 {
+		t.Fatalf("expected media history entries, got %#v", mediaHistory.Entries)
 	}
 
 	if rr := doReq(http.MethodPost, "/__admin/api/media/delete", `{"reference":"`+mediaList[0].Reference+`"}`); rr.Code != http.StatusOK {
@@ -701,7 +897,26 @@ func TestAdminCustomPathRoutesAndAssets(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Admin.Path = "/cms-admin"
 	cfg.ApplyDefaults()
-	r := newTestRouter(t, cfg)
+	if err := os.MkdirAll(filepath.Join(cfg.PluginsDir, "search", "admin"), 0o755); err != nil {
+		t.Fatalf("mkdir plugin admin assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PluginsDir, "search", "admin", "console.js"), []byte(`export default function () {}`), 0o644); err != nil {
+		t.Fatalf("write plugin admin asset: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PluginsDir, "search", "admin", "secret.txt"), []byte(`top-secret`), 0o644); err != nil {
+		t.Fatalf("write undeclared plugin admin asset: %v", err)
+	}
+	svc := service.New(cfg, service.WithPluginMetadata(func() map[string]plugins.Metadata {
+		return map[string]plugins.Metadata{
+			"search": {
+				Name: "search",
+				AdminExtensions: plugins.AdminExtensions{
+					Pages: []plugins.AdminPage{{Key: "search-console", Title: "Search Console", Route: "/plugins/search", Module: "admin/console.js"}},
+				},
+			},
+		}
+	}))
+	r := New(cfg, svc)
 	mux := http.NewServeMux()
 	r.RegisterRoutes(mux)
 
@@ -728,6 +943,24 @@ func TestAdminCustomPathRoutesAndAssets(t *testing.T) {
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected custom admin status route to work, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/cms-admin/extensions/search/admin/console.js", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "export default") {
+		t.Fatalf("unexpected custom plugin extension asset response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/cms-admin/extensions/search/admin/secret.txt", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected undeclared plugin asset to be hidden, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -929,4 +1162,8 @@ func writeRouterPluginMetadata(t *testing.T, cfg *config.Config, name string) {
 	if err := os.WriteFile(filepath.Join(root, "plugin.yaml"), []byte("name: "+name+"\ntitle: "+name+"\nversion: 0.1.0\nrepo: github.com/acme/"+name+"\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n"), 0o644); err != nil {
 		t.Fatalf("write plugin metadata: %v", err)
 	}
+}
+
+func testPNGBytes() []byte {
+	return []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R'}
 }

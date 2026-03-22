@@ -14,9 +14,27 @@
     color: var(--text);
 }
 
-.toc-level-1 { padding-left: 0; font-weight: 650; }
-.toc-level-2 { padding-left: 0.55rem; }
-.toc-level-3 { padding-left: 1rem; }
-.toc-level-4 { padding-left: 1.45rem; }
-.toc-level-5 { padding-left: 1.9rem; }
-.toc-level-6 { padding-left: 2.35rem; }
+.toc-level-1 {
+    padding-left: 0;
+    font-weight: 650;
+}
+
+.toc-level-2 {
+    padding-left: 0.55rem;
+}
+
+.toc-level-3 {
+    padding-left: 1rem;
+}
+
+.toc-level-4 {
+    padding-left: 1.45rem;
+}
+
+.toc-level-5 {
+    padding-left: 1.9rem;
+}
+
+.toc-level-6 {
+    padding-left: 2.35rem;
+}

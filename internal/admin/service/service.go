@@ -9,6 +9,7 @@ import (
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/site"
 )
 
@@ -45,7 +46,9 @@ type Service struct {
 	cfg             *config.Config
 	fs              FileSystem
 	loadGraph       GraphLoader
+	pluginMetadata  func() map[string]plugins.Metadata
 	mu              sync.RWMutex
+	lockMu          sync.Mutex
 	statusProviders map[string]StatusProvider
 	graphCache      map[bool]cachedGraph
 }
@@ -75,6 +78,14 @@ func WithGraphLoader(loader GraphLoader) Option {
 	}
 }
 
+func WithPluginMetadata(loader func() map[string]plugins.Metadata) Option {
+	return func(s *Service) {
+		if loader != nil {
+			s.pluginMetadata = loader
+		}
+	}
+}
+
 func New(cfg *config.Config, opts ...Option) *Service {
 	s := &Service{
 		cfg:             cfg,
@@ -84,6 +95,9 @@ func New(cfg *config.Config, opts ...Option) *Service {
 		loadGraph: func(ctx context.Context, cfg *config.Config, includeDrafts bool) (*content.SiteGraph, error) {
 			graph, _, err := site.LoadConfiguredGraph(ctx, cfg, includeDrafts)
 			return graph, err
+		},
+		pluginMetadata: func() map[string]plugins.Metadata {
+			return map[string]plugins.Metadata{}
 		},
 	}
 

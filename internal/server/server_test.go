@@ -196,6 +196,39 @@ func TestServerChangeClassificationAndWatchHelpers(t *testing.T) {
 	}
 }
 
+func TestPublicStaticHandlerAddsSecurityHeaders(t *testing.T) {
+	cfg := testServerConfig(t)
+	if err := os.MkdirAll(filepath.Join(cfg.PublicDir, "uploads"), 0o755); err != nil {
+		t.Fatalf("mkdir uploads: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PublicDir, "uploads", "danger.html"), []byte("<html>bad</html>"), 0o644); err != nil {
+		t.Fatalf("write upload: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PublicDir, "uploads", "clip.mp4"), []byte("video"), 0o644); err != nil {
+		t.Fatalf("write upload: %v", err)
+	}
+
+	s := &Server{cfg: cfg}
+	handler := s.publicStaticHandler(true)
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/danger.html", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("expected nosniff header, got %#v", rr.Header())
+	}
+	if rr.Header().Get("Content-Disposition") != "attachment" {
+		t.Fatalf("expected attachment disposition for dangerous upload, got %#v", rr.Header())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/uploads/clip.mp4", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("expected safe media file to render inline, got %#v", rr.Header())
+	}
+}
+
 func TestServerRebuildIncrementalAndNew(t *testing.T) {
 	cfg := testServerConfig(t)
 	writeServerTheme(t, cfg)

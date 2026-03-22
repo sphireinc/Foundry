@@ -10,10 +10,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/assets"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/platformapi"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -41,6 +43,14 @@ type Renderer struct {
 	cfg    *config.Config
 	themes *theme.Manager
 	hooks  Hooks
+}
+
+type BuildStats struct {
+	Prepare    time.Duration
+	Assets     time.Duration
+	Documents  time.Duration
+	Taxonomies time.Duration
+	Search     time.Duration
 }
 
 func New(cfg *config.Config, themes *theme.Manager, hooks Hooks) *Renderer {
@@ -191,33 +201,49 @@ func containsString(values []string, target string) bool {
 }
 
 func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
-	_ = ctx
+	_, err := r.BuildWithStats(ctx, graph)
+	return err
+}
 
-	if err := r.prepareBuild(true, true); err != nil {
-		return err
+func (r *Renderer) BuildWithStats(ctx context.Context, graph *content.SiteGraph) (BuildStats, error) {
+	_ = ctx
+	var stats BuildStats
+
+	if err := r.prepareBuild(true, true, &stats); err != nil {
+		return stats, err
 	}
 
+	start := time.Now()
 	for _, doc := range graph.Documents {
 		if err := r.renderDocumentToDisk(graph, doc, false); err != nil {
-			return err
+			return stats, err
 		}
 	}
+	stats.Documents = time.Since(start)
 
+	start = time.Now()
 	if err := r.buildTaxonomyArchives(ctx, graph, false, nil); err != nil {
-		return err
+		return stats, err
 	}
+	stats.Taxonomies = time.Since(start)
 
+	start = time.Now()
 	if err := r.writeSearchIndex(graph); err != nil {
-		return err
+		return stats, err
+	}
+	stats.Search = time.Since(start)
+
+	if err := platformapi.WriteStaticArtifacts(r.cfg, graph); err != nil {
+		return stats, err
 	}
 
-	return nil
+	return stats, nil
 }
 
 func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls []string) error {
 	_ = ctx
 
-	if err := r.prepareBuild(false, false); err != nil {
+	if err := r.prepareBuild(false, false, nil); err != nil {
 		return err
 	}
 
@@ -237,6 +263,9 @@ func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls
 	if err := r.writeSearchIndex(graph); err != nil {
 		return err
 	}
+	if err := platformapi.WriteStaticArtifacts(r.cfg, graph); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -248,7 +277,7 @@ func (r *Renderer) BuildTaxonomyArchives(ctx context.Context, graph *content.Sit
 func (r *Renderer) buildTaxonomyArchives(ctx context.Context, graph *content.SiteGraph, liveReload bool, filter map[string]struct{}) error {
 	_ = ctx
 
-	if err := r.prepareBuild(false, false); err != nil {
+	if err := r.prepareBuild(false, false, nil); err != nil {
 		return err
 	}
 
@@ -348,6 +377,7 @@ type searchIndexEntry struct {
 	Title      string              `json:"title"`
 	URL        string              `json:"url"`
 	Summary    string              `json:"summary,omitempty"`
+	Snippet    string              `json:"snippet,omitempty"`
 	Content    string              `json:"content,omitempty"`
 	Type       string              `json:"type"`
 	Lang       string              `json:"lang"`
@@ -370,6 +400,7 @@ func (r *Renderer) writeSearchIndex(graph *content.SiteGraph) error {
 			Title:      doc.Title,
 			URL:        doc.URL,
 			Summary:    doc.Summary,
+			Snippet:    buildSearchSnippet(doc.Summary, normalizeSearchContent(doc)),
 			Content:    normalizeSearchContent(doc),
 			Type:       doc.Type,
 			Lang:       doc.Lang,
@@ -404,6 +435,18 @@ func normalizeSearchContent(doc *content.Document) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
+func buildSearchSnippet(summary, content string) string {
+	summary = strings.TrimSpace(summary)
+	if summary != "" {
+		return summary
+	}
+	runes := []rune(strings.TrimSpace(content))
+	if len(runes) <= 180 {
+		return string(runes)
+	}
+	return strings.TrimSpace(string(runes[:180])) + "..."
+}
+
 func cloneTaxonomies(in map[string][]string) map[string][]string {
 	if len(in) == 0 {
 		return nil
@@ -427,7 +470,8 @@ func documentArchived(doc *content.Document) bool {
 	return ok && flag
 }
 
-func (r *Renderer) prepareBuild(cleanPublicDir, syncAssets bool) error {
+func (r *Renderer) prepareBuild(cleanPublicDir, syncAssets bool, stats *BuildStats) error {
+	start := time.Now()
 	if err := r.themes.MustExist(); err != nil {
 		return err
 	}
@@ -440,9 +484,16 @@ func (r *Renderer) prepareBuild(cleanPublicDir, syncAssets bool) error {
 		return err
 	}
 	if syncAssets {
+		assetsStart := time.Now()
 		if err := assets.Sync(r.cfg, r.hooks); err != nil {
 			return err
 		}
+		if stats != nil {
+			stats.Assets = time.Since(assetsStart)
+		}
+	}
+	if stats != nil {
+		stats.Prepare = time.Since(start)
 	}
 	return nil
 }
@@ -634,6 +685,7 @@ func (r *Renderer) resolveNav(graph *content.SiteGraph, currentURL string) []Nav
 }
 
 func normalizeNavURL(u string) string {
+	// pure thievery lol
 	u = strings.TrimSpace(u)
 	if u == "" {
 		return "/"

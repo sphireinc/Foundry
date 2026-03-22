@@ -19,12 +19,13 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/sphireinc/foundry/internal/assets"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/deps"
 	"github.com/sphireinc/foundry/internal/diag"
 	"github.com/sphireinc/foundry/internal/logx"
+	"github.com/sphireinc/foundry/internal/media"
+	"github.com/sphireinc/foundry/internal/ops"
 	"github.com/sphireinc/foundry/internal/renderer"
 	"github.com/sphireinc/foundry/internal/router"
 )
@@ -174,9 +175,14 @@ func (s *Server) newMux() *http.ServeMux {
 	mux.HandleFunc(s.cfg.Feed.RSSPath, s.handleRSS)
 	mux.HandleFunc(s.cfg.Feed.SitemapPath, s.handleSitemap)
 
-	for _, prefix := range []string{"/assets/", "/images/", "/uploads/", "/theme/", "/plugins/"} {
-		mux.Handle(prefix, http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir))))
-	}
+	mux.Handle("/assets/", s.publicStaticHandler(false))
+	mux.Handle("/images/", s.publicStaticHandler(true))
+	mux.Handle("/videos/", s.publicStaticHandler(true))
+	mux.Handle("/audio/", s.publicStaticHandler(true))
+	mux.Handle("/documents/", s.publicStaticHandler(true))
+	mux.Handle("/uploads/", s.publicStaticHandler(true))
+	mux.Handle("/theme/", s.publicStaticHandler(false))
+	mux.Handle("/plugins/", s.publicStaticHandler(false))
 
 	s.hooks.RegisterRoutes(mux)
 	mux.HandleFunc("/", s.handlePage)
@@ -186,6 +192,17 @@ func (s *Server) newMux() *http.ServeMux {
 	}
 
 	return mux
+}
+
+func (s *Server) publicStaticHandler(mediaCollection bool) http.Handler {
+	base := http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir)))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if mediaCollection && media.ShouldForceDownload(r.URL.Path) {
+			w.Header().Set("Content-Disposition", "attachment")
+		}
+		base.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) newHTTPServer(handler http.Handler) *http.Server {
@@ -238,16 +255,16 @@ func (s *Server) rebuild(ctx context.Context) error {
 		logx.Info("serve rebuild started", append([]any{"preview", s.preview}, before.logFields("runtime_")...)...)
 	}
 
-	graph, err := s.loadPreparedGraph(ctx)
+	prepared, err := ops.LoadPreparedGraph(ctx, s.loader, s.router, s.hooks, s.cfg.Theme)
 	if err != nil {
 		return err
 	}
-	if err := s.syncAssets(); err != nil {
+	if err := ops.SyncAssets(s.cfg, s.hooks); err != nil {
 		return err
 	}
 
-	s.updateGraphState(graph)
-	logx.Info("site rebuilt", "documents", len(graph.Documents), "routes", len(graph.ByURL))
+	s.updatePreparedGraph(prepared)
+	logx.Info("site rebuilt", "documents", len(prepared.Graph.Documents), "routes", len(prepared.Graph.ByURL))
 	if s.debug {
 		after := s.captureRuntimeSnapshot()
 		args := []any{"elapsed", time.Since(start).String()}
@@ -277,7 +294,7 @@ func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet)
 	oldDepGraph := s.currentDepGraph()
 
 	if len(changes.Assets) > 0 {
-		if err := s.syncAssets(); err != nil {
+		if err := ops.SyncAssets(s.cfg, s.hooks); err != nil {
 			return err
 		}
 	}
@@ -299,17 +316,17 @@ func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet)
 		return s.rebuild(ctx)
 	}
 
-	graph, err := s.loadPreparedGraph(ctx)
+	prepared, err := ops.LoadPreparedGraph(ctx, s.loader, s.router, s.hooks, s.cfg.Theme)
 	if err != nil {
 		return err
 	}
 	if len(plan.OutputURLs) > 0 {
-		if err := s.renderer.BuildURLs(ctx, graph, plan.OutputURLs); err != nil {
+		if err := s.renderer.BuildURLs(ctx, prepared.Graph, plan.OutputURLs); err != nil {
 			return diag.Wrap(diag.KindRender, "build urls", err)
 		}
 	}
 
-	s.updateGraphState(graph)
+	s.updatePreparedGraph(prepared)
 	logx.Debug("incremental rebuild complete", "output_count", len(plan.OutputURLs))
 	if s.debug {
 		after := s.captureRuntimeSnapshot()
@@ -325,31 +342,13 @@ func (s *Server) incrementalRebuild(ctx context.Context, changes deps.ChangeSet)
 	return nil
 }
 
-func (s *Server) loadPreparedGraph(ctx context.Context) (*content.SiteGraph, error) {
-	graph, err := s.loader.Load(ctx)
-	if err != nil {
-		return nil, diag.Wrap(diag.KindBuild, "load site graph", err)
+func (s *Server) updatePreparedGraph(prepared *ops.PreparedGraph) {
+	if prepared == nil || prepared.Graph == nil {
+		return
 	}
-	if err := s.router.AssignURLs(graph); err != nil {
-		return nil, diag.Wrap(diag.KindBuild, "assign urls", err)
-	}
-	if err := s.hooks.OnRoutesAssigned(graph); err != nil {
-		return nil, diag.Wrap(diag.KindPlugin, "run route hooks", err)
-	}
-	return graph, nil
-}
-
-func (s *Server) syncAssets() error {
-	if err := assets.Sync(s.cfg, s.hooks); err != nil {
-		return diag.Wrap(diag.KindIO, "sync assets", err)
-	}
-	return nil
-}
-
-func (s *Server) updateGraphState(graph *content.SiteGraph) {
 	s.mu.Lock()
-	s.graph = graph
-	s.depGraph = deps.BuildSiteDependencyGraph(graph, s.cfg.Theme)
+	s.graph = prepared.Graph
+	s.depGraph = prepared.DepGraph
 	s.mu.Unlock()
 }
 
@@ -360,6 +359,7 @@ func (s *Server) currentDepGraph() *deps.Graph {
 }
 
 func hasRenderableChanges(changes deps.ChangeSet) bool {
+	// TODO this needs to be revisited, feels flaky
 	return changes.Full ||
 		len(changes.Sources) > 0 ||
 		len(changes.Templates) > 0 ||
@@ -485,6 +485,9 @@ func (s *Server) classifyChanges(paths []string) deps.ChangeSet {
 			changes.Templates = append(changes.Templates, clean)
 		case strings.HasPrefix(clean, roots["content_assets"]+"/"),
 			strings.HasPrefix(clean, roots["content_images"]+"/"),
+			strings.HasPrefix(clean, roots["content_videos"]+"/"),
+			strings.HasPrefix(clean, roots["content_audio"]+"/"),
+			strings.HasPrefix(clean, roots["content_documents"]+"/"),
 			strings.HasPrefix(clean, roots["content_uploads"]+"/"),
 			strings.HasPrefix(clean, roots["theme_assets"]+"/"):
 			changes.Assets = append(changes.Assets, clean)
@@ -508,19 +511,23 @@ func (s *Server) classifyChanges(paths []string) deps.ChangeSet {
 }
 
 func (s *Server) changeRoots() map[string]string {
+	// TODO I'm lazy but this hsould be abstracted I just don't feel like it right now
 	return map[string]string{
-		"config":          filepath.ToSlash(s.contentConfigPath()),
-		"pages":           filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PagesDir)),
-		"posts":           filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PostsDir)),
-		"content_assets":  filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir)),
-		"content_images":  filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.ImagesDir)),
-		"content_uploads": filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.UploadsDir)),
-		"theme_assets":    filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "assets")),
-		"theme_layouts":   filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "layouts")),
-		"data":            filepath.ToSlash(s.cfg.DataDir),
-		"plugins":         filepath.ToSlash(s.cfg.PluginsDir),
-		"themes":          filepath.ToSlash(s.cfg.ThemesDir),
-		"content":         filepath.ToSlash(s.cfg.ContentDir),
+		"config":            filepath.ToSlash(s.contentConfigPath()),
+		"pages":             filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PagesDir)),
+		"posts":             filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.PostsDir)),
+		"content_assets":    filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir)),
+		"content_images":    filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.ImagesDir)),
+		"content_videos":    filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.VideoDir)),
+		"content_audio":     filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.AudioDir)),
+		"content_documents": filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.DocumentsDir)),
+		"content_uploads":   filepath.ToSlash(filepath.Join(s.cfg.ContentDir, s.cfg.Content.UploadsDir)),
+		"theme_assets":      filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "assets")),
+		"theme_layouts":     filepath.ToSlash(filepath.Join(s.cfg.ThemesDir, s.cfg.Theme, "layouts")),
+		"data":              filepath.ToSlash(s.cfg.DataDir),
+		"plugins":           filepath.ToSlash(s.cfg.PluginsDir),
+		"themes":            filepath.ToSlash(s.cfg.ThemesDir),
+		"content":           filepath.ToSlash(s.cfg.ContentDir),
 	}
 }
 

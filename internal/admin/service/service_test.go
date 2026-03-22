@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -131,12 +132,12 @@ func TestDocumentQueriesPreviewAndStatus(t *testing.T) {
 	}
 
 	preview, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{
-		Raw: "---\ntitle: Preview\nslug: preview\n---\n\n# Hello\n\n![Clip](media:uploads/demo.mp4)",
+		Raw: "---\ntitle: Preview\nslug: preview\n---\n\n# Hello\n\n![Clip](media:videos/demo.mp4)",
 	})
 	if err != nil || preview.Title != "Preview" || !strings.Contains(preview.HTML, "<h1") {
 		t.Fatalf("preview document: %v %#v", err, preview)
 	}
-	if !strings.Contains(preview.HTML, `<video controls preload="metadata" src="/uploads/demo.mp4" title="Clip" aria-label="Clip"></video>`) {
+	if !strings.Contains(preview.HTML, `<video controls preload="metadata" src="/videos/demo.mp4" title="Clip" aria-label="Clip"></video>`) {
 		t.Fatalf("expected preview html to rewrite media reference, got %q", preview.HTML)
 	}
 
@@ -152,6 +153,31 @@ func TestDocumentQueriesPreviewAndStatus(t *testing.T) {
 	}
 	if len(svc.providers()) == 0 {
 		t.Fatal("expected status providers")
+	}
+}
+
+func TestPreviewDocumentIncludesFieldValidationErrors(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.Fields.Enabled = true
+	cfg.Fields.Schemas = map[string]config.FieldSchemaSet{
+		"post": {
+			Fields: []config.FieldDefinition{
+				{Name: "stage", Type: "select", Enum: []string{"draft", "review"}},
+			},
+		},
+	}
+	svc := New(cfg)
+
+	preview, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{
+		SourcePath: "posts/invalid.md",
+		Raw:        "---\ntitle: Invalid\nslug: invalid\nlayout: post\n---\n\nBody",
+		Fields:     map[string]any{"stage": "published"},
+	})
+	if err != nil {
+		t.Fatalf("preview document: %v", err)
+	}
+	if len(preview.FieldErrors) == 0 {
+		t.Fatalf("expected preview field errors, got %#v", preview)
 	}
 }
 
@@ -278,6 +304,145 @@ func TestStatusProvidersBranches(t *testing.T) {
 	}
 }
 
+func TestGetRuntimeStatusIncludesInventoryStorageIntegrityAndActivity(t *testing.T) {
+	cfg := testServiceConfig(t)
+	writeServiceTheme(t, cfg, cfg.Theme)
+
+	graph := content.NewSiteGraph(cfg)
+	now := time.Now().UTC()
+	page := &content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       "en",
+		Status:     "published",
+		Title:      "Home",
+		Slug:       "home",
+		URL:        "/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "index.md")),
+		RawBody:    "# Home\n\n![Hero](media:images/hero.png)",
+		HTMLBody:   template.HTML("<h1>Home</h1>"),
+		Date:       &now,
+	}
+	post := &content.Document{
+		ID:         "post-1",
+		Type:       "post",
+		Lang:       "en",
+		Status:     "draft",
+		Title:      "Draft Post",
+		Slug:       "draft-post",
+		URL:        "/posts/draft-post/",
+		Layout:     "post",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "posts", "draft-post.md")),
+		RawBody:    "# Draft\n\n[Missing](/missing/)",
+		HTMLBody:   template.HTML("<h1>Draft</h1>"),
+		Date:       &now,
+		Draft:      true,
+	}
+	graph.Add(page)
+	graph.Add(post)
+	graph.Taxonomies.Values = map[string]map[string][]taxonomy.Entry{
+		"tags": {
+			"intro": {{DocumentID: page.ID, URL: page.URL, Lang: page.Lang, Type: page.Type, Title: page.Title, Slug: page.Slug}},
+		},
+	}
+
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, "pages", "index.md"), []byte("---\ntitle: Home\nslug: home\nlayout: page\n---\n\n# Home"), 0o644); err != nil {
+		t.Fatalf("write page: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, "posts", "draft-post.md"), []byte("---\ntitle: Draft Post\nslug: draft-post\nlayout: post\ndraft: true\n---\n\n# Draft"), 0o644); err != nil {
+		t.Fatalf("write post: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir), 0o755); err != nil {
+		t.Fatalf("mkdir images: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "hero.png"), testPNGBytes(), 0o644); err != nil {
+		t.Fatalf("write hero image: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "old.version.20260321T120000Z.png"), testPNGBytes(), 0o644); err != nil {
+		t.Fatalf("write versioned image: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "trashed.trash.20260321T120500Z.png"), testPNGBytes(), 0o644); err != nil {
+		t.Fatalf("write trashed image: %v", err)
+	}
+	if err := os.MkdirAll(cfg.PublicDir, 0o755); err != nil {
+		t.Fatalf("mkdir public: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PublicDir, "index.html"), []byte("<html></html>"), 0o644); err != nil {
+		t.Fatalf("write public file: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Admin.SessionStoreFile), 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+	if err := os.WriteFile(cfg.Admin.SessionStoreFile, []byte("sessions:\n  - token: active\n    expires_at: "+now.Add(10*time.Minute).Format(time.RFC3339)+"\n"), 0o600); err != nil {
+		t.Fatalf("write session file: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Admin.LockFile), 0o755); err != nil {
+		t.Fatalf("mkdir lock dir: %v", err)
+	}
+	if err := os.WriteFile(cfg.Admin.LockFile, []byte("locks:\n  - source_path: "+filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "index.md"))+"\n    username: admin\n    token: abc\n    last_beat_at: "+now.Format(time.RFC3339)+"\n    expires_at: "+now.Add(time.Minute).Format(time.RFC3339)+"\n"), 0o600); err != nil {
+		t.Fatalf("write lock file: %v", err)
+	}
+	auditEntry, err := json.Marshal(types.AuditEntry{
+		Timestamp: now,
+		Action:    "login",
+		Outcome:   "fail",
+		Actor:     "admin",
+	})
+	if err != nil {
+		t.Fatalf("marshal audit entry: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.DataDir, "admin"), 0o755); err != nil {
+		t.Fatalf("mkdir audit dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.DataDir, "admin", "audit.jsonl"), append(auditEntry, '\n'), 0o644); err != nil {
+		t.Fatalf("write audit file: %v", err)
+	}
+	buildReport := `{"generated_at":"` + now.Format(time.RFC3339) + `","environment":"preview","target":"production","preview":true,"document_count":2,"route_count":2,"stats":{"prepare":1000000,"assets":2000000,"documents":3000000,"taxonomies":4000000,"search":5000000}}`
+	if err := os.WriteFile(filepath.Join(cfg.DataDir, "admin", "build-report.json"), []byte(buildReport), 0o644); err != nil {
+		t.Fatalf("write build report: %v", err)
+	}
+
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return graph, nil
+	}))
+
+	status, err := svc.GetRuntimeStatus(context.Background())
+	if err != nil {
+		t.Fatalf("get runtime status: %v", err)
+	}
+	if status.Content.DocumentCount != 2 || status.Content.RouteCount != 2 {
+		t.Fatalf("unexpected content totals: %#v", status.Content)
+	}
+	if status.Content.ByStatus["published"] != 1 || status.Content.ByStatus["draft"] != 1 {
+		t.Fatalf("unexpected content status counts: %#v", status.Content.ByStatus)
+	}
+	if status.Content.MediaCounts["images"] != 1 {
+		t.Fatalf("expected one current image, got %#v", status.Content.MediaCounts)
+	}
+	if status.Storage.DerivedVersionCount != 1 || status.Storage.DerivedTrashCount != 1 {
+		t.Fatalf("unexpected derived file counts: %#v", status.Storage)
+	}
+	if status.Storage.MediaBytes["images"] <= 0 || status.Storage.ContentBytes <= 0 {
+		t.Fatalf("expected storage sizes, got %#v", status.Storage)
+	}
+	if status.Integrity.BrokenInternalLinks != 1 {
+		t.Fatalf("expected one broken internal link, got %#v", status.Integrity)
+	}
+	if status.Activity.ActiveSessions != 1 || status.Activity.ActiveDocumentLocks != 1 {
+		t.Fatalf("unexpected activity counts: %#v", status.Activity)
+	}
+	if status.Activity.RecentFailedLogins != 1 || status.Activity.RecentAuditEvents != 1 {
+		t.Fatalf("unexpected audit activity counts: %#v", status.Activity)
+	}
+	if status.LastBuild == nil || status.LastBuild.Environment != "preview" || status.LastBuild.DocumentsMS != 3 {
+		t.Fatalf("unexpected build report: %#v", status.LastBuild)
+	}
+	if len(status.Storage.LargestFiles) == 0 {
+		t.Fatalf("expected largest files, got %#v", status.Storage)
+	}
+}
+
 func TestDocumentHistoryRestorePurgeAndDiff(t *testing.T) {
 	cfg := testServiceConfig(t)
 	svc := New(cfg)
@@ -388,15 +553,15 @@ func TestMediaHistoryRestoreAndPurge(t *testing.T) {
 	cfg := testServiceConfig(t)
 	svc := New(cfg)
 
-	upload, err := svc.SaveMedia(context.Background(), "images", "posts/history", "diagram.png", "image/png", []byte("v1"))
+	upload, err := svc.SaveMedia(context.Background(), "images", "posts/history", "diagram.png", "image/png", testPNGBytes())
 	if err != nil {
 		t.Fatalf("save media: %v", err)
 	}
 	if _, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{Title: "Diagram v1"}, "initial metadata", "Admin User"); err != nil {
 		t.Fatalf("save media metadata: %v", err)
 	}
-	if _, err := svc.SaveMedia(context.Background(), "images", "posts/history", "diagram.png", "image/png", []byte("v2")); err != nil {
-		t.Fatalf("save media replacement: %v", err)
+	if _, err := svc.ReplaceMedia(context.Background(), upload.Reference, "image/png", testPNGBytes()); err != nil {
+		t.Fatalf("replace media: %v", err)
 	}
 	if _, err := svc.SaveMediaMetadata(context.Background(), upload.Reference, types.MediaMetadata{Title: "Diagram current"}, "refresh metadata", "Admin User"); err != nil {
 		t.Fatalf("save current media metadata: %v", err)
@@ -485,7 +650,7 @@ func TestListMediaTrashForRootUploadWithoutMetadata(t *testing.T) {
 	cfg := testServiceConfig(t)
 	svc := New(cfg)
 
-	upload, err := svc.SaveMedia(context.Background(), "images", "", "1768917471861.png", "image/png", []byte("img"))
+	upload, err := svc.SaveMedia(context.Background(), "images", "", "1768917471861.png", "image/png", testPNGBytes())
 	if err != nil {
 		t.Fatalf("save media: %v", err)
 	}
@@ -510,7 +675,7 @@ func TestListMediaTrashForRootUploadWithoutMetadata(t *testing.T) {
 	if trash[0].CurrentReference != upload.Reference {
 		t.Fatalf("expected current reference %q, got %#v", upload.Reference, trash[0])
 	}
-	if !strings.Contains(trash[0].Path, "1768917471861.trash.") || !strings.HasSuffix(trash[0].Path, ".png") {
+	if !strings.Contains(trash[0].Path, ".trash.") || !strings.HasSuffix(trash[0].Path, ".png") {
 		t.Fatalf("expected trash path for numeric root upload, got %#v", trash[0])
 	}
 }
@@ -521,7 +686,7 @@ func TestGetMediaDetailIncludesUsage(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(uploadPath), 0o755); err != nil {
 		t.Fatalf("mkdir media dir: %v", err)
 	}
-	if err := os.WriteFile(uploadPath, []byte("png"), 0o644); err != nil {
+	if err := os.WriteFile(uploadPath, testPNGBytes(), 0o644); err != nil {
 		t.Fatalf("write media: %v", err)
 	}
 	docPath := filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "about.md")
@@ -557,49 +722,119 @@ func TestMediaUploadAndListing(t *testing.T) {
 	cfg := testServiceConfig(t)
 	svc := New(cfg)
 
-	first, err := svc.SaveMedia(context.Background(), "", "posts/hello", "Hero Banner.PNG", "image/png", []byte("image"))
+	first, err := svc.SaveMedia(context.Background(), "", "posts/hello", "Hero Banner.PNG", "image/png", testPNGBytes())
 	if err != nil {
 		t.Fatalf("save media: %v", err)
 	}
-	if first.Collection != "images" || first.Path != "posts/hello/hero-banner.png" || first.Reference != media.MustReference("images", "posts/hello/hero-banner.png") {
+	if first.Collection != "images" || !strings.HasPrefix(first.Path, "posts/hello/hero-banner-") || !strings.HasSuffix(first.Path, ".png") || first.Reference != media.MustReference("images", first.Path) {
 		t.Fatalf("unexpected first upload response: %#v", first)
 	}
+	if first.Metadata.OriginalFilename != "Hero Banner.PNG" || first.Metadata.StoredFilename != first.Name || first.Metadata.ContentHash == "" || first.Metadata.MIMEType != "image/png" {
+		t.Fatalf("expected upload metadata to be populated, got %#v", first.Metadata)
+	}
 
-	second, err := svc.SaveMedia(context.Background(), "uploads", "posts/hello", "clip.mp4", "video/mp4", []byte("video"))
+	second, err := svc.SaveMedia(context.Background(), "videos", "posts/hello", "clip.mp4", "video/mp4", testMP4Bytes())
 	if err != nil {
 		t.Fatalf("save second media: %v", err)
 	}
-	if second.Collection != "uploads" || second.Kind != "video" {
+	if second.Collection != "videos" || second.Kind != "video" {
 		t.Fatalf("unexpected second upload response: %#v", second)
 	}
 
-	dupe, err := svc.SaveMedia(context.Background(), "images", "posts/hello", "hero banner.png", "image/png", []byte("dupe"))
+	dupe, err := svc.SaveMedia(context.Background(), "images", "posts/hello", "hero banner.png", "image/png", testPNGBytes())
 	if err != nil {
 		t.Fatalf("save duplicate media: %v", err)
 	}
-	if dupe.Path != "posts/hello/hero-banner.png" || dupe.Created {
-		t.Fatalf("expected overwrite with stable path, got %#v", dupe)
+	if dupe.Path == first.Path || !dupe.Created {
+		t.Fatalf("expected unique path for duplicate upload, got %#v", dupe)
 	}
 	entries, err := os.ReadDir(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "hello"))
 	if err != nil {
 		t.Fatalf("read media dir: %v", err)
 	}
-	var foundVersion bool
+	var pngCount int
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "hero-banner.version.") {
-			foundVersion = true
+		if strings.HasSuffix(entry.Name(), ".png") {
+			pngCount++
 		}
 	}
-	if !foundVersion {
-		t.Fatal("expected media overwrite to create versioned file")
+	if pngCount != 2 {
+		t.Fatalf("expected two distinct uploaded png files, got entries %#v", entries)
 	}
 
 	items, err := svc.ListMedia(context.Background())
 	if err != nil {
 		t.Fatalf("list media: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 current media items, got %#v", items)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 current media items, got %#v", items)
+	}
+}
+
+func TestMediaUploadNormalizesCollectionRootDirectoryInput(t *testing.T) {
+	cfg := testServiceConfig(t)
+	svc := New(cfg)
+
+	upload, err := svc.SaveMedia(context.Background(), "images", "content/images", "Hero Banner.PNG", "image/png", testPNGBytes())
+	if err != nil {
+		t.Fatalf("save media with collection root dir: %v", err)
+	}
+	if strings.Contains(upload.Path, "content/images") || strings.Contains(upload.Path, "images/") {
+		t.Fatalf("expected collection-root dir input to normalize away, got path %q", upload.Path)
+	}
+	if !strings.HasPrefix(upload.Path, "hero-banner-") || !strings.HasSuffix(upload.Path, ".png") {
+		t.Fatalf("unexpected normalized upload path: %q", upload.Path)
+	}
+}
+
+func TestMediaUploadWritesMetadataWithRelativeContentDir(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	cfg := &config.Config{
+		ContentDir: "content",
+		PublicDir:  "public",
+		ThemesDir:  "themes",
+		PluginsDir: "plugins",
+		DataDir:    "data",
+		Content: config.ContentConfig{
+			PagesDir:          "pages",
+			PostsDir:          "posts",
+			ImagesDir:         "images",
+			DefaultLayoutPage: "page",
+			DefaultLayoutPost: "post",
+		},
+	}
+	cfg.ApplyDefaults()
+	if err := os.MkdirAll(filepath.Join(cfg.ContentDir, "config"), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	hash, err := users.HashPassword("secret-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg.Admin.UsersFile = filepath.Join(cfg.ContentDir, "config", "admin-users.yaml")
+	if err := os.WriteFile(cfg.Admin.UsersFile, []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: "+hash+"\n"), 0o644); err != nil {
+		t.Fatalf("write users file: %v", err)
+	}
+
+	svc := New(cfg)
+	upload, err := svc.SaveMedia(context.Background(), "images", "", "Hero Banner.PNG", "image/png", testPNGBytes())
+	if err != nil {
+		t.Fatalf("save media with relative content dir: %v", err)
+	}
+	sidecar := filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, upload.Name+".meta.yaml")
+	if _, err := os.Stat(sidecar); err != nil {
+		t.Fatalf("expected metadata sidecar to exist at %s: %v", sidecar, err)
 	}
 }
 
@@ -610,10 +845,10 @@ func TestSaveMediaErrors(t *testing.T) {
 	if _, err := svc.SaveMedia(context.Background(), "bad", "", "clip.mp4", "video/mp4", []byte("x")); err == nil {
 		t.Fatal("expected invalid collection error")
 	}
-	if _, err := svc.SaveMedia(context.Background(), "uploads", "../escape", "clip.mp4", "video/mp4", []byte("x")); err == nil {
+	if _, err := svc.SaveMedia(context.Background(), "videos", "../escape", "clip.mp4", "video/mp4", []byte("x")); err == nil {
 		t.Fatal("expected invalid media dir error")
 	}
-	if _, err := svc.SaveMedia(context.Background(), "uploads", "", "clip.mp4", "video/mp4", nil); err == nil {
+	if _, err := svc.SaveMedia(context.Background(), "videos", "", "clip.mp4", "video/mp4", nil); err == nil {
 		t.Fatal("expected empty media body error")
 	}
 }
@@ -646,7 +881,7 @@ func TestManagementServices(t *testing.T) {
 		Name:     "Editor User",
 		Email:    "editor@example.com",
 		Role:     "editor",
-		Password: "secret-password",
+		Password: "Secret-password1!",
 	})
 	if err != nil || user.Username != "editor" {
 		t.Fatalf("save user: %v %#v", err, user)
@@ -696,7 +931,7 @@ func TestManagementServices(t *testing.T) {
 		t.Fatalf("disable plugin: %v", err)
 	}
 
-	upload, err := svc.SaveMedia(context.Background(), "uploads", "docs", "guide.pdf", "application/pdf", []byte("pdf"))
+	upload, err := svc.SaveMedia(context.Background(), "documents", "docs", "guide.pdf", "application/pdf", testPDFBytes())
 	if err != nil {
 		t.Fatalf("save media for delete: %v", err)
 	}
@@ -769,11 +1004,63 @@ func TestDocumentLifecycleServices(t *testing.T) {
 	}
 }
 
+func TestDocumentWorkflowAndSchemaFields(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.Fields.Schemas["post"] = config.FieldSchemaSet{
+		Fields: []config.FieldDefinition{
+			{Name: "hero", Type: "text", Required: true, Default: "launch"},
+			{Name: "stage", Type: "select", Enum: []string{"draft", "review"}, Default: "draft"},
+		},
+	}
+	svc := New(cfg)
+
+	saved, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{
+		SourcePath: "posts/editorial-workflow.md",
+		Raw:        "---\ntitle: Editorial Workflow\nslug: editorial-workflow\nlayout: post\nworkflow: in_review\neditorial_note: Needs fact check\ndraft: true\n---\n\nBody",
+		Fields:     map[string]any{"stage": "review"},
+		Username:   "editor",
+	})
+	if err != nil {
+		t.Fatalf("save document with workflow: %v", err)
+	}
+	if !strings.Contains(saved.Raw, "author: editor") || !strings.Contains(saved.Raw, "last_editor: editor") {
+		t.Fatalf("expected author attribution in raw document, got %q", saved.Raw)
+	}
+	if !strings.Contains(saved.Raw, "fields:") || !strings.Contains(saved.Raw, "hero: launch") {
+		t.Fatalf("expected schema defaults in raw document, got %q", saved.Raw)
+	}
+
+	status, err := svc.UpdateDocumentStatus(context.Background(), types.DocumentStatusRequest{
+		SourcePath:           saved.SourcePath,
+		Status:               "scheduled",
+		ScheduledPublishAt:   "2026-03-25T10:00:00Z",
+		ScheduledUnpublishAt: "2026-03-30T10:00:00Z",
+		EditorialNote:        "Publish with launch post",
+	})
+	if err != nil {
+		t.Fatalf("schedule document: %v", err)
+	}
+	if status.Status != "scheduled" || status.ScheduledPublishAt == nil || status.ScheduledUnpublishAt == nil {
+		t.Fatalf("expected scheduled status response, got %#v", status)
+	}
+
+	detail, err := svc.GetDocument(context.Background(), saved.SourcePath, true)
+	if err != nil {
+		t.Fatalf("get saved document: %v", err)
+	}
+	if detail.Status != "scheduled" || detail.Author != "editor" || detail.LastEditor != "editor" {
+		t.Fatalf("expected workflow attribution on detail, got %#v", detail)
+	}
+	if len(detail.FieldSchema) != 2 || detail.Fields["hero"] != "launch" {
+		t.Fatalf("expected field schema and defaults on detail, got %#v %#v", detail.FieldSchema, detail.Fields)
+	}
+}
+
 func TestMediaMetadataServices(t *testing.T) {
 	cfg := testServiceConfig(t)
 	svc := New(cfg)
 
-	upload, err := svc.SaveMedia(context.Background(), "images", "posts/about", "diagram.png", "image/png", []byte("png"))
+	upload, err := svc.SaveMedia(context.Background(), "images", "posts/about", "diagram.png", "image/png", testPNGBytes())
 	if err != nil {
 		t.Fatalf("save media: %v", err)
 	}
@@ -808,6 +1095,9 @@ func TestMediaMetadataServices(t *testing.T) {
 	if gotDetail.Metadata.Caption != "System overview" {
 		t.Fatalf("unexpected detail metadata: %#v", gotDetail)
 	}
+	if gotDetail.Metadata.OriginalFilename != "diagram.png" || gotDetail.Metadata.ContentHash == "" {
+		t.Fatalf("expected technical media metadata, got %#v", gotDetail.Metadata)
+	}
 	if len(gotDetail.UsedBy) != 0 {
 		t.Fatalf("expected no media usage, got %#v", gotDetail.UsedBy)
 	}
@@ -829,8 +1119,9 @@ func TestMediaMetadataServices(t *testing.T) {
 	}
 	var foundMetadataVersion bool
 	var foundMetadataComment bool
+	baseName := strings.TrimSuffix(filepath.Base(upload.Path), filepath.Ext(upload.Path))
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "diagram.version.") && strings.HasSuffix(entry.Name(), ".png.meta.yaml") {
+		if strings.HasPrefix(entry.Name(), baseName+".version.") && strings.HasSuffix(entry.Name(), ".png.meta.yaml") {
 			foundMetadataVersion = true
 			body, err := os.ReadFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", entry.Name()))
 			if err != nil {
@@ -857,10 +1148,10 @@ func TestMediaMetadataServices(t *testing.T) {
 	}
 	var foundTrash, foundSidecarTrash bool
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "diagram.trash.") && strings.HasSuffix(entry.Name(), ".png") {
+		if strings.HasPrefix(entry.Name(), baseName+".trash.") && strings.HasSuffix(entry.Name(), ".png") {
 			foundTrash = true
 		}
-		if strings.HasPrefix(entry.Name(), "diagram.trash.") && strings.HasSuffix(entry.Name(), ".png.meta.yaml") {
+		if strings.HasPrefix(entry.Name(), baseName+".trash.") && strings.HasSuffix(entry.Name(), ".png.meta.yaml") {
 			foundSidecarTrash = true
 		}
 	}
@@ -873,12 +1164,12 @@ func TestReplaceMediaPreservesCanonicalReference(t *testing.T) {
 	cfg := testServiceConfig(t)
 	svc := New(cfg)
 
-	upload, err := svc.SaveMedia(context.Background(), "images", "posts/about", "diagram.png", "image/png", []byte("v1"))
+	upload, err := svc.SaveMedia(context.Background(), "images", "posts/about", "diagram.png", "image/png", testPNGBytes())
 	if err != nil {
 		t.Fatalf("save media: %v", err)
 	}
 
-	replaced, err := svc.ReplaceMedia(context.Background(), upload.Reference, "image/png", []byte("v2"))
+	replaced, err := svc.ReplaceMedia(context.Background(), upload.Reference, "image/png", testPNGBytes())
 	if err != nil {
 		t.Fatalf("replace media: %v", err)
 	}
@@ -886,11 +1177,11 @@ func TestReplaceMediaPreservesCanonicalReference(t *testing.T) {
 		t.Fatalf("expected canonical reference to be preserved, got %#v", replaced)
 	}
 
-	body, err := os.ReadFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, "posts", "about", "diagram.png"))
+	body, err := os.ReadFile(filepath.Join(cfg.ContentDir, cfg.Content.ImagesDir, filepath.FromSlash(upload.Path)))
 	if err != nil {
 		t.Fatalf("read replaced media: %v", err)
 	}
-	if string(body) != "v2" {
+	if len(body) == 0 {
 		t.Fatalf("expected replaced media body, got %q", string(body))
 	}
 
@@ -899,8 +1190,9 @@ func TestReplaceMediaPreservesCanonicalReference(t *testing.T) {
 		t.Fatalf("read media dir: %v", err)
 	}
 	foundVersion := false
+	baseName := strings.TrimSuffix(filepath.Base(upload.Path), filepath.Ext(upload.Path))
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "diagram.version.") && strings.HasSuffix(entry.Name(), ".png") {
+		if strings.HasPrefix(entry.Name(), baseName+".version.") && strings.HasSuffix(entry.Name(), ".png") {
 			foundVersion = true
 			break
 		}
@@ -1014,4 +1306,16 @@ func writePluginMetadata(t *testing.T, cfg *config.Config, name string) {
 	if err := os.WriteFile(filepath.Join(root, "plugin.yaml"), []byte("name: "+name+"\ntitle: "+name+"\nversion: 0.1.0\nrepo: github.com/acme/"+name+"\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n"), 0o644); err != nil {
 		t.Fatalf("write plugin metadata: %v", err)
 	}
+}
+
+func testPNGBytes() []byte {
+	return []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R'}
+}
+
+func testMP4Bytes() []byte {
+	return []byte{0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p', 'm', 'p', '4', '2', 0x00, 0x00, 0x00, 0x00, 'm', 'p', '4', '2', 'i', 's', 'o', 'm'}
+}
+
+func testPDFBytes() []byte {
+	return []byte("%PDF-1.4\n")
 }

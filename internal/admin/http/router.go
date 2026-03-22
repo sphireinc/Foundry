@@ -2,6 +2,8 @@ package httpadmin
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	adminauth "github.com/sphireinc/foundry/internal/admin/auth"
@@ -9,14 +11,16 @@ import (
 	adminui "github.com/sphireinc/foundry/internal/admin/ui"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/plugins"
+	"github.com/sphireinc/foundry/internal/safepath"
 	"github.com/sphireinc/foundry/internal/server"
 )
 
 type routeDef struct {
-	pattern string
-	handler http.Handler
-	public  bool
-	role    string
+	pattern    string
+	handler    http.Handler
+	public     bool
+	capability string
 }
 
 type Registrar func(*Router) []routeDef
@@ -42,6 +46,7 @@ func New(cfg *config.Config, svc *service.Service) *Router {
 	r.RegisterRegistrar(registerStatusRoutes)
 	r.RegisterRegistrar(registerDocumentRoutes)
 	r.RegisterRegistrar(registerManagementRoutes)
+	r.RegisterRegistrar(registerDebugRoutes)
 	return r
 }
 
@@ -53,6 +58,11 @@ func NewHooks(cfg *config.Config, base server.Hooks, opts ...service.Option) ser
 		return base
 	}
 
+	if pm, ok := base.(interface {
+		Metadata() map[string]plugins.Metadata
+	}); ok {
+		opts = append(opts, service.WithPluginMetadata(pm.Metadata))
+	}
 	svc := service.New(cfg, opts...)
 	router := New(cfg, svc)
 	return WrapHooks(base, router)
@@ -73,6 +83,7 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle(r.adminBasePath(), http.HandlerFunc(r.handleIndex))
 	mux.Handle(r.adminBasePath()+"/", http.HandlerFunc(r.handleIndex))
 	mux.Handle(r.themeBasePath()+"/", http.StripPrefix(r.themeBasePath()+"/", r.ui.AssetHandler()))
+	mux.Handle(r.extensionAssetBasePath()+"/", r.auth.Wrap(http.HandlerFunc(r.handlePluginExtensionAsset)))
 
 	for _, reg := range r.registrars {
 		for _, rd := range reg(r) {
@@ -80,8 +91,8 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 				mux.Handle(rd.pattern, rd.handler)
 				continue
 			}
-			if strings.TrimSpace(rd.role) != "" {
-				mux.Handle(rd.pattern, r.auth.WrapRole(rd.handler, rd.role))
+			if strings.TrimSpace(rd.capability) != "" {
+				mux.Handle(rd.pattern, r.auth.WrapCapability(rd.handler, rd.capability))
 				continue
 			}
 			mux.Handle(rd.pattern, r.auth.Wrap(rd.handler))
@@ -90,17 +101,24 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (r *Router) handleIndex(w http.ResponseWriter, req *http.Request) {
-	if !strings.HasPrefix(req.URL.Path, r.adminBasePath()) || strings.HasPrefix(req.URL.Path, r.apiBasePath()+"/") || strings.HasPrefix(req.URL.Path, r.themeBasePath()+"/") {
+	if !strings.HasPrefix(req.URL.Path, r.adminBasePath()) ||
+		strings.HasPrefix(req.URL.Path, r.apiBasePath()+"/") ||
+		strings.HasPrefix(req.URL.Path, r.themeBasePath()+"/") ||
+		strings.HasPrefix(req.URL.Path, r.routePath("/debug/pprof/")) {
 		http.NotFound(w, req)
 		return
 	}
 
 	body, err := r.ui.RenderIndex()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "admin UI render failed", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob:; media-src 'self' blob:; frame-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")
 	_, _ = w.Write(body)
 }
 
@@ -119,6 +137,10 @@ func (r *Router) themeBasePath() string {
 	return r.adminBasePath() + "/theme"
 }
 
+func (r *Router) extensionAssetBasePath() string {
+	return r.adminBasePath() + "/extensions"
+}
+
 func (r *Router) routePath(suffix string) string {
 	suffix = strings.TrimSpace(suffix)
 	if suffix == "" || suffix == "/" {
@@ -128,6 +150,49 @@ func (r *Router) routePath(suffix string) string {
 		suffix = "/" + suffix
 	}
 	return r.adminBasePath() + suffix
+}
+
+func (r *Router) handlePluginExtensionAsset(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	rel := strings.TrimPrefix(req.URL.Path, r.extensionAssetBasePath()+"/")
+	parts := strings.SplitN(rel, "/", 2)
+	if len(parts) != 2 {
+		http.NotFound(w, req)
+		return
+	}
+
+	pluginName, err := safepath.ValidatePathComponent("plugin name", parts[0])
+	if err != nil {
+		http.NotFound(w, req)
+		return
+	}
+	assetPath, err := plugins.NormalizeAdminAssetPath(parts[1])
+	if err != nil {
+		http.NotFound(w, req)
+		return
+	}
+	if r.service == nil || !r.service.AllowsAdminAsset(pluginName, assetPath) {
+		http.NotFound(w, req)
+		return
+	}
+
+	root := filepath.Join(r.cfg.PluginsDir, pluginName)
+	target, err := safepath.ResolveRelativeUnderRoot(root, assetPath)
+	if err != nil {
+		http.NotFound(w, req)
+		return
+	}
+	info, err := os.Stat(target)
+	if err != nil || info.IsDir() {
+		http.NotFound(w, req)
+		return
+	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeFile(w, req, target)
 }
 
 func WrapHooks(base server.Hooks, admin *Router) server.Hooks {

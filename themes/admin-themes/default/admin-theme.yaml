@@ -1,0 +1,27 @@
+name: default
+title: Default Admin
+version: 0.1.0
+description: The default Foundry admin theme.
+author: Foundry
+license: MIT
+admin_api: v1
+sdk_version: v1
+compatibility_version: v1
+components:
+  - shell
+  - login
+  - navigation
+  - documents
+  - media
+  - users
+  - config
+  - plugins
+  - themes
+  - audit
+widget_slots:
+  - overview.after
+  - documents.sidebar
+  - media.sidebar
+  - plugins.sidebar
+screenshots:
+  - screenshots/dashboard.png

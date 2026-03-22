@@ -38,3 +38,32 @@ func TestParseServeDebugFlag(t *testing.T) {
 		t.Fatal("expected unknown serve flag to fail")
 	}
 }
+
+func TestParseBuildFlags(t *testing.T) {
+	flags, err := parseBuildFlags([]string{"--preview"})
+	if err != nil || !flags.preview {
+		t.Fatalf("expected preview build flag to parse, got flags=%+v err=%v", flags, err)
+	}
+
+	flags, err = parseBuildFlags(nil)
+	if err != nil || flags.preview {
+		t.Fatalf("expected empty build args to parse, got flags=%+v err=%v", flags, err)
+	}
+
+	if _, err := parseBuildFlags([]string{"--nope"}); err == nil {
+		t.Fatal("expected unknown build flag to fail")
+	}
+}
+
+func TestExtractGlobalConfigFlags(t *testing.T) {
+	filtered, opts, err := extractGlobalConfigFlags([]string{"foundry", "--env", "preview", "--target=production", "build", "--preview"})
+	if err != nil {
+		t.Fatalf("extract global config flags: %v", err)
+	}
+	if opts.Environment != "preview" || opts.Target != "production" {
+		t.Fatalf("unexpected load options: %+v", opts)
+	}
+	if len(filtered) != 3 || filtered[1] != "build" || filtered[2] != "--preview" {
+		t.Fatalf("unexpected filtered args: %v", filtered)
+	}
+}

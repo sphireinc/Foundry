@@ -186,6 +186,14 @@ func validateDependencies(metadata map[string]Metadata) error {
 				return fmt.Errorf("plugin %q requires %q, but no enabled plugin declares repo %q", pluginName, dep, dep)
 			}
 		}
+		for _, dep := range meta.Dependencies {
+			if dep.Name == "" || dep.Optional {
+				continue
+			}
+			if _, ok := installedByRepo[dep.Name]; !ok {
+				return fmt.Errorf("plugin %q depends on %q, but no enabled plugin declares repo %q", pluginName, dep.Name, dep.Name)
+			}
+		}
 	}
 
 	return nil

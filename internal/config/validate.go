@@ -35,6 +35,9 @@ func Validate(cfg *Config) []error {
 	require("content.pages_dir", cfg.Content.PagesDir)
 	require("content.posts_dir", cfg.Content.PostsDir)
 	require("content.images_dir", cfg.Content.ImagesDir)
+	require("content.videos_dir", cfg.Content.VideoDir)
+	require("content.audio_dir", cfg.Content.AudioDir)
+	require("content.documents_dir", cfg.Content.DocumentsDir)
 	require("content.assets_dir", cfg.Content.AssetsDir)
 	require("content.uploads_dir", cfg.Content.UploadsDir)
 	require("content.default_layout_page", cfg.Content.DefaultLayoutPage)
@@ -47,6 +50,9 @@ func Validate(cfg *Config) []error {
 	require("feed.rss_path", cfg.Feed.RSSPath)
 	require("feed.sitemap_path", cfg.Feed.SitemapPath)
 	require("server.live_reload_mode", cfg.Server.LiveReloadMode)
+	if strings.TrimSpace(cfg.Environment) == "" {
+		errs = append(errs, fmt.Errorf("environment must not be empty"))
+	}
 
 	if cfg.Feed.RSSPath != "" && !strings.HasPrefix(cfg.Feed.RSSPath, "/") {
 		errs = append(errs, fmt.Errorf("feed.rss_path must start with '/'"))
@@ -99,8 +105,23 @@ func Validate(cfg *Config) []error {
 	if strings.TrimSpace(cfg.Admin.UsersFile) == "" {
 		errs = append(errs, fmt.Errorf("admin.users_file must not be empty"))
 	}
+	if strings.TrimSpace(cfg.Admin.SessionStoreFile) == "" {
+		errs = append(errs, fmt.Errorf("admin.session_store_file must not be empty"))
+	}
+	if strings.TrimSpace(cfg.Admin.LockFile) == "" {
+		errs = append(errs, fmt.Errorf("admin.lock_file must not be empty"))
+	}
 	if cfg.Admin.SessionTTLMinutes <= 0 {
 		errs = append(errs, fmt.Errorf("admin.session_ttl_minutes must be greater than zero"))
+	}
+	if cfg.Admin.PasswordMinLength < 8 {
+		errs = append(errs, fmt.Errorf("admin.password_min_length must be at least 8"))
+	}
+	if cfg.Admin.PasswordResetTTL <= 0 {
+		errs = append(errs, fmt.Errorf("admin.password_reset_ttl_minutes must be greater than zero"))
+	}
+	if strings.TrimSpace(cfg.Admin.TOTPIssuer) == "" {
+		errs = append(errs, fmt.Errorf("admin.totp_issuer must not be empty"))
 	}
 	for _, name := range cfg.Plugins.Enabled {
 		if strings.TrimSpace(name) == "" {
@@ -108,6 +129,31 @@ func Validate(cfg *Config) []error {
 		}
 		if _, err := safepath.ValidatePathComponent("plugin name", name); err != nil {
 			errs = append(errs, err)
+		}
+	}
+	if strings.TrimSpace(cfg.Deploy.DefaultTarget) != "" {
+		if _, ok := cfg.Deploy.Targets[strings.TrimSpace(cfg.Deploy.DefaultTarget)]; !ok {
+			errs = append(errs, fmt.Errorf("deploy.default_target must reference a configured deploy target"))
+		}
+	}
+	for name, target := range cfg.Deploy.Targets {
+		if _, err := safepath.ValidatePathComponent("deploy target", name); err != nil {
+			errs = append(errs, err)
+		}
+		if strings.TrimSpace(target.Theme) != "" {
+			if _, err := safepath.ValidatePathComponent("deploy target theme", target.Theme); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if strings.TrimSpace(target.LiveReloadMode) != "" {
+			switch strings.ToLower(strings.TrimSpace(target.LiveReloadMode)) {
+			case "stream", "poll":
+			default:
+				errs = append(errs, fmt.Errorf("deploy.targets.%s.live_reload_mode must be one of: stream, poll", name))
+			}
+		}
+		if strings.TrimSpace(target.Environment) != "" && strings.Contains(target.Environment, "/") {
+			errs = append(errs, fmt.Errorf("deploy.targets.%s.environment must not contain '/'", name))
 		}
 	}
 

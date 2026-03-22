@@ -3,6 +3,7 @@ package configcmd
 import (
 	"fmt"
 
+	"github.com/sphireinc/foundry/internal/cliout"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
 )
@@ -38,11 +39,11 @@ func (command) Run(cfg *foundryconfig.Config, args []string) error {
 
 	errs := foundryconfig.Validate(cfg)
 	if len(errs) == 0 {
-		fmt.Println("config OK")
+		cliout.Successf("config OK")
 		return nil
 	}
 
-	fmt.Println("config check failed:")
+	cliout.Println(cliout.Fail("config check failed:"))
 	for _, err := range errs {
 		fmt.Printf("- %v\n", err)
 	}

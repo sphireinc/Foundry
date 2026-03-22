@@ -2,6 +2,7 @@ name: "foundry"
 title: "Foundry CMS"
 base_url: "http://localhost:8080"
 theme: "default"
+environment: "default"
 default_lang: "en"
 content_dir: "content"
 public_dir: "public"
@@ -12,6 +13,7 @@ plugins_dir: "plugins"
 server:
   addr: ":8080"
   live_reload: true
+  live_reload_mode: "stream"
   auto_open_browser: false
   debug_routes: false
 
@@ -20,10 +22,17 @@ admin:
   addr: ""
   path: "/__admin"
   local_only: true
-  access_token:
+  access_token: ""
   theme: default
   users_file: "content/config/admin-users.yaml"
+  session_store_file: "data/admin/sessions.yaml"
+  lock_file: "data/admin/locks.yaml"
   session_ttl_minutes: 30
+  password_min_length: 12
+  password_reset_ttl_minutes: 30
+  totp_issuer: "Foundry"
+  debug:
+    pprof: true
 
 build:
   clean_public_dir: true
@@ -37,8 +46,12 @@ content:
   pages_dir: "pages"
   posts_dir: "posts"
   images_dir: "images"
+  videos_dir: "videos"
+  audio_dir: "audio"
+  documents_dir: "documents"
   assets_dir: "assets"
   uploads_dir: "uploads"
+  max_versions_per_file: 10
   default_layout_page: "page"
   default_layout_post: "post"
   default_page_slug_index: "index"
@@ -77,6 +90,7 @@ plugins:
 fields:
   enabled: true
   allow_anything: true
+  schemas: {}
 
 seo:
   enabled: true
@@ -94,6 +108,10 @@ feed:
   rss_limit: 50
   rss_title: "Foundry CMS"
   rss_description: "Latest posts from Foundry CMS"
+
+deploy:
+  default_target: ""
+  targets: {}
 
 params:
   company_name: "Sphire"

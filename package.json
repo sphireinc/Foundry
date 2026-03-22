@@ -1,0 +1,13 @@
+{
+  "name": "foundry-cms-tooling",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Formatting tooling for Foundry CMS web assets and docs.",
+  "scripts": {
+    "fmt:web": "prettier --write \"{themes,sdk,docs}/**/*.{js,css,html}\" \"README.md\" \"FEATURES.md\"",
+    "fmt:web:check": "prettier --check \"{themes,sdk,docs}/**/*.{js,css,html}\" \"README.md\" \"FEATURES.md\""
+  },
+  "devDependencies": {
+    "prettier": "^3.6.0"
+  }
+}

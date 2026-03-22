@@ -5,12 +5,27 @@ description: The default Foundry theme.
 author: Sphire
 license: MIT
 min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
 layouts:
   - base
   - index
   - page
   - post
   - list
+supported_layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+screenshots:
+  - screenshots/home.png
+config_schema:
+  - name: accent_color
+    label: Accent Color
+    type: text
+    default: "#0c7c59"
 slots:
   - head.end
   - body.start

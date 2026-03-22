@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/sphireinc/foundry/internal/config"
@@ -117,6 +118,9 @@ func (l *Loader) loadSection(graph *SiteGraph, docType, root string) error {
 		if err != nil {
 			return err
 		}
+		if doc == nil {
+			return nil
+		}
 
 		if doc.Draft && !l.includeDrafts {
 			return nil
@@ -185,11 +189,22 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 		RawBody:    body,
 		Summary:    buildSummary(fm.Summary, body),
 		Date:       fm.Date,
+		CreatedAt:  fm.CreatedAt,
 		UpdatedAt:  fm.UpdatedAt,
 		Draft:      fm.Draft,
+		Author:     strings.TrimSpace(fm.Author),
+		LastEditor: strings.TrimSpace(fm.LastEditor),
 		Params:     fm.Params,
-		Fields:     fields.Normalize(fm.Fields),
+		Fields:     fields.ApplyDefaults(fields.Normalize(fm.Fields), fields.DefinitionsFor(l.cfg, docType)),
 		Taxonomies: taxes,
+	}
+	workflow := WorkflowFromFrontMatter(fm, time.Now().UTC())
+	doc.Status = workflow.Status
+	if workflow.Status == "scheduled" && !l.includeDrafts {
+		return nil, nil
+	}
+	if workflow.ScheduledUnpublish != nil && time.Now().UTC().After(*workflow.ScheduledUnpublish) && !l.includeDrafts {
+		return nil, nil
 	}
 
 	if doc.Title == "" {

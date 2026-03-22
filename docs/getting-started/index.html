@@ -1,63 +1,76 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Foundry Overview</title>
-  <meta name="description" content="Getting started with Foundry, including the main ideas, directories, commands, and configuration groups.">
-  <link rel="stylesheet" href="../site.css">
-</head>
-<body>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="../">
-        <span class="brand-mark">F</span>
-        <span class="brand-copy">
-          <strong>Foundry</strong>
-          <span>Overview and setup</span>
-        </span>
-      </a>
-      <nav class="nav">
-        <a href="../">Home</a>
-        <a href="../getting-started/">Getting Started</a>
-        <a href="../architecture/">Architecture</a>
-        <a href="../plugins/">Plugins</a>
-        <a href="../themes/">Themes</a>
-        <a href="../contract/">CLI Contract</a>
-        <a href="../coverage/">Coverage</a>
-        <a href="https://github.com/sphireinc/foundry">GitHub</a>
-      </nav>
-    </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry Overview</title>
+    <meta
+      name="description"
+      content="Getting started with Foundry, including the main ideas, directories, commands, and configuration groups."
+    />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark">F</span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>Overview and setup</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
 
-    <main class="content-card">
-      <div class="page-header">
-        <div class="eyebrow">Overview</div>
-        <h1 class="page-title">Foundry in one page</h1>
-        <p>Foundry is a Markdown-first CMS written in Go. It keeps content file-based, rendering theme-driven, plugins explicit, and rebuild planning dependency-aware.</p>
-      </div>
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Overview</div>
+          <h1 class="page-title">Foundry in one page</h1>
+          <p>
+            Foundry is a Markdown-first CMS written in Go. It keeps content file-based, rendering
+            theme-driven, plugins explicit, and rebuild planning dependency-aware.
+          </p>
+        </div>
 
-      <div class="page-body">
-        <h2>Core ideas</h2>
-        <ul>
-          <li>Content lives in Markdown files with frontmatter.</li>
-          <li>Routes are assigned from structured content and language-aware conventions.</li>
-          <li>Themes own presentation through layouts and partials.</li>
-          <li>Plugins extend behavior through explicit hook interfaces.</li>
-          <li>A dependency graph supports incremental rebuilds for both documents and taxonomy archive outputs.</li>
-        </ul>
+        <div class="page-body">
+          <h2>Core ideas</h2>
+          <ul>
+            <li>Content lives in Markdown files with frontmatter.</li>
+            <li>Routes are assigned from structured content and language-aware conventions.</li>
+            <li>Themes own presentation through layouts and partials.</li>
+            <li>Plugins extend behavior through explicit hook interfaces.</li>
+            <li>
+              A dependency graph supports incremental rebuilds for both documents and taxonomy
+              archive outputs.
+            </li>
+          </ul>
 
-        <h2>Key directories</h2>
-        <pre><code>/content      pages, posts, images, assets, uploads, config
+          <h2>Key directories</h2>
+          <pre><code>/content      pages, posts, images, assets, uploads, config
 /data         structured data files exposed to rendering
 /themes       active theme layouts and assets
 /plugins      installed plugins
 /public       generated output
 /docs         GitHub Pages content and generated coverage output</code></pre>
 
-        <h2>Common commands</h2>
-        <pre><code>foundry
+          <h2>Common commands</h2>
+          <pre><code>foundry
 foundry version
 foundry build
+foundry build --preview
+foundry build --env preview --target production
 foundry serve
 foundry serve --debug
 foundry serve-preview
@@ -66,41 +79,135 @@ foundry theme list
 foundry routes check
 foundry admin hash-password your-password</code></pre>
 
-        <p>If you want additional logging, run <code>foundry serve --debug</code> to log request timing, slow-render warnings, memory snapshots, goroutine counts, active request counts, connections, and process CPU time deltas.</p>
-        <p>Live reload supports two transport modes: <code>stream</code> uses Server-Sent-Events (sse) and is the default. <code>poll</code> checks a lightweight endpoint every 1.5 seconds and is the safer choice if your browser hits local connection limits while reloading.</p>
-        <p>Media files live under <code>content/images</code> and <code>content/uploads</code>. Reference them from Markdown with the <code>media:</code> scheme, for example <code>![Hero](media:images/hero.jpg)</code>, <code>![Demo](media:uploads/demo.mp4)</code>, or <code>[Spec PDF](media:uploads/spec.pdf)</code>. Static builds also write a frontend search index to <code>public/search.json</code>.</p>
+          <p>
+            If you want additional logging, run <code>foundry serve --debug</code> to log request
+            timing, slow-render warnings, memory snapshots, goroutine counts, active request counts,
+            connections, and process CPU time deltas. If <code>admin.debug.pprof</code> is enabled,
+            the admin Debug page also surfaces runtime, content, storage, integrity, activity, and
+            persisted build-report snapshots alongside authenticated <code>pprof</code> links.
+          </p>
+          <p>
+            Live reload supports two transport modes: <code>stream</code> uses Server-Sent-Events
+            (sse) and is the default. <code>poll</code> checks a lightweight endpoint every 1.5
+            seconds and is the safer choice if your browser hits local connection limits while
+            reloading.
+          </p>
+          <p>
+            Media files now live under dedicated collection roots such as
+            <code>content/images</code>, <code>content/videos</code>, <code>content/audio</code>,
+            and <code>content/documents</code>. Reference them from Markdown with the
+            <code>media:</code> scheme, for example <code>![Hero](media:images/hero.jpg)</code>,
+            <code>![Demo](media:videos/demo.mp4)</code>,
+            <code>![Theme](media:audio/theme.mp3)</code>, or
+            <code>[Spec PDF](media:documents/spec.pdf)</code>. Static builds also write a frontend
+            search index to <code>public/search.json</code>, and preview builds write
+            <code>public/preview-links.json</code>.
+          </p>
 
-        <h2>Important config groups</h2>
-        <ul>
-          <li><strong>Admin:</strong> <code>admin.path</code> controls the mount point for the themeable admin shell and defaults to <code>/__admin</code>; username/password login is backed by <code>content/config/admin-users.yaml</code>, browser sessions expire after 30 minutes of inactivity by default, and the default admin theme includes structured frontmatter editing, media replacement, audit log browsing, and keyboard shortcuts.</li>
-          <li><strong>Security:</strong> <code>security.allow_unsafe_html</code> controls whether raw HTML is preserved in Markdown output.</li>
-          <li><strong>Server:</strong> preview/admin serving uses read, write, and idle timeouts by default, and live reload can run in <code>stream</code> or <code>poll</code> mode.</li>
-          <li><strong>Taxonomies:</strong> default and custom taxonomies participate in rendering and incremental rebuild planning.</li>
-          <li><strong>Plugins:</strong> enabled plugins are validated and synced into generated registration code.</li>
-          <li><strong>Themes:</strong> themes must satisfy the minimum slot contract validated by <code>foundry theme validate</code>.</li>
-        </ul>
+          <h2>Important config groups</h2>
+          <ul>
+            <li>
+              <strong>Admin:</strong> <code>admin.path</code> controls the mount point for the
+              themeable admin shell and defaults to <code>/__admin</code>; username/password login
+              is backed by <code>content/config/admin-users.yaml</code>, browser sessions expire
+              after 30 minutes of inactivity by default, and the default admin theme includes
+              structured frontmatter editing, restore-preview workflows, media replacement, audit
+              log browsing, user-security flows, a command palette, and keyboard shortcuts.
+            </li>
+            <li>
+              <strong>Security:</strong> <code>security.allow_unsafe_html</code> controls whether
+              raw HTML is preserved in Markdown output.
+            </li>
+            <li>
+              <strong>Server:</strong> preview/admin serving uses read, write, and idle timeouts by
+              default, and live reload can run in <code>stream</code> or <code>poll</code> mode.
+            </li>
+            <li>
+              <strong>Deploy:</strong> <code>deploy.targets</code> can override base URL, public
+              dir, theme, preview mode, and related output settings;
+              <code>foundry build --env &lt;name&gt;</code> also layers
+              <code>site.&lt;name&gt;.yaml</code> over the base config when present, and
+              <code>deploy.default_target</code> is applied automatically when no explicit
+              <code>--target</code> is passed.
+            </li>
+            <li>
+              <strong>Taxonomies:</strong> default and custom taxonomies participate in rendering
+              and incremental rebuild planning.
+            </li>
+            <li>
+              <strong>Plugins:</strong> enabled plugins are validated and synced into generated
+              registration code.
+            </li>
+            <li>
+              <strong>Themes:</strong> themes must satisfy the minimum slot contract validated by
+              <code>foundry theme validate</code>.
+            </li>
+          </ul>
+          <p>
+            For the full key-by-key config reference, including all defaults and the exact meaning
+            of each entry, see the <a href="../config/">Configuration guide</a>.
+          </p>
 
-        <h2>Admin shortcuts</h2>
-        <ul>
-          <li><code>Cmd/Ctrl+S</code> saves the current form.</li>
-          <li><code>Cmd/Ctrl+Enter</code> previews the current document.</li>
-          <li><code>Shift+/</code> toggles shortcut help.</li>
-          <li><code>g d</code>, <code>g m</code>, <code>g u</code>, and <code>g a</code> jump to Documents, Media, Users, and Audit.</li>
-        </ul>
+          <h2>Operations commands</h2>
+          <ul>
+            <li>
+              <code>foundry doctor</code> reports timing breakdowns for plugin config, graph load,
+              route assignment, route hooks, asset sync, renderer, and feed generation.
+            </li>
+            <li>
+              <code>foundry validate</code> checks broken links, broken
+              <code>media:</code> references, missing templates, orphaned media, duplicate
+              routes/slugs, and taxonomy inconsistencies.
+            </li>
+            <li>
+              <code>foundry content export</code>, <code>foundry content import</code>, and
+              <code>foundry content migrate</code> cover basic portability and schema/layout
+              migration workflows, including <code>--dry-run</code> support for layout and
+              field-rename migrations.
+            </li>
+          </ul>
 
-        <h2>Recommended reading order</h2>
-        <ol>
-          <li>Read the <a href="../architecture/">architecture guide</a> to understand the package layout and runtime flow.</li>
-          <li>Read the <a href="../plugins/">plugin guide</a> or <a href="../themes/">theme guide</a> before extending those surfaces.</li>
-          <li>Read the <a href="../contract/">CLI contract</a> before changing command UX.</li>
-          <li>Open the <a href="../coverage/">coverage report</a> if you want to see where tests are still thin.</li>
-        </ol>
-      </div>
-    </main>
+          <h2>Admin shortcuts</h2>
+          <ul>
+            <li><code>Cmd/Ctrl+S</code> saves the current form.</li>
+            <li><code>Cmd/Ctrl+Enter</code> previews the current document.</li>
+            <li><code>Cmd/Ctrl+K</code> opens the command palette.</li>
+            <li><code>Shift+/</code> toggles shortcut help.</li>
+            <li>
+              <code>g d</code>, <code>g m</code>, <code>g u</code>, and <code>g a</code> jump to
+              Documents, Media, Users, and Audit.
+            </li>
+          </ul>
 
-    <footer class="footer">
-      <span>Source material is maintained in <code>README.md</code> and published here as a shorter entry point.</span>
-    </footer>
-  </div>
-</body>
+          <h2>Recommended reading order</h2>
+          <ol>
+            <li>
+              Read the <a href="../architecture/">architecture guide</a> to understand the package
+              layout and runtime flow.
+            </li>
+            <li>
+              Use the <a href="../config/">configuration reference</a> when you need the exact
+              meaning or default for a <code>site.yaml</code> setting.
+            </li>
+            <li>
+              Read the <a href="../plugins/">plugin guide</a> or
+              <a href="../themes/">theme guide</a> before extending those surfaces.
+            </li>
+            <li>Read the <a href="../contract/">CLI contract</a> before changing command UX.</li>
+            <li>
+              Open the <a href="../coverage/">coverage report</a> if you want to see where tests are
+              still thin.
+            </li>
+          </ol>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span
+          >Source material is maintained in <code>README.md</code> and published here as a shorter
+          entry point.</span
+        >
+      </footer>
+    </div>
+  </body>
 </html>

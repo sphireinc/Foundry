@@ -1,17 +1,17 @@
 {{ define "content" }}
 <section class="page-wrap">
-    <header class="page-header">
-        <div class="eyebrow">Page</div>
-        <h1>{{ .Page.Title }}</h1>
-        {{ if .Page.Summary }}
-        <p>{{ .Page.Summary }}</p>
-        {{ end }}
-    </header>
+  <header class="page-header">
+    <div class="eyebrow">Page</div>
+    <h1>{{ .Page.Title }}</h1>
+    {{ if .Page.Summary }}
+    <p>{{ .Page.Summary }}</p>
+    {{ end }}
+  </header>
 
-    <article class="content-panel content-panel--article">
-        {{ pluginSlot "page.before_content" }}
-        <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
-        {{ pluginSlot "page.after_content" }}
-    </article>
+  <article class="content-panel content-panel--article">
+    {{ pluginSlot "page.before_content" }}
+    <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
+    {{ pluginSlot "page.after_content" }}
+  </article>
 </section>
 {{ end }}

@@ -161,6 +161,42 @@ func TestLoaderDefaultsAndErrors(t *testing.T) {
 	}
 }
 
+func TestLoaderSkipsScheduledFutureContentWhenDraftsExcluded(t *testing.T) {
+	cfg := testLoaderConfig(t)
+	future := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	scheduled := "---\ntitle: Launch Window\nslug: launch-window\nlayout: page\nworkflow: scheduled\nscheduled_publish_at: " + future + "\nauthor: editor\n---\n\n# Scheduled"
+	if err := os.WriteFile(filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "scheduled.md"), []byte(scheduled), 0o644); err != nil {
+		t.Fatalf("write scheduled page: %v", err)
+	}
+
+	loader := NewLoader(cfg, nil, false)
+	graph, err := loader.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load content: %v", err)
+	}
+	for _, doc := range graph.Documents {
+		if doc.Slug == "launch-window" {
+			t.Fatalf("scheduled future document should not load when drafts are excluded: %#v", doc)
+		}
+	}
+
+	loader = NewLoader(cfg, nil, true)
+	graph, err = loader.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load content with drafts: %v", err)
+	}
+	var found *Document
+	for _, doc := range graph.Documents {
+		if doc.Slug == "launch-window" {
+			found = doc
+			break
+		}
+	}
+	if found == nil || found.Status != "scheduled" || found.Author != "editor" {
+		t.Fatalf("expected scheduled document with attribution, got %#v", found)
+	}
+}
+
 func testLoaderConfig(t *testing.T) *config.Config {
 	t.Helper()
 	root := t.TempDir()

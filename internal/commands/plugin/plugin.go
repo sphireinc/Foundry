@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sphireinc/foundry/internal/cliout"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/consts"
@@ -81,7 +82,7 @@ func (command) Run(cfg *config.Config, args []string) error {
 		if err := project.Sync(); err != nil {
 			return err
 		}
-		fmt.Println("plugin imports synced")
+		cliout.Successf("plugin imports synced")
 		return nil
 	}
 
@@ -155,9 +156,9 @@ func runInstall(cfg *config.Config, project plugins.Project, args []string) erro
 		return err
 	}
 
-	fmt.Printf("Installed plugin: %s\n", meta.Name)
-	fmt.Printf("Directory: %s\n", meta.Directory)
-	fmt.Printf("Version: %s\n", meta.Version)
+	cliout.Successf("Installed plugin: %s", meta.Name)
+	fmt.Printf("%s %s\n", cliout.Label("Directory:"), meta.Directory)
+	fmt.Printf("%s %s\n", cliout.Label("Version:"), meta.Version)
 
 	missing, warnErr := project.MissingDependencies(meta, cfg.Plugins.Enabled)
 	if warnErr != nil {
@@ -166,7 +167,7 @@ func runInstall(cfg *config.Config, project plugins.Project, args []string) erro
 
 	if len(missing) > 0 {
 		fmt.Println("")
-		fmt.Println("Dependency warnings:")
+		cliout.Println(cliout.Warning("Dependency warnings:"))
 		for _, dep := range missing {
 			if dep.Installed {
 				fmt.Printf("- Required plugin repo %s is installed as %q but not enabled\n", dep.Repo, dep.Name)
@@ -176,7 +177,7 @@ func runInstall(cfg *config.Config, project plugins.Project, args []string) erro
 		}
 
 		fmt.Println("")
-		fmt.Println("Suggested next steps:")
+		cliout.Println(cliout.Heading("Suggested next steps:"))
 		for _, dep := range missing {
 			if dep.Installed {
 				fmt.Printf("Add %q to %s under plugins.enabled\n", dep.Name, consts.ConfigFilePath)
@@ -187,7 +188,7 @@ func runInstall(cfg *config.Config, project plugins.Project, args []string) erro
 	}
 
 	fmt.Println("")
-	fmt.Println("Next steps:")
+	cliout.Println(cliout.Heading("Next steps:"))
 	if len(missing) > 0 {
 		fmt.Println("1. Resolve the dependency warnings above")
 		fmt.Printf("2. Add %q to %s under plugins.enabled\n", meta.Name, consts.ConfigFilePath)
@@ -212,9 +213,9 @@ func runUninstall(project plugins.Project, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Uninstalled plugin: %s\n", name)
+	cliout.Successf("Uninstalled plugin: %s", name)
 	fmt.Println("")
-	fmt.Println("Next steps:")
+	cliout.Println(cliout.Heading("Next steps:"))
 	fmt.Printf("1. Remove %q from %s under plugins.enabled\n", name, consts.ConfigFilePath)
 	fmt.Println("2. Run foundry plugin sync")
 	fmt.Println("3. Run foundry build or foundry serve")
@@ -232,8 +233,8 @@ func runEnable(project plugins.Project, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Enabled plugin: %s\n", name)
-	fmt.Println("Next steps:")
+	cliout.Successf("Enabled plugin: %s", name)
+	cliout.Println(cliout.Heading("Next steps:"))
 	fmt.Println("1. Run foundry plugin sync")
 	fmt.Println("2. Run foundry build or foundry serve")
 	return nil
@@ -249,8 +250,8 @@ func runDisable(project plugins.Project, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Disabled plugin: %s\n", name)
-	fmt.Println("Next steps:")
+	cliout.Successf("Disabled plugin: %s", name)
+	cliout.Println(cliout.Heading("Next steps:"))
 	fmt.Println("1. Run foundry plugin sync")
 	fmt.Println("2. Run foundry build or foundry serve")
 	return nil
@@ -262,34 +263,34 @@ func runValidate(cfg *config.Config, project plugins.Project, args []string) err
 		if err := project.Validate(name); err != nil {
 			return err
 		}
-		fmt.Println("Plugin validation")
+		cliout.Println(cliout.Heading("Plugin validation"))
 		fmt.Println("")
 		fmt.Println("Legend:")
-		fmt.Println("  OK    valid and loadable")
-		fmt.Println("  FAIL  invalid or not loadable")
+		fmt.Printf("  %s    valid and loadable\n", cliout.OK("OK"))
+		fmt.Printf("  %s  invalid or not loadable\n", cliout.Fail("FAIL"))
 		fmt.Println("")
-		fmt.Printf("[OK]   %s\n", name)
+		fmt.Printf("[%s]   %s\n", cliout.OK("OK"), name)
 		return nil
 	}
 
 	report := project.ValidateEnabled(cfg.Plugins.Enabled)
 
-	fmt.Println("Plugin validation")
+	cliout.Println(cliout.Heading("Plugin validation"))
 	fmt.Println("")
 	fmt.Println("Legend:")
-	fmt.Println("  OK    valid and loadable")
-	fmt.Println("  FAIL  invalid or not loadable")
+	fmt.Printf("  %s    valid and loadable\n", cliout.OK("OK"))
+	fmt.Printf("  %s  invalid or not loadable\n", cliout.Fail("FAIL"))
 	fmt.Println("")
 
 	for _, name := range report.Passed {
-		fmt.Printf("[OK]   %s\n", name)
+		fmt.Printf("[%s]   %s\n", cliout.OK("OK"), name)
 	}
 	for _, issue := range report.Issues {
-		fmt.Printf("[FAIL] %s\n", issue.String())
+		fmt.Printf("[%s] %s\n", cliout.Fail("FAIL"), issue.String())
 	}
 
 	if len(report.Issues) == 0 {
-		fmt.Printf("\nAll %d enabled plugin(s) are valid\n", len(report.Passed))
+		fmt.Printf("\n%s %d enabled plugin(s) are valid\n", cliout.OK("All"), len(report.Passed))
 		return nil
 	}
 

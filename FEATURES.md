@@ -13,6 +13,7 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Route-aware content graph** that maps documents, URLs, languages, and content types
 - **Document summaries, detail views, and raw source access** in the admin and CLI
 - **Draft and published workflows** built directly into content state
+- **Expanded editorial workflow states** including draft, in review, scheduled, published, and archived
 - **Archived content support** without deleting the source document state
 - **In-place soft delete and versioning** using `*.trash.<timestamp>.*` and `*.version.<timestamp>.*` file conventions
 
@@ -27,11 +28,16 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Two-way sync between structured fields and raw frontmatter**
 - **Version comments** captured alongside document revisions
 - **Live document preview** before publishing
+- **Restore-preview workflow** that loads a document diff before committing a restore
 - **Save content back to the filesystem** with validation and safe path handling
 - **Document listing with filters** for drafts, type, language, and text query
-- **Status switching** between published, draft, and archived
+- **Status switching** between draft, in review, scheduled, published, and archived
+- **Scheduled publish and unpublish windows**
+- **Author, last-editor, created-at, and updated-at attribution** surfaced in admin and frontmatter
+- **Editorial notes** stored with workflow metadata
 - **Document history, diff, restore, and purge flows** in the admin
 - **Trash and history views** for editorial recovery workflows
+- **Document locking with heartbeat and collision prevention**
 - **Word count support** in preview responses and plugin data
 
 ## Multilingual and routing features
@@ -103,6 +109,13 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Preview server diagnostics** and debug output for route and timing inspection
 - **Explicit server read, write, and idle timeouts**
 - **Frontend search index generation** written to `public/search.json`
+- **Weighted frontend search ranking** with normalized snippets in both live and static search payloads
+- **Public frontend data artifacts** written under `public/__foundry/` for stable theme-side JS integration
+- **Public preview manifest artifacts** written under `public/__foundry/preview.json`
+- **Preview build manifest generation** written to `public/preview-links.json`
+- **Environment-specific config layering** with `site.<env>.yaml` overlays
+- **Named deploy target overrides** for build-time base URL, public dir, theme, preview mode, and related output settings
+- **Default deploy-target application** when `deploy.default_target` is set and no `--target` flag is passed
 
 ## SEO and syndication
 
@@ -120,18 +133,28 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Session-based authentication** by default
 - **Optional API token authentication** for automation and tooling
 - **Filesystem-backed admin user accounts**
-- **Role-aware API access** with admin and editor scopes
+- **Capability-based API access control** with admin, editor, author, and reviewer roles
 - **Login, logout, and session endpoints**
+- **Password reset, session revocation, and optional TOTP-based 2FA** on the backend auth surface
+- **Dedicated admin UI flows** for password reset tokens, TOTP setup/disable, and session revocation
 - **Config editing from the admin**
 - **Theme listing and theme switching from the admin**
-- **Plugin listing and enable/disable controls from the admin**
+- **Plugin listing plus install, update, rollback, enable, and disable controls from the admin**
 - **User listing, create/update, disable, and delete from the admin**
 - **Dashboard-style system overview** including content counts, draft counts, users, themes, plugins, and media
 - **System status endpoint** with health and configuration visibility
 - **Audit log view** for authentication and admin-management activity
+- **Official Admin JavaScript SDK** for admin frontends and future plugin-provided admin UI
+- **Admin settings-section metadata endpoint** for core and plugin-defined settings groups
+- **Plugin admin-extension registry endpoint** for future pages, widgets, slots, and settings sections
+- **Plugin-defined admin page bundles** with stable module/style URLs under the admin base path
+- **Automatic admin extension-page mounting** through the default admin shell plus `window.FoundryAdmin`
+- **Automatic admin widget mounting** in stable default-theme slots through the same extension contract
 - **Keyboard shortcuts** for save, preview, shortcut help, and section jumps
+- **Command palette** for fast admin navigation and common creation actions
 - **Unsaved-change warnings, toasts, breadcrumbs, and better error surfaces**
 - **Client-side pagination, filtering, and sorting** across major admin tables
+- **Authenticated debug dashboard** with runtime, content, storage, integrity, activity, build-report, and `pprof` visibility
 
 ## Security and operational safeguards
 
@@ -139,24 +162,44 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Loopback-only enforcement** for local admin access
 - **Forwarded-header rejection** when local-only admin is enabled
 - **Secure cookie-based browser sessions** scoped to the admin area
+- **Persistent session storage** instead of memory-only session state
 - **Session TTL controls** with rolling renewal during active use
 - **Password hashing with PBKDF2-SHA256**
 - **Login throttling** to slow repeated auth attempts
+- **CSRF protection** for state-changing cookie-authenticated admin routes
 - **Safe path validation** across themes, plugins, content operations, and assets
 - **Supply-chain-conscious plugin installation rules** restricted to GitHub sources
 - **Optional unsafe HTML toggle** for Markdown rendering when explicitly enabled
-- **Validation for broken `media:` references and broken internal links**
+- **Validation for broken `media:` references, broken internal links, missing templates, orphaned media, duplicate routes/slugs, and taxonomy inconsistencies**
+- **Schema-driven field validation surfaced in preview responses** before publish/save decisions
 
 ## Theme system
 
 - **Frontend theme manager**
 - **Theme manifests with metadata and compatibility info**
+- **Theme manifests with supported layouts, config schema, screenshots, and compatibility version**
 - **Theme validation** against Foundry requirements
+- **Theme validation diagnostics** for missing layouts/partials, slot completeness, template references, and parse failures
 - **Theme scaffolding from the CLI**
 - **Theme switching from the CLI and admin**
 - **Theme asset support** copied into public output
 - **Required slot contract enforcement** for launch-compatible themes
 - **Theme-owned layouts, partials, and assets**
+- **Admin theme manifests and validation** with a stable component contract for the admin shell
+- **Admin theme widget-slot manifests and validation** for plugin widget placement
+- **Official Frontend JavaScript SDK** for JS-powered themes and hybrid presentation layers
+- **Preview-manifest access in the Frontend SDK** for draft/review preview link discovery
+
+## Platform SDKs and client contracts
+
+- **Shared SDK core** for request handling, error normalization, and capability helpers
+- **Official Admin SDK** with session, capabilities, status, documents, media, settings, users, themes, plugins, and audit modules
+- **Official Frontend SDK** with site, navigation, routes, content, collections, search, media, and preview modules
+- **Capability discovery endpoints** for both admin and frontend clients
+- **Live frontend platform API** under `/__foundry/api`
+- **Published browser-consumable SDK modules** under `/__foundry/sdk/`
+- **Static frontend JSON contract** emitted under `public/__foundry/`
+- **Shipped default themes consume the official SDKs** instead of private fetch logic
 
 ## Plugin system
 
@@ -164,8 +207,12 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Compile-time plugin registration model** for predictable deployments
 - **Generated plugin import syncing**
 - **Plugin metadata manifests**
+- **Plugin dependency metadata and config schema support**
+- **Plugin-declared admin page/widget/settings metadata** in `plugin.yaml`
 - **Plugin lifecycle hooks** spanning config load, content discovery, parsing, graph building, routing, rendering, asset injection, build, server start, and custom CLI commands
 - **Plugin validation and dependency checks**
+- **Plugin health/diagnostic reporting** surfaced in admin
+- **Plugin rollback snapshots** preserved across updates for safer recovery
 - **Plugin install, update, uninstall, enable, disable, info, deps, and sync commands**
 - **Plugin asset injection into rendered pages**
 - **Plugin-defined HTML slot output**
@@ -190,11 +237,12 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Serve command** for local site serving
 - **Serve-preview command** for preview-oriented development
 - **Validate command** for config, content, routes, and theme checks
-- **Doctor command** for project health checks
+- **Doctor command** for project health checks and timing breakdowns
 - **Clean command** for generated artifact cleanup
 - **Version command** for build metadata
 - **Config check command**
-- **Content commands** for linting, listing, graph inspection, and generating new pages/posts
+- **Content commands** for linting, listing, graph inspection, generating new pages/posts, import/export, and migration tasks
+- **Dry-run migration support** for layout and field-rename content migrations
 - **Routes commands** for route inspection
 - **Feed commands** for feed generation and inspection
 - **Assets commands** for build, list, and clean
@@ -204,7 +252,5 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Debug commands** for routes, plugins, and config output
 - **Dependency inspection commands** for rebuild planning visibility
 - **i18n commands** for language-related inspection helpers
-
-## What this adds up to
-
-Foundry already ships as a real CMS, not just a site generator. It gives you file-based content, a browser admin, multilingual routing, taxonomies, themes, plugins, media management, live preview, incremental rebuilds, and deployment-friendly static output - all in a Go-native architecture designed for teams that want control, transparency, and extensibility.
+- **Environment and deploy-target aware builds** through `foundry build --env` and `--target`
+- **Preview builds** through `foundry build --preview`

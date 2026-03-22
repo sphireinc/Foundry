@@ -1,51 +1,59 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Foundry Theme Authoring</title>
-  <meta name="description" content="How to scaffold, structure, and ship a Foundry theme.">
-  <link rel="stylesheet" href="../site.css">
-</head>
-<body>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="../">
-        <span class="brand-mark">F</span>
-        <span class="brand-copy">
-          <strong>Foundry</strong>
-          <span>Theme authoring</span>
-        </span>
-      </a>
-      <nav class="nav">
-        <a href="../">Home</a>
-        <a href="../getting-started/">Getting Started</a>
-        <a href="../architecture/">Architecture</a>
-        <a href="../plugins/">Plugins</a>
-        <a href="../themes/">Themes</a>
-        <a href="../contract/">CLI Contract</a>
-        <a href="../coverage/">Coverage</a>
-        <a href="https://github.com/sphireinc/foundry">GitHub</a>
-      </nav>
-    </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry Theme Authoring</title>
+    <meta name="description" content="How to scaffold, structure, and ship a Foundry theme." />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark">F</span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>Theme authoring</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
 
-    <main class="content-card">
-      <div class="page-header">
-        <div class="eyebrow">Authoring Guide</div>
-        <h1 class="page-title">Building a theme</h1>
-        <p>Foundry themes own presentation. A theme defines layouts, partials, theme assets, and a small manifest that describes the package.</p>
-      </div>
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Authoring Guide</div>
+          <h1 class="page-title">Building a theme</h1>
+          <p>
+            Foundry themes own presentation. A theme defines layouts, partials, theme assets, and a
+            small manifest that describes the package.
+          </p>
+        </div>
 
-      <div class="page-body">
-        <h2>Start with the scaffold</h2>
-        <pre><code>foundry theme scaffold &lt;theme-name&gt;
+        <div class="page-body">
+          <h2>Start with the scaffold</h2>
+          <pre><code>foundry theme scaffold &lt;theme-name&gt;
 foundry theme validate &lt;theme-name&gt;
 foundry theme switch &lt;theme-name&gt;</code></pre>
 
-        <p>The scaffolded theme gives you the expected directory structure and the required base set of layouts and partials.</p>
+          <p>
+            The scaffolded theme gives you the expected directory structure and the required base
+            set of layouts and partials.
+          </p>
 
-        <h2>Theme structure</h2>
-        <pre><code>themes/editorial/
+          <h2>Theme structure</h2>
+          <pre><code>themes/editorial/
   theme.yaml
   assets/
     css/
@@ -61,20 +69,37 @@ foundry theme switch &lt;theme-name&gt;</code></pre>
       header.html
       footer.html</code></pre>
 
-        <h2>Manifest fields</h2>
-        <p><code>theme.yaml</code> describes the theme and lists the layouts and slots it expects to support.</p>
-        <pre><code>name: editorial
+          <h2>Manifest fields</h2>
+          <p>
+            <code>theme.yaml</code> describes the theme, the layouts it supports, the configuration
+            it expects, and the slot surface it guarantees.
+          </p>
+          <pre><code>name: editorial
 title: Editorial
 version: 0.1.0
 description: A Foundry theme.
 license: MIT
 min_foundry_version: 0.1.0
+compatibility_version: v1
 layouts:
   - base
   - index
   - page
   - post
   - list
+supported_layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+screenshots:
+  - screenshots/home.png
+config_schema:
+  - name: accent_color
+    label: Accent Color
+    type: text
+    default: "#0c7c59"
 slots:
   - head.end
   - body.start
@@ -91,63 +116,147 @@ slots:
   - post.sidebar.overview
   - post.sidebar.bottom</code></pre>
 
-        <h2>Layout responsibilities</h2>
-        <ul>
-          <li><strong>base.html:</strong> wraps the page shell and usually includes shared head, header, footer, and plugin slots.</li>
-          <li><strong>index.html:</strong> renders the home page or language root page.</li>
-          <li><strong>page.html:</strong> renders page documents.</li>
-          <li><strong>post.html:</strong> renders post documents.</li>
-          <li><strong>list.html:</strong> renders list-style views such as taxonomy archives.</li>
-        </ul>
+          <h2>Layout responsibilities</h2>
+          <ul>
+            <li>
+              <strong>base.html:</strong> wraps the page shell and usually includes shared head,
+              header, footer, and plugin slots.
+            </li>
+            <li><strong>index.html:</strong> renders the home page or language root page.</li>
+            <li><strong>page.html:</strong> renders page documents.</li>
+            <li><strong>post.html:</strong> renders post documents.</li>
+            <li><strong>list.html:</strong> renders list-style views such as taxonomy archives.</li>
+          </ul>
 
-        <h2>Required slots</h2>
-        <p>For the launch version of Foundry, theme validation enforces a minimum slot contract. A valid theme must declare and render all of the following slots:</p>
-        <ul>
-          <li><code>head.end</code></li>
-          <li><code>body.start</code></li>
-          <li><code>body.end</code></li>
-          <li><code>page.before_main</code></li>
-          <li><code>page.after_main</code></li>
-          <li><code>page.before_content</code></li>
-          <li><code>page.after_content</code></li>
-          <li><code>post.before_header</code></li>
-          <li><code>post.after_header</code></li>
-          <li><code>post.before_content</code></li>
-          <li><code>post.after_content</code></li>
-          <li><code>post.sidebar.top</code></li>
-          <li><code>post.sidebar.overview</code></li>
-          <li><code>post.sidebar.bottom</code></li>
-        </ul>
+          <h2>Required slots</h2>
+          <p>
+            For the launch version of Foundry, theme validation enforces a minimum slot contract. A
+            valid theme must declare and render all of the following slots:
+          </p>
+          <ul>
+            <li><code>head.end</code></li>
+            <li><code>body.start</code></li>
+            <li><code>body.end</code></li>
+            <li><code>page.before_main</code></li>
+            <li><code>page.after_main</code></li>
+            <li><code>page.before_content</code></li>
+            <li><code>page.after_content</code></li>
+            <li><code>post.before_header</code></li>
+            <li><code>post.after_header</code></li>
+            <li><code>post.before_content</code></li>
+            <li><code>post.after_content</code></li>
+            <li><code>post.sidebar.top</code></li>
+            <li><code>post.sidebar.overview</code></li>
+            <li><code>post.sidebar.bottom</code></li>
+          </ul>
 
-        <h2>Validation behavior</h2>
-        <p>Theme validation checks two things for the launch slot contract:</p>
-        <ul>
-          <li>the theme manifest declares the required slot names</li>
-          <li>the expected layouts actually render those slot calls</li>
-        </ul>
+          <h2>Validation behavior</h2>
+          <p>Theme validation now reports a fuller diagnostic set:</p>
+          <ul>
+            <li>the theme manifest declares the required slot names</li>
+            <li>the expected layouts actually render those slot calls</li>
+            <li>required layouts and required partials are present</li>
+            <li>templates do not reference missing layouts or partials</li>
+            <li>the layout set parses cleanly with the current Foundry template helpers</li>
+          </ul>
 
-        <h2>Theme and plugin interplay</h2>
-        <p>Theme templates should leave room for plugin-provided markup. If you introduce a new slot, document it in the theme manifest and place it intentionally in the layout instead of treating slots as arbitrary append-only escape hatches.</p>
+          <h2>Manifest reference</h2>
+          <ul>
+            <li>
+              <code>layouts</code> and <code>supported_layouts</code> define the expected template
+              surface. If <code>supported_layouts</code> is present, validation treats it as the
+              authoritative layout contract.
+            </li>
+            <li>
+              <code>config_schema</code> describes theme-level configuration fields using the same
+              schema field shapes used elsewhere in Foundry.
+            </li>
+            <li>
+              <code>screenshots</code> is metadata for admin/docs/reporting and should point at
+              paths inside the theme package.
+            </li>
+            <li>
+              <code>sdk_version</code> is the official Foundry JavaScript SDK contract version the
+              theme expects. The shipped default themes target <code>v1</code>, and validation now
+              rejects themes that declare an unsupported SDK contract.
+            </li>
+            <li>
+              <code>compatibility_version</code> is the theme-platform contract version. Use it to
+              signal compatibility with future theme-platform changes.
+            </li>
+          </ul>
 
-        <h2>Assets</h2>
-        <p>Put theme CSS and other theme-owned assets under <code>assets/</code>. During build or preview, Foundry copies theme assets into <code>public/theme/</code> and bundles discovered CSS into the main CSS output.</p>
+          <h2>Theme and plugin interplay</h2>
+          <p>
+            Theme templates should leave room for plugin-provided markup. If you introduce a new
+            slot, document it in the theme manifest and place it intentionally in the layout instead
+            of treating slots as arbitrary append-only escape hatches.
+          </p>
 
-        <h2>Validation checklist</h2>
-        <ol>
-          <li>Run <code>foundry theme validate &lt;name&gt;</code>.</li>
-          <li>Preview with <code>foundry serve</code> or <code>foundry serve-preview</code>.</li>
-          <li>Confirm page, post, and taxonomy archive templates all render cleanly.</li>
-          <li>Check that plugin slots still have sensible placement.</li>
-        </ol>
+          <h2>Assets</h2>
+          <p>
+            Put theme CSS and other theme-owned assets under <code>assets/</code>. During build or
+            preview, Foundry copies theme assets into <code>public/theme/</code> and bundles
+            discovered CSS into the main CSS output.
+          </p>
 
-        <h2>Reference theme</h2>
-        <p>The default theme in the repository is the canonical reference for current layout expectations and slot placement.</p>
-      </div>
-    </main>
+          <h2>Validation checklist</h2>
+          <ol>
+            <li>Run <code>foundry theme validate &lt;name&gt;</code>.</li>
+            <li>Preview with <code>foundry serve</code> or <code>foundry serve-preview</code>.</li>
+            <li>Confirm page, post, and taxonomy archive templates all render cleanly.</li>
+            <li>Check that plugin slots still have sensible placement.</li>
+          </ol>
 
-    <footer class="footer">
-      <span>Start from the scaffold, then compare against the default theme when you need a concrete reference.</span>
-    </footer>
-  </div>
-</body>
+          <h2>Reference theme</h2>
+          <p>
+            The default theme in the repository is the canonical reference for current layout
+            expectations and slot placement.
+          </p>
+
+          <h2>Admin theme widget slots</h2>
+          <p>
+            Admin themes use a separate manifest, <code>admin-theme.yaml</code>. In addition to the
+            component contract, admin themes now declare <code>widget_slots</code> so plugin-defined
+            admin widgets can mount against a validated slot surface instead of guessing where the
+            shell has room for them.
+          </p>
+          <pre><code>name: default
+title: Default Admin
+version: 0.1.0
+admin_api: v1
+sdk_version: v1
+compatibility_version: v1
+components:
+  - shell
+  - login
+  - navigation
+  - documents
+  - media
+  - users
+  - config
+  - plugins
+  - themes
+  - audit
+widget_slots:
+  - overview.after
+  - documents.sidebar
+  - media.sidebar
+  - plugins.sidebar</code></pre>
+          <p>
+            For the current admin-platform contract, all four widget slots are required. The default
+            admin theme auto-mounts plugin widgets declared for those slots, and alternate admin
+            themes are validated against the same baseline.
+          </p>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span
+          >Start from the scaffold, then compare against the default theme when you need a concrete
+          reference.</span
+        >
+      </footer>
+    </div>
+  </body>
 </html>

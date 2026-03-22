@@ -1,78 +1,159 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Foundry Plugin Authoring</title>
-  <meta name="description" content="How to build, register, and validate a Foundry plugin.">
-  <link rel="stylesheet" href="../site.css">
-</head>
-<body>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="../">
-        <span class="brand-mark">F</span>
-        <span class="brand-copy">
-          <strong>Foundry</strong>
-          <span>Plugin authoring</span>
-        </span>
-      </a>
-      <nav class="nav">
-        <a href="../">Home</a>
-        <a href="../getting-started/">Getting Started</a>
-        <a href="../architecture/">Architecture</a>
-        <a href="../plugins/">Plugins</a>
-        <a href="../themes/">Themes</a>
-        <a href="../contract/">CLI Contract</a>
-        <a href="../coverage/">Coverage</a>
-        <a href="https://github.com/sphireinc/foundry">GitHub</a>
-      </nav>
-    </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry Plugin Authoring</title>
+    <meta name="description" content="How to build, register, and validate a Foundry plugin." />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark">F</span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>Plugin authoring</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
 
-    <main class="content-card">
-      <div class="page-header">
-        <div class="eyebrow">Authoring Guide</div>
-        <h1 class="page-title">Building a plugin</h1>
-        <p>Foundry plugins are regular Go packages that register themselves through the plugin registry and optionally implement one or more hook interfaces.</p>
-      </div>
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Authoring Guide</div>
+          <h1 class="page-title">Building a plugin</h1>
+          <p>
+            Foundry plugins are regular Go packages that register themselves through the plugin
+            registry and optionally implement one or more hook interfaces.
+          </p>
+        </div>
 
-      <div class="page-body">
-        <h2>Plugin shape</h2>
-        <pre><code>plugins/myplugin/
+        <div class="page-body">
+          <h2>Plugin shape</h2>
+          <pre><code>plugins/myplugin/
   plugin.go
   plugin.yaml
   assets/
     css/
     js/</code></pre>
 
-        <h2>Required metadata</h2>
-        <p>Every plugin should ship a <code>plugin.yaml</code> file. The compatibility fields are the ones that matter most operationally:</p>
-        <pre><code>name: myplugin
+          <h2>Required metadata</h2>
+          <p>
+            Every plugin should ship a <code>plugin.yaml</code> file. The compatibility fields are
+            the ones that matter most operationally:
+          </p>
+          <pre><code>name: myplugin
 title: My Plugin
 version: 0.1.0
 description: Adds project-specific behavior
 author: Your Team
 license: MIT
 foundry_api: v1
-min_foundry_version: 0.1.0</code></pre>
+min_foundry_version: 0.1.0
+compatibility_version: v1
+dependencies:
+  - name: github.com/acme/search-core
+    version: ^1.2.0
+config_schema:
+  - name: mode
+    type: select
+    enum: [compact, full]
+    default: compact
+admin:
+  pages:
+    - key: search-console
+      title: Search Console
+      route: /plugins/search
+      module: admin/search-console.js
+      styles:
+        - admin/search-console.css
+  settings_sections:
+    - key: search
+      title: Search
+      description: Search tuning</code></pre>
 
-        <h2>Available metadata fields</h2>
-        <ul>
-          <li><code>name</code></li>
-          <li><code>title</code></li>
-          <li><code>version</code></li>
-          <li><code>description</code></li>
-          <li><code>author</code></li>
-          <li><code>homepage</code></li>
-          <li><code>license</code></li>
-          <li><code>repo</code></li>
-          <li><code>requires</code></li>
-          <li><code>foundry_api</code></li>
-          <li><code>min_foundry_version</code></li>
-        </ul>
+          <h2>Available metadata fields</h2>
+          <ul>
+            <li><code>name</code></li>
+            <li><code>title</code></li>
+            <li><code>version</code></li>
+            <li><code>description</code></li>
+            <li><code>author</code></li>
+            <li><code>homepage</code></li>
+            <li><code>license</code></li>
+            <li><code>repo</code></li>
+            <li><code>requires</code></li>
+            <li><code>dependencies</code></li>
+            <li><code>foundry_api</code></li>
+            <li><code>min_foundry_version</code></li>
+            <li><code>compatibility_version</code></li>
+            <li><code>config_schema</code></li>
+            <li><code>admin.pages</code></li>
+            <li><code>admin.widgets</code></li>
+            <li><code>admin.slots</code></li>
+            <li><code>admin.settings_sections</code></li>
+            <li><code>screenshots</code></li>
+          </ul>
 
-        <h2>Minimal implementation</h2>
-        <pre><code class="language-go">package myplugin
+          <h2>Plugin-defined admin pages</h2>
+          <p>
+            Plugins can now declare admin pages in <code>plugin.yaml</code>. Foundry exposes those
+            pages through the admin extension registry, gives them stable routes inside the admin
+            shell, and can auto-load a plugin-provided ES module bundle for the page.
+          </p>
+          <pre><code>admin:
+  pages:
+    - key: search-console
+      title: Search Console
+      route: /plugins/search
+      capability: plugins.manage
+      description: Inspect search status and rebuild controls
+      module: admin/search-console.js
+      styles:
+        - admin/search-console.css</code></pre>
+          <p>
+            The <code>module</code> and <code>styles</code> paths are relative to the plugin
+            directory. Foundry serves them under
+            <code>&lt;admin.path&gt;/extensions/&lt;plugin&gt;/...</code> after normalizing the
+            paths and keeping them inside the plugin root.
+          </p>
+          <p>
+            When that page is active, the default admin shell dispatches
+            <code>foundry:admin-extension-page</code>, exposes <code>window.FoundryAdmin</code>, and
+            will automatically import the plugin module if one is declared. A page bundle can export
+            either <code>mountAdminExtensionPage(ctx)</code> or a default function.
+          </p>
+          <p>
+            Widgets follow the same model. The default admin theme currently exposes these stable
+            widget slots:
+          </p>
+          <ul>
+            <li><code>overview.after</code></li>
+            <li><code>documents.sidebar</code></li>
+            <li><code>media.sidebar</code></li>
+            <li><code>plugins.sidebar</code></li>
+          </ul>
+          <p>
+            Widget bundles can export <code>mountAdminExtensionWidget(ctx)</code> or a default
+            function. The shell dispatches <code>foundry:admin-extension-widget</code> for each
+            visible widget mount.
+          </p>
+
+          <h2>Minimal implementation</h2>
+          <pre><code class="language-go">package myplugin
 
 import "github.com/sphireinc/foundry/internal/plugins"
 
@@ -86,93 +167,140 @@ func init() {
   })
 }</code></pre>
 
-        <h2>Available plugin hooks</h2>
-        <p>The current plugin surface is interface-based. A plugin implements only the hooks it needs.</p>
-        <ul>
-          <li><code>OnConfigLoaded(*config.Config) error</code></li>
-          <li><code>OnContentDiscovered(path string) error</code></li>
-          <li><code>OnFrontmatterParsed(*content.Document) error</code></li>
-          <li><code>OnMarkdownRendered(*content.Document) error</code></li>
-          <li><code>OnDocumentParsed(*content.Document) error</code></li>
-          <li><code>OnDataLoaded(map[string]any) error</code></li>
-          <li><code>OnGraphBuilding(*content.SiteGraph) error</code></li>
-          <li><code>OnGraphBuilt(*content.SiteGraph) error</code></li>
-          <li><code>OnTaxonomyBuilt(*content.SiteGraph) error</code></li>
-          <li><code>OnRoutesAssigned(*content.SiteGraph) error</code></li>
-          <li><code>OnContext(*renderer.ViewData) error</code></li>
-          <li><code>OnAssets(*renderer.ViewData, *renderer.AssetSet) error</code></li>
-          <li><code>OnHTMLSlots(*renderer.ViewData, *renderer.Slots) error</code></li>
-          <li><code>OnBeforeRender(*renderer.ViewData) error</code></li>
-          <li><code>OnAfterRender(url string, html []byte) ([]byte, error)</code></li>
-          <li><code>OnAssetsBuilding(*config.Config) error</code></li>
-          <li><code>OnBuildStarted() error</code></li>
-          <li><code>OnBuildCompleted(*content.SiteGraph) error</code></li>
-          <li><code>OnServerStarted(addr string) error</code></li>
-          <li><code>RegisterRoutes(mux *http.ServeMux)</code></li>
-          <li><code>Commands() []plugins.Command</code> for plugin-provided CLI commands</li>
-        </ul>
+          <h2>Available plugin hooks</h2>
+          <p>
+            The current plugin surface is interface-based. A plugin implements only the hooks it
+            needs.
+          </p>
+          <ul>
+            <li><code>OnConfigLoaded(*config.Config) error</code></li>
+            <li><code>OnContentDiscovered(path string) error</code></li>
+            <li><code>OnFrontmatterParsed(*content.Document) error</code></li>
+            <li><code>OnMarkdownRendered(*content.Document) error</code></li>
+            <li><code>OnDocumentParsed(*content.Document) error</code></li>
+            <li><code>OnDataLoaded(map[string]any) error</code></li>
+            <li><code>OnGraphBuilding(*content.SiteGraph) error</code></li>
+            <li><code>OnGraphBuilt(*content.SiteGraph) error</code></li>
+            <li><code>OnTaxonomyBuilt(*content.SiteGraph) error</code></li>
+            <li><code>OnRoutesAssigned(*content.SiteGraph) error</code></li>
+            <li><code>OnContext(*renderer.ViewData) error</code></li>
+            <li><code>OnAssets(*renderer.ViewData, *renderer.AssetSet) error</code></li>
+            <li><code>OnHTMLSlots(*renderer.ViewData, *renderer.Slots) error</code></li>
+            <li><code>OnBeforeRender(*renderer.ViewData) error</code></li>
+            <li><code>OnAfterRender(url string, html []byte) ([]byte, error)</code></li>
+            <li><code>OnAssetsBuilding(*config.Config) error</code></li>
+            <li><code>OnBuildStarted() error</code></li>
+            <li><code>OnBuildCompleted(*content.SiteGraph) error</code></li>
+            <li><code>OnServerStarted(addr string) error</code></li>
+            <li><code>RegisterRoutes(mux *http.ServeMux)</code></li>
+            <li><code>Commands() []plugins.Command</code> for plugin-provided CLI commands</li>
+          </ul>
 
-        <h2>Injectable HTML slots</h2>
-        <p>Slots are defined by the active theme. For the launch version of Foundry, the following slot names are the required baseline supported by theme validation and are therefore the safe targets for <code>OnHTMLSlots</code>:</p>
-        <ul>
-          <li><code>head.end</code></li>
-          <li><code>body.start</code></li>
-          <li><code>body.end</code></li>
-          <li><code>page.before_main</code></li>
-          <li><code>page.after_main</code></li>
-          <li><code>page.before_content</code></li>
-          <li><code>page.after_content</code></li>
-          <li><code>post.before_header</code></li>
-          <li><code>post.after_header</code></li>
-          <li><code>post.before_content</code></li>
-          <li><code>post.after_content</code></li>
-          <li><code>post.sidebar.top</code></li>
-          <li><code>post.sidebar.overview</code></li>
-          <li><code>post.sidebar.bottom</code></li>
-        </ul>
+          <h2>Injectable HTML slots</h2>
+          <p>
+            Slots are defined by the active theme. For the launch version of Foundry, the following
+            slot names are the required baseline supported by theme validation and are therefore the
+            safe targets for <code>OnHTMLSlots</code>:
+          </p>
+          <ul>
+            <li><code>head.end</code></li>
+            <li><code>body.start</code></li>
+            <li><code>body.end</code></li>
+            <li><code>page.before_main</code></li>
+            <li><code>page.after_main</code></li>
+            <li><code>page.before_content</code></li>
+            <li><code>page.after_content</code></li>
+            <li><code>post.before_header</code></li>
+            <li><code>post.after_header</code></li>
+            <li><code>post.before_content</code></li>
+            <li><code>post.after_content</code></li>
+            <li><code>post.sidebar.top</code></li>
+            <li><code>post.sidebar.overview</code></li>
+            <li><code>post.sidebar.bottom</code></li>
+          </ul>
 
-        <h2>Plugin command surface</h2>
-        <p>If a plugin implements CLI commands, each command currently exposes these fields:</p>
-        <ul>
-          <li><code>Name</code></li>
-          <li><code>Summary</code></li>
-          <li><code>Description</code></li>
-          <li><code>Run func(ctx plugins.CommandContext) error</code></li>
-        </ul>
+          <h2>Plugin command surface</h2>
+          <p>If a plugin implements CLI commands, each command currently exposes these fields:</p>
+          <ul>
+            <li><code>Name</code></li>
+            <li><code>Summary</code></li>
+            <li><code>Description</code></li>
+            <li><code>Run func(ctx plugins.CommandContext) error</code></li>
+          </ul>
 
-        <h2>Typical workflow</h2>
-        <ol>
-          <li>Create the plugin directory under <code>plugins/</code>.</li>
-          <li>Add <code>plugin.go</code> and <code>plugin.yaml</code>.</li>
-          <li>Register the plugin in <code>init()</code>.</li>
-          <li>Enable it in project config.</li>
-          <li>Run <code>foundry plugin sync</code> or <code>go run ./cmd/plugin-sync</code>.</li>
-          <li>Run <code>go test ./...</code> and <code>foundry plugin validate</code>.</li>
-        </ol>
+          <h2>Typical workflow</h2>
+          <ol>
+            <li>Create the plugin directory under <code>plugins/</code>.</li>
+            <li>Add <code>plugin.go</code> and <code>plugin.yaml</code>.</li>
+            <li>Register the plugin in <code>init()</code>.</li>
+            <li>Enable it in project config.</li>
+            <li>Run <code>foundry plugin sync</code> or <code>go run ./cmd/plugin-sync</code>.</li>
+            <li>Run <code>go test ./...</code> and <code>foundry plugin validate</code>.</li>
+          </ol>
 
-        <h2>Asset and HTML integration</h2>
-        <p>Plugins can contribute assets through the renderer asset hooks and add markup through HTML slots. If a plugin ships public assets, place them under <code>assets/</code>; Foundry will copy enabled plugin assets into <code>public/plugins/&lt;name&gt;/</code>.</p>
+          <h2>Asset and HTML integration</h2>
+          <p>
+            Plugins can contribute assets through the renderer asset hooks and add markup through
+            HTML slots. If a plugin ships public assets, place them under <code>assets/</code>;
+            Foundry will copy enabled plugin assets into <code>public/plugins/&lt;name&gt;/</code>.
+          </p>
 
-        <h2>Dependency and install notes</h2>
-        <ul>
-          <li>Use the <code>requires</code> field in <code>plugin.yaml</code> when your plugin depends on another plugin by repo identity.</li>
-          <li>Plugin installation is intentionally restricted to GitHub over <code>https</code> or <code>git@github.com</code>.</li>
-          <li>Installing a plugin still means trusting third-party code. Treat it as a supply-chain boundary.</li>
-        </ul>
+          <h2>Dependency and install notes</h2>
+          <ul>
+            <li>
+              Use the <code>requires</code> field in <code>plugin.yaml</code> when your plugin
+              depends on another plugin by repo identity.
+            </li>
+            <li>
+              Use <code>dependencies</code> when you want richer dependency metadata such as version
+              ranges or optional dependencies.
+            </li>
+            <li>
+              Plugin installation is intentionally restricted to GitHub over <code>https</code> or
+              <code>git@github.com</code>.
+            </li>
+            <li>
+              Plugin updates now preserve rollback snapshots under
+              <code>plugins/.rollback/&lt;name&gt;/</code>.
+            </li>
+            <li>
+              Admin plugin records surface health diagnostics, compatibility fields, dependency
+              metadata, and rollback availability.
+            </li>
+            <li>
+              Installing a plugin still means trusting third-party code. Treat it as a supply-chain
+              boundary.
+            </li>
+          </ul>
 
-        <h2>Reference code</h2>
-        <p>The built-in plugins are the best reference implementations:</p>
-        <ul>
-          <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/readingtime">Reading Time</a> for document enrichment and slot rendering.</li>
-          <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/toc">TOC</a> for content parsing, asset injection, slot rendering, and plugin CLI commands.</li>
-          <li><a href="https://github.com/sphireinc/foundry/tree/main/plugins/relatedposts">Related Posts</a> for post-render content injection into post slots.</li>
-        </ul>
-      </div>
-    </main>
+          <h2>Reference code</h2>
+          <p>The built-in plugins are the best reference implementations:</p>
+          <ul>
+            <li>
+              <a href="https://github.com/sphireinc/foundry/tree/main/plugins/readingtime"
+                >Reading Time</a
+              >
+              for document enrichment and slot rendering.
+            </li>
+            <li>
+              <a href="https://github.com/sphireinc/foundry/tree/main/plugins/toc">TOC</a> for
+              content parsing, asset injection, slot rendering, and plugin CLI commands.
+            </li>
+            <li>
+              <a href="https://github.com/sphireinc/foundry/tree/main/plugins/relatedposts"
+                >Related Posts</a
+              >
+              for post-render content injection into post slots.
+            </li>
+          </ul>
+        </div>
+      </main>
 
-    <footer class="footer">
-      <span>Use the built-in plugins as working examples before designing new hook patterns.</span>
-    </footer>
-  </div>
-</body>
+      <footer class="footer">
+        <span
+          >Use the built-in plugins as working examples before designing new hook patterns.</span
+        >
+      </footer>
+    </div>
+  </body>
 </html>

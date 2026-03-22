@@ -2,6 +2,13 @@ package consts
 
 const (
 	BinaryName = "foundry"
+	SDKVersion = "v1"
+
+	FrontendSDKVersion      = SDKVersion
+	AdminSDKVersion         = SDKVersion
+	FrontendCompatibility   = "v1"
+	AdminThemeCompatibility = "v1"
+	AdminAPIContractVersion = "v1"
 
 	ConfigFilePath = "content/config/site.yaml"
 

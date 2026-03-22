@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,11 @@ import (
 )
 
 var pluginDownloadClient = &http.Client{Timeout: 30 * time.Second}
+
+const (
+	pluginCloneTimeout = 2 * time.Minute
+	pluginZipMaxBytes  = 128 << 20
+)
 
 type InstallOptions struct {
 	PluginsDir string
@@ -61,7 +67,9 @@ func Install(opts InstallOptions) (Metadata, error) {
 		return Metadata{}, fmt.Errorf("create plugins dir: %w", err)
 	}
 
-	cmd := exec.Command("git", "clone", repoURL, targetDir)
+	cloneCtx, cancel := context.WithTimeout(context.Background(), pluginCloneTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(cloneCtx, "git", "clone", repoURL, targetDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -156,8 +164,12 @@ func downloadAndExtract(repoURL, targetDir string) error {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	written, err := io.Copy(tmpFile, io.LimitReader(resp.Body, pluginZipMaxBytes+1))
+	if err != nil {
 		return err
+	}
+	if written > pluginZipMaxBytes {
+		return fmt.Errorf("plugin zip exceeds %d bytes", pluginZipMaxBytes)
 	}
 	tmpFile.Close()
 

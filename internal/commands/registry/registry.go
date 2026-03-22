@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sphireinc/foundry/internal/cliout"
 	"github.com/sphireinc/foundry/internal/config"
 )
 
@@ -107,15 +108,16 @@ func Usage() string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("usage: foundry <command>\n")
+	sb.WriteString(cliout.Heading("usage:"))
+	sb.WriteString(" foundry <command>\n")
 
 	for _, group := range groups {
 		sb.WriteString("\n")
-		sb.WriteString(group)
+		sb.WriteString(cliout.Heading(group))
 		sb.WriteString(":\n")
 
 		for _, item := range grouped[group] {
-			sb.WriteString(fmt.Sprintf("  %-*s  %s\n", nameWidth, item.Name, item.Summary))
+			sb.WriteString(fmt.Sprintf("  %-*s  %s\n", nameWidth, cliout.Label(item.Name), item.Summary))
 			for _, detail := range item.Details {
 				sb.WriteString(fmt.Sprintf("  %-*s  %s\n", nameWidth, "", detail))
 			}

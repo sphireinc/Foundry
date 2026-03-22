@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/sphireinc/foundry/internal/admin/types"
+	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/fields"
 	"github.com/sphireinc/foundry/internal/i18n"
 	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
@@ -28,6 +30,9 @@ func (s *Service) ListDocuments(ctx context.Context, opts types.DocumentListOpti
 	query := strings.ToLower(strings.TrimSpace(opts.Query))
 
 	for _, doc := range graph.Documents {
+		if identity, ok := currentIdentity(ctx); ok && !canAccessDocument(identity, doc) {
+			continue
+		}
 		if !opts.IncludeDrafts && doc.Draft {
 			continue
 		}
@@ -73,7 +78,11 @@ func (s *Service) GetDocument(ctx context.Context, idOrPath string, includeDraft
 
 	for _, doc := range graph.Documents {
 		if doc.ID == idOrPath || doc.SourcePath == idOrPath || displayDocumentPath(doc.SourcePath, s.cfg.ContentDir) == idOrPath || doc.URL == idOrPath {
-			detail, err := s.toDetail(doc)
+			identity, ok := currentIdentity(ctx)
+			if ok && !canAccessDocument(identity, doc) {
+				return nil, fmt.Errorf("document access denied")
+			}
+			detail, err := s.toDetail(ctx, doc)
 			if err != nil {
 				return nil, err
 			}
@@ -85,8 +94,6 @@ func (s *Service) GetDocument(ctx context.Context, idOrPath string, includeDraft
 }
 
 func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveRequest) (*types.DocumentSaveResponse, error) {
-	_ = ctx
-
 	sourcePath, err := s.resolveContentPath(req.SourcePath)
 	if err != nil {
 		return nil, err
@@ -94,12 +101,81 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	if strings.TrimSpace(req.Raw) == "" {
 		return nil, fmt.Errorf("raw document body is required")
 	}
+	if err := s.ensureDocumentLock(ctx, req.SourcePath, req.LockToken); err != nil {
+		return nil, err
+	}
+
+	fm, body, err := content.ParseDocument([]byte(req.Raw))
+	if err != nil {
+		return nil, err
+	}
+	if fm.Params == nil {
+		fm.Params = make(map[string]any)
+	}
+	defs := fields.DefinitionsFor(s.cfg, documentKindFromSourcePath(sourcePath, s.cfg))
+	if req.Fields != nil {
+		fm.Fields = fields.Normalize(req.Fields)
+	}
+	fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
+	if errs := fields.Validate(fm.Fields, defs, s.cfg.Fields.AllowAnything); len(errs) > 0 {
+		return nil, errs[0]
+	}
+	actorUsername := strings.TrimSpace(req.Username)
+	if identity, ok := currentIdentity(ctx); ok {
+		if actorUsername == "" {
+			actorUsername = identity.Username
+		}
+		owner := documentOwnerFromFrontMatter(fm)
+		if owner == "" && actorUsername != "" {
+			fm.Author = actorUsername
+			owner = actorUsername
+		}
+		if !canMutateDocument(identity, owner) {
+			return nil, fmt.Errorf("document access denied")
+		}
+		fm.LastEditor = actorUsername
+	} else if actorUsername != "" {
+		if strings.TrimSpace(fm.Author) == "" {
+			fm.Author = actorUsername
+		}
+		fm.LastEditor = actorUsername
+	}
+	if fm.Author == "" {
+		fm.Author = documentOwnerFromFrontMatter(fm)
+	}
+	if fm.CreatedAt == nil {
+		nowCreated := time.Now().UTC()
+		fm.CreatedAt = &nowCreated
+	}
+	nowUpdated := time.Now().UTC()
+	fm.UpdatedAt = &nowUpdated
+	if content.WorkflowFromFrontMatter(fm, nowUpdated).Status == "" {
+		content.ApplyWorkflowToFrontMatter(fm, "draft", nil, nil, "")
+	}
+	renderedRaw, err := marshalDocument(fm, body)
+	if err != nil {
+		return nil, err
+	}
 
 	created := false
 	now := time.Now()
 	if _, err := s.fs.Stat(sourcePath); err != nil {
+		if err := requireCapability(ctx, "documents.create"); err != nil {
+			return nil, err
+		}
 		created = true
 	} else {
+		existingRaw, err := s.fs.ReadFile(sourcePath)
+		if err != nil {
+			return nil, err
+		}
+		existingFM, _, err := content.ParseDocument(existingRaw)
+		if err != nil {
+			return nil, err
+		}
+		if identity, ok := currentIdentity(ctx); ok && !canMutateDocument(identity, documentOwnerFromFrontMatter(existingFM)) {
+			return nil, fmt.Errorf("document access denied")
+		}
 		if strings.TrimSpace(req.VersionComment) != "" || strings.TrimSpace(req.Actor) != "" {
 			if err := s.snapshotDocumentVersion(sourcePath, now, req.VersionComment, req.Actor); err != nil {
 				return nil, err
@@ -112,20 +188,23 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	if err := s.fs.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		return nil, err
 	}
-	if err := s.fs.WriteFile(sourcePath, []byte(req.Raw), 0o644); err != nil {
+	if err := s.fs.WriteFile(sourcePath, renderedRaw, 0o644); err != nil {
 		return nil, err
 	}
 	s.invalidateGraphCache()
 
 	return &types.DocumentSaveResponse{
 		SourcePath: displayDocumentPath(sourcePath, s.cfg.ContentDir),
-		Size:       int64(len(req.Raw)),
+		Size:       int64(len(renderedRaw)),
 		Created:    created,
+		Raw:        string(renderedRaw),
 	}, nil
 }
 
 func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRequest) (*types.DocumentCreateResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "documents.create"); err != nil {
+		return nil, err
+	}
 
 	kind := normalizeDocumentKind(req.Kind)
 	if kind == "" {
@@ -162,6 +241,33 @@ func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRe
 	if err := s.fs.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
 		return nil, err
 	}
+	actorUsername := ""
+	if identity, ok := currentIdentity(ctx); ok && identity.Username != "" {
+		actorUsername = identity.Username
+	}
+	if actorUsername != "" {
+		fm, contentBody, err := content.ParseDocument([]byte(body))
+		if err == nil {
+			if fm.Params == nil {
+				fm.Params = make(map[string]any)
+			}
+			if documentOwnerFromFrontMatter(fm) == "" {
+				fm.Author = actorUsername
+			}
+			fm.LastEditor = actorUsername
+			now := time.Now().UTC()
+			if fm.CreatedAt == nil {
+				fm.CreatedAt = &now
+			}
+			fm.UpdatedAt = &now
+			content.ApplyWorkflowToFrontMatter(fm, "draft", nil, nil, "")
+			defs := fields.DefinitionsFor(s.cfg, kind)
+			fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
+			if rendered, err := marshalDocument(fm, contentBody); err == nil {
+				body = string(rendered)
+			}
+		}
+	}
 	if err := s.fs.WriteFile(sourcePath, []byte(body), 0o644); err != nil {
 		return nil, err
 	}
@@ -179,8 +285,6 @@ func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRe
 }
 
 func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentStatusRequest) (*types.DocumentStatusResponse, error) {
-	_ = ctx
-
 	sourcePath, err := s.resolveContentPath(req.SourcePath)
 	if err != nil {
 		return nil, err
@@ -194,28 +298,44 @@ func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentSt
 	if err != nil {
 		return nil, err
 	}
+	if identity, ok := currentIdentity(ctx); ok && !canMutateDocument(identity, documentOwnerFromFrontMatter(fm)) {
+		return nil, fmt.Errorf("document access denied")
+	}
+	if err := s.ensureDocumentLock(ctx, req.SourcePath, req.LockToken); err != nil {
+		return nil, err
+	}
 
 	status := normalizeDocumentStatus(req.Status)
 	if status == "" {
-		return nil, fmt.Errorf("document status must be published, draft, or archived")
+		return nil, fmt.Errorf("document status must be draft, in_review, scheduled, published, or archived")
+	}
+	scheduledPublishAt, err := parseOptionalTime(req.ScheduledPublishAt)
+	if err != nil {
+		return nil, fmt.Errorf("scheduled publish time: %w", err)
+	}
+	scheduledUnpublishAt, err := parseOptionalTime(req.ScheduledUnpublishAt)
+	if err != nil {
+		return nil, fmt.Errorf("scheduled unpublish time: %w", err)
+	}
+	if status == "scheduled" && scheduledPublishAt == nil && scheduledUnpublishAt == nil {
+		return nil, fmt.Errorf("scheduled status requires scheduled publish or unpublish time")
 	}
 
 	if fm.Params == nil {
 		fm.Params = make(map[string]any)
 	}
-	switch status {
-	case "published":
-		fm.Draft = false
-		delete(fm.Params, "archived")
-	case "draft":
-		fm.Draft = true
-		delete(fm.Params, "archived")
-	case "archived":
-		fm.Draft = true
-		fm.Params["archived"] = true
+	if identity, ok := currentIdentity(ctx); ok && identity.Username != "" {
+		fm.LastEditor = identity.Username
+		if fm.Author == "" {
+			fm.Author = documentOwnerFromFrontMatter(fm)
+		}
 	}
 	now := time.Now().UTC()
+	if fm.CreatedAt == nil {
+		fm.CreatedAt = &now
+	}
 	fm.UpdatedAt = &now
+	content.ApplyWorkflowToFrontMatter(fm, status, scheduledPublishAt, scheduledUnpublishAt, req.EditorialNote)
 
 	rendered, err := marshalDocument(fm, body)
 	if err != nil {
@@ -227,22 +347,33 @@ func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentSt
 	s.invalidateGraphCache()
 
 	return &types.DocumentStatusResponse{
-		SourcePath: displayDocumentPath(sourcePath, s.cfg.ContentDir),
-		Status:     status,
-		Draft:      fm.Draft,
-		Archived:   documentArchivedFromParams(fm.Params),
+		SourcePath:           displayDocumentPath(sourcePath, s.cfg.ContentDir),
+		Status:               status,
+		Draft:                fm.Draft,
+		Archived:             documentArchivedFromParams(fm.Params),
+		ScheduledPublishAt:   scheduledPublishAt,
+		ScheduledUnpublishAt: scheduledUnpublishAt,
+		EditorialNote:        strings.TrimSpace(req.EditorialNote),
 	}, nil
 }
 
 func (s *Service) DeleteDocument(ctx context.Context, req types.DocumentDeleteRequest) (*types.DocumentDeleteResponse, error) {
-	_ = ctx
-
 	sourcePath, err := s.resolveContentPath(req.SourcePath)
 	if err != nil {
 		return nil, err
 	}
 	if _, err := s.fs.Stat(sourcePath); err != nil {
 		return nil, err
+	}
+	if err := s.ensureDocumentLock(ctx, req.SourcePath, req.LockToken); err != nil {
+		return nil, err
+	}
+	if raw, err := s.fs.ReadFile(sourcePath); err == nil {
+		if fm, _, err := content.ParseDocument(raw); err == nil {
+			if identity, ok := currentIdentity(ctx); ok && !canMutateDocument(identity, documentOwnerFromFrontMatter(fm)) {
+				return nil, fmt.Errorf("document access denied")
+			}
+		}
 	}
 
 	trashPath, err := s.trashFile(sourcePath, time.Now())
@@ -259,8 +390,6 @@ func (s *Service) DeleteDocument(ctx context.Context, req types.DocumentDeleteRe
 }
 
 func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreviewRequest) (*types.DocumentPreviewResponse, error) {
-	_ = ctx
-
 	raw := req.Raw
 	if strings.TrimSpace(raw) == "" && strings.TrimSpace(req.SourcePath) != "" {
 		sourcePath, err := s.resolveContentPath(req.SourcePath)
@@ -270,6 +399,11 @@ func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreview
 		b, err := s.fs.ReadFile(sourcePath)
 		if err != nil {
 			return nil, err
+		}
+		if identity, ok := currentIdentity(ctx); ok {
+			if fm, _, err := content.ParseDocument(b); err == nil && !canMutateDocument(identity, documentOwnerFromFrontMatter(fm)) && !adminauthCapabilityAllowed(identity, "documents.read") && !adminauthCapabilityAllowed(identity, "documents.read.own") {
+				return nil, fmt.Errorf("document access denied")
+			}
 		}
 		raw = string(b)
 	}
@@ -282,6 +416,15 @@ func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreview
 	if err != nil {
 		return nil, err
 	}
+	if req.Fields != nil {
+		fm.Fields = fields.Normalize(req.Fields)
+	}
+	defs := fields.DefinitionsFor(s.cfg, documentKindFromSourcePath(strings.TrimSpace(req.SourcePath), s.cfg))
+	fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
+	fieldErrors := make([]string, 0)
+	for _, err := range fields.Validate(fm.Fields, defs, s.cfg.Fields.AllowAnything) {
+		fieldErrors = append(fieldErrors, err.Error())
+	}
 
 	htmlBody, err := markup.MarkdownToHTML(body, s.cfg.Security.AllowUnsafeHTML)
 	if err != nil {
@@ -292,17 +435,24 @@ func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreview
 	if title == "" {
 		title = strings.TrimSpace(fm.Slug)
 	}
+	workflow := content.WorkflowFromFrontMatter(fm, time.Now().UTC())
 
 	return &types.DocumentPreviewResponse{
-		Title:     title,
-		Slug:      fm.Slug,
-		Layout:    fm.Layout,
-		Summary:   fm.Summary,
-		Draft:     fm.Draft,
-		Date:      fm.Date,
-		UpdatedAt: fm.UpdatedAt,
-		HTML:      string(htmlBody),
-		WordCount: countWords(body),
+		Title:       title,
+		Slug:        fm.Slug,
+		Layout:      fm.Layout,
+		Summary:     fm.Summary,
+		Status:      workflow.Status,
+		Draft:       fm.Draft,
+		Archived:    workflow.Archived,
+		Date:        fm.Date,
+		CreatedAt:   fm.CreatedAt,
+		UpdatedAt:   fm.UpdatedAt,
+		Author:      strings.TrimSpace(fm.Author),
+		LastEditor:  strings.TrimSpace(fm.LastEditor),
+		HTML:        string(htmlBody),
+		WordCount:   countWords(body),
+		FieldErrors: fieldErrors,
 	}, nil
 }
 
@@ -331,6 +481,7 @@ func toSummary(doc *content.Document) types.DocumentSummary {
 		ID:         doc.ID,
 		Type:       doc.Type,
 		Lang:       doc.Lang,
+		Status:     doc.Status,
 		Title:      doc.Title,
 		Slug:       doc.Slug,
 		URL:        doc.URL,
@@ -340,15 +491,22 @@ func toSummary(doc *content.Document) types.DocumentSummary {
 		Draft:      doc.Draft,
 		Archived:   documentArchivedFromParams(doc.Params),
 		Date:       doc.Date,
+		CreatedAt:  doc.CreatedAt,
 		UpdatedAt:  doc.UpdatedAt,
+		Author:     doc.Author,
+		LastEditor: doc.LastEditor,
 		Taxonomies: doc.Taxonomies,
 	}
 }
 
-func (s *Service) toDetail(doc *content.Document) (types.DocumentDetail, error) {
+func (s *Service) toDetail(ctx context.Context, doc *content.Document) (types.DocumentDetail, error) {
 	raw, err := s.fs.ReadFile(doc.SourcePath)
 	if err != nil {
 		return types.DocumentDetail{}, err
+	}
+	lock, err := s.DocumentLock(ctx, displayDocumentPath(doc.SourcePath, s.cfg.ContentDir))
+	if err != nil {
+		lock = nil
 	}
 	return types.DocumentDetail{
 		DocumentSummary: toSummary(doc),
@@ -356,6 +514,8 @@ func (s *Service) toDetail(doc *content.Document) (types.DocumentDetail, error) 
 		HTMLBody:        string(doc.HTMLBody),
 		Params:          doc.Params,
 		Fields:          doc.Fields,
+		FieldSchema:     toFieldSchema(fields.DefinitionsFor(s.cfg, doc.Type)),
+		Lock:            lock,
 	}, nil
 }
 
@@ -392,11 +552,78 @@ func normalizeDocumentKind(kind string) string {
 
 func normalizeDocumentStatus(status string) string {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "published", "draft", "archived":
+	case "published", "draft", "archived", "in_review", "scheduled":
 		return strings.ToLower(strings.TrimSpace(status))
 	default:
 		return ""
 	}
+}
+
+func documentKindFromSourcePath(path string, cfg *config.Config) string {
+	normalized := filepath.ToSlash(strings.TrimSpace(path))
+	pagesDir := filepath.ToSlash(filepath.Join(strings.TrimSpace(cfg.ContentDir), strings.TrimSpace(cfg.Content.PagesDir)))
+	postsDir := filepath.ToSlash(filepath.Join(strings.TrimSpace(cfg.ContentDir), strings.TrimSpace(cfg.Content.PostsDir)))
+	switch {
+	case normalized == postsDir || strings.HasPrefix(normalized, postsDir+"/"):
+		return "post"
+	case normalized == pagesDir || strings.HasPrefix(normalized, pagesDir+"/"):
+		return "page"
+	default:
+		if strings.Contains(normalized, "/posts/") {
+			return "post"
+		}
+		return "page"
+	}
+}
+
+func parseOptionalTime(raw string) (*time.Time, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if parsed, err := time.Parse(time.RFC3339, trimmed); err == nil {
+		value := parsed.UTC()
+		return &value, nil
+	}
+	if parsed, err := time.Parse("2006-01-02 15:04", trimmed); err == nil {
+		value := parsed.UTC()
+		return &value, nil
+	}
+	if parsed, err := time.Parse("2006-01-02", trimmed); err == nil {
+		value := parsed.UTC()
+		return &value, nil
+	}
+	return nil, fmt.Errorf("must be RFC3339 or YYYY-MM-DD[ HH:MM]")
+}
+
+func toFieldSchema(defs []fields.Definition) []types.FieldSchema {
+	if len(defs) == 0 {
+		return nil
+	}
+	result := make([]types.FieldSchema, 0, len(defs))
+	for _, def := range defs {
+		entry := types.FieldSchema{
+			Name:        def.Name,
+			Label:       def.Label,
+			Type:        def.Type,
+			Required:    def.Required,
+			Default:     def.Default,
+			Enum:        append([]string{}, def.Enum...),
+			Help:        def.Help,
+			Placeholder: def.Placeholder,
+		}
+		if len(def.Fields) > 0 {
+			entry.Fields = toFieldSchema(def.Fields)
+		}
+		if def.Item != nil {
+			item := toFieldSchema([]fields.Definition{*def.Item})
+			if len(item) == 1 {
+				entry.Item = &item[0]
+			}
+		}
+		result = append(result, entry)
+	}
+	return result
 }
 
 func sanitizeDocumentSlug(slug string) string {

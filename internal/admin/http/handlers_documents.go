@@ -2,6 +2,7 @@ package httpadmin
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -15,114 +16,129 @@ const adminMediaUploadLimit = 256 << 20
 func registerDocumentRoutes(r *Router) []routeDef {
 	return []routeDef{
 		{
-			pattern: r.routePath("/api/documents"),
-			handler: http.HandlerFunc(r.handleDocuments),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents"),
+			handler:    http.HandlerFunc(r.handleDocuments),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/document"),
-			handler: http.HandlerFunc(r.handleDocument),
-			role:    "editor",
+			pattern:    r.routePath("/api/document"),
+			handler:    http.HandlerFunc(r.handleDocument),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/create"),
-			handler: http.HandlerFunc(r.handleCreateDocument),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/create"),
+			handler:    http.HandlerFunc(r.handleCreateDocument),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/save"),
-			handler: http.HandlerFunc(r.handleSaveDocument),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/save"),
+			handler:    http.HandlerFunc(r.handleSaveDocument),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/history"),
-			handler: http.HandlerFunc(r.handleDocumentHistory),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/lock"),
+			handler:    http.HandlerFunc(r.handleDocumentLock),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/trash"),
-			handler: http.HandlerFunc(r.handleDocumentTrash),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/lock/heartbeat"),
+			handler:    http.HandlerFunc(r.handleDocumentLockHeartbeat),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/restore"),
-			handler: http.HandlerFunc(r.handleRestoreDocument),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/unlock"),
+			handler:    http.HandlerFunc(r.handleDocumentUnlock),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/purge"),
-			handler: http.HandlerFunc(r.handlePurgeDocument),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/history"),
+			handler:    http.HandlerFunc(r.handleDocumentHistory),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/diff"),
-			handler: http.HandlerFunc(r.handleDocumentDiff),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/trash"),
+			handler:    http.HandlerFunc(r.handleDocumentTrash),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/status"),
-			handler: http.HandlerFunc(r.handleDocumentStatus),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/restore"),
+			handler:    http.HandlerFunc(r.handleRestoreDocument),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/delete"),
-			handler: http.HandlerFunc(r.handleDeleteDocument),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/purge"),
+			handler:    http.HandlerFunc(r.handlePurgeDocument),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/documents/preview"),
-			handler: http.HandlerFunc(r.handlePreviewDocument),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/diff"),
+			handler:    http.HandlerFunc(r.handleDocumentDiff),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media"),
-			handler: http.HandlerFunc(r.handleMedia),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/status"),
+			handler:    http.HandlerFunc(r.handleDocumentStatus),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/detail"),
-			handler: http.HandlerFunc(r.handleMediaDetail),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/delete"),
+			handler:    http.HandlerFunc(r.handleDeleteDocument),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/history"),
-			handler: http.HandlerFunc(r.handleMediaHistory),
-			role:    "editor",
+			pattern:    r.routePath("/api/documents/preview"),
+			handler:    http.HandlerFunc(r.handlePreviewDocument),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/trash"),
-			handler: http.HandlerFunc(r.handleMediaTrash),
-			role:    "editor",
+			pattern:    r.routePath("/api/media"),
+			handler:    http.HandlerFunc(r.handleMedia),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/upload"),
-			handler: http.HandlerFunc(r.handleMediaUpload),
-			role:    "editor",
+			pattern:    r.routePath("/api/media/detail"),
+			handler:    http.HandlerFunc(r.handleMediaDetail),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/replace"),
-			handler: http.HandlerFunc(r.handleMediaReplace),
-			role:    "editor",
+			pattern:    r.routePath("/api/media/history"),
+			handler:    http.HandlerFunc(r.handleMediaHistory),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/metadata"),
-			handler: http.HandlerFunc(r.handleMediaMetadata),
-			role:    "editor",
+			pattern:    r.routePath("/api/media/trash"),
+			handler:    http.HandlerFunc(r.handleMediaTrash),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/delete"),
-			handler: http.HandlerFunc(r.handleMediaDelete),
-			role:    "editor",
+			pattern:    r.routePath("/api/media/upload"),
+			handler:    http.HandlerFunc(r.handleMediaUpload),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/restore"),
-			handler: http.HandlerFunc(r.handleMediaRestore),
-			role:    "editor",
+			pattern:    r.routePath("/api/media/replace"),
+			handler:    http.HandlerFunc(r.handleMediaReplace),
+			capability: "dashboard.read",
 		},
 		{
-			pattern: r.routePath("/api/media/purge"),
-			handler: http.HandlerFunc(r.handleMediaPurge),
-			role:    "editor",
+			pattern:    r.routePath("/api/media/metadata"),
+			handler:    http.HandlerFunc(r.handleMediaMetadata),
+			capability: "dashboard.read",
+		},
+		{
+			pattern:    r.routePath("/api/media/delete"),
+			handler:    http.HandlerFunc(r.handleMediaDelete),
+			capability: "dashboard.read",
+		},
+		{
+			pattern:    r.routePath("/api/media/restore"),
+			handler:    http.HandlerFunc(r.handleMediaRestore),
+			capability: "dashboard.read",
+		},
+		{
+			pattern:    r.routePath("/api/media/purge"),
+			handler:    http.HandlerFunc(r.handleMediaPurge),
+			capability: "dashboard.read",
 		},
 	}
 }
@@ -178,11 +194,14 @@ func (r *Router) handleSaveDocument(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var body admintypes.DocumentSaveRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, largeJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	body.Actor = actorLabel(req)
+	body.Username = actorUsername(req)
 
 	resp, err := r.service.SaveDocument(req.Context(), body)
 	if err != nil {
@@ -192,6 +211,65 @@ func (r *Router) handleSaveDocument(w http.ResponseWriter, req *http.Request) {
 	r.logAuditRequest(req, "document.save", "success", resp.SourcePath, nil)
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDocumentLock(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.DocumentLockRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	resp, err := r.service.AcquireDocumentLock(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDocumentLockHeartbeat(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.DocumentLockRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	resp, err := r.service.HeartbeatDocumentLock(req.Context(), body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleDocumentUnlock(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.DocumentLockRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	if err := r.service.ReleaseDocumentLock(req.Context(), body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, admintypes.DocumentLockResponse{})
 }
 
 func (r *Router) handleDocumentHistory(w http.ResponseWriter, req *http.Request) {
@@ -231,8 +309,10 @@ func (r *Router) handleRestoreDocument(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	var body admintypes.DocumentLifecycleRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	resp, err := r.service.RestoreDocument(req.Context(), body)
@@ -250,8 +330,10 @@ func (r *Router) handlePurgeDocument(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body admintypes.DocumentLifecycleRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	resp, err := r.service.PurgeDocument(req.Context(), body)
@@ -269,8 +351,10 @@ func (r *Router) handleDocumentDiff(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body admintypes.DocumentDiffRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, mediumJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	resp, err := r.service.DiffDocument(req.Context(), body)
@@ -288,8 +372,10 @@ func (r *Router) handleCreateDocument(w http.ResponseWriter, req *http.Request) 
 	}
 
 	var body admintypes.DocumentCreateRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, mediumJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 
@@ -310,8 +396,10 @@ func (r *Router) handlePreviewDocument(w http.ResponseWriter, req *http.Request)
 	}
 
 	var body admintypes.DocumentPreviewRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, largeJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 
@@ -331,8 +419,10 @@ func (r *Router) handleDocumentStatus(w http.ResponseWriter, req *http.Request) 
 	}
 
 	var body admintypes.DocumentStatusRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, mediumJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 
@@ -353,8 +443,10 @@ func (r *Router) handleDeleteDocument(w http.ResponseWriter, req *http.Request) 
 	}
 
 	var body admintypes.DocumentDeleteRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 
@@ -440,7 +532,13 @@ func (r *Router) handleMediaUpload(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	req.Body = http.MaxBytesReader(w, req.Body, adminMultipartMaxBody)
 	if err := req.ParseMultipartForm(adminMediaUploadLimit); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONErrorMessage(w, http.StatusRequestEntityTooLarge, "media upload exceeds allowed size")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -480,7 +578,13 @@ func (r *Router) handleMediaReplace(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	req.Body = http.MaxBytesReader(w, req.Body, adminMultipartMaxBody)
 	if err := req.ParseMultipartForm(adminMediaUploadLimit); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSONErrorMessage(w, http.StatusRequestEntityTooLarge, "media upload exceeds allowed size")
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -515,8 +619,10 @@ func (r *Router) handleMediaDelete(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body admintypes.MediaDeleteRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	if err := r.service.DeleteMedia(req.Context(), body.Reference); err != nil {
@@ -533,8 +639,10 @@ func (r *Router) handleMediaRestore(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body admintypes.MediaLifecycleRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	resp, err := r.service.RestoreMedia(req.Context(), body)
@@ -552,8 +660,10 @@ func (r *Router) handleMediaPurge(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body admintypes.MediaLifecycleRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	resp, err := r.service.PurgeMedia(req.Context(), body)
@@ -571,8 +681,10 @@ func (r *Router) handleMediaMetadata(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var body admintypes.MediaMetadataSaveRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, mediumJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 	body.Actor = actorLabel(req)
@@ -592,6 +704,14 @@ func actorLabel(req *http.Request) string {
 	}
 	if name := strings.TrimSpace(identity.Name); name != "" {
 		return name
+	}
+	return strings.TrimSpace(identity.Username)
+}
+
+func actorUsername(req *http.Request) string {
+	identity, ok := adminauth.IdentityFromContext(req.Context())
+	if !ok {
+		return ""
 	}
 	return strings.TrimSpace(identity.Username)
 }

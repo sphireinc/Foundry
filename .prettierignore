@@ -1,0 +1,8 @@
+node_modules
+public
+bin
+tmp
+data/admin
+content/.trash
+dist
+coverage

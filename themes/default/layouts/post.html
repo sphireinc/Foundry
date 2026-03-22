@@ -1,45 +1,41 @@
 {{ define "content" }}
 <div class="split-layout">
-    <section>
-        {{ pluginSlot "post.before_header" }}
+  <section>
+    {{ pluginSlot "post.before_header" }}
 
-        <header class="post-header">
-            <div class="eyebrow">Post</div>
-            <h1>{{ .Page.Title }}</h1>
+    <header class="post-header">
+      <div class="eyebrow">Post</div>
+      <h1>{{ .Page.Title }}</h1>
 
-            {{ if .Page.Summary }}
-            <p>{{ .Page.Summary }}</p>
-            {{ end }}
+      {{ if .Page.Summary }}
+      <p>{{ .Page.Summary }}</p>
+      {{ end }} {{ template "post_meta" . }}
+    </header>
 
-            {{ template "post_meta" . }}
-        </header>
+    {{ pluginSlot "post.after_header" }}
 
-        {{ pluginSlot "post.after_header" }}
+    <article class="content-panel content-panel--article">
+      {{ pluginSlot "post.before_content" }}
+      <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
+    </article>
 
-        <article class="content-panel content-panel--article">
-            {{ pluginSlot "post.before_content" }}
-            <div class="prose">{{ safeHTML .Page.HTMLBody }}</div>
-        </article>
+    {{ pluginSlot "post.after_content" }}
+  </section>
 
-        {{ pluginSlot "post.after_content" }}
-    </section>
+  <aside class="meta-panel">
+    {{ pluginSlot "post.sidebar.top" }}
 
-    <aside class="meta-panel">
-        {{ pluginSlot "post.sidebar.top" }}
+    <div class="meta-panel-block">
+      <h3>Overview</h3>
+      <div class="meta-list">
+        <div><strong>Type:</strong> {{ .Page.Type }}</div>
+        <div><strong>Slug:</strong> {{ .Page.Slug }}</div>
+        <div><strong>Language:</strong> {{ .Page.Lang }}</div>
+        {{ pluginSlot "post.sidebar.overview" }}
+      </div>
+    </div>
 
-        <div class="meta-panel-block">
-            <h3>Overview</h3>
-            <div class="meta-list">
-                <div><strong>Type:</strong> {{ .Page.Type }}</div>
-                <div><strong>Slug:</strong> {{ .Page.Slug }}</div>
-                <div><strong>Language:</strong> {{ .Page.Lang }}</div>
-                {{ pluginSlot "post.sidebar.overview" }}
-            </div>
-        </div>
-
-        {{ template "taxonomy_chips" . }}
-
-        {{ pluginSlot "post.sidebar.bottom" }}
-    </aside>
+    {{ template "taxonomy_chips" . }} {{ pluginSlot "post.sidebar.bottom" }}
+  </aside>
 </div>
 {{ end }}

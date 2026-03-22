@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.DS_Store
+
+docs/coverage
+node_modules
+
+*.log
+*.out
+coverage.*
+
+bin
+dist

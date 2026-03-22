@@ -6,6 +6,7 @@ type DocumentSummary struct {
 	ID         string              `json:"id"`
 	Type       string              `json:"type"`
 	Lang       string              `json:"lang"`
+	Status     string              `json:"status"`
 	Title      string              `json:"title"`
 	Slug       string              `json:"slug"`
 	URL        string              `json:"url"`
@@ -15,16 +16,21 @@ type DocumentSummary struct {
 	Draft      bool                `json:"draft"`
 	Archived   bool                `json:"archived,omitempty"`
 	Date       *time.Time          `json:"date,omitempty"`
+	CreatedAt  *time.Time          `json:"created_at,omitempty"`
 	UpdatedAt  *time.Time          `json:"updated_at,omitempty"`
+	Author     string              `json:"author,omitempty"`
+	LastEditor string              `json:"last_editor,omitempty"`
 	Taxonomies map[string][]string `json:"taxonomies,omitempty"`
 }
 
 type DocumentDetail struct {
 	DocumentSummary
-	RawBody  string         `json:"raw_body"`
-	HTMLBody string         `json:"html_body"`
-	Params   map[string]any `json:"params,omitempty"`
-	Fields   map[string]any `json:"fields,omitempty"`
+	RawBody     string         `json:"raw_body"`
+	HTMLBody    string         `json:"html_body"`
+	Params      map[string]any `json:"params,omitempty"`
+	Fields      map[string]any `json:"fields,omitempty"`
+	FieldSchema []FieldSchema  `json:"field_schema,omitempty"`
+	Lock        *DocumentLock  `json:"lock,omitempty"`
 }
 
 type DocumentListOptions struct {
@@ -35,33 +41,44 @@ type DocumentListOptions struct {
 }
 
 type DocumentSaveRequest struct {
-	SourcePath     string `json:"source_path"`
-	Raw            string `json:"raw"`
-	VersionComment string `json:"version_comment,omitempty"`
-	Actor          string `json:"-"`
+	SourcePath     string         `json:"source_path"`
+	Raw            string         `json:"raw"`
+	Fields         map[string]any `json:"fields,omitempty"`
+	VersionComment string         `json:"version_comment,omitempty"`
+	Actor          string         `json:"-"`
+	Username       string         `json:"-"`
+	LockToken      string         `json:"lock_token,omitempty"`
 }
 
 type DocumentSaveResponse struct {
 	SourcePath string `json:"source_path"`
 	Size       int64  `json:"size"`
 	Created    bool   `json:"created"`
+	Raw        string `json:"raw,omitempty"`
 }
 
 type DocumentPreviewRequest struct {
-	SourcePath string `json:"source_path"`
-	Raw        string `json:"raw"`
+	SourcePath string         `json:"source_path"`
+	Raw        string         `json:"raw"`
+	Fields     map[string]any `json:"fields,omitempty"`
 }
 
 type DocumentPreviewResponse struct {
-	Title     string     `json:"title"`
-	Slug      string     `json:"slug"`
-	Layout    string     `json:"layout"`
-	Summary   string     `json:"summary"`
-	Draft     bool       `json:"draft"`
-	Date      *time.Time `json:"date,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
-	HTML      string     `json:"html"`
-	WordCount int        `json:"word_count"`
+	Title       string     `json:"title"`
+	Slug        string     `json:"slug"`
+	Layout      string     `json:"layout"`
+	Summary     string     `json:"summary"`
+	Status      string     `json:"status"`
+	Draft       bool       `json:"draft"`
+	Archived    bool       `json:"archived"`
+	Date        *time.Time `json:"date,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	Author      string     `json:"author,omitempty"`
+	LastEditor  string     `json:"last_editor,omitempty"`
+	HTML        string     `json:"html"`
+	WordCount   int        `json:"word_count"`
+	FieldErrors []string   `json:"field_errors,omitempty"`
 }
 
 type DocumentCreateRequest struct {
@@ -69,6 +86,7 @@ type DocumentCreateRequest struct {
 	Slug      string `json:"slug"`
 	Lang      string `json:"lang,omitempty"`
 	Archetype string `json:"archetype,omitempty"`
+	LockToken string `json:"lock_token,omitempty"`
 }
 
 type DocumentCreateResponse struct {
@@ -82,15 +100,22 @@ type DocumentCreateResponse struct {
 }
 
 type DocumentStatusRequest struct {
-	SourcePath string `json:"source_path"`
-	Status     string `json:"status"`
+	SourcePath           string `json:"source_path"`
+	Status               string `json:"status"`
+	ScheduledPublishAt   string `json:"scheduled_publish_at,omitempty"`
+	ScheduledUnpublishAt string `json:"scheduled_unpublish_at,omitempty"`
+	EditorialNote        string `json:"editorial_note,omitempty"`
+	LockToken            string `json:"lock_token,omitempty"`
 }
 
 type DocumentStatusResponse struct {
-	SourcePath string `json:"source_path"`
-	Status     string `json:"status"`
-	Draft      bool   `json:"draft"`
-	Archived   bool   `json:"archived"`
+	SourcePath           string     `json:"source_path"`
+	Status               string     `json:"status"`
+	Draft                bool       `json:"draft"`
+	Archived             bool       `json:"archived"`
+	ScheduledPublishAt   *time.Time `json:"scheduled_publish_at,omitempty"`
+	ScheduledUnpublishAt *time.Time `json:"scheduled_unpublish_at,omitempty"`
+	EditorialNote        string     `json:"editorial_note,omitempty"`
 }
 
 type DocumentMoveRequest struct {
@@ -106,6 +131,7 @@ type DocumentMoveResponse struct {
 
 type DocumentDeleteRequest struct {
 	SourcePath string `json:"source_path"`
+	LockToken  string `json:"lock_token,omitempty"`
 }
 
 type DocumentDeleteResponse struct {
@@ -129,6 +155,7 @@ type DocumentHistoryEntry struct {
 	Timestamp      *time.Time     `json:"timestamp,omitempty"`
 	VersionComment string         `json:"version_comment,omitempty"`
 	Actor          string         `json:"actor,omitempty"`
+	Status         string         `json:"status,omitempty"`
 	Title          string         `json:"title"`
 	Slug           string         `json:"slug"`
 	Layout         string         `json:"layout"`
@@ -136,7 +163,24 @@ type DocumentHistoryEntry struct {
 	Draft          bool           `json:"draft"`
 	Archived       bool           `json:"archived"`
 	Lang           string         `json:"lang"`
+	Author         string         `json:"author,omitempty"`
+	LastEditor     string         `json:"last_editor,omitempty"`
+	CreatedAt      *time.Time     `json:"created_at,omitempty"`
+	UpdatedAt      *time.Time     `json:"updated_at,omitempty"`
 	Size           int64          `json:"size"`
+}
+
+type FieldSchema struct {
+	Name        string        `json:"name"`
+	Label       string        `json:"label,omitempty"`
+	Type        string        `json:"type"`
+	Required    bool          `json:"required,omitempty"`
+	Default     any           `json:"default,omitempty"`
+	Enum        []string      `json:"enum,omitempty"`
+	Fields      []FieldSchema `json:"fields,omitempty"`
+	Item        *FieldSchema  `json:"item,omitempty"`
+	Help        string        `json:"help,omitempty"`
+	Placeholder string        `json:"placeholder,omitempty"`
 }
 
 type DocumentHistoryResponse struct {
@@ -159,6 +203,26 @@ type DocumentDiffResponse struct {
 
 type DocumentLifecycleRequest struct {
 	Path string `json:"path"`
+}
+
+type DocumentLock struct {
+	SourcePath string     `json:"source_path"`
+	Username   string     `json:"username"`
+	Name       string     `json:"name,omitempty"`
+	Role       string     `json:"role,omitempty"`
+	OwnedByMe  bool       `json:"owned_by_me,omitempty"`
+	Token      string     `json:"token,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	LastBeatAt *time.Time `json:"last_beat_at,omitempty"`
+}
+
+type DocumentLockRequest struct {
+	SourcePath string `json:"source_path"`
+	LockToken  string `json:"lock_token,omitempty"`
+}
+
+type DocumentLockResponse struct {
+	Lock *DocumentLock `json:"lock,omitempty"`
 }
 
 type DocumentLifecycleResponse struct {
@@ -188,12 +252,21 @@ type MediaDeleteRequest struct {
 }
 
 type MediaMetadata struct {
-	Title       string   `json:"title,omitempty" yaml:"title,omitempty"`
-	Alt         string   `json:"alt,omitempty" yaml:"alt,omitempty"`
-	Caption     string   `json:"caption,omitempty" yaml:"caption,omitempty"`
-	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
-	Credit      string   `json:"credit,omitempty" yaml:"credit,omitempty"`
-	Tags        []string `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Title            string     `json:"title,omitempty" yaml:"title,omitempty"`
+	Alt              string     `json:"alt,omitempty" yaml:"alt,omitempty"`
+	Caption          string     `json:"caption,omitempty" yaml:"caption,omitempty"`
+	Description      string     `json:"description,omitempty" yaml:"description,omitempty"`
+	Credit           string     `json:"credit,omitempty" yaml:"credit,omitempty"`
+	Tags             []string   `json:"tags,omitempty" yaml:"tags,omitempty"`
+	OriginalFilename string     `json:"original_filename,omitempty" yaml:"original_filename,omitempty"`
+	StoredFilename   string     `json:"stored_filename,omitempty" yaml:"stored_filename,omitempty"`
+	Extension        string     `json:"extension,omitempty" yaml:"extension,omitempty"`
+	MIMEType         string     `json:"mime_type,omitempty" yaml:"mime_type,omitempty"`
+	Kind             string     `json:"kind,omitempty" yaml:"kind,omitempty"`
+	ContentHash      string     `json:"content_hash,omitempty" yaml:"content_hash,omitempty"`
+	FileSize         int64      `json:"file_size,omitempty" yaml:"file_size,omitempty"`
+	UploadedAt       *time.Time `json:"uploaded_at,omitempty" yaml:"uploaded_at,omitempty"`
+	UploadedBy       string     `json:"uploaded_by,omitempty" yaml:"uploaded_by,omitempty"`
 }
 
 type MediaDetailResponse struct {

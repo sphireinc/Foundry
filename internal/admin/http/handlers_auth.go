@@ -1,8 +1,8 @@
 package httpadmin
 
 import (
-	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	adminauth "github.com/sphireinc/foundry/internal/admin/auth"
@@ -25,6 +25,36 @@ func registerAuthRoutes(r *Router) []routeDef {
 			pattern: r.routePath("/api/session"),
 			handler: http.HandlerFunc(r.handleSession),
 		},
+		{
+			pattern:    r.routePath("/api/sessions/revoke"),
+			handler:    http.HandlerFunc(r.handleSessionRevoke),
+			capability: "users.manage",
+		},
+		{
+			pattern:    r.routePath("/api/password-reset/start"),
+			handler:    http.HandlerFunc(r.handlePasswordResetStart),
+			capability: "dashboard.read",
+		},
+		{
+			pattern: r.routePath("/api/password-reset/complete"),
+			handler: http.HandlerFunc(r.handlePasswordResetComplete),
+			public:  true,
+		},
+		{
+			pattern:    r.routePath("/api/totp/setup"),
+			handler:    http.HandlerFunc(r.handleTOTPSetup),
+			capability: "dashboard.read",
+		},
+		{
+			pattern:    r.routePath("/api/totp/enable"),
+			handler:    http.HandlerFunc(r.handleTOTPEnable),
+			capability: "dashboard.read",
+		},
+		{
+			pattern:    r.routePath("/api/totp/disable"),
+			handler:    http.HandlerFunc(r.handleTOTPDisable),
+			capability: "dashboard.read",
+		},
 	}
 }
 
@@ -35,12 +65,14 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var body admintypes.LoginRequest
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err)
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
 		return
 	}
 
-	identity, err := r.auth.Login(w, req, strings.TrimSpace(body.Username), body.Password)
+	identity, err := r.auth.Login(w, req, strings.TrimSpace(body.Username), body.Password, body.TOTPCode)
 	if err != nil {
 		r.logAudit(strings.TrimSpace(body.Username), "login", "failure", strings.TrimSpace(body.Username), map[string]string{"error": err.Error()})
 		writeJSONError(w, http.StatusForbidden, err)
@@ -54,6 +86,9 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		Name:          identity.Name,
 		Email:         identity.Email,
 		Role:          identity.Role,
+		Capabilities:  identity.Capabilities,
+		MFAComplete:   identity.MFAComplete,
+		CSRFToken:     identity.CSRFToken,
 		TTLSeconds:    int(r.auth.SessionTTL().Seconds()),
 	})
 }
@@ -92,6 +127,138 @@ func (r *Router) handleSession(w http.ResponseWriter, req *http.Request) {
 		Name:          identity.Name,
 		Email:         identity.Email,
 		Role:          identity.Role,
+		Capabilities:  identity.Capabilities,
+		MFAComplete:   identity.MFAComplete,
+		CSRFToken:     identity.CSRFToken,
 		TTLSeconds:    int(r.auth.SessionTTL().Seconds()),
 	})
+}
+
+func (r *Router) handleSessionRevoke(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.SessionRevokeRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	revoked := 0
+	if body.All {
+		revoked = r.auth.RevokeAllSessions()
+	} else {
+		revoked = r.auth.RevokeUserSessions(strings.TrimSpace(body.Username))
+	}
+	r.logAuditRequest(req, "session.revoke", "success", strings.TrimSpace(body.Username), map[string]string{"revoked": strconv.Itoa(revoked)})
+	writeJSON(w, http.StatusOK, admintypes.SessionRevokeResponse{Revoked: revoked})
+}
+
+func (r *Router) handlePasswordResetStart(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.PasswordResetStartRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	identity, _ := adminauth.IdentityFromContext(req.Context())
+	resp, err := r.auth.StartPasswordReset(identity, body.Username)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "password_reset.start", "success", body.Username, nil)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handlePasswordResetComplete(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.PasswordResetCompleteRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	if err := r.auth.CompletePasswordReset(body); err != nil {
+		r.logAudit(strings.TrimSpace(body.Username), "password_reset.complete", "failure", body.Username, map[string]string{"error": err.Error()})
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAudit(strings.TrimSpace(body.Username), "password_reset.complete", "success", body.Username, nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (r *Router) handleTOTPSetup(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.TOTPSetupRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	identity, _ := adminauth.IdentityFromContext(req.Context())
+	resp, err := r.auth.SetupTOTP(identity, body.Username)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "totp.setup", "success", resp.Username, nil)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleTOTPEnable(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.TOTPEnableRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	identity, _ := adminauth.IdentityFromContext(req.Context())
+	if err := r.auth.EnableTOTP(identity, body.Username, body.Code); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "totp.enable", "success", body.Username, nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (r *Router) handleTOTPDisable(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.TOTPDisableRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	identity, _ := adminauth.IdentityFromContext(req.Context())
+	if err := r.auth.DisableTOTP(identity, body.Username); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "totp.disable", "success", body.Username, nil)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

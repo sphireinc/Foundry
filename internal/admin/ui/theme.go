@@ -62,6 +62,7 @@ func (m *Manager) AssetHandler() http.Handler {
 		}
 
 		if path := filepath.Join(m.themeRoot(), "assets", filepath.FromSlash(name)); fileExists(path) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
 			http.ServeFile(w, r, path)
 			return
 		}
@@ -72,6 +73,7 @@ func (m *Manager) AssetHandler() http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = w.Write([]byte(body))
 	})
 }
@@ -127,7 +129,7 @@ const defaultIndexTemplate = `<!doctype html>
   <div id="app" data-admin-base="{{ .AdminPath }}" data-default-lang="{{ .DefaultLang }}" data-theme="{{ .ThemeName }}">
     <noscript>Foundry admin requires JavaScript.</noscript>
   </div>
-  <script src="{{ .ThemeBase }}/admin.js"></script>
+  <script type="module" src="{{ .ThemeBase }}/admin.js"></script>
 </body>
 </html>
 `
@@ -440,8 +442,7 @@ const defaultJS = `(() => {
             '<p class="note">Accepted header: <code>X-Foundry-Admin-Token</code> or bearer token.</p>' +
             '<form id="upload-form" class="stack">' +
               '<h2 class="panel-title">Upload Media</h2>' +
-              '<label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="uploads">uploads</option></select></label>' +
-              '<label>Directory<input id="media-dir" type="text" placeholder="posts/launch"></label>' +
+              '<label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="videos">videos</option><option value="audio">audio</option><option value="documents">documents</option></select></label>' +
               '<label>File<input id="media-file" type="file"></label>' +
               '<button type="submit">Upload</button>' +
             '</form>' +
@@ -489,7 +490,6 @@ const defaultJS = `(() => {
         return;
       }
       const fileInput = document.getElementById('media-file');
-      const dirInput = document.getElementById('media-dir');
       const collectionInput = document.getElementById('media-collection');
       const file = fileInput.files && fileInput.files[0];
       if (!file) {
@@ -503,7 +503,6 @@ const defaultJS = `(() => {
       try {
         const form = new FormData();
         form.append('file', file);
-        form.append('dir', dirInput.value);
         form.append('collection', collectionInput.value);
         const response = await fetch(adminBase + '/api/media/upload', {
           method: 'POST',

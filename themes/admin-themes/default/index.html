@@ -1,15 +1,20 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ .Title }} Admin</title>
-  <link rel="stylesheet" href="{{ .ThemeBase }}/admin.css">
-</head>
-<body>
-  <div id="app" data-admin-base="{{ .AdminPath }}" data-theme="{{ .ThemeName }}">
-    <noscript>Foundry admin requires JavaScript.</noscript>
-  </div>
-  <script src="{{ .ThemeBase }}/admin.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ .Title }} Admin</title>
+    <link rel="stylesheet" href="{{ .ThemeBase }}/admin.css" />
+  </head>
+  <body>
+    <div
+      id="app"
+      data-admin-base="{{ .AdminPath }}"
+      data-default-lang="{{ .DefaultLang }}"
+      data-theme="{{ .ThemeName }}"
+    >
+      <noscript>Foundry admin requires JavaScript.</noscript>
+    </div>
+    <script type="module" src="{{ .ThemeBase }}/admin.js"></script>
+  </body>
 </html>

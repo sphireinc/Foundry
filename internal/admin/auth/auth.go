@@ -20,21 +20,28 @@ type Middleware struct {
 
 func New(cfg *config.Config) *Middleware {
 	ttl := 30 * time.Minute
+	sessionStorePath := ""
 	if cfg != nil && cfg.Admin.SessionTTLMinutes > 0 {
 		ttl = time.Duration(cfg.Admin.SessionTTLMinutes) * time.Minute
 	}
+	if cfg != nil {
+		sessionStorePath = cfg.Admin.SessionStoreFile
+	}
 	return &Middleware{
 		cfg:            cfg,
-		sessions:       NewSessionManager(ttl),
+		sessions:       NewSessionManager(sessionStorePath, ttl),
 		loginThrottler: newLoginThrottler(),
 	}
 }
 
 type Identity struct {
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Role     string `json:"role,omitempty"`
+	Username     string   `json:"username"`
+	Name         string   `json:"name"`
+	Email        string   `json:"email"`
+	Role         string   `json:"role,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
+	MFAComplete  bool     `json:"mfa_complete,omitempty"`
+	CSRFToken    string   `json:"csrf_token,omitempty"`
 }
 
 func (m *Middleware) Authorize(r *http.Request) error {
@@ -53,7 +60,7 @@ func (m *Middleware) Authenticate(w http.ResponseWriter, r *http.Request) (*Iden
 	return identity, nil
 }
 
-func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, password string) (*Identity, error) {
+func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, password, totpCode string) (*Identity, error) {
 	if err := m.checkAccess(r); err != nil {
 		return nil, err
 	}
@@ -70,18 +77,25 @@ func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, pas
 		m.loginThrottler.Failure(r, username, time.Now())
 		return nil, fmt.Errorf("invalid username or password")
 	}
+	if user.TOTPEnabled && !VerifyTOTP(user.TOTPSecret, totpCode, time.Now()) {
+		m.loginThrottler.Failure(r, username, time.Now())
+		return nil, fmt.Errorf("two-factor authentication code is required")
+	}
 	m.loginThrottler.Success(r, username)
 
 	identity := Identity{
-		Username: user.Username,
-		Name:     user.Name,
-		Email:    user.Email,
-		Role:     normalizeRole(user.Role),
+		Username:     user.Username,
+		Name:         user.Name,
+		Email:        user.Email,
+		Role:         normalizeRole(user.Role),
+		Capabilities: capabilitiesFor(user.Role, user.Capabilities),
+		MFAComplete:  !user.TOTPEnabled || VerifyTOTP(user.TOTPSecret, totpCode, time.Now()),
 	}
 	session, err := m.sessions.Issue(identity, time.Now())
 	if err != nil {
 		return nil, err
 	}
+	identity.CSRFToken = session.CSRFToken
 	m.setSessionCookie(w, r, session.Token)
 	return &identity, nil
 }
@@ -104,6 +118,20 @@ func (m *Middleware) SessionTTL() time.Duration {
 	return m.sessions.TTL()
 }
 
+func (m *Middleware) RevokeUserSessions(username string) int {
+	if m == nil || m.sessions == nil {
+		return 0
+	}
+	return m.sessions.RevokeUser(username)
+}
+
+func (m *Middleware) RevokeAllSessions() int {
+	if m == nil || m.sessions == nil {
+		return 0
+	}
+	return m.sessions.RevokeAll()
+}
+
 func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error) {
 	if m == nil || m.cfg == nil {
 		return nil, "", nil
@@ -116,10 +144,13 @@ func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error
 		session, ok := m.sessions.Authenticate(sessionToken, time.Now())
 		if ok {
 			return &Identity{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
-				Role:     normalizeRole(session.Role),
+				Username:     session.Username,
+				Name:         session.Name,
+				Email:        session.Email,
+				Role:         normalizeRole(session.Role),
+				Capabilities: append([]string(nil), session.Capabilities...),
+				MFAComplete:  session.MFAComplete,
+				CSRFToken:    session.CSRFToken,
 			}, session.Token, nil
 		}
 		return nil, "", fmt.Errorf("admin session expired")
@@ -128,9 +159,11 @@ func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error
 	token := strings.TrimSpace(m.cfg.Admin.AccessToken)
 	if token != "" && tokensEqual(extractAccessToken(r), token) {
 		return &Identity{
-			Username: "api-token",
-			Name:     "API Token",
-			Role:     "admin",
+			Username:     "api-token",
+			Name:         "API Token",
+			Role:         "admin",
+			Capabilities: capabilitiesFor("admin", nil),
+			MFAComplete:  true,
 		}, "", nil
 	}
 

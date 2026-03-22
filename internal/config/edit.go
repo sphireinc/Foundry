@@ -85,6 +85,58 @@ func UpsertTopLevelScalar(path, key, value string) error {
 	return SaveYAMLDocument(path, doc)
 }
 
+func UpsertNestedScalar(path string, keyPath []string, value string) error {
+	doc, err := LoadYAMLDocument(path)
+	if err != nil {
+		return err
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("config root must be a mapping")
+	}
+	if len(keyPath) == 0 {
+		return fmt.Errorf("key path must not be empty")
+	}
+
+	current := doc.Content[0]
+	for i, key := range keyPath {
+		last := i == len(keyPath)-1
+		var next *yaml.Node
+		for j := 0; j < len(current.Content); j += 2 {
+			k := current.Content[j]
+			v := current.Content[j+1]
+			if k.Value == key {
+				next = v
+				break
+			}
+		}
+		if next == nil {
+			next = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			if last {
+				next = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
+			}
+			current.Content = append(current.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+				next,
+			)
+		}
+		if last {
+			next.Kind = yaml.ScalarNode
+			next.Tag = "!!str"
+			next.Value = value
+			next.Content = nil
+			return SaveYAMLDocument(path, doc)
+		}
+		if next.Kind != yaml.MappingNode {
+			next.Kind = yaml.MappingNode
+			next.Tag = "!!map"
+			next.Value = ""
+			next.Content = nil
+		}
+		current = next
+	}
+	return SaveYAMLDocument(path, doc)
+}
+
 func EnsureStringListValue(path string, keyPath []string, value string) error {
 	doc, err := LoadYAMLDocument(path)
 	if err != nil {

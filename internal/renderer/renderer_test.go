@@ -237,12 +237,28 @@ func TestRendererHookFailuresAndBuild(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "tags", "go", "index.html")); err != nil {
 		t.Fatalf("expected built taxonomy output: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "theme", "js", "foundry-theme.js")); err != nil {
+		t.Fatalf("expected frontend theme sdk bootstrap asset to be copied: %v", err)
+	}
 	searchIndex, err := os.ReadFile(filepath.Join(cfg.PublicDir, "search.json"))
 	if err != nil {
 		t.Fatalf("expected search index output: %v", err)
 	}
 	if !strings.Contains(string(searchIndex), `"url": "/posts/hello/"`) {
 		t.Fatalf("expected search index to include rendered document, got %q", string(searchIndex))
+	}
+	platformSite, err := os.ReadFile(filepath.Join(cfg.PublicDir, "__foundry", "site.json"))
+	if err != nil {
+		t.Fatalf("expected platform site metadata output: %v", err)
+	}
+	if !strings.Contains(string(platformSite), cfg.Title) {
+		t.Fatalf("expected platform site metadata to include site title, got %q", string(platformSite))
+	}
+	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "__foundry", "preview.json")); err != nil {
+		t.Fatalf("expected preview manifest artifact: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "__foundry", "sdk", "frontend", "index.js")); err != nil {
+		t.Fatalf("expected frontend sdk asset to be copied: %v", err)
 	}
 }
 
@@ -284,6 +300,7 @@ func writeRendererTheme(t *testing.T, cfg *config.Config) {
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "head.html"):   `{{ define "head" }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "header.html"): `{{ define "header" }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "footer.html"): `{{ define "footer" }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "assets", "js", "foundry-theme.js"):   `console.log("frontend sdk bootstrap");`,
 	}
 
 	for path, body := range files {

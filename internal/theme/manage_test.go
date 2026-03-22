@@ -129,3 +129,58 @@ func TestValidateInstalledRequiresLaunchSlotsInManifestAndTemplates(t *testing.T
 		t.Fatal("expected validation failure for missing required slot rendering")
 	}
 }
+
+func TestValidateInstalledDetailedReportsTemplateProblems(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "broken-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	basePath := filepath.Join(scaffolded, "layouts", "base.html")
+	if err := os.WriteFile(basePath, []byte(`{{ define "base" }}{{ template "missing-partial" . }}{{ end }}`), 0o644); err != nil {
+		t.Fatalf("write broken base: %v", err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "broken-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected invalid validation result")
+	}
+	var foundReference bool
+	for _, diagnostic := range result.Diagnostics {
+		if strings.Contains(diagnostic.Message, "unknown partial") {
+			foundReference = true
+			break
+		}
+	}
+	if !foundReference {
+		t.Fatalf("expected unknown partial diagnostic, got %#v", result.Diagnostics)
+	}
+}
+
+func TestValidateInstalledDetailedRejectsUnsupportedSDKVersion(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "sdk-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	manifestPath := filepath.Join(scaffolded, "theme.yaml")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	body = []byte(strings.Replace(string(body), "sdk_version: v1\n", "sdk_version: v2\n", 1))
+	if err := os.WriteFile(manifestPath, body, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "sdk-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected unsupported sdk version to invalidate theme")
+	}
+}

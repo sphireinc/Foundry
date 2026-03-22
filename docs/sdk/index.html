@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry JavaScript SDKs</title>
+    <meta
+      name="description"
+      content="Official JavaScript SDKs for Foundry admin frontends and JS-powered themes."
+    />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark">F</span>
+          <span class="brand-copy"><strong>Foundry</strong></span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="eyebrow">Official JavaScript SDKs</div>
+          <h1>Admin SDK and Frontend SDK</h1>
+          <p>
+            Foundry ships two official framework-agnostic JavaScript SDKs. The Admin SDK gives admin
+            frontends and plugin UIs a stable client contract over the Go backend. The Frontend SDK
+            gives JS-powered themes a stable route/content/search/navigation surface without binding
+            them to renderer internals.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>Why they exist</h2>
+              <p class="section-copy">
+                These SDKs are the supported client boundary for future admin frontends, JS-driven
+                themes, and plugin UIs.
+              </p>
+            </div>
+          </div>
+          <div class="feature-grid">
+            <article class="feature">
+              <h3>Stable UI contract</h3>
+              <p>
+                Admin frontends and themes no longer need to hand-roll fetch logic against ad hoc
+                endpoint shapes.
+              </p>
+            </article>
+            <article class="feature">
+              <h3>Framework-agnostic</h3>
+              <p>
+                The SDKs are plain ES modules. They work from vanilla JavaScript first and can be
+                wrapped by React, Vue, Svelte, or other frameworks later.
+              </p>
+            </article>
+            <article class="feature">
+              <h3>Capability-aware</h3>
+              <p>
+                Both SDKs expose capability discovery so consumers can ask what a given install
+                supports instead of hard-coding assumptions.
+              </p>
+            </article>
+            <article class="feature">
+              <h3>Static and live friendly</h3>
+              <p>
+                The Frontend SDK can talk to the live <code>/__foundry/api</code> surface in
+                preview/server mode and can fall back to static artifacts emitted under
+                <code>public/__foundry/</code> for built sites.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>Package structure</h2>
+              <p class="section-copy">
+                The SDKs live in the repo under <code>sdk/</code> with a small shared core and
+                separate domain modules.
+              </p>
+            </div>
+          </div>
+          <pre><code>sdk/
+  core/
+    errors.js
+    http.js
+    capabilities.js
+  admin/
+    client.js
+    session.js
+    documents.js
+    media.js
+    settings.js
+    users.js
+    themes.js
+    plugins.js
+    audit.js
+  frontend/
+    client.js
+    site.js
+    routes.js
+    content.js
+    collections.js
+    navigation.js
+    search.js
+    media.js
+    preview.js
+  examples/
+    admin-basic.js
+    frontend-theme.js</code></pre>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>Admin SDK</h2>
+              <p class="section-copy">
+                Use this for the classic admin, future React admin implementations, and
+                plugin-provided admin UI modules.
+              </p>
+            </div>
+          </div>
+          <p>
+            The Admin SDK targets the authenticated admin API under
+            <code>&lt;admin.path&gt;/api</code>. It normalizes JSON requests, CSRF handling, and
+            common error behavior. The default admin theme now consumes this SDK instead of carrying
+            its own private fetch layer.
+          </p>
+          <pre><code class="language-js">import { createAdminClient } from '/__foundry/sdk/admin/index.js';
+
+const admin = createAdminClient({ baseURL: '/__admin' });
+
+const session = await admin.session.get();
+const capabilities = await admin.capabilities.get();
+const documents = await admin.documents.list({ include_drafts: 1 });
+
+if (capabilities.has('plugins.manage')) {
+  await admin.plugins.update({ name: 'toc' });
+}</code></pre>
+          <p>
+            Current modules: <code>session</code>, <code>identity</code>, <code>capabilities</code>,
+            <code>status</code>, <code>documents</code>, <code>media</code>, <code>settings</code>,
+            <code>users</code>, <code>themes</code>, <code>plugins</code>, <code>audit</code>, plus
+            extension access through <code>admin.extensions.getAdminExtensions()</code> and
+            settings-section metadata through <code>admin.settings.getSections()</code>.
+          </p>
+          <p>
+            The default admin shell now also exposes a stable plugin page mount contract. When a
+            plugin-defined admin page is active, the shell dispatches
+            <code>foundry:admin-extension-page</code> with the page metadata, current
+            session/capabilities, plugin settings sections, and a stable mount target id. The shell
+            also exposes <code>window.FoundryAdmin</code> with the shared admin client and extension
+            registry helpers.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>Frontend SDK</h2>
+              <p class="section-copy">
+                Use this for JS-powered themes, hybrid server/client themes, and future
+                headless-friendly presentation layers.
+              </p>
+            </div>
+          </div>
+          <p>
+            The Frontend SDK targets the public Foundry platform surface at <code>/__foundry</code>.
+            In preview/server mode it uses live JSON endpoints under <code>/__foundry/api</code>.
+            For built/static sites it uses generated artifacts under <code>public/__foundry/</code>.
+            The default frontend theme now boots through a small SDK-based runtime at
+            <code>/theme/js/foundry-theme.js</code>.
+          </p>
+          <pre><code class="language-js">import { createFrontendClient } from '/__foundry/sdk/frontend/index.js';
+
+const frontend = createFrontendClient({ mode: 'auto' });
+
+const site = await frontend.site.getInfo();
+const current = await frontend.content.getCurrent();
+const nav = await frontend.navigation.get('main');
+const results = await frontend.search.query('foundry');
+
+console.log(site.title, current?.title, nav.length, results.items.length);</code></pre>
+          <p>
+            Current modules: <code>capabilities</code>, <code>site</code>, <code>navigation</code>,
+            <code>routes</code>, <code>content</code>, <code>collections</code>,
+            <code>search</code>, <code>media</code>, and <code>preview</code> for preview-manifest
+            access.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>Capability discovery and errors</h2>
+              <p class="section-copy">
+                Consumers should detect what a given install supports and should get normalized
+                failure objects back from the SDK instead of hand-parsing every failed fetch.
+              </p>
+            </div>
+          </div>
+          <p>
+            Admin capability discovery is exposed at
+            <code>&lt;admin.path&gt;/api/capabilities</code>. Frontend capability discovery is
+            exposed at <code>/__foundry/api/capabilities</code> and mirrored into
+            <code>public/__foundry/capabilities.json</code>. Preview manifests are exposed at
+            <code>/__foundry/api/preview</code> and mirrored into
+            <code>public/__foundry/preview.json</code>.
+          </p>
+          <p>
+            The shared core includes explicit error classes for auth, validation, not-found, and
+            unsupported operations.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>Extension strategy</h2>
+              <p class="section-copy">
+                The SDKs are intentionally structured to absorb future platform work without forcing
+                every UI consumer to chase internal rewrites.
+              </p>
+            </div>
+          </div>
+          <ul>
+            <li>
+              Future admin pages, widgets, slots, and settings sections should target the Admin SDK
+              instead of private endpoints.
+            </li>
+            <li>
+              Future React or alternate admin frontends should be thin UI layers on top of the same
+              admin client contract.
+            </li>
+            <li>
+              Future JS-powered themes should use the Frontend SDK instead of scraping template data
+              or relying on unstable JSON blobs.
+            </li>
+            <li>
+              Sync, storage, preview, and plugin-admin registry support can extend the existing
+              client modules without breaking the creation story.
+            </li>
+          </ul>
+          <pre><code class="language-js">document.addEventListener('foundry:admin-extension-page', async (event) =&gt; {
+  const mount = document.getElementById(event.detail.mountId);
+  const { client } = window.FoundryAdmin;
+  const status = await client.status.get();
+  mount.textContent = JSON.stringify(status, null, 2);
+});</code></pre>
+          <p>
+            A concrete reference implementation of that mount pattern ships in
+            <code>sdk/examples/admin-extension-page.js</code>.
+          </p>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span
+          >Official JavaScript SDKs ship under <code>sdk/</code> and are published at
+          <code>/__foundry/sdk/</code>.</span
+        >
+        <span
+          ><a href="https://github.com/sphireinc/foundry/tree/main/sdk">Browse SDK source</a></span
+        >
+      </footer>
+    </div>
+  </body>
+</html>

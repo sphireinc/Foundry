@@ -7,7 +7,7 @@ import (
 
 func TestSessionManagerIssueAuthenticateAndRevoke(t *testing.T) {
 	now := time.Now()
-	manager := NewSessionManager(30 * time.Minute)
+	manager := NewSessionManager("", 30*time.Minute)
 
 	session, err := manager.Issue(Identity{Username: "admin", Name: "Admin"}, now)
 	if err != nil {
@@ -30,7 +30,7 @@ func TestSessionManagerIssueAuthenticateAndRevoke(t *testing.T) {
 
 func TestSessionManagerExpiresIdleSessions(t *testing.T) {
 	now := time.Now()
-	manager := NewSessionManager(30 * time.Minute)
+	manager := NewSessionManager("", 30*time.Minute)
 
 	session, err := manager.Issue(Identity{Username: "admin"}, now)
 	if err != nil {

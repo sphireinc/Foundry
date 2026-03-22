@@ -1,45 +1,42 @@
 {{ define "content" }}
 <section>
-    <header class="archive-header">
-        <div class="eyebrow">Archive</div>
-        <h1>{{ .Title }}</h1>
+  <header class="archive-header">
+    <div class="eyebrow">Archive</div>
+    <h1>{{ .Title }}</h1>
 
-        {{ if and .TaxonomyName .TaxonomyTerm }}
-        <p>
-            Browse all content filed under <strong>{{ .TaxonomyName }}</strong> with the term
-            <strong>{{ .TaxonomyTerm }}</strong>.
-        </p>
+    {{ if and .TaxonomyName .TaxonomyTerm }}
+    <p>
+      Browse all content filed under <strong>{{ .TaxonomyName }}</strong> with the term
+      <strong>{{ .TaxonomyTerm }}</strong>.
+    </p>
+    {{ end }}
+  </header>
+
+  <div class="archive-list">
+    {{ range .Documents }}
+    <article class="archive-item">
+      <h2 class="archive-item-title">
+        <a href="{{ .URL }}">{{ .Title }}</a>
+      </h2>
+
+      <div class="archive-meta">
+        {{ if eq .Type "post" }}Post{{ else }}Page{{ end }} {{ if .Date }} · {{ .Date.Format "Jan 2,
+        2006" }}{{ end }} · {{ .Lang }}
+      </div>
+
+      {{ if .Summary }}
+      <div class="archive-item-summary">{{ .Summary }}</div>
+      {{ end }} {{ with index .Taxonomies "tags" }}
+      <div class="tag-row" style="margin-top: 0.85rem">
+        {{ range . }}
+        <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
         {{ end }}
-    </header>
-
-    <div class="archive-list">
-        {{ range .Documents }}
-        <article class="archive-item">
-            <h2 class="archive-item-title">
-                <a href="{{ .URL }}">{{ .Title }}</a>
-            </h2>
-
-            <div class="archive-meta">
-                {{ if eq .Type "post" }}Post{{ else }}Page{{ end }}
-                {{ if .Date }} · {{ .Date.Format "Jan 2, 2006" }}{{ end }}
-                · {{ .Lang }}
-            </div>
-
-            {{ if .Summary }}
-            <div class="archive-item-summary">{{ .Summary }}</div>
-            {{ end }}
-
-            {{ with index .Taxonomies "tags" }}
-            <div class="tag-row" style="margin-top: 0.85rem;">
-                {{ range . }}
-                <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
-                {{ end }}
-            </div>
-            {{ end }}
-        </article>
-        {{ else }}
-        <div class="empty-state">No matching content found.</div>
-        {{ end }}
-    </div>
+      </div>
+      {{ end }}
+    </article>
+    {{ else }}
+    <div class="empty-state">No matching content found.</div>
+    {{ end }}
+  </div>
 </section>
 {{ end }}

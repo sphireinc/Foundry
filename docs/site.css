@@ -42,7 +42,7 @@ a {
 
 code,
 pre {
-  font-family: "SFMono-Regular", "Menlo", "Monaco", "Courier New", monospace;
+  font-family: 'SFMono-Regular', 'Menlo', 'Monaco', 'Courier New', monospace;
 }
 
 .shell {
@@ -140,7 +140,7 @@ pre {
 }
 
 .hero::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: auto -120px -120px auto;
   width: 280px;

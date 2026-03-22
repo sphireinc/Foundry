@@ -21,14 +21,16 @@ import (
 const maxMediaUploadSize = 256 << 20
 
 func (s *Service) ListMedia(ctx context.Context, query ...string) ([]types.MediaItem, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.read"); err != nil {
+		return nil, err
+	}
 	search := ""
 	if len(query) > 0 {
 		search = strings.ToLower(strings.TrimSpace(query[0]))
 	}
 
 	var items []types.MediaItem
-	for _, collection := range []string{"images", "uploads", "assets"} {
+	for _, collection := range []string{"images", "videos", "audio", "documents", "uploads", "assets"} {
 		root, err := s.mediaRoot(collection)
 		if err != nil {
 			return nil, err
@@ -102,7 +104,9 @@ func (s *Service) ListMedia(ctx context.Context, query ...string) ([]types.Media
 }
 
 func (s *Service) GetMediaDetail(ctx context.Context, reference string) (*types.MediaDetailResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.read"); err != nil {
+		return nil, err
+	}
 
 	item, path, err := s.resolveMediaItem(reference)
 	if err != nil {
@@ -121,7 +125,10 @@ func (s *Service) GetMediaDetail(ctx context.Context, reference string) (*types.
 }
 
 func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, contentType string, body []byte) (*types.MediaUploadResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.write"); err != nil {
+		return nil, err
+	}
+	_ = contentType
 
 	if len(body) == 0 {
 		return nil, fmt.Errorf("media upload body is required")
@@ -130,21 +137,21 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 		return nil, fmt.Errorf("media upload exceeds %d bytes", maxMediaUploadSize)
 	}
 
-	collection = strings.TrimSpace(collection)
-	if collection == "" {
-		collection = media.DefaultCollection(filename, contentType)
+	now := time.Now()
+	uploadInfo, err := media.PrepareUpload(collection, filename, body, now)
+	if err != nil {
+		return nil, err
 	}
-	root, err := s.mediaRoot(collection)
+	root, err := s.mediaRoot(uploadInfo.Collection)
 	if err != nil {
 		return nil, err
 	}
 
-	cleanDir, err := cleanMediaDir(dir)
+	cleanDir, err := s.cleanMediaDir(uploadInfo.Collection, dir)
 	if err != nil {
 		return nil, err
 	}
 
-	safeName := media.SanitizeFilename(filename)
 	targetDir := root
 	relPrefix := ""
 	if cleanDir != "" {
@@ -159,17 +166,14 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 		return nil, err
 	}
 
-	fullPath := filepath.Join(targetDir, safeName)
-	finalName := safeName
+	fullPath := filepath.Join(targetDir, uploadInfo.StoredFilename)
+	if err := ensureNoSymlinkEscape(root, fullPath); err != nil {
+		return nil, err
+	}
+	finalName := uploadInfo.StoredFilename
 	created := true
 	if _, err := s.fs.Stat(fullPath); err == nil {
-		created = false
-		if err := s.versionFile(fullPath, time.Now()); err != nil {
-			return nil, err
-		}
-		if err := s.versionMediaMetadataForPrimary(fullPath, time.Now()); err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("generated media filename collision; retry upload")
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -177,8 +181,11 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 	if err := s.fs.WriteFile(fullPath, body, 0o644); err != nil {
 		return nil, err
 	}
+	if err := s.writeUploadedMediaMetadata(fullPath, uploadInfo, actorLabelFromContext(ctx), now); err != nil {
+		return nil, err
+	}
 
-	ref, err := media.NewReference(collection, relPrefix+finalName)
+	ref, err := media.NewReference(uploadInfo.Collection, relPrefix+finalName)
 	if err != nil {
 		return nil, err
 	}
@@ -189,20 +196,35 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 
 	return &types.MediaUploadResponse{
 		MediaItem: types.MediaItem{
-			Collection: collection,
+			Collection: uploadInfo.Collection,
 			Path:       resolved.Path,
 			Name:       finalName,
 			Reference:  ref,
 			PublicURL:  resolved.PublicURL,
-			Kind:       string(resolved.Kind),
-			Size:       int64(len(body)),
+			Kind:       string(uploadInfo.Kind),
+			Size:       uploadInfo.Size,
+			Metadata: types.MediaMetadata{
+				Title:            uploadTitle(uploadInfo.OriginalFilename),
+				OriginalFilename: uploadInfo.OriginalFilename,
+				StoredFilename:   uploadInfo.StoredFilename,
+				Extension:        uploadInfo.Extension,
+				MIMEType:         uploadInfo.MIMEType,
+				Kind:             string(uploadInfo.Kind),
+				ContentHash:      uploadInfo.ContentHash,
+				FileSize:         uploadInfo.Size,
+				UploadedAt:       timePtr(now.UTC()),
+				UploadedBy:       actorLabelFromContext(ctx),
+			},
 		},
 		Created: created,
 	}, nil
 }
 
 func (s *Service) ReplaceMedia(ctx context.Context, reference, contentType string, body []byte) (*types.MediaReplaceResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.write"); err != nil {
+		return nil, err
+	}
+	_ = contentType
 
 	if len(body) == 0 {
 		return nil, fmt.Errorf("media upload body is required")
@@ -215,8 +237,19 @@ func (s *Service) ReplaceMedia(ctx context.Context, reference, contentType strin
 	if err != nil {
 		return nil, err
 	}
-
+	root, err := s.mediaRoot(item.Collection)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureNoSymlinkEscape(root, fullPath); err != nil {
+		return nil, err
+	}
 	now := time.Now()
+	uploadInfo, err := media.PrepareUpload(item.Collection, item.Name, body, now)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := s.versionFile(fullPath, now); err != nil {
 		return nil, err
 	}
@@ -226,15 +259,25 @@ func (s *Service) ReplaceMedia(ctx context.Context, reference, contentType strin
 	if err := s.fs.WriteFile(fullPath, body, 0o644); err != nil {
 		return nil, err
 	}
+	currentMetadata, err := s.loadMediaMetadataFromPath(fullPath)
+	if err != nil {
+		return nil, err
+	}
+	uploadInfo.OriginalFilename = firstNonEmptyMedia(currentMetadata.OriginalFilename, item.Name)
+	uploadInfo.StoredFilename = item.Name
+	uploadInfo.SafeFilename = item.Name
+	mergedMetadata := preserveEditableMediaMetadata(currentMetadata, uploadInfo, actorLabelFromContext(ctx), now)
+	if err := s.writeMediaMetadataDocument(fullPath, mergedMetadata); err != nil {
+		return nil, err
+	}
 
 	info, err := s.fs.Stat(fullPath)
 	if err != nil {
 		return nil, err
 	}
 	item.Size = info.Size()
-	if item.Kind == "" {
-		item.Kind = string(media.DetectKind(item.Path))
-	}
+	item.Kind = string(uploadInfo.Kind)
+	item.Metadata = mergedMetadata
 
 	return &types.MediaReplaceResponse{
 		MediaItem: item,
@@ -243,14 +286,23 @@ func (s *Service) ReplaceMedia(ctx context.Context, reference, contentType strin
 }
 
 func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metadata types.MediaMetadata, versionComment, actor string) (*types.MediaDetailResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.write"); err != nil {
+		return nil, err
+	}
 
 	item, path, err := s.resolveMediaItem(reference)
 	if err != nil {
 		return nil, err
 	}
-	metadata = normalizeMediaMetadata(metadata)
-	sidecar := mediaMetadataPath(path)
+	existingMetadata, err := s.loadMediaMetadataFromPath(path)
+	if err != nil {
+		return nil, err
+	}
+	metadata = mergeEditableMediaMetadata(existingMetadata, metadata)
+	sidecar, err := s.mediaSidecarPath(path)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	if mediaMetadataEmpty(metadata) {
 		if err := s.snapshotMediaMetadataVersion(path, now, versionComment, actor); err != nil {
@@ -288,6 +340,12 @@ func matchesMediaQuery(pathValue, reference string, metadata types.MediaMetadata
 		metadata.Caption,
 		metadata.Description,
 		metadata.Credit,
+		metadata.OriginalFilename,
+		metadata.StoredFilename,
+		metadata.MIMEType,
+		metadata.Kind,
+		metadata.ContentHash,
+		metadata.UploadedBy,
 	} {
 		if strings.Contains(strings.ToLower(candidate), query) {
 			return true
@@ -301,17 +359,31 @@ func matchesMediaQuery(pathValue, reference string, metadata types.MediaMetadata
 	return false
 }
 
-func (s *Service) mediaRoot(collection string) (string, error) {
+func (s *Service) collectionDir(collection string) (string, error) {
 	switch strings.TrimSpace(collection) {
 	case "images":
-		return filepath.Join(s.cfg.ContentDir, s.cfg.Content.ImagesDir), nil
+		return s.cfg.Content.ImagesDir, nil
+	case "videos":
+		return s.cfg.Content.VideoDir, nil
+	case "audio":
+		return s.cfg.Content.AudioDir, nil
+	case "documents":
+		return s.cfg.Content.DocumentsDir, nil
 	case "uploads":
-		return filepath.Join(s.cfg.ContentDir, s.cfg.Content.UploadsDir), nil
+		return s.cfg.Content.UploadsDir, nil
 	case "assets":
-		return filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir), nil
+		return s.cfg.Content.AssetsDir, nil
 	default:
 		return "", fmt.Errorf("unsupported media collection: %s", collection)
 	}
+}
+
+func (s *Service) mediaRoot(collection string) (string, error) {
+	collectionDir, err := s.collectionDir(collection)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(s.cfg.ContentDir, collectionDir), nil
 }
 
 func (s *Service) resolveMediaItem(reference string) (types.MediaItem, string, error) {
@@ -347,7 +419,11 @@ func (s *Service) resolveMediaItem(reference string) (types.MediaItem, string, e
 
 func (s *Service) loadMediaMetadataFromPath(path string) (types.MediaMetadata, error) {
 	var metadata types.MediaMetadata
-	body, err := s.fs.ReadFile(mediaMetadataPath(path))
+	sidecar, err := s.mediaSidecarPath(path)
+	if err != nil {
+		return metadata, err
+	}
+	body, err := s.fs.ReadFile(sidecar)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return metadata, nil
@@ -382,6 +458,13 @@ func normalizeMediaMetadata(metadata types.MediaMetadata) types.MediaMetadata {
 	metadata.Caption = strings.TrimSpace(metadata.Caption)
 	metadata.Description = strings.TrimSpace(metadata.Description)
 	metadata.Credit = strings.TrimSpace(metadata.Credit)
+	metadata.OriginalFilename = strings.TrimSpace(metadata.OriginalFilename)
+	metadata.StoredFilename = strings.TrimSpace(metadata.StoredFilename)
+	metadata.Extension = strings.ToLower(strings.TrimSpace(metadata.Extension))
+	metadata.MIMEType = strings.ToLower(strings.TrimSpace(metadata.MIMEType))
+	metadata.Kind = strings.TrimSpace(metadata.Kind)
+	metadata.ContentHash = strings.ToLower(strings.TrimSpace(metadata.ContentHash))
+	metadata.UploadedBy = strings.TrimSpace(metadata.UploadedBy)
 	if len(metadata.Tags) > 0 {
 		tags := make([]string, 0, len(metadata.Tags))
 		for _, tag := range metadata.Tags {
@@ -408,11 +491,23 @@ func mediaMetadataEmpty(metadata types.MediaMetadata) bool {
 		metadata.Caption == "" &&
 		metadata.Description == "" &&
 		metadata.Credit == "" &&
-		len(metadata.Tags) == 0
+		len(metadata.Tags) == 0 &&
+		metadata.OriginalFilename == "" &&
+		metadata.StoredFilename == "" &&
+		metadata.Extension == "" &&
+		metadata.MIMEType == "" &&
+		metadata.Kind == "" &&
+		metadata.ContentHash == "" &&
+		metadata.FileSize == 0 &&
+		metadata.UploadedAt == nil &&
+		metadata.UploadedBy == ""
 }
 
 func (s *Service) versionMediaMetadataForPrimary(primaryPath string, now time.Time) error {
-	sidecar := mediaMetadataPath(primaryPath)
+	sidecar, err := s.mediaSidecarPath(primaryPath)
+	if err != nil {
+		return err
+	}
 	if _, err := s.fs.Stat(sidecar); err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -432,7 +527,10 @@ func (s *Service) versionMediaMetadataForPrimary(primaryPath string, now time.Ti
 }
 
 func (s *Service) snapshotMediaMetadataVersion(primaryPath string, now time.Time, versionComment, actor string) error {
-	sidecar := mediaMetadataPath(primaryPath)
+	sidecar, err := s.mediaSidecarPath(primaryPath)
+	if err != nil {
+		return err
+	}
 	body, err := s.fs.ReadFile(sidecar)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -473,7 +571,10 @@ func (s *Service) snapshotMediaMetadataVersion(primaryPath string, now time.Time
 }
 
 func (s *Service) trashMediaMetadataForPrimary(primaryPath string, now time.Time) error {
-	sidecar := mediaMetadataPath(primaryPath)
+	sidecar, err := s.mediaSidecarPath(primaryPath)
+	if err != nil {
+		return err
+	}
 	if _, err := s.fs.Stat(sidecar); err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -489,7 +590,117 @@ func (s *Service) trashMediaMetadataForPrimary(primaryPath string, now time.Time
 	return s.fs.Rename(sidecar, trashPath)
 }
 
-func cleanMediaDir(value string) (string, error) {
+func (s *Service) mediaSidecarPath(primaryPath string) (string, error) {
+	_, _, resolved, err := s.mediaReferenceInfoForPath(primaryPath)
+	if err != nil {
+		return "", err
+	}
+	root, err := s.mediaRoot(resolved.Collection)
+	if err != nil {
+		return "", err
+	}
+	sidecar := mediaMetadataPath(primaryPath)
+	if err := ensureNoSymlinkEscape(root, sidecar); err != nil {
+		return "", err
+	}
+	return sidecar, nil
+}
+
+func (s *Service) writeUploadedMediaMetadata(primaryPath string, info media.UploadInfo, actor string, now time.Time) error {
+	metadata := types.MediaMetadata{
+		Title:            uploadTitle(info.OriginalFilename),
+		OriginalFilename: info.OriginalFilename,
+		StoredFilename:   info.StoredFilename,
+		Extension:        info.Extension,
+		MIMEType:         info.MIMEType,
+		Kind:             string(info.Kind),
+		ContentHash:      info.ContentHash,
+		FileSize:         info.Size,
+		UploadedAt:       timePtr(now.UTC()),
+		UploadedBy:       strings.TrimSpace(actor),
+	}
+	return s.writeMediaMetadataDocument(primaryPath, metadata)
+}
+
+func (s *Service) writeMediaMetadataDocument(primaryPath string, metadata types.MediaMetadata) error {
+	sidecar, err := s.mediaSidecarPath(primaryPath)
+	if err != nil {
+		return err
+	}
+	body, err := yaml.Marshal(normalizeMediaMetadata(metadata))
+	if err != nil {
+		return err
+	}
+	return s.fs.WriteFile(sidecar, body, 0o644)
+}
+
+func preserveEditableMediaMetadata(existing types.MediaMetadata, info media.UploadInfo, actor string, now time.Time) types.MediaMetadata {
+	existing = normalizeMediaMetadata(existing)
+	existing.OriginalFilename = info.OriginalFilename
+	existing.StoredFilename = info.StoredFilename
+	existing.Extension = info.Extension
+	existing.MIMEType = info.MIMEType
+	existing.Kind = string(info.Kind)
+	existing.ContentHash = info.ContentHash
+	existing.FileSize = info.Size
+	if existing.UploadedAt == nil {
+		existing.UploadedAt = timePtr(now.UTC())
+	}
+	if strings.TrimSpace(existing.UploadedBy) == "" {
+		existing.UploadedBy = strings.TrimSpace(actor)
+	}
+	if strings.TrimSpace(existing.Title) == "" {
+		existing.Title = uploadTitle(info.OriginalFilename)
+	}
+	return existing
+}
+
+func mergeEditableMediaMetadata(existing, requested types.MediaMetadata) types.MediaMetadata {
+	existing = normalizeMediaMetadata(existing)
+	requested = normalizeMediaMetadata(requested)
+	existing.Title = requested.Title
+	existing.Alt = requested.Alt
+	existing.Caption = requested.Caption
+	existing.Description = requested.Description
+	existing.Credit = requested.Credit
+	existing.Tags = append([]string(nil), requested.Tags...)
+	return existing
+}
+
+func uploadTitle(filename string) string {
+	name := strings.TrimSuffix(filepath.Base(strings.TrimSpace(filename)), filepath.Ext(strings.TrimSpace(filename)))
+	name = strings.TrimSpace(strings.ReplaceAll(name, "-", " "))
+	name = strings.TrimSpace(strings.ReplaceAll(name, "_", " "))
+	if name == "" {
+		return "Upload"
+	}
+	return name
+}
+
+func firstNonEmptyMedia(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func actorLabelFromContext(ctx context.Context) string {
+	if identity, ok := currentIdentity(ctx); ok {
+		if strings.TrimSpace(identity.Name) != "" {
+			return strings.TrimSpace(identity.Name)
+		}
+		return strings.TrimSpace(identity.Username)
+	}
+	return ""
+}
+
+func timePtr(v time.Time) *time.Time {
+	return &v
+}
+
+func (s *Service) cleanMediaDir(collection, value string) (string, error) {
 	value = strings.TrimSpace(strings.ReplaceAll(value, `\`, "/"))
 	value = strings.Trim(value, "/")
 	if value == "" {
@@ -498,6 +709,31 @@ func cleanMediaDir(value string) (string, error) {
 	cleaned := path.Clean(value)
 	if cleaned == "." || cleaned == "/" || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
 		return "", fmt.Errorf("invalid media dir: path must stay inside the media root")
+	}
+	cleaned = strings.TrimPrefix(cleaned, "/")
+	contentPrefix := strings.Trim(strings.ReplaceAll(s.cfg.ContentDir, `\`, "/"), "/")
+	contentBase := strings.Trim(filepath.Base(s.cfg.ContentDir), "/")
+	collectionDir, err := s.collectionDir(collection)
+	if err != nil {
+		return "", err
+	}
+	collectionPrefix := strings.Trim(strings.ReplaceAll(collectionDir, `\`, "/"), "/")
+	for _, prefix := range []string{
+		collectionPrefix,
+		path.Join(contentBase, collectionPrefix),
+		path.Join(contentPrefix, collectionPrefix),
+	} {
+		prefix = strings.Trim(prefix, "/")
+		if prefix == "" {
+			continue
+		}
+		if cleaned == prefix {
+			return "", nil
+		}
+		if strings.HasPrefix(cleaned, prefix+"/") {
+			cleaned = strings.TrimPrefix(cleaned, prefix+"/")
+			break
+		}
 	}
 	return strings.TrimPrefix(cleaned, "/"), nil
 }

@@ -26,13 +26,13 @@ func TestMarkdownToHTMLAllowsRawHTMLWhenConfigured(t *testing.T) {
 }
 
 func TestMarkdownToHTMLRewritesMediaReferences(t *testing.T) {
-	html, err := MarkdownToHTML("![Screenshot](media:images/shot.png)\n\n![Walkthrough](media:uploads/demo.mp4)\n\n[Download](media:uploads/spec.pdf)", false)
+	html, err := MarkdownToHTML("![Screenshot](media:images/shot.png)\n\n![Walkthrough](media:videos/demo.mp4)\n\n[Download](media:documents/spec.pdf)", false)
 	if err != nil {
 		t.Fatalf("render markdown: %v", err)
 	}
 
 	rendered := string(html)
-	for _, want := range []string{`<img src="/images/shot.png" alt="Screenshot">`, `<video controls preload="metadata" src="/uploads/demo.mp4" title="Walkthrough" aria-label="Walkthrough"></video>`, `<a href="/uploads/spec.pdf">Download</a>`} {
+	for _, want := range []string{`<img src="/images/shot.png" alt="Screenshot">`, `<video controls preload="metadata" src="/videos/demo.mp4" title="Walkthrough" aria-label="Walkthrough"></video>`, `<a href="/documents/spec.pdf">Download</a>`} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected rendered html to contain %q, got %q", want, rendered)
 		}

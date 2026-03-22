@@ -25,11 +25,20 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Admin.UsersFile != filepath.Join("content", "config", "admin-users.yaml") {
 		t.Fatalf("expected default admin users file, got %q", cfg.Admin.UsersFile)
 	}
+	if cfg.Admin.SessionStoreFile != filepath.Join("data", "admin", "sessions.yaml") {
+		t.Fatalf("expected default admin session store file, got %q", cfg.Admin.SessionStoreFile)
+	}
+	if cfg.Admin.LockFile != filepath.Join("data", "admin", "locks.yaml") {
+		t.Fatalf("expected default admin lock file, got %q", cfg.Admin.LockFile)
+	}
 	if cfg.AdminPath() != "/__admin" {
 		t.Fatalf("expected default admin path, got %q", cfg.AdminPath())
 	}
 	if cfg.Admin.SessionTTLMinutes != 30 {
 		t.Fatalf("expected default admin session ttl, got %d", cfg.Admin.SessionTTLMinutes)
+	}
+	if cfg.Admin.Debug.Pprof {
+		t.Fatal("expected admin pprof debug to default to disabled")
 	}
 	if cfg.Content.MaxVersionsPerFile != 10 {
 		t.Fatalf("expected default content max versions, got %d", cfg.Content.MaxVersionsPerFile)
@@ -143,5 +152,61 @@ func TestAdminPathNormalizationAndValidation(t *testing.T) {
 	cfg.Admin.Path = "/bad path"
 	if errs := Validate(cfg); len(errs) == 0 {
 		t.Fatal("expected invalid admin path errors")
+	}
+}
+
+func TestLoadWithOptionsAppliesEnvironmentOverlayAndDeployTarget(t *testing.T) {
+	root := t.TempDir()
+	basePath := filepath.Join(root, "site.yaml")
+	if err := os.WriteFile(basePath, []byte("theme: default\nbase_url: https://example.com\npublic_dir: public\ncontent_dir: content\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\ndefault_lang: en\ndeploy:\n  default_target: production\n  targets:\n    production:\n      base_url: https://prod.example.com\n      public_dir: public-prod\n      include_drafts: false\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n"), 0o644); err != nil {
+		t.Fatalf("write base config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "site.preview.yaml"), []byte("environment: preview\nbuild:\n  include_drafts: true\n"), 0o644); err != nil {
+		t.Fatalf("write overlay config: %v", err)
+	}
+
+	cfg, err := LoadWithOptions(basePath, LoadOptions{Environment: "preview", Target: "production"})
+	if err != nil {
+		t.Fatalf("load with options: %v", err)
+	}
+	if cfg.Environment != "preview" {
+		t.Fatalf("expected environment overlay, got %q", cfg.Environment)
+	}
+	if cfg.BaseURL != "https://prod.example.com" {
+		t.Fatalf("expected deploy target base url override, got %q", cfg.BaseURL)
+	}
+	if cfg.PublicDir != "public-prod" {
+		t.Fatalf("expected deploy target public dir override, got %q", cfg.PublicDir)
+	}
+	if cfg.Build.IncludeDrafts {
+		t.Fatal("expected deploy target include_drafts=false to win")
+	}
+}
+
+func TestLoadWithOptionsAppliesDefaultDeployTargetWhenNoTargetFlagProvided(t *testing.T) {
+	root := t.TempDir()
+	basePath := filepath.Join(root, "site.yaml")
+	body := "theme: default\nbase_url: https://example.com\npublic_dir: public\ncontent_dir: content\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\ndefault_lang: en\ndeploy:\n  default_target: production\n  targets:\n    production:\n      base_url: https://prod.example.com\n      public_dir: public-prod\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n"
+	if err := os.WriteFile(basePath, []byte(body), 0o644); err != nil {
+		t.Fatalf("write base config: %v", err)
+	}
+
+	cfg, err := LoadWithOptions(basePath, LoadOptions{})
+	if err != nil {
+		t.Fatalf("load with default target: %v", err)
+	}
+	if cfg.BaseURL != "https://prod.example.com" || cfg.PublicDir != "public-prod" {
+		t.Fatalf("expected default target overrides, got %#v", cfg)
+	}
+}
+
+func TestUnmarshalYAMLPreservesExplicitAdminLocalOnlyFalse(t *testing.T) {
+	cfg := &Config{}
+	body := []byte("theme: default\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\ndefault_lang: en\nadmin:\n  local_only: false\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n")
+	if err := UnmarshalYAML(body, cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	if cfg.Admin.LocalOnly {
+		t.Fatal("expected explicit admin.local_only=false to be preserved")
 	}
 }

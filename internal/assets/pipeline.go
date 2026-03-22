@@ -66,6 +66,30 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 		if err := copyDirIfExists(src, dst); err != nil {
 			return err
 		}
+
+		videoSrc, err := safepath.ResolveRelativeUnderRoot(cfg.ContentDir, cfg.Content.VideoDir)
+		if err != nil {
+			return err
+		}
+		if err := copyDirIfExists(videoSrc, filepath.Join(cfg.PublicDir, "videos")); err != nil {
+			return err
+		}
+
+		audioSrc, err := safepath.ResolveRelativeUnderRoot(cfg.ContentDir, cfg.Content.AudioDir)
+		if err != nil {
+			return err
+		}
+		if err := copyDirIfExists(audioSrc, filepath.Join(cfg.PublicDir, "audio")); err != nil {
+			return err
+		}
+
+		documentsSrc, err := safepath.ResolveRelativeUnderRoot(cfg.ContentDir, cfg.Content.DocumentsDir)
+		if err != nil {
+			return err
+		}
+		if err := copyDirIfExists(documentsSrc, filepath.Join(cfg.PublicDir, "documents")); err != nil {
+			return err
+		}
 	}
 
 	themeName, err := safepath.ValidatePathComponent("theme name", cfg.Theme)

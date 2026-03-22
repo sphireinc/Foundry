@@ -1,15 +1,15 @@
 {{ define "footer" }}
 <footer class="site-footer">
-    <div class="container site-footer-inner">
-        <div>
-            <strong>{{ .Site.Title }}</strong><br>
-            <span class="muted">A modern Markdown CMS powered by Go.</span>
-        </div>
-        <div>
-            <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
-            &nbsp;·&nbsp;
-            <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
-        </div>
+  <div class="container site-footer-inner">
+    <div>
+      <strong>{{ .Site.Title }}</strong><br />
+      <span class="muted">A modern Markdown CMS powered by Go.</span>
     </div>
+    <div>
+      <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+      &nbsp;·&nbsp;
+      <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+    </div>
+  </div>
 </footer>
 {{ end }}

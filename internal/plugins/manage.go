@@ -113,20 +113,17 @@ func UpdateInstalled(pluginsDir, name string) (Metadata, error) {
 		return Metadata{}, fmt.Errorf("update fallback install failed: %w", err)
 	}
 
-	backupDir := filepath.Join(pluginsDir, name+"-backup-old")
-	_ = os.RemoveAll(backupDir)
-
-	if err := os.Rename(targetDir, backupDir); err != nil {
+	if _, err := backupInstalled(pluginsDir, name); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		return Metadata{}, fmt.Errorf("backup current plugin: %w", err)
 	}
 
 	if err := os.Rename(filepath.Join(pluginsDir, tmpName), targetDir); err != nil {
-		_ = os.Rename(backupDir, targetDir)
+		if backupDir, ok, latestErr := latestRollback(pluginsDir, name); latestErr == nil && ok {
+			_ = os.Rename(backupDir, targetDir)
+		}
 		return Metadata{}, fmt.Errorf("replace plugin with updated version: %w", err)
 	}
-
-	_ = os.RemoveAll(backupDir)
 
 	installMeta.Name = name
 	installMeta.Directory = filepath.Join(pluginsDir, name)

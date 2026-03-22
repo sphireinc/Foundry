@@ -18,7 +18,9 @@ import (
 )
 
 func (s *Service) GetDocumentHistory(ctx context.Context, sourcePath string) (*types.DocumentHistoryResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "documents.history"); err != nil {
+		return nil, err
+	}
 
 	fullPath, originalPath, _, err := s.resolveDocumentLifecyclePath(sourcePath)
 	if err != nil {
@@ -39,7 +41,9 @@ func (s *Service) GetDocumentHistory(ctx context.Context, sourcePath string) (*t
 }
 
 func (s *Service) ListDocumentTrash(ctx context.Context) ([]types.DocumentHistoryEntry, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "documents.history"); err != nil {
+		return nil, err
+	}
 
 	entries := make([]types.DocumentHistoryEntry, 0)
 	err := s.walkDir(s.cfg.ContentDir, func(path string, info os.DirEntry) error {
@@ -64,7 +68,9 @@ func (s *Service) ListDocumentTrash(ctx context.Context) ([]types.DocumentHistor
 }
 
 func (s *Service) RestoreDocument(ctx context.Context, req types.DocumentLifecycleRequest) (*types.DocumentLifecycleResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "documents.lifecycle"); err != nil {
+		return nil, err
+	}
 
 	path, originalPath, state, err := s.resolveDocumentLifecyclePath(req.Path)
 	if err != nil {
@@ -92,7 +98,9 @@ func (s *Service) RestoreDocument(ctx context.Context, req types.DocumentLifecyc
 }
 
 func (s *Service) PurgeDocument(ctx context.Context, req types.DocumentLifecycleRequest) (*types.DocumentLifecycleResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "documents.lifecycle"); err != nil {
+		return nil, err
+	}
 
 	path, _, state, err := s.resolveDocumentLifecyclePath(req.Path)
 	if err != nil {
@@ -112,7 +120,9 @@ func (s *Service) PurgeDocument(ctx context.Context, req types.DocumentLifecycle
 }
 
 func (s *Service) DiffDocument(ctx context.Context, req types.DocumentDiffRequest) (*types.DocumentDiffResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "documents.diff"); err != nil {
+		return nil, err
+	}
 
 	leftPath, _, _, err := s.resolveDocumentLifecyclePath(req.LeftPath)
 	if err != nil {
@@ -142,7 +152,9 @@ func (s *Service) DiffDocument(ctx context.Context, req types.DocumentDiffReques
 }
 
 func (s *Service) GetMediaHistory(ctx context.Context, identifier string) (*types.MediaHistoryResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.read"); err != nil {
+		return nil, err
+	}
 
 	identifier = strings.TrimSpace(identifier)
 	if identifier == "" {
@@ -183,10 +195,12 @@ func (s *Service) GetMediaHistory(ctx context.Context, identifier string) (*type
 }
 
 func (s *Service) ListMediaTrash(ctx context.Context) ([]types.MediaHistoryEntry, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.read"); err != nil {
+		return nil, err
+	}
 
 	entries := make([]types.MediaHistoryEntry, 0)
-	for _, collection := range []string{"images", "uploads", "assets"} {
+	for _, collection := range []string{"images", "videos", "audio", "documents", "uploads", "assets"} {
 		root, err := s.mediaRoot(collection)
 		if err != nil {
 			return nil, err
@@ -220,7 +234,9 @@ func (s *Service) ListMediaTrash(ctx context.Context) ([]types.MediaHistoryEntry
 }
 
 func (s *Service) RestoreMedia(ctx context.Context, req types.MediaLifecycleRequest) (*types.MediaLifecycleResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.lifecycle"); err != nil {
+		return nil, err
+	}
 
 	path, originalPath, state, err := s.resolveMediaLifecyclePath(req.Path)
 	if err != nil {
@@ -272,7 +288,9 @@ func (s *Service) RestoreMedia(ctx context.Context, req types.MediaLifecycleRequ
 }
 
 func (s *Service) PurgeMedia(ctx context.Context, req types.MediaLifecycleRequest) (*types.MediaLifecycleResponse, error) {
-	_ = ctx
+	if err := requireCapability(ctx, "media.lifecycle"); err != nil {
+		return nil, err
+	}
 
 	path, _, state, err := s.resolveMediaLifecyclePath(req.Path)
 	if err != nil {
@@ -357,6 +375,7 @@ func (s *Service) documentHistoryEntry(path string) (types.DocumentHistoryEntry,
 	if !ts.IsZero() {
 		timestamp = &ts
 	}
+	workflow := content.WorkflowFromFrontMatter(fm, time.Now().UTC())
 
 	return types.DocumentHistoryEntry{
 		Path:           displayDocumentPath(path, s.cfg.ContentDir),
@@ -365,6 +384,7 @@ func (s *Service) documentHistoryEntry(path string) (types.DocumentHistoryEntry,
 		Timestamp:      timestamp,
 		VersionComment: versionCommentFromFrontMatter(fm),
 		Actor:          versionActorFromFrontMatter(fm),
+		Status:         workflow.Status,
 		Title:          strings.TrimSpace(fm.Title),
 		Slug:           strings.TrimSpace(fm.Slug),
 		Layout:         strings.TrimSpace(fm.Layout),
@@ -372,6 +392,10 @@ func (s *Service) documentHistoryEntry(path string) (types.DocumentHistoryEntry,
 		Draft:          fm.Draft,
 		Archived:       documentArchivedFromParams(fm.Params),
 		Lang:           documentLangFromFrontMatter(fm, s.cfg.DefaultLang),
+		Author:         strings.TrimSpace(fm.Author),
+		LastEditor:     strings.TrimSpace(fm.LastEditor),
+		CreatedAt:      fm.CreatedAt,
+		UpdatedAt:      fm.UpdatedAt,
 		Size:           info.Size(),
 	}, nil
 }
@@ -616,7 +640,7 @@ func (s *Service) resolveMediaPathAllowDerived(path string) (string, error) {
 		return "", err
 	}
 
-	for _, collection := range []string{"images", "uploads", "assets"} {
+	for _, collection := range []string{"images", "videos", "audio", "documents", "uploads", "assets"} {
 		root, err := s.mediaRoot(collection)
 		if err != nil {
 			return "", err
@@ -637,7 +661,11 @@ func (s *Service) resolveMediaPathAllowDerived(path string) (string, error) {
 }
 
 func (s *Service) mediaReferenceInfoForPath(fullPath string) (string, string, media.Reference, error) {
-	for _, collection := range []string{"images", "uploads", "assets"} {
+	absFullPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return "", "", media.Reference{}, err
+	}
+	for _, collection := range []string{"images", "videos", "audio", "documents", "uploads", "assets"} {
 		root, err := s.mediaRoot(collection)
 		if err != nil {
 			return "", "", media.Reference{}, err
@@ -646,13 +674,13 @@ func (s *Service) mediaReferenceInfoForPath(fullPath string) (string, string, me
 		if err != nil {
 			return "", "", media.Reference{}, err
 		}
-		rel, err := filepath.Rel(root, fullPath)
+		rel, err := filepath.Rel(root, absFullPath)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue
 		}
 
 		originalRel := filepath.ToSlash(rel)
-		if original, _, ok := lifecycle.ParsePath(fullPath); ok {
+		if original, _, ok := lifecycle.ParsePath(absFullPath); ok {
 			if originalRelValue, err := filepath.Rel(root, original); err == nil {
 				originalRel = filepath.ToSlash(originalRelValue)
 			}
@@ -819,8 +847,11 @@ func buildUnifiedLineDiff(leftPath string, leftBody []byte, rightPath string, ri
 	matches := buildLineLCS(leftLines, rightLines)
 
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "--- %s\n", filepath.ToSlash(leftPath))
-	fmt.Fprintf(&buf, "+++ %s\n", filepath.ToSlash(rightPath))
+	_, err := fmt.Fprintf(&buf, "--- %s\n", filepath.ToSlash(leftPath))
+	_, err = fmt.Fprintf(&buf, "+++ %s\n", filepath.ToSlash(rightPath))
+	if err != nil {
+		// TODO Handle this error at some point, even if redundant
+	}
 	for _, line := range matches {
 		buf.WriteString(line.prefix)
 		buf.WriteString(line.text)

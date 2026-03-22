@@ -1,720 +1,513 @@
+import { createAdminClient } from '/__foundry/sdk/admin/index.js';
+import {
+  createAdminRouter,
+  createSectionForPath,
+  adminPathForSection,
+  normalizeAdminSection,
+} from './admin/core/router.js';
+import { createInitialState, sectionTitles } from './admin/core/state.js';
+import { createUIStateHelpers } from './admin/core/ui-state.js';
+import {
+  clone,
+  escapeHTML,
+  formatDateTime,
+  getValueAtPath,
+  parseTagInput,
+  slugify,
+} from './admin/core/utils.js';
+import {
+  buildDefaultMarkdown,
+  buildDocumentRaw,
+  defaultValueForSchema,
+  inferLangFromSourcePath,
+  parseDocumentEditor,
+  removeNestedFieldValue,
+  updateNestedFieldValue,
+} from './admin/editor/frontmatter.js';
+import { createEditorSync } from './admin/editor/sync.js';
+import { bindDashboardEvents } from './admin/events/dashboard.js';
+import { createPlatformViews } from './admin/views/platform.js';
+import {
+  documentStatusLabel,
+  mediaPreview,
+  mediaThumb,
+  panel,
+  renderBreadcrumbs,
+  renderDocumentHistoryRows,
+  renderKeyboardHelp,
+  renderMediaHistoryRows,
+  renderOverview,
+  renderTableControls,
+  renderToasts,
+  renderTrashSelectionRows,
+  shellNav,
+  summarizeLoadErrors,
+} from './admin/views/shared.js';
+
 (() => {
   const root = document.getElementById('app');
   if (!root) return;
 
   const adminBase = root.dataset.adminBase || '/__admin';
   const defaultLang = root.dataset.defaultLang || 'en';
-  const adminBaseEscaped = adminBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const adminBasePattern = new RegExp(`^${adminBaseEscaped}/?`);
-  const frontmatterFieldNames = ['title', 'slug', 'layout', 'date', 'summary', 'tags', 'categories', 'draft', 'archived', 'lang'];
-  const sectionTitles = {
-    overview: 'Overview',
-    documents: 'Documents',
-    history: 'History',
-    trash: 'Trash',
-    media: 'Media',
-    audit: 'Audit',
-    users: 'Users',
-    config: 'Configuration',
-    plugins: 'Plugins',
-    themes: 'Themes'
-  };
-  const sectionForPath = (pathname) => {
-    const path = pathname.replace(/\/+$/, '');
-    if (path === adminBase || path === '') return 'overview';
-    return path.replace(adminBasePattern, '') || 'overview';
-  };
+  const sectionForPath = createSectionForPath(adminBase);
+  const state = createInitialState({ section: sectionForPath(window.location.pathname) });
+  const admin = createAdminClient({ baseURL: adminBase, getSession: () => state.session });
+  let navigate = () => {};
+  const extensionModuleCache = new Map();
+  const extensionStyleCache = new Set();
 
-  const escapeHTML = (value) => String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-
-  const state = {
-    session: null,
-    status: null,
-    documentQuery: '',
-    documents: [],
-    documentTrash: [],
-    documentHistory: [],
-    documentHistoryPath: '',
-    documentDiff: null,
-    documentDiffMode: 'split',
-    selectedDocumentTrash: [],
-    media: [],
-    mediaQuery: '',
-    mediaPickerQuery: '',
-    mediaTrash: [],
-    mediaHistory: [],
-    mediaHistoryReference: '',
-    selectedMediaTrash: [],
-    users: [],
-    config: null,
-    plugins: [],
-    themes: [],
-    audit: [],
-    section: sectionForPath(window.location.pathname),
-    documentEditor: { source_path: '', raw: '', version_comment: '' },
-    documentPreview: null,
-    selectedMediaReference: '',
-    mediaDetail: null,
-    mediaVersionComment: '',
-    userForm: { username: '', name: '', email: '', role: '', password: '', disabled: false },
-    dirty: { document: false, media: false, user: false, config: false },
-    snapshots: { document: '', media: '', user: '', config: '' },
-    toasts: [],
-    keyboardHelp: false,
-    tables: {
-      documents: { page: 1, pageSize: 10, sort: 'title', dir: 'asc' },
-      media: { page: 1, pageSize: 10, sort: 'name', dir: 'asc' },
-      users: { page: 1, pageSize: 10, sort: 'username', dir: 'asc' },
-      audit: { page: 1, pageSize: 15, sort: 'timestamp', dir: 'desc' },
-      plugins: { page: 1, pageSize: 10, sort: 'name', dir: 'asc' },
-      themes: { page: 1, pageSize: 10, sort: 'name', dir: 'asc' }
-    },
-    loadErrors: [],
-    error: '',
-    flash: '',
-    loading: false
-  };
-
-  const formatDate = (value) => value.toISOString().slice(0, 10);
-  const formatDateTime = (value) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString();
-  };
-  const lifecycleLabel = (value) => {
-    switch (value) {
-      case 'version': return 'Version';
-      case 'trash': return 'Trash';
-      default: return 'Current';
-    }
-  };
-
-  const buildDefaultMarkdown = (kind = 'post') => {
-    const today = formatDate(new Date());
-    if (kind === 'page') {
-      return [
-        '---',
-        'title: ',
-        'slug: ',
-        'layout: page',
-        'draft: false',
-        'summary: ""',
-        'tags: []',
-        'categories: []',
-        '---',
-        '',
-        '# Title',
-        ''
-      ].join('\n');
-    }
-    return [
-      '---',
-      'title: ',
-      'slug: ',
-      'layout: post',
-      'draft: true',
-      'summary: ""',
-      `date: ${today}`,
-      'tags: []',
-      'categories: []',
-      '---',
-      '',
-      '# Title',
-      ''
-    ].join('\n');
-  };
-
-  const slugify = (value) => String(value || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-
-  const parseBool = (value) => {
-    const normalized = String(value || '').trim().toLowerCase();
-    if (normalized === 'true') return true;
-    if (normalized === 'false') return false;
-    return false;
-  };
-
-  const stripQuotes = (value) => {
-    const trimmed = String(value || '').trim();
-    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith('\'') && trimmed.endsWith('\''))) {
-      return trimmed.slice(1, -1);
-    }
-    return trimmed;
-  };
-
-  const parseInlineList = (value) => {
-    const trimmed = String(value || '').trim();
-    if (!trimmed || trimmed === '[]') return [];
-    const inner = trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed;
-    return inner.split(',').map((item) => stripQuotes(item)).map((item) => item.trim()).filter(Boolean);
-  };
-
-  const inferLangFromSourcePath = (sourcePath) => {
-    const normalized = String(sourcePath || '').replaceAll('\\', '/').replace(/^content\//, '');
-    const parts = normalized.split('/').filter(Boolean);
-    if (parts.length >= 3 && (parts[0] === 'pages' || parts[0] === 'posts')) {
-      return parts[1];
-    }
-    return defaultLang;
-  };
-
-  const splitDocumentRaw = (raw) => {
-    const normalized = String(raw || '').replaceAll('\r\n', '\n');
-    const lines = normalized.split('\n');
-    if (lines[0] !== '---') {
-      return { hasFrontmatter: false, frontmatter: '', body: normalized };
-    }
-    for (let index = 1; index < lines.length; index += 1) {
-      if (lines[index] === '---') {
-        return {
-          hasFrontmatter: true,
-          frontmatter: lines.slice(1, index).join('\n'),
-          body: lines.slice(index + 1).join('\n')
-        };
-      }
-    }
-    return { hasFrontmatter: false, frontmatter: '', body: normalized };
-  };
-
-  const parseDocumentEditor = (raw, sourcePath = '') => {
-    const split = splitDocumentRaw(raw);
-    const fields = {
-      title: '',
-      slug: '',
-      layout: sourcePath.includes('/pages/') ? 'page' : 'post',
-      date: '',
-      summary: '',
-      tags: [],
-      categories: [],
-      draft: true,
-      archived: false,
-      lang: inferLangFromSourcePath(sourcePath)
-    };
-    const extraLines = [];
-    const lines = split.frontmatter ? split.frontmatter.split('\n') : [];
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index];
-      const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-      if (!match) {
-        extraLines.push(line);
-        continue;
-      }
-
-      const key = match[1].toLowerCase();
-      const value = match[2];
-      if ((key === 'tags' || key === 'categories') && value.trim() === '') {
-        const items = [];
-        let next = index + 1;
-        while (next < lines.length && /^\s*-\s+/.test(lines[next])) {
-          items.push(stripQuotes(lines[next].replace(/^\s*-\s+/, '')));
-          next += 1;
-        }
-        if (next !== index + 1) {
-          fields[key] = items;
-          index = next - 1;
-          continue;
-        }
-      }
-
-      switch (key) {
-        case 'title':
-        case 'slug':
-        case 'layout':
-        case 'date':
-        case 'summary':
-          fields[key] = stripQuotes(value);
-          break;
-        case 'draft':
-        case 'archived':
-          fields[key] = parseBool(value);
-          break;
-        case 'tags':
-        case 'categories':
-          fields[key] = parseInlineList(value);
-          break;
-        case 'lang':
-        case 'language':
-          fields.lang = stripQuotes(value) || inferLangFromSourcePath(sourcePath);
-          break;
-        default:
-          extraLines.push(line);
-      }
-    }
-
-    return {
-      ...split,
-      fields,
-      extraLines
-    };
-  };
-
-  const quoteYAML = (value) => {
-    const stringValue = String(value ?? '');
-    if (stringValue === '') return '""';
-    if (/^[A-Za-z0-9._/-]+$/.test(stringValue)) return stringValue;
-    return JSON.stringify(stringValue);
-  };
-
-  const renderYAMLList = (items) => `[${items.map((item) => quoteYAML(item)).join(', ')}]`;
-
-  const buildDocumentRaw = (fields, body, extraLines = []) => {
-    const normalized = {
-      title: String(fields.title || '').trim(),
-      slug: String(fields.slug || '').trim(),
-      layout: String(fields.layout || '').trim() || 'post',
-      date: String(fields.date || '').trim(),
-      summary: String(fields.summary || ''),
-      tags: Array.isArray(fields.tags) ? fields.tags.filter(Boolean) : [],
-      categories: Array.isArray(fields.categories) ? fields.categories.filter(Boolean) : [],
-      draft: !!fields.draft,
-      archived: !!fields.archived,
-      lang: String(fields.lang || '').trim()
-    };
-    const lines = [
-      '---',
-      `title: ${quoteYAML(normalized.title)}`,
-      `slug: ${quoteYAML(normalized.slug)}`,
-      `layout: ${quoteYAML(normalized.layout)}`,
-      `draft: ${normalized.draft ? 'true' : 'false'}`,
-      `summary: ${quoteYAML(normalized.summary)}`
-    ];
-    if (normalized.date) lines.push(`date: ${quoteYAML(normalized.date)}`);
-    lines.push(`tags: ${renderYAMLList(normalized.tags)}`);
-    lines.push(`categories: ${renderYAMLList(normalized.categories)}`);
-    if (normalized.archived) lines.push('archived: true');
-    if (normalized.lang && normalized.lang !== defaultLang) lines.push(`lang: ${quoteYAML(normalized.lang)}`);
-    extraLines.filter((line) => String(line).trim() !== '').forEach((line) => lines.push(line));
-    lines.push('---', '', String(body || '').replaceAll('\r\n', '\n'));
-    return lines.join('\n');
-  };
-
-  const parseTagInput = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
-
-  const editorElements = () => ({
-    sourcePath: document.getElementById('document-source-path'),
-    versionComment: document.getElementById('document-version-comment'),
-    raw: document.getElementById('document-raw'),
-    title: document.getElementById('document-frontmatter-title'),
-    slug: document.getElementById('document-frontmatter-slug'),
-    layout: document.getElementById('document-frontmatter-layout'),
-    date: document.getElementById('document-frontmatter-date'),
-    summary: document.getElementById('document-frontmatter-summary'),
-    tags: document.getElementById('document-frontmatter-tags'),
-    categories: document.getElementById('document-frontmatter-categories'),
-    draft: document.getElementById('document-frontmatter-draft'),
-    archived: document.getElementById('document-frontmatter-archived'),
-    lang: document.getElementById('document-frontmatter-lang')
+  const {
+    editorElements,
+    setStructuredFields,
+    syncStructuredEditorFromRaw,
+    syncRawFromStructuredEditor,
+    insertIntoMarkdown,
+    mediaSnippet,
+    renderPreviewFrame,
+  } = createEditorSync({
+    state,
+    defaultLang,
+    parseTagInput,
+    inferLangFromSourcePath,
+    parseDocumentEditor,
+    buildDocumentRaw,
   });
 
-  const setStructuredFields = (parsed) => {
-    const elements = editorElements();
-    if (!elements.raw) return;
-    elements.title && (elements.title.value = parsed.fields.title || '');
-    elements.slug && (elements.slug.value = parsed.fields.slug || '');
-    elements.layout && (elements.layout.value = parsed.fields.layout || 'post');
-    elements.date && (elements.date.value = parsed.fields.date || '');
-    elements.summary && (elements.summary.value = parsed.fields.summary || '');
-    elements.tags && (elements.tags.value = (parsed.fields.tags || []).join(', '));
-    elements.categories && (elements.categories.value = (parsed.fields.categories || []).join(', '));
-    elements.draft && (elements.draft.checked = !!parsed.fields.draft);
-    elements.archived && (elements.archived.checked = !!parsed.fields.archived);
-    elements.lang && (elements.lang.value = parsed.fields.lang || inferLangFromSourcePath(elements.sourcePath?.value || state.documentEditor.source_path));
+  const capabilitySet = () => new Set(state.session?.capabilities || []);
+  const hasCapability = (capability) => !capability || capabilitySet().has(capability);
+  const debugEnabled = () => !!state.capabilityInfo?.features?.pprof;
+  const extensionPages = () =>
+    (state.adminExtensions.pages || [])
+      .filter((page) => page && page.key && hasCapability(page.capability))
+      .map((page) => ({
+        ...page,
+        section: normalizeAdminSection(page.route || `plugins/${page.plugin}/${page.key}`),
+      }));
+  const extensionWidgetsForSlot = (slot) =>
+    (state.adminExtensions.widgets || []).filter(
+      (widget) => widget && widget.key && widget.slot === slot && hasCapability(widget.capability)
+    );
+  const extensionMountID = (kind, plugin, key, slot = '') =>
+    `${kind}-${plugin}-${key}-${slot}`.replace(/[^a-zA-Z0-9_-]+/g, '-');
+  const extensionPageBySection = (section) =>
+    extensionPages().find((page) => page.section === normalizeAdminSection(section)) || null;
+  const titleForSection = (section) => {
+    const normalized = normalizeAdminSection(section);
+    return (
+      sectionTitles[normalized] ||
+      extensionPageBySection(normalized)?.title ||
+      normalized.charAt(0).toUpperCase() + normalized.slice(1)
+    );
+  };
+  const renderWidgetPanels = (slot) =>
+    extensionWidgetsForSlot(slot).map((widget) =>
+      panel(
+        widget.title,
+        `
+    <div class="panel-pad stack">
+      ${widget.description ? `<div class="muted">${escapeHTML(widget.description)}</div>` : ''}
+      <div id="${escapeHTML(extensionMountID('admin-widget', widget.plugin, widget.key, widget.slot))}"
+           class="admin-extension-mount admin-extension-widget-mount"
+           data-plugin="${escapeHTML(widget.plugin)}"
+           data-extension-key="${escapeHTML(widget.key)}"
+           data-extension-slot="${escapeHTML(widget.slot)}"
+           data-extension-kind="widget">
+        <div class="empty-state">This widget slot is ready for a plugin-provided admin widget mount.</div>
+      </div>
+    </div>`,
+        widget.slot || 'Plugin-defined widget'
+      )
+    );
+  const renderExtensionPage = () => {
+    const page = extensionPageBySection(state.section);
+    if (!page) {
+      return panel(
+        'Admin Extension',
+        '<div class="panel-pad empty-state">This admin extension page is not registered.</div>'
+      );
+    }
+    const relatedWidgets = (state.adminExtensions.widgets || []).filter(
+      (widget) => widget.plugin === page.plugin && hasCapability(widget.capability)
+    );
+    const relatedSettings = (state.adminExtensions.settings || []).filter(
+      (setting) => setting.plugin === page.plugin && hasCapability(setting.capability)
+    );
+    const relatedSlots = (state.adminExtensions.slots || []).filter(
+      (slot) => slot.plugin === page.plugin
+    );
+    return panel(
+      page.title,
+      `
+      <div class="panel-pad stack">
+        <div class="note">
+          <strong>${escapeHTML(page.plugin)}</strong>${page.description ? ` • ${escapeHTML(page.description)}` : ''}
+        </div>
+        <div class="cards">
+          <article class="card"><span class="card-label">Route</span><strong>${escapeHTML(page.route || `/${page.section}`)}</strong><span class="card-copy">Mounted from plugin metadata.</span></article>
+          <article class="card"><span class="card-label">Widgets</span><strong>${escapeHTML(relatedWidgets.length)}</strong><span class="card-copy">Plugin widgets registered for admin slots.</span></article>
+          <article class="card"><span class="card-label">Settings</span><strong>${escapeHTML(relatedSettings.length)}</strong><span class="card-copy">Plugin settings sections exposed to admin.</span></article>
+          <article class="card"><span class="card-label">Slots</span><strong>${escapeHTML(relatedSlots.length)}</strong><span class="card-copy">Declared admin shell slots.</span></article>
+        </div>
+        ${
+          relatedSettings.length
+            ? `<div class="stack">
+          <h3>Settings Sections</h3>
+          <div class="table table-three">
+            <div class="table-head"><span>Section</span><span>Capability</span><span>Description</span></div>
+            ${relatedSettings
+              .map(
+                (setting) => `
+              <div class="table-row">
+                <span><strong>${escapeHTML(setting.title)}</strong><div class="muted mono">${escapeHTML(setting.key)}</div></span>
+                <span>${escapeHTML(setting.capability || '-')}</span>
+                <span>${escapeHTML(setting.description || '-')}</span>
+              </div>`
+              )
+              .join('')}
+          </div>
+        </div>`
+            : ''
+        }
+        ${
+          relatedWidgets.length
+            ? `<div class="stack">
+          <h3>Widgets</h3>
+          <div class="table table-three">
+            <div class="table-head"><span>Widget</span><span>Slot</span><span>Description</span></div>
+            ${relatedWidgets
+              .map(
+                (widget) => `
+              <div class="table-row">
+                <span><strong>${escapeHTML(widget.title)}</strong><div class="muted mono">${escapeHTML(widget.key)}</div></span>
+                <span>${escapeHTML(widget.slot)}</span>
+                <span>${escapeHTML(widget.description || '-')}</span>
+              </div>`
+              )
+              .join('')}
+          </div>
+        </div>`
+            : ''
+        }
+        <div id="admin-extension-mount"
+             class="admin-extension-mount"
+             data-plugin="${escapeHTML(page.plugin)}"
+             data-extension-key="${escapeHTML(page.key)}"
+             data-extension-route="${escapeHTML(page.route || '')}"
+             data-extension-section="${escapeHTML(page.section)}">
+          <div class="empty-state">This page is ready for a plugin-provided admin UI mount. Listen for the <code>foundry:admin-extension-page</code> event or read <code>window.FoundryAdmin</code>.</div>
+        </div>
+      </div>`,
+      page.description || 'Plugin-defined admin page'
+    );
   };
 
-  const syncStructuredEditorFromRaw = () => {
-    const elements = editorElements();
-    if (!elements.raw) return;
-    state.documentEditor.raw = elements.raw.value;
-    if (elements.sourcePath) {
-      state.documentEditor.source_path = elements.sourcePath.value;
-    }
-    if (elements.versionComment) {
-      state.documentEditor.version_comment = elements.versionComment.value;
-    }
-    setStructuredFields(parseDocumentEditor(elements.raw.value, elements.sourcePath?.value || state.documentEditor.source_path));
-  };
-
-  const syncRawFromStructuredEditor = () => {
-    const elements = editorElements();
-    if (!elements.raw) return;
-    const parsed = parseDocumentEditor(elements.raw.value, elements.sourcePath?.value || state.documentEditor.source_path);
-    const nextFields = {
-      title: elements.title?.value || '',
-      slug: elements.slug?.value || '',
-      layout: elements.layout?.value || parsed.fields.layout || 'post',
-      date: elements.date?.value || '',
-      summary: elements.summary?.value || '',
-      tags: parseTagInput(elements.tags?.value || ''),
-      categories: parseTagInput(elements.categories?.value || ''),
-      draft: !!elements.draft?.checked,
-      archived: !!elements.archived?.checked,
-      lang: elements.lang?.value || defaultLang
+  const publishAdminRuntime = () => {
+    window.FoundryAdmin = {
+      client: admin,
+      adminBase,
+      getSession: () => state.session,
+      getCapabilities: () => [...capabilitySet()],
+      getExtensions: () => clone(state.adminExtensions),
+      getSettingsSections: () => clone(state.settingsSections),
     };
-    const rebuilt = buildDocumentRaw(nextFields, parsed.body, parsed.extraLines);
-    elements.raw.value = rebuilt;
-    state.documentEditor.raw = rebuilt;
-    if (elements.sourcePath) state.documentEditor.source_path = elements.sourcePath.value;
-    if (elements.versionComment) state.documentEditor.version_comment = elements.versionComment.value;
-  };
-
-  const insertIntoMarkdown = (snippet) => {
-    const elements = editorElements();
-    if (!elements.raw) return;
-    const textarea = elements.raw;
-    const start = textarea.selectionStart ?? textarea.value.length;
-    const end = textarea.selectionEnd ?? textarea.value.length;
-    const prefix = start > 0 && !textarea.value.slice(0, start).endsWith('\n') ? '\n' : '';
-    const suffix = end < textarea.value.length && !textarea.value.slice(end).startsWith('\n') ? '\n' : '';
-    const nextValue = textarea.value.slice(0, start) + prefix + snippet + suffix + textarea.value.slice(end);
-    textarea.value = nextValue;
-    state.documentEditor.raw = nextValue;
-    textarea.focus();
-    const cursor = start + prefix.length + snippet.length;
-    textarea.setSelectionRange(cursor, cursor);
-    syncStructuredEditorFromRaw();
-  };
-
-  const mediaSnippet = (item, mode = 'auto') => {
-    if (!item) return '';
-    const label = item.metadata?.alt || item.metadata?.title || item.name;
-    if (mode === 'link') {
-      return `[${label}](${item.reference})`;
+    const page = extensionPageBySection(state.section);
+    if (page) {
+      document.dispatchEvent(
+        new CustomEvent('foundry:admin-extension-page', {
+          detail: {
+            page,
+            adminBase,
+            session: state.session,
+            capabilities: [...capabilitySet()],
+            settingsSections: (state.settingsSections || []).filter(
+              (section) => section.source === page.plugin
+            ),
+            extensions: clone(state.adminExtensions),
+            mountId: 'admin-extension-mount',
+          },
+        })
+      );
     }
-    return item.kind === 'file'
-      ? `[${label}](${item.reference})`
-      : `![${label}](${item.reference})`;
   };
 
-  const request = async (path, options = {}) => {
-    const baseHeaders = options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' };
-    const response = await fetch(adminBase + path, {
-      credentials: 'same-origin',
-      headers: { ...baseHeaders, ...(options.headers || {}) },
-      ...options
+  const ensureExtensionStyles = (urls = []) => {
+    urls.filter(Boolean).forEach((url) => {
+      if (extensionStyleCache.has(url)) return;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = url;
+      link.dataset.foundryAdminExtensionStyle = url;
+      document.head.appendChild(link);
+      extensionStyleCache.add(url);
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.error || `request failed for ${path}`);
-    }
-    return payload;
   };
 
-  const navigate = (section) => {
-    if (section !== state.section && !confirmNavigation()) {
-      return;
+  const loadExtensionModule = async (page) => {
+    if (!page?.module_url) return null;
+    ensureExtensionStyles(page.style_urls || []);
+    if (!extensionModuleCache.has(page.module_url)) {
+      extensionModuleCache.set(page.module_url, import(page.module_url));
     }
-    state.section = section;
-    const nextPath = section === 'overview' ? adminBase : `${adminBase}/${section}`;
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState({}, '', nextPath);
+    return extensionModuleCache.get(page.module_url);
+  };
+
+  const mountActiveExtensionPage = async () => {
+    const page = extensionPageBySection(state.section);
+    if (!page) return;
+    const mount = document.getElementById('admin-extension-mount');
+    if (!mount) return;
+    mount.dataset.extensionStatus = 'loading';
+    try {
+      const mod = await loadExtensionModule(page);
+      const mountFn = mod?.mountAdminExtensionPage || mod?.default;
+      if (typeof mountFn === 'function') {
+        await mountFn({
+          mount,
+          page,
+          adminBase,
+          client: admin,
+          session: state.session,
+          capabilities: [...capabilitySet()],
+          settingsSections: (state.settingsSections || []).filter(
+            (section) => section.source === page.plugin
+          ),
+          extensions: clone(state.adminExtensions),
+        });
+        mount.dataset.extensionStatus = 'mounted';
+      } else {
+        mount.dataset.extensionStatus = 'ready';
+      }
+    } catch (error) {
+      mount.dataset.extensionStatus = 'error';
+      mount.innerHTML = `<div class="error">Failed to load plugin admin page bundle: ${escapeHTML(error?.message || String(error))}</div>`;
     }
+  };
+
+  const mountVisibleExtensionWidgets = async () => {
+    const widgets = [
+      ...extensionWidgetsForSlot('overview.after'),
+      ...extensionWidgetsForSlot('documents.sidebar'),
+      ...extensionWidgetsForSlot('media.sidebar'),
+      ...extensionWidgetsForSlot('plugins.sidebar'),
+    ];
+    await Promise.all(
+      widgets.map(async (widget) => {
+        const mountId = extensionMountID('admin-widget', widget.plugin, widget.key, widget.slot);
+        const mount = document.getElementById(mountId);
+        if (!mount) return;
+        mount.dataset.extensionStatus = 'loading';
+        try {
+          const mod = await loadExtensionModule(widget);
+          const mountFn = mod?.mountAdminExtensionWidget || mod?.default;
+          document.dispatchEvent(
+            new CustomEvent('foundry:admin-extension-widget', {
+              detail: {
+                widget,
+                adminBase,
+                session: state.session,
+                capabilities: [...capabilitySet()],
+                extensions: clone(state.adminExtensions),
+                mountId,
+              },
+            })
+          );
+          if (typeof mountFn === 'function') {
+            await mountFn({
+              mount,
+              widget,
+              adminBase,
+              client: admin,
+              session: state.session,
+              capabilities: [...capabilitySet()],
+              extensions: clone(state.adminExtensions),
+            });
+            mount.dataset.extensionStatus = 'mounted';
+          } else {
+            mount.dataset.extensionStatus = 'ready';
+          }
+        } catch (error) {
+          mount.dataset.extensionStatus = 'error';
+          mount.innerHTML = `<div class="error">Failed to load plugin admin widget bundle: ${escapeHTML(error?.message || String(error))}</div>`;
+        }
+      })
+    );
+  };
+
+  const updateDocumentFieldValue = (path, nextValue) => {
+    updateNestedFieldValue(state, path, nextValue);
+    compareSnapshot('document', {
+      editor: state.documentEditor,
+      fields: state.documentFieldValues,
+      meta: state.documentMeta,
+    });
     render();
   };
 
-  const resetUserForm = () => {
-    state.userForm = { username: '', name: '', email: '', role: '', password: '', disabled: false };
+  let documentLockHeartbeatId = null;
+
+  const stopDocumentLockHeartbeat = () => {
+    if (documentLockHeartbeatId) {
+      window.clearInterval(documentLockHeartbeatId);
+      documentLockHeartbeatId = null;
+    }
   };
 
-  const resetDocumentEditor = () => {
-    const createKind = document.getElementById('document-create-kind')?.value || 'post';
-    state.documentEditor = { source_path: '', raw: buildDefaultMarkdown(createKind), version_comment: '' };
+  const releaseCurrentDocumentLock = async () => {
+    if (!state.documentEditor.source_path || !state.documentEditor.lock_token) return;
+    try {
+      await admin.documents.unlock({
+        source_path: state.documentEditor.source_path,
+        lock_token: state.documentEditor.lock_token,
+      });
+    } catch (_error) {
+    } finally {
+      stopDocumentLockHeartbeat();
+      state.documentEditor.lock_token = '';
+      state.documentLock = null;
+    }
+  };
+
+  const startDocumentLockHeartbeat = () => {
+    stopDocumentLockHeartbeat();
+    if (!state.documentEditor.source_path || !state.documentEditor.lock_token) return;
+    documentLockHeartbeatId = window.setInterval(async () => {
+      try {
+        const response = await admin.documents.heartbeat({
+          source_path: state.documentEditor.source_path,
+          lock_token: state.documentEditor.lock_token,
+        });
+        state.documentLock = response.lock || null;
+      } catch (error) {
+        stopDocumentLockHeartbeat();
+        state.error = error.message || String(error);
+        render();
+      }
+    }, 45000);
+  };
+
+  const acquireDocumentLock = async (sourcePath, lockToken = '') => {
+    if (!sourcePath) return null;
+    const response = await admin.documents.lock({ source_path: sourcePath, lock_token: lockToken });
+    state.documentLock = response.lock || null;
+    state.documentEditor.lock_token = response.lock?.owned_by_me ? response.lock.token || '' : '';
+    if (state.documentEditor.lock_token) {
+      startDocumentLockHeartbeat();
+    } else {
+      stopDocumentLockHeartbeat();
+    }
+    return response.lock || null;
+  };
+
+  const loadDocumentIntoEditor = async (detail) => {
+    if (!detail) return;
+    if (
+      state.documentEditor.source_path &&
+      state.documentEditor.source_path !== detail.source_path
+    ) {
+      await releaseCurrentDocumentLock();
+    }
+    state.documentEditor = {
+      source_path: detail.source_path,
+      raw: detail.raw_body,
+      version_comment: '',
+      lock_token: '',
+    };
+    state.documentFieldSchema = detail.field_schema || [];
+    state.documentFieldValues = clone(detail.fields || {});
+    state.documentMeta = {
+      status: detail.status || 'draft',
+      author: detail.author || '',
+      last_editor: detail.last_editor || '',
+      created_at: detail.created_at || '',
+      updated_at: detail.updated_at || '',
+    };
     state.documentPreview = null;
-  };
-
-  const setFlash = (message) => {
-    state.flash = message;
-    state.error = '';
-    pushToast(message, 'success');
-  };
-
-  const setError = (message) => {
-    state.error = message;
-    if (message) {
-      pushToast(message, 'error');
-    }
-  };
-
-  const pushToast = (message, tone = 'info') => {
-    if (!String(message || '').trim()) return;
-    const id = Date.now() + Math.random();
-    state.toasts = [...state.toasts.slice(-3), { id, message: String(message), tone }];
-    window.setTimeout(() => {
-      state.toasts = state.toasts.filter((toast) => toast.id !== id);
-      render();
-    }, tone === 'error' ? 6500 : 3500);
-  };
-
-  const markDirty = (key, next = true) => {
-    state.dirty[key] = next;
-  };
-
-  const snapshotValue = (key, value) => {
-    state.snapshots[key] = JSON.stringify(value ?? '');
-    state.dirty[key] = false;
-  };
-
-  const dirtyMessage = () => Object.entries(state.dirty).filter(([, value]) => value).map(([key]) => key).join(', ');
-
-  const hasUnsavedChanges = () => Object.values(state.dirty).some(Boolean);
-
-  const confirmNavigation = () => {
-    if (!hasUnsavedChanges()) return true;
-    return window.confirm(`You have unsaved changes in: ${dirtyMessage()}. Leave this view?`);
-  };
-
-  const compareSnapshot = (key, value) => {
-    state.dirty[key] = state.snapshots[key] !== JSON.stringify(value ?? '');
-  };
-
-  const updateTablePage = (name, page) => {
-    const table = state.tables[name];
-    if (!table) return;
-    table.page = Math.max(1, page);
-  };
-
-  const sortItems = (items, tableName, valueFor) => {
-    const table = state.tables[tableName];
-    if (!table) return items;
-    return [...items].sort((left, right) => {
-      const a = String(valueFor(left, table.sort) ?? '').toLowerCase();
-      const b = String(valueFor(right, table.sort) ?? '').toLowerCase();
-      if (a === b) return 0;
-      const cmp = a < b ? -1 : 1;
-      return table.dir === 'asc' ? cmp : -cmp;
+    snapshotValue('document', {
+      editor: state.documentEditor,
+      fields: state.documentFieldValues,
+      meta: state.documentMeta,
     });
+    await acquireDocumentLock(detail.source_path, detail.lock?.token || '');
   };
 
-  const paginateItems = (items, tableName) => {
-    const table = state.tables[tableName];
-    if (!table) return { items, totalPages: 1, page: 1 };
-    const totalPages = Math.max(1, Math.ceil(items.length / table.pageSize));
-    table.page = Math.min(table.page, totalPages);
-    const start = (table.page - 1) * table.pageSize;
-    return { items: items.slice(start, start + table.pageSize), totalPages, page: table.page };
-  };
+  const {
+    setUserForm,
+    resetUserForm,
+    resetUserSecurity,
+    selectedUserRecord,
+    resetDocumentEditor,
+    setFlash,
+    setError,
+    pushToast,
+    markDirty,
+    snapshotValue,
+    dirtyMessage,
+    hasUnsavedChanges,
+    clearDirtyState,
+    confirmNavigation,
+    compareSnapshot,
+    updateTablePage,
+    sortItems,
+    paginateItems,
+    toggleSelection,
+    clearLoadErrors,
+  } = createUIStateHelpers({
+    state,
+    render: () => render(),
+    buildDefaultMarkdown,
+  });
 
-  const renderTableControls = (tableName, totalCount, totalPages) => {
-    const table = state.tables[tableName];
-    if (!table) return '';
-    const choices = {
-      documents: ['title', 'type', 'status', 'lang'],
-      media: ['name', 'kind', 'reference'],
-      users: ['username', 'name', 'email'],
-      audit: ['timestamp', 'action', 'actor', 'outcome'],
-      plugins: ['name', 'status', 'version'],
-      themes: ['name', 'version', 'valid']
-    }[tableName] || [table.sort];
-    const options = Array.from(new Set([table.sort, ...choices])).map((choice) => `<option value="${escapeHTML(choice)}" ${table.sort === choice ? 'selected' : ''}>${escapeHTML(choice)}</option>`).join('');
-    return `<div class="table-controls">
-      <label>Sort
-        <select data-table-sort="${tableName}">
-          ${options}
-        </select>
-      </label>
-      <button type="button" class="ghost small" data-table-dir="${tableName}">${table.dir === 'asc' ? 'Asc' : 'Desc'}</button>
-      <div class="table-paging">
-        <button type="button" class="ghost small" data-table-page="${tableName}|prev" ${table.page <= 1 ? 'disabled' : ''}>Prev</button>
-        <span class="muted">Page ${table.page} / ${totalPages} • ${totalCount} items</span>
-        <button type="button" class="ghost small" data-table-page="${tableName}|next" ${table.page >= totalPages ? 'disabled' : ''}>Next</button>
-      </div>
-    </div>`;
-  };
-
-  const renderBreadcrumbs = () => {
-    const trail = ['Admin', sectionTitles[state.section] || 'Overview'];
-    if (state.section === 'documents' && state.documentEditor.source_path) {
-      trail.push(state.documentEditor.source_path);
-    } else if (state.section === 'media' && state.selectedMediaReference) {
-      trail.push(state.selectedMediaReference);
-    } else if (state.section === 'history' && state.documentHistoryPath) {
-      trail.push(state.documentHistoryPath);
-    } else if (state.section === 'users' && state.userForm.username) {
-      trail.push(state.userForm.username);
-    }
-    return `<nav class="breadcrumbs">${trail.map((part, index) => `${index ? '<span>/</span>' : ''}<span>${escapeHTML(part)}</span>`).join(' ')}</nav>`;
-  };
-
-  const renderToasts = () => {
-    if (!state.toasts.length) return '';
-    return `<div class="toast-stack">${state.toasts.map((toast) => `<div class="toast ${escapeHTML(toast.tone)}">${escapeHTML(toast.message)}</div>`).join('')}</div>`;
-  };
-
-  const renderKeyboardHelp = () => {
-    if (!state.keyboardHelp) return '';
-    return `<div class="shortcut-help">
-      <strong>Keyboard Shortcuts</strong>
-      <div><code>Cmd/Ctrl+S</code> Save current form</div>
-      <div><code>Cmd/Ctrl+Enter</code> Preview current document</div>
-      <div><code>Shift+/</code> Toggle shortcut help</div>
-      <div><code>g d</code> Documents</div>
-      <div><code>g m</code> Media</div>
-      <div><code>g u</code> Users</div>
-    </div>`;
-  };
-
-  const toggleSelection = (items, value, checked) => checked
-    ? Array.from(new Set([...items, value]))
-    : items.filter((item) => item !== value);
-
-  const clearLoadErrors = () => {
-    state.loadErrors = [];
-  };
-
-  const summarizeLoadErrors = () => {
-    if (!state.loadErrors.length) {
-      return '';
-    }
-    return `Some admin data could not be loaded: ${state.loadErrors.join(', ')}`;
-  };
-
-  const mediaPreview = (item) => {
-    if (!item) {
-      return '<div class="empty-state">Select media to preview and edit metadata.</div>';
-    }
-    const url = escapeHTML(item.public_url);
-    switch (item.kind) {
-      case 'image':
-        return `<img class="media-preview" src="${url}" alt="${escapeHTML(item.metadata?.alt || item.name)}">`;
-      case 'video':
-        return `<video class="media-preview" controls preload="metadata" src="${url}"></video>`;
-      case 'audio':
-        return `<audio class="media-audio" controls preload="metadata" src="${url}"></audio>`;
+  const renderFieldSchemaControl = (schema, path = []) => {
+    const fullPath = [...path, schema.name];
+    const pathValue = fullPath.join('.');
+    const value =
+      getValueAtPath(state.documentFieldValues, fullPath) ?? defaultValueForSchema(schema);
+    const label = schema.label || schema.name;
+    const help = schema.help ? `<div class="muted">${escapeHTML(schema.help)}</div>` : '';
+    switch (schema.type) {
+      case 'bool':
+        return `<label class="checkbox"><input type="checkbox" data-custom-field="${escapeHTML(pathValue)}" data-custom-type="bool" ${value ? 'checked' : ''}> ${escapeHTML(label)}</label>${help}`;
+      case 'select':
+        return `<label>${escapeHTML(label)}<select data-custom-field="${escapeHTML(pathValue)}" data-custom-type="select">
+          ${(schema.enum || []).map((entry) => `<option value="${escapeHTML(entry)}" ${entry === value ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}
+        </select></label>${help}`;
+      case 'number':
+        return `<label>${escapeHTML(label)}<input type="number" data-custom-field="${escapeHTML(pathValue)}" data-custom-type="number" value="${escapeHTML(value)}" placeholder="${escapeHTML(schema.placeholder || '')}"></label>${help}`;
+      case 'object':
+        return `<fieldset class="custom-field-group"><legend>${escapeHTML(label)}</legend>${help}${(schema.fields || []).map((field) => renderFieldSchemaControl(field, fullPath)).join('')}</fieldset>`;
+      case 'repeater': {
+        const items = Array.isArray(value) ? value : [];
+        return `<fieldset class="custom-field-group"><legend>${escapeHTML(label)}</legend>${help}
+          <div class="repeater-list">
+            ${items
+              .map((item, index) => {
+                const itemPath = [...fullPath, index];
+                const itemSchema = schema.item || { name: 'item', type: 'text', label: 'Item' };
+                const body =
+                  itemSchema.type === 'object'
+                    ? `<div class="custom-object">${(itemSchema.fields || []).map((field) => renderFieldSchemaControl(field, itemPath)).join('')}</div>`
+                    : renderFieldSchemaControl(
+                        {
+                          ...itemSchema,
+                          name: String(index),
+                          label: itemSchema.label || `Item ${index + 1}`,
+                        },
+                        fullPath
+                      );
+                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-repeater-remove="${escapeHTML(itemPath.join('.'))}">Remove</button></div>`;
+              })
+              .join('')}
+          </div>
+          <button type="button" class="ghost small" data-repeater-add="${escapeHTML(pathValue)}">Add Item</button>
+        </fieldset>`;
+      }
+      case 'textarea':
+        return `<label>${escapeHTML(label)}<textarea data-custom-field="${escapeHTML(pathValue)}" data-custom-type="textarea" rows="4" placeholder="${escapeHTML(schema.placeholder || '')}">${escapeHTML(value || '')}</textarea></label>${help}`;
       default:
-        return `<a class="file-link" href="${url}" target="_blank" rel="noreferrer">${escapeHTML(item.name)}</a>`;
+        return `<label>${escapeHTML(label)}<input type="text" data-custom-field="${escapeHTML(pathValue)}" data-custom-type="text" value="${escapeHTML(value || '')}" placeholder="${escapeHTML(schema.placeholder || '')}"></label>${help}`;
     }
   };
-
-  const mediaThumb = (item) => {
-    if (!item) return '<span class="media-thumb placeholder">-</span>';
-    const url = escapeHTML(item.public_url);
-    switch (item.kind) {
-      case 'image':
-        return `<img class="media-thumb" src="${url}" alt="${escapeHTML(item.metadata?.alt || item.name)}">`;
-      case 'video':
-        return `<video class="media-thumb" src="${url}" muted preload="metadata"></video>`;
-      case 'audio':
-        return `<div class="media-thumb audio">AUDIO</div>`;
-      default:
-        return `<div class="media-thumb file">FILE</div>`;
-    }
-  };
-
-  const shellNav = () => {
-    const items = [
-      ['overview', 'Overview'],
-      ['documents', 'Documents'],
-      ['history', 'History'],
-      ['trash', 'Trash'],
-      ['media', 'Media'],
-      ['audit', 'Audit'],
-      ['users', 'Users'],
-      ['config', 'Configuration'],
-      ['plugins', 'Plugins'],
-      ['themes', 'Themes']
-    ];
-    return items.map(([key, label]) => `<a class="wp-nav-item${state.section === key ? ' active' : ''}" href="${adminBase}/${key === 'overview' ? '' : key}" data-section="${key}">${label}</a>`).join('');
-  };
-
-  const panel = (title, body, subtitle = '', actions = '') => `
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>${escapeHTML(title)}</h2>
-          ${subtitle ? `<div class="muted">${escapeHTML(subtitle)}</div>` : ''}
-        </div>
-        ${actions}
-      </div>
-      ${body}
-    </section>`;
-
-  const renderOverview = () => {
-    const content = state.status?.content || {};
-    const cards = `
-      <div class="cards">
-        <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(content.document_count ?? 0)}</strong><span class="card-copy">Loaded into the current graph.</span></article>
-        <article class="card"><span class="card-label">Drafts</span><strong>${escapeHTML(content.draft_count ?? 0)}</strong><span class="card-copy">Draft and archived content.</span></article>
-        <article class="card"><span class="card-label">Media</span><strong>${escapeHTML(state.media.length)}</strong><span class="card-copy">Images, uploads, and asset files.</span></article>
-        <article class="card"><span class="card-label">Users</span><strong>${escapeHTML(state.users.length)}</strong><span class="card-copy">Filesystem-backed admin accounts.</span></article>
-      </div>`;
-    return cards + (state.loadErrors.length ? `<div class="panel"><div class="panel-pad"><div class="error">${escapeHTML(summarizeLoadErrors())}</div></div></div>` : '');
-  };
-
-  const documentStatusLabel = (doc) => {
-    if (doc.archived) return 'Archived';
-    if (doc.draft) return 'Draft';
-    return 'Published';
-  };
-
-  const renderDocumentHistoryRows = (entries) => entries.map((entry) => `
-    <div class="table-row table-row-actions">
-      <span>
-        <strong>${escapeHTML(entry.title || entry.slug || entry.path)}</strong>
-        <div class="muted mono">${escapeHTML(entry.path)}</div>
-        ${entry.version_comment ? `<div class="muted">Note: ${escapeHTML(entry.version_comment)}</div>` : ''}
-        ${entry.actor ? `<div class="muted">By ${escapeHTML(entry.actor)}</div>` : ''}
-      </span>
-      <span>${escapeHTML(lifecycleLabel(entry.state))}</span>
-      <span>${escapeHTML(formatDateTime(entry.timestamp) || 'Current')}</span>
-      <span class="row-actions">
-        ${entry.state === 'current' ? '<span class="muted">Current</span>' : `
-          <button class="ghost small" data-restore-document="${escapeHTML(entry.path)}">Restore</button>
-          <button class="ghost small" data-diff-document="${escapeHTML(entry.path)}">Diff</button>
-          <button class="ghost small danger" data-purge-document="${escapeHTML(entry.path)}">Purge</button>`}
-      </span>
-    </div>`).join('');
-
-  const renderMediaHistoryRows = (entries) => entries.map((entry) => `
-    <div class="table-row table-row-actions">
-      <span>
-        <strong>${escapeHTML(entry.name || entry.path)}</strong>
-        <div class="muted mono">${escapeHTML(entry.path)}</div>
-        ${entry.metadata_only ? '<div class="muted">Metadata revision</div>' : ''}
-        ${entry.version_comment ? `<div class="muted">Note: ${escapeHTML(entry.version_comment)}</div>` : ''}
-        ${entry.actor ? `<div class="muted">By ${escapeHTML(entry.actor)}</div>` : ''}
-      </span>
-      <span>${escapeHTML(lifecycleLabel(entry.state))}</span>
-      <span>${escapeHTML(formatDateTime(entry.timestamp) || 'Current')}</span>
-      <span class="row-actions">
-        ${entry.state === 'current'
-          ? (entry.public_url ? `<a class="button-link ghost small" href="${escapeHTML(entry.public_url)}" target="_blank" rel="noreferrer">View</a>` : '<span class="muted">Current</span>')
-          : `
-            <button class="ghost small" data-restore-media-path="${escapeHTML(entry.path)}">Restore</button>
-            <button class="ghost small danger" data-purge-media-path="${escapeHTML(entry.path)}">Purge</button>`}
-      </span>
-    </div>`).join('');
-
-  const renderTrashSelectionRows = (entries, selected, kind) => entries.map((entry) => `
-    <div class="table-row table-row-actions">
-      <span>
-        <label class="checkbox inline-checkbox">
-          <input type="checkbox" ${selected.includes(entry.path) ? 'checked' : ''} data-select-trash="${escapeHTML(entry.path)}" data-trash-kind="${kind}">
-          <strong>${escapeHTML(entry.title || entry.name || entry.slug || entry.path)}</strong>
-        </label>
-        <div class="muted mono">${escapeHTML(entry.path)}</div>
-        ${entry.version_comment ? `<div class="muted">${escapeHTML(entry.version_comment)}</div>` : ''}
-      </span>
-      <span>${escapeHTML(lifecycleLabel(entry.state))}</span>
-      <span>${escapeHTML(formatDateTime(entry.timestamp) || 'Current')}</span>
-      <span class="row-actions">
-        ${kind === 'document'
-          ? `<button class="ghost small" data-restore-document="${escapeHTML(entry.path)}">Restore</button>
-             <button class="ghost small danger" data-purge-document="${escapeHTML(entry.path)}">Purge</button>`
-          : `<button class="ghost small" data-restore-media-path="${escapeHTML(entry.path)}">Restore</button>
-             <button class="ghost small danger" data-purge-media-path="${escapeHTML(entry.path)}">Purge</button>`}
-      </span>
-    </div>`).join('');
 
   const renderSplitDiffPane = (leftRaw, rightRaw) => {
     const leftLines = (leftRaw || '').replaceAll('\r\n', '\n').split('\n');
@@ -739,8 +532,12 @@
           rightClass += ' changed';
         }
       }
-      leftRows.push(`<div class="${leftClass}"><span class="diff-line-number">${index + 1}</span><code>${escapeHTML(left)}</code></div>`);
-      rightRows.push(`<div class="${rightClass}"><span class="diff-line-number">${index + 1}</span><code>${escapeHTML(right)}</code></div>`);
+      leftRows.push(
+        `<div class="${leftClass}"><span class="diff-line-number">${index + 1}</span><code>${escapeHTML(left)}</code></div>`
+      );
+      rightRows.push(
+        `<div class="${rightClass}"><span class="diff-line-number">${index + 1}</span><code>${escapeHTML(right)}</code></div>`
+      );
     }
     return `<div class="diff-split">
       <section><h3>Previous</h3><div class="diff-pane">${leftRows.join('')}</div></section>
@@ -748,45 +545,30 @@
     </div>`;
   };
 
-  const renderDocuments = () => {
-    const editorDocument = parseDocumentEditor(state.documentEditor.raw, state.documentEditor.source_path);
+  const renderEditorPanel = () => {
+    const editorDocument = parseDocumentEditor(
+      state.documentEditor.raw,
+      state.documentEditor.source_path,
+      defaultLang
+    );
     const mediaQuery = state.mediaPickerQuery.trim().toLowerCase();
-    const mediaMatches = state.media.filter((item) => {
-      if (!mediaQuery) return true;
-      const haystack = [
-        item.name,
-        item.reference,
-        item.metadata?.title,
-        item.metadata?.alt,
-        item.path
-      ].join(' ').toLowerCase();
-      return haystack.includes(mediaQuery);
-    }).slice(0, 10);
-    const sortedDocuments = sortItems(state.documents, 'documents', (doc, field) => {
-      switch (field) {
-        case 'type': return doc.type;
-        case 'status': return documentStatusLabel(doc);
-        case 'lang': return doc.lang;
-        default: return doc.title || doc.slug || doc.id;
-      }
-    });
-    const pagedDocuments = paginateItems(sortedDocuments, 'documents');
-    const rows = pagedDocuments.items.map((doc) => `
-      <div class="table-row table-row-actions">
-        <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong><div class="muted mono">${escapeHTML(doc.source_path)}</div></span>
-        <span>${escapeHTML(doc.type)}</span>
-        <span>${escapeHTML(documentStatusLabel(doc))}</span>
-        <span class="row-actions">
-          <button class="ghost small" data-edit-document="${escapeHTML(doc.id)}">Edit</button>
-          <button class="ghost small" data-history-document="${escapeHTML(doc.source_path)}">History</button>
-          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|published">Publish</button>
-          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|draft">Draft</button>
-          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|archived">Archive</button>
-          <button class="ghost small danger" data-delete-document="${escapeHTML(doc.source_path)}">Delete</button>
-        </span>
-      </div>`);
-
-    const editor = `
+    const mediaMatches = state.media
+      .filter((item) => {
+        if (!mediaQuery) return true;
+        const haystack = [
+          item.name,
+          item.reference,
+          item.metadata?.title,
+          item.metadata?.alt,
+          item.path,
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(mediaQuery);
+      })
+      .slice(0, 10);
+    const workflowStatus = editorDocument.fields.workflow || state.documentMeta.status || 'draft';
+    return `
       <div class="panel-pad stack">
         <form id="document-create-form" class="inline-form">
           <label>Kind
@@ -800,16 +582,36 @@
           <label>Archetype<input id="document-create-archetype" type="text" placeholder="post"></label>
           <button type="submit">Create Document</button>
         </form>
-        <form id="document-search-form" class="inline-form compact-inline-form">
-          <label class="frontmatter-span-2">Search Documents<input id="document-search-query" type="search" value="${escapeHTML(state.documentQuery)}" placeholder="Search title, slug, URL, summary, tags, or path"></label>
-          <button type="submit">Search</button>
-          <button type="button" class="ghost" id="document-search-clear">Clear</button>
-        </form>
         <form id="document-save-form" class="stack">
           <div class="editor-grid">
             <div class="stack">
               <label>Source Path<input id="document-source-path" type="text" value="${escapeHTML(state.documentEditor.source_path)}" placeholder="content/pages/about.md"></label>
+              ${state.documentLock ? `<div class="status-line ${state.documentLock.owned_by_me ? '' : 'error'}">${state.documentLock.owned_by_me ? `Locked by you until ${escapeHTML(formatDateTime(state.documentLock.expires_at))}` : `Currently being edited by ${escapeHTML(state.documentLock.name || state.documentLock.username || 'another user')}`}</div>` : ''}
               <label>Version Comment<input id="document-version-comment" type="text" value="${escapeHTML(state.documentEditor.version_comment || '')}" placeholder="Explain what changed in this revision"></label>
+              <div class="frontmatter-card">
+                <div class="frontmatter-card-header">
+                  <div>
+                    <strong>Workflow</strong>
+                    <div class="muted">Request review, schedule publication windows, and keep editorial notes with the draft.</div>
+                  </div>
+                </div>
+                <div class="frontmatter-grid">
+                  <label>Workflow
+                    <select id="document-frontmatter-workflow" data-frontmatter-field="workflow">
+                      ${['draft', 'in_review', 'scheduled', 'published', 'archived'].map((entry) => `<option value="${entry}" ${workflowStatus === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}
+                    </select>
+                  </label>
+                  <label>Scheduled Publish<input id="document-frontmatter-scheduled-publish-at" data-frontmatter-field="scheduled_publish_at" type="text" value="${escapeHTML(editorDocument.fields.scheduled_publish_at || '')}" placeholder="2026-03-21T14:00:00Z"></label>
+                  <label>Scheduled Unpublish<input id="document-frontmatter-scheduled-unpublish-at" data-frontmatter-field="scheduled_unpublish_at" type="text" value="${escapeHTML(editorDocument.fields.scheduled_unpublish_at || '')}" placeholder="2026-03-28T14:00:00Z"></label>
+                  <label class="frontmatter-span-3">Editorial Note<textarea id="document-frontmatter-editorial-note" data-frontmatter-field="editorial_note" rows="3">${escapeHTML(editorDocument.fields.editorial_note || '')}</textarea></label>
+                </div>
+                <div class="toolbar">
+                  <button type="button" class="ghost small" data-apply-workflow="draft">Save as Draft</button>
+                  <button type="button" class="ghost small" data-apply-workflow="in_review">Request Review</button>
+                  <button type="button" class="ghost small" data-apply-workflow="published">Approve & Publish</button>
+                  <button type="button" class="ghost small" data-apply-workflow="archived">Archive</button>
+                </div>
+              </div>
               <div class="frontmatter-card">
                 <div class="frontmatter-card-header">
                   <div>
@@ -836,6 +638,36 @@
                   <label class="checkbox"><input id="document-frontmatter-archived" data-frontmatter-field="archived" type="checkbox" ${editorDocument.fields.archived ? 'checked' : ''}> Archived</label>
                 </div>
               </div>
+              <div class="frontmatter-card">
+                <div class="frontmatter-card-header">
+                  <div>
+                    <strong>Attribution</strong>
+                    <div class="muted">Tracked automatically in frontmatter and surfaced in history.</div>
+                  </div>
+                </div>
+                <div class="frontmatter-grid">
+                  <label>Author<input type="text" value="${escapeHTML(state.documentMeta.author || '')}" readonly></label>
+                  <label>Last Editor<input type="text" value="${escapeHTML(state.documentMeta.last_editor || '')}" readonly></label>
+                  <label>Created<input type="text" value="${escapeHTML(formatDateTime(state.documentMeta.created_at) || '')}" readonly></label>
+                  <label>Updated<input type="text" value="${escapeHTML(formatDateTime(state.documentMeta.updated_at) || '')}" readonly></label>
+                </div>
+              </div>
+              ${
+                state.documentFieldSchema.length
+                  ? `
+                <div class="frontmatter-card">
+                  <div class="frontmatter-card-header">
+                    <div>
+                      <strong>Custom Fields</strong>
+                      <div class="muted">Schema-driven fields for ${escapeHTML(editorDocument.fields.layout || 'document')} content.</div>
+                    </div>
+                  </div>
+                  <div class="frontmatter-grid custom-field-grid">
+                    ${state.documentFieldSchema.map((schema) => renderFieldSchemaControl(schema)).join('')}
+                  </div>
+                </div>`
+                  : ''
+              }
             </div>
             <div class="stack">
               <label>Raw Markdown<textarea id="document-raw" rows="20" spellcheck="false">${escapeHTML(state.documentEditor.raw)}</textarea></label>
@@ -848,8 +680,11 @@
                   <input id="document-media-picker-query" type="search" value="${escapeHTML(state.mediaPickerQuery)}" placeholder="Search media">
                 </div>
                 <div class="media-picker-list">
-                  ${mediaMatches.length
-                    ? mediaMatches.map((item) => `
+                  ${
+                    mediaMatches.length
+                      ? mediaMatches
+                          .map(
+                            (item) => `
                       <div class="media-picker-row">
                         <div class="media-picker-meta">
                           <strong>${escapeHTML(item.name)}</strong>
@@ -859,8 +694,11 @@
                           <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="auto">Insert</button>
                           <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="link">Insert Link</button>
                         </div>
-                      </div>`).join('')
-                    : '<div class="empty-state">No media matched your search.</div>'}
+                      </div>`
+                          )
+                          .join('')
+                      : '<div class="empty-state">No media matched your search.</div>'
+                  }
                 </div>
               </div>
             </div>
@@ -872,9 +710,45 @@
           </div>
         </form>
       </div>`;
+  };
+
+  const renderDocuments = () => {
+    const sortedDocuments = sortItems(state.documents, 'documents', (doc, field) => {
+      switch (field) {
+        case 'type':
+          return doc.type;
+        case 'status':
+          return documentStatusLabel(doc);
+        case 'lang':
+          return doc.lang;
+        default:
+          return doc.title || doc.slug || doc.id;
+      }
+    });
+    const pagedDocuments = paginateItems(sortedDocuments, 'documents');
+    const rows = pagedDocuments.items.map(
+      (doc) => `
+      <div class="table-row table-row-actions">
+        <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong><div class="muted mono">${escapeHTML(doc.source_path)}</div></span>
+        <span>${escapeHTML(doc.type)}</span>
+        <span>${escapeHTML(documentStatusLabel(doc))}</span>
+        <span class="row-actions">
+          <button class="ghost small" data-edit-document="${escapeHTML(doc.id)}">Edit</button>
+          <button class="ghost small" data-history-document="${escapeHTML(doc.source_path)}">History</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|in_review">Request Review</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|published">Publish</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|draft">Draft</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|archived">Archive</button>
+          <button class="ghost small danger" data-delete-document="${escapeHTML(doc.source_path)}">Delete</button>
+        </span>
+      </div>`
+    );
 
     const preview = state.documentPreview
-      ? `<div class="panel-pad preview-body">${state.documentPreview.html}</div>`
+      ? `<div class="panel-pad stack preview-body">
+          ${state.documentPreview.field_errors?.length ? `<div class="warning-panel panel"><div class="panel-pad"><strong>Field Validation</strong><div class="mini-list">${state.documentPreview.field_errors.map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div></div></div>` : ''}
+          ${renderPreviewFrame(state.documentPreview.html)}
+        </div>`
       : `<div class="panel-pad empty-state">Use Preview to render the current Markdown body.</div>`;
     const historyRows = renderDocumentHistoryRows(state.documentHistory);
     const trashRows = renderDocumentHistoryRows(state.documentTrash);
@@ -885,37 +759,82 @@
             <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">Unified Diff</button>
           </div>
           <div class="status-line mono">${escapeHTML(state.documentDiff.left_path)} -> ${escapeHTML(state.documentDiff.right_path)}</div>
-          ${state.documentDiffMode === 'split'
-            ? renderSplitDiffPane(state.documentDiff.left_raw, state.documentDiff.right_raw)
-            : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`}
+          ${
+            state.documentDiffMode === 'split'
+              ? renderSplitDiffPane(state.documentDiff.left_raw, state.documentDiff.right_raw)
+              : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`
+          }
         </div>`
       : `<div class="panel-pad empty-state">Select a version or trashed document and choose Diff to compare it against the current file.</div>`;
 
     return `
       <div class="layout-grid">
         <div class="stack">
-          ${panel('Documents', `${renderTableControls('documents', state.documents.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search. Try a broader query or create a new page/post.</div>'}</div>`, `${state.documents.length} documents`)}
+          ${panel(
+            'Find Documents',
+            `
+            <form id="document-search-form" class="panel-pad stack">
+              <label>Search Documents<input id="document-search-query" type="search" value="${escapeHTML(state.documentQuery)}" placeholder="Search title, slug, URL, summary, tags, or path"></label>
+              <div class="toolbar">
+                <button type="submit">Search</button>
+                <button type="button" class="ghost" id="document-search-clear">Clear</button>
+                <button type="button" class="ghost" data-open-editor>Open Editor</button>
+              </div>
+            </form>
+          `,
+            'Keep management here, then jump into Editor to write'
+          )}
+          ${panel('Documents', `${renderTableControls(state, 'documents', state.documents.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search. Try a broader query or create a new page/post.</div>'}</div>`, `${state.documents.length} documents`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed`)}
         </div>
         <div class="stack">
-          ${panel('Editor', editor, 'Create, edit, publish, archive, or soft-delete Markdown content')}
           ${panel('Preview', preview, state.documentPreview ? state.documentPreview.title || state.documentPreview.slug || 'Rendered preview' : 'No preview yet')}
           ${panel('History', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${historyRows || '<div class="panel-pad empty-state">Select a document to inspect version and trash history.</div>'}</div>`, state.documentHistoryPath || 'No document selected')}
           ${panel('Diff', diffBody, 'Line-based diff against the current version')}
+          ${renderWidgetPanels('documents.sidebar').join('')}
         </div>
       </div>`;
   };
 
+  const renderEditor = () => `
+    <div class="layout-grid">
+      <div class="stack">
+        ${panel('Editor', renderEditorPanel(), 'Create, edit, publish, archive, or soft-delete Markdown content')}
+      </div>
+      <div class="stack">
+        ${panel(
+          'Editor Status',
+          `
+          <div class="panel-pad stack">
+            <div class="status-line"><strong>Source Path:</strong> <span class="mono">${escapeHTML(state.documentEditor.source_path || 'Unsaved draft')}</span></div>
+            <div class="status-line"><strong>Current Status:</strong> <span>${escapeHTML(documentStatusLabel({ status: state.documentMeta.status || 'draft' }))}</span></div>
+            <div class="status-line"><strong>Author:</strong> <span>${escapeHTML(state.documentMeta.author || 'Unassigned')}</span></div>
+            <div class="status-line"><strong>Last Editor:</strong> <span>${escapeHTML(state.documentMeta.last_editor || 'Unassigned')}</span></div>
+            <div class="toolbar">
+              <button type="button" class="ghost" data-open-documents>Open Documents</button>
+              <button type="button" class="ghost" id="editor-preview-documents">Show Preview on Documents</button>
+            </div>
+          </div>
+        `,
+          'Preview, diff, history, and trash stay on the Documents page'
+        )}
+      </div>
+    </div>`;
+
   const renderMedia = () => {
     const sortedMedia = sortItems(state.media, 'media', (item, field) => {
       switch (field) {
-        case 'kind': return item.kind;
-        case 'reference': return item.reference;
-        default: return item.name;
+        case 'kind':
+          return item.kind;
+        case 'reference':
+          return item.reference;
+        default:
+          return item.name;
       }
     });
     const pagedMedia = paginateItems(sortedMedia, 'media');
-    const rows = pagedMedia.items.map((item) => `
+    const rows = pagedMedia.items.map(
+      (item) => `
       <div class="table-row table-row-actions">
         <span class="media-library-cell">${mediaThumb(item)}<span><strong>${escapeHTML(item.name)}</strong><div class="muted mono">${escapeHTML(item.reference)}</div></span></span>
         <span>${escapeHTML(item.kind)}</span>
@@ -927,7 +846,8 @@
           <a class="button-link ghost small" href="${escapeHTML(item.public_url)}" target="_blank" rel="noreferrer">View</a>
           <button class="ghost small danger" data-delete-media="${escapeHTML(item.reference)}">Delete</button>
         </span>
-      </div>`);
+      </div>`
+    );
 
     const detail = state.mediaDetail;
     const metadata = detail?.metadata || {};
@@ -936,11 +856,13 @@
     return `
       <div class="layout-grid">
         <div class="stack">
-          ${panel('Upload Media', `
+          ${panel(
+            'Upload Media',
+            `
             <form id="media-upload-form" class="panel-pad stack">
               <label>Search Library<input id="media-search-query" type="search" value="${escapeHTML(state.mediaQuery)}" placeholder="Search name, reference, metadata, or tags"></label>
-              <label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="uploads">uploads</option></select></label>
-              <label>Directory<input id="media-dir" type="text" placeholder="posts/launch"></label>
+              <label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="videos">videos</option><option value="audio">audio</option><option value="documents">documents</option></select></label>
+              <!-- Directory uploads remain supported by the backend, but the default admin theme intentionally hides this field to avoid path confusion in the UI. -->
               <label>File<input id="media-file" type="file"></label>
               <div class="toolbar">
                 <button type="submit">Upload Media</button>
@@ -948,15 +870,28 @@
                 <button type="button" class="ghost" id="media-search-clear">Clear</button>
               </div>
             </form>
-          `, 'Uploads return stable media: references that can be used in Markdown')}
-          ${panel('Library', `${renderTableControls('media', state.media.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media matched the current search. Upload a file or clear the filter.</div>'}</div>`, `${state.media.length} media items`)}
+          `,
+            'Uploads return stable media: references that can be used in Markdown'
+          )}
+          ${panel('Library', `${renderTableControls(state, 'media', state.media.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media matched the current search. Upload a file or clear the filter.</div>'}</div>`, `${state.media.length} media items`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed`)}
         </div>
         <div class="stack">
-          ${panel('Selected Media', `
+          ${panel(
+            'Selected Media',
+            `
             <div class="panel-pad stack">
               ${mediaPreview(detail)}
               <div class="status-line mono">${escapeHTML(detail?.reference || '')}</div>
+              <div class="stack subtle-meta">
+                <div class="status-line"><strong>Original file:</strong> <span class="mono">${escapeHTML(metadata.original_filename || '')}</span></div>
+                <div class="status-line"><strong>Stored file:</strong> <span class="mono">${escapeHTML(metadata.stored_filename || detail?.name || '')}</span></div>
+                <div class="status-line"><strong>Type:</strong> <span class="mono">${escapeHTML(metadata.mime_type || detail?.kind || '')}</span></div>
+                <div class="status-line"><strong>Hash:</strong> <span class="mono">${escapeHTML(metadata.content_hash || '')}</span></div>
+                <div class="status-line"><strong>Size:</strong> <span class="mono">${escapeHTML(String(metadata.file_size || detail?.size || ''))}</span></div>
+                <div class="status-line"><strong>Uploaded:</strong> <span>${escapeHTML(metadata.uploaded_at ? formatDateTime(metadata.uploaded_at) : '')}</span></div>
+                <div class="status-line"><strong>Uploaded by:</strong> <span>${escapeHTML(metadata.uploaded_by || '')}</span></div>
+              </div>
               <form id="media-metadata-form" class="stack">
                 <label>Title<input id="media-title" type="text" value="${escapeHTML(metadata.title || '')}"></label>
                 <label>Alt Text<input id="media-alt" type="text" value="${escapeHTML(metadata.alt || '')}"></label>
@@ -972,22 +907,35 @@
                 </div>
               </form>
             </div>
-          `, 'Metadata is stored beside the file as .meta.yaml')}
-          ${panel('Used By', `
+          `,
+            'Metadata is stored beside the file as .meta.yaml'
+          )}
+          ${panel(
+            'Used By',
+            `
             <div class="table table-four">
               <div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Path</span></div>
-              ${detail?.used_by?.length
-                ? detail.used_by.map((doc) => `
+              ${
+                detail?.used_by?.length
+                  ? detail.used_by
+                      .map(
+                        (doc) => `
                   <div class="table-row">
                     <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></span>
                     <span>${escapeHTML(doc.type)}</span>
                     <span>${escapeHTML(documentStatusLabel(doc))}</span>
                     <span class="mono"><button class="ghost small" data-edit-document-path="${escapeHTML(doc.source_path)}">Open</button> ${escapeHTML(doc.source_path)}</span>
-                  </div>`).join('')
-                : '<div class="panel-pad empty-state">No documents reference this media yet.</div>'}
+                  </div>`
+                      )
+                      .join('')
+                  : '<div class="panel-pad empty-state">No documents reference this media yet.</div>'
+              }
             </div>
-          `, 'Documents currently referencing this media: reference')}
+          `,
+            'Documents currently referencing this media: reference'
+          )}
           ${panel('History', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${historyRows || '<div class="panel-pad empty-state">Select a media item to inspect version and trash history.</div>'}</div>`, state.mediaHistoryReference || 'No media selected')}
+          ${renderWidgetPanels('media.sidebar').join('')}
         </div>
       </div>`;
   };
@@ -999,45 +947,389 @@
         ${panel('Media History', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderMediaHistoryRows(state.mediaHistory) || '<div class="panel-pad empty-state">Choose History from a media item to inspect revisions and restore points.</div>'}</div>`, state.mediaHistoryReference || 'No media selected')}
       </div>
       <div class="stack">
-        ${panel('Document Diff', state.documentDiff
-          ? `<div class="panel-pad stack">
+        ${panel(
+          'Document Diff',
+          state.documentDiff
+            ? `<div class="panel-pad stack">
               <div class="toolbar">
                 <button type="button" class="ghost small ${state.documentDiffMode === 'split' ? 'active-toggle' : ''}" data-diff-mode="split">Split View</button>
                 <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">Unified Diff</button>
               </div>
-              ${state.documentDiffMode === 'split'
-                ? renderSplitDiffPane(state.documentDiff.left_raw, state.documentDiff.right_raw)
-                : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`}
+              ${
+                state.documentDiffMode === 'split'
+                  ? renderSplitDiffPane(state.documentDiff.left_raw, state.documentDiff.right_raw)
+                  : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`
+              }
             </div>`
-          : '<div class="panel-pad empty-state">Select a document version and choose Diff to review the changes.</div>', 'Side-by-side and unified views are both available')}
+            : '<div class="panel-pad empty-state">Select a document version and choose Diff to review the changes.</div>',
+          'Side-by-side and unified views are both available'
+        )}
       </div>
     </div>`;
 
-  const renderAudit = () => panel('Audit Log', `
+  const renderAudit = () =>
+    panel(
+      'Audit Log',
+      `
     ${(() => {
       const sortedAudit = sortItems(state.audit, 'audit', (entry, field) => {
         switch (field) {
-          case 'action': return entry.action;
-          case 'actor': return entry.actor;
-          case 'outcome': return entry.outcome;
-          default: return entry.timestamp;
+          case 'action':
+            return entry.action;
+          case 'actor':
+            return entry.actor;
+          case 'outcome':
+            return entry.outcome;
+          default:
+            return entry.timestamp;
         }
       });
       const pagedAudit = paginateItems(sortedAudit, 'audit');
-      return `${renderTableControls('audit', state.audit.length, pagedAudit.totalPages)}
+      return `${renderTableControls(state, 'audit', state.audit.length, pagedAudit.totalPages)}
     <div class="table table-four">
       <div class="table-head"><span>Action</span><span>Actor</span><span>Outcome</span><span>Details</span></div>
-      ${pagedAudit.items.length
-        ? pagedAudit.items.map((entry) => `
+      ${
+        pagedAudit.items.length
+          ? pagedAudit.items
+              .map(
+                (entry) => `
           <div class="table-row">
             <span><strong>${escapeHTML(entry.action)}</strong><div class="muted">${escapeHTML(formatDateTime(entry.timestamp))}</div></span>
             <span>${escapeHTML(entry.actor || '-')}</span>
             <span>${escapeHTML(entry.outcome || '-')}</span>
             <span><div>${escapeHTML(entry.target || '-')}</div>${entry.remote_addr ? `<div class="muted mono">${escapeHTML(entry.remote_addr)}</div>` : ''}</span>
-          </div>`).join('')
-        : '<div class="panel-pad empty-state">No audit log entries yet. Activity will appear here after logins and admin actions.</div>'}
+          </div>`
+              )
+              .join('')
+          : '<div class="panel-pad empty-state">No audit log entries yet. Activity will appear here after logins and admin actions.</div>'
+      }
     </div>`;
-    })()}`, `${state.audit.length} recent events`);
+    })()}`,
+      `${state.audit.length} recent events`
+    );
+
+  const formatBytes = (value) => {
+    const bytes = Number(value || 0);
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const scaled = bytes / 1024 ** exp;
+    return `${scaled >= 10 || exp === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[exp]}`;
+  };
+
+  const formatUptime = (seconds) => {
+    const total = Number(seconds || 0);
+    if (!Number.isFinite(total) || total <= 0) return '0m';
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const formatMilliseconds = (value) => `${Number(value || 0)} ms`;
+
+  const sortedEntries = (value) =>
+    Object.entries(value || {}).sort((a, b) => a[0].localeCompare(b[0]));
+
+  const renderMiniList = (value, formatter = (entryValue) => String(entryValue)) => {
+    const entries = sortedEntries(value);
+    if (!entries.length) return '<div class="empty-state">No data yet.</div>';
+    return `<div class="mini-list">${entries
+      .map(
+        ([key, entryValue]) => `
+      <div class="mini-list-row">
+        <span>${escapeHTML(key)}</span>
+        <strong>${escapeHTML(formatter(entryValue))}</strong>
+      </div>`
+      )
+      .join('')}</div>`;
+  };
+
+  const renderLargestFiles = (files) => {
+    if (!files?.length) return '<div class="empty-state">No file size data yet.</div>';
+    return `<div class="mini-list">${files
+      .map(
+        (file) => `
+      <div class="mini-list-row">
+        <span class="mono">${escapeHTML(file.path)}</span>
+        <strong>${escapeHTML(formatBytes(file.size_bytes))}</strong>
+      </div>`
+      )
+      .join('')}</div>`;
+  };
+
+  const renderDebug = () => {
+    if (!debugEnabled()) {
+      return panel(
+        'Runtime Profiling',
+        '<div class="panel-pad empty-state">pprof is disabled. Set <code>admin.debug.pprof: true</code> in site.yaml to enable runtime profiling in the admin.</div>'
+      );
+    }
+    const pprofBase = `${adminBase}/debug/pprof`;
+    const runtime = state.runtimeStatus;
+    return `
+      <div class="layout-grid">
+        <div class="stack">
+          ${panel(
+            'Runtime Summary',
+            runtime
+              ? `<div class="panel-pad stack">
+                <div class="cards">
+                  <article class="card"><span class="card-label">Heap Alloc</span><strong>${escapeHTML(formatBytes(runtime.heap_alloc_bytes))}</strong><span class="card-copy">Live heap bytes allocated.</span></article>
+                  <article class="card"><span class="card-label">Heap In Use</span><strong>${escapeHTML(formatBytes(runtime.heap_inuse_bytes))}</strong><span class="card-copy">Heap spans currently in use.</span></article>
+                  <article class="card"><span class="card-label">Heap Objects</span><strong>${escapeHTML(String(runtime.heap_objects || 0))}</strong><span class="card-copy">Objects tracked by the runtime.</span></article>
+                  <article class="card"><span class="card-label">Goroutines</span><strong>${escapeHTML(String(runtime.goroutines || 0))}</strong><span class="card-copy">Live goroutines right now.</span></article>
+                  <article class="card"><span class="card-label">Process CPU</span><strong>${escapeHTML(String((runtime.process_user_cpu_ms || 0) + (runtime.process_system_cpu_ms || 0)))} ms</strong><span class="card-copy">Accumulated user + system CPU time.</span></article>
+                  <article class="card"><span class="card-label">GC Runs</span><strong>${escapeHTML(String(runtime.num_gc || 0))}</strong><span class="card-copy">Completed garbage collection cycles.</span></article>
+                  <article class="card"><span class="card-label">Uptime</span><strong>${escapeHTML(formatUptime(runtime.uptime_seconds))}</strong><span class="card-copy">Time since the current process started.</span></article>
+                  <article class="card"><span class="card-label">CPU Cores</span><strong>${escapeHTML(String(runtime.num_cpu || 0))}</strong><span class="card-copy">Logical CPUs available to the process.</span></article>
+                </div>
+                <div class="subtle-meta">
+                  <div><strong>Captured:</strong> ${escapeHTML(formatDateTime(runtime.captured_at) || '')}</div>
+                  <div><strong>Go Version:</strong> ${escapeHTML(runtime.go_version || 'n/a')}</div>
+                  <div><strong>Stack In Use:</strong> ${escapeHTML(formatBytes(runtime.stack_inuse_bytes))}</div>
+                  <div><strong>Runtime Sys:</strong> ${escapeHTML(formatBytes(runtime.sys_bytes))}</div>
+                  <div><strong>Next GC:</strong> ${escapeHTML(formatBytes(runtime.next_gc_bytes))}</div>
+                  <div><strong>Last GC:</strong> ${escapeHTML(formatDateTime(runtime.last_gc_at) || 'n/a')}</div>
+                  <div><strong>Live Reload Mode:</strong> ${escapeHTML(runtime.live_reload_mode || 'n/a')}</div>
+                </div>
+                <div class="toolbar">
+                  <button type="button" class="ghost" id="debug-refresh-runtime">Refresh Runtime Snapshot</button>
+                </div>
+              </div>`
+              : '<div class="panel-pad empty-state">No runtime snapshot loaded yet.</div>',
+            'Heap, CPU, goroutines, and GC at a glance'
+          )}
+          ${panel(
+            'Content Inventory',
+            runtime
+              ? `<div class="panel-pad stack">
+                <div class="cards">
+                  <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(String(runtime.content?.document_count || 0))}</strong><span class="card-copy">Total loaded documents.</span></article>
+                  <article class="card"><span class="card-label">Routes</span><strong>${escapeHTML(String(runtime.content?.route_count || 0))}</strong><span class="card-copy">Resolved routes in the current graph.</span></article>
+                  <article class="card"><span class="card-label">Taxonomies</span><strong>${escapeHTML(String(runtime.content?.taxonomy_count || 0))}</strong><span class="card-copy">Configured taxonomy groups in use.</span></article>
+                  <article class="card"><span class="card-label">Terms</span><strong>${escapeHTML(String(runtime.content?.taxonomy_term_count || 0))}</strong><span class="card-copy">Known taxonomy terms across all groups.</span></article>
+                </div>
+                <div class="debug-grid-two">
+                  <div>
+                    <h3>Status</h3>
+                    ${renderMiniList(runtime.content?.by_status)}
+                  </div>
+                  <div>
+                    <h3>Languages</h3>
+                    ${renderMiniList(runtime.content?.by_lang)}
+                  </div>
+                  <div>
+                    <h3>Document Types</h3>
+                    ${renderMiniList(runtime.content?.by_type)}
+                  </div>
+                  <div>
+                    <h3>Media Collections</h3>
+                    ${renderMiniList(runtime.content?.media_counts)}
+                  </div>
+                </div>
+              </div>`
+              : '<div class="panel-pad empty-state">No content inventory loaded yet.</div>',
+            'Document, route, taxonomy, language, and media totals'
+          )}
+          ${panel(
+            'Storage Footprint',
+            runtime
+              ? `<div class="panel-pad stack">
+                <div class="cards">
+                  <article class="card"><span class="card-label">Content Dir</span><strong>${escapeHTML(formatBytes(runtime.storage?.content_bytes))}</strong><span class="card-copy">Current size of the content tree.</span></article>
+                  <article class="card"><span class="card-label">Public Dir</span><strong>${escapeHTML(formatBytes(runtime.storage?.public_bytes))}</strong><span class="card-copy">Current generated output footprint.</span></article>
+                  <article class="card"><span class="card-label">Versions</span><strong>${escapeHTML(String(runtime.storage?.derived_version_count || 0))}</strong><span class="card-copy">Retained version snapshots on disk.</span></article>
+                  <article class="card"><span class="card-label">Trash</span><strong>${escapeHTML(String(runtime.storage?.derived_trash_count || 0))}</strong><span class="card-copy">Soft-deleted files still retained.</span></article>
+                </div>
+                <div class="subtle-meta">
+                  <div><strong>Derived Bytes:</strong> ${escapeHTML(formatBytes(runtime.storage?.derived_bytes))}</div>
+                </div>
+                <div class="debug-grid-two">
+                  <div>
+                    <h3>Media Count By Collection</h3>
+                    ${renderMiniList(runtime.storage?.media_counts)}
+                  </div>
+                  <div>
+                    <h3>Media Size By Collection</h3>
+                    ${renderMiniList(runtime.storage?.media_bytes, formatBytes)}
+                  </div>
+                </div>
+                <div>
+                  <h3>Largest Files</h3>
+                  ${renderLargestFiles(runtime.storage?.largest_files)}
+                </div>
+              </div>`
+              : '<div class="panel-pad empty-state">No storage snapshot loaded yet.</div>',
+            'Disk footprint across content, output, and retained lifecycle files'
+          )}
+          ${panel(
+            'Last Build Report',
+            runtime?.last_build
+              ? `<div class="panel-pad stack">
+                <div class="cards">
+                  <article class="card"><span class="card-label">Generated</span><strong>${escapeHTML(formatDateTime(runtime.last_build.generated_at) || 'n/a')}</strong><span class="card-copy">Most recent persisted build report.</span></article>
+                  <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(String(runtime.last_build.document_count || 0))}</strong><span class="card-copy">Documents included in that build.</span></article>
+                  <article class="card"><span class="card-label">Routes</span><strong>${escapeHTML(String(runtime.last_build.route_count || 0))}</strong><span class="card-copy">Routes emitted in that build.</span></article>
+                  <article class="card"><span class="card-label">Mode</span><strong>${escapeHTML(runtime.last_build.preview ? 'Preview' : 'Standard')}</strong><span class="card-copy">${escapeHTML(runtime.last_build.environment || 'default')}${runtime.last_build.target ? ` / ${escapeHTML(runtime.last_build.target)}` : ''}</span></article>
+                </div>
+                <div class="debug-grid-two">
+                  <div>
+                    <h3>Build Timings</h3>
+                    ${renderMiniList(
+                      {
+                        prepare: runtime.last_build.prepare_ms || 0,
+                        assets: runtime.last_build.assets_ms || 0,
+                        documents: runtime.last_build.documents_ms || 0,
+                        taxonomies: runtime.last_build.taxonomies_ms || 0,
+                        search: runtime.last_build.search_ms || 0,
+                      },
+                      formatMilliseconds
+                    )}
+                  </div>
+                </div>
+              </div>`
+              : '<div class="panel-pad empty-state">No persisted build report yet. Run <code>foundry build</code> or <code>foundry build --preview</code> to capture one.</div>',
+            'Latest static build metrics written by the CLI'
+          )}
+          ${panel(
+            'Integrity & Activity',
+            runtime
+              ? `<div class="panel-pad stack">
+                <div class="cards">
+                  <article class="card"><span class="card-label">Broken Media Refs</span><strong>${escapeHTML(String(runtime.integrity?.broken_media_refs || 0))}</strong><span class="card-copy">Current unresolved <code>media:</code> references.</span></article>
+                  <article class="card"><span class="card-label">Broken Links</span><strong>${escapeHTML(String(runtime.integrity?.broken_internal_links || 0))}</strong><span class="card-copy">Internal links that do not resolve.</span></article>
+                  <article class="card"><span class="card-label">Orphaned Media</span><strong>${escapeHTML(String(runtime.integrity?.orphaned_media || 0))}</strong><span class="card-copy">Media files with no current references.</span></article>
+                  <article class="card"><span class="card-label">Missing Templates</span><strong>${escapeHTML(String(runtime.integrity?.missing_templates || 0))}</strong><span class="card-copy">Layouts missing from the active theme.</span></article>
+                  <article class="card"><span class="card-label">Active Sessions</span><strong>${escapeHTML(String(runtime.activity?.active_sessions || 0))}</strong><span class="card-copy">Currently persisted admin sessions.</span></article>
+                  <article class="card"><span class="card-label">Document Locks</span><strong>${escapeHTML(String(runtime.activity?.active_document_locks || 0))}</strong><span class="card-copy">Active editor locks right now.</span></article>
+                  <article class="card"><span class="card-label">Audit Events</span><strong>${escapeHTML(String(runtime.activity?.recent_audit_events || 0))}</strong><span class="card-copy">Events in the last ${escapeHTML(String(runtime.activity?.audit_window_hours || 24))} hours.</span></article>
+                  <article class="card"><span class="card-label">Failed Logins</span><strong>${escapeHTML(String(runtime.activity?.recent_failed_logins || 0))}</strong><span class="card-copy">Failed login attempts in the audit window.</span></article>
+                </div>
+                <div class="debug-grid-two">
+                  <div>
+                    <h3>Integrity Totals</h3>
+                    ${renderMiniList({
+                      duplicate_urls: runtime.integrity?.duplicate_urls || 0,
+                      duplicate_slugs: runtime.integrity?.duplicate_slugs || 0,
+                      taxonomy_inconsistency: runtime.integrity?.taxonomy_inconsistency || 0,
+                    })}
+                  </div>
+                  <div>
+                    <h3>Recent Audit Actions</h3>
+                    ${renderMiniList(runtime.activity?.recent_audit_by_action)}
+                  </div>
+                </div>
+              </div>`
+              : '<div class="panel-pad empty-state">No integrity or activity snapshot loaded yet.</div>',
+            'Reference health, route safety, and recent admin activity'
+          )}
+          ${panel(
+            'pprof Profiles',
+            `<div class="panel-pad stack">
+            <p class="muted">Inspect live runtime state from the admin surface. These endpoints are served through Go\'s standard <code>net/http/pprof</code> handlers.</p>
+            <div class="toolbar">
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/`)}" target="_blank" rel="noreferrer">Index</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/heap`)}" target="_blank" rel="noreferrer">Heap</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/allocs`)}" target="_blank" rel="noreferrer">Allocs</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/goroutine?debug=1`)}" target="_blank" rel="noreferrer">Goroutines</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/mutex?debug=1`)}" target="_blank" rel="noreferrer">Mutex</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/block?debug=1`)}" target="_blank" rel="noreferrer">Block</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/profile?seconds=30`)}" target="_blank" rel="noreferrer">CPU 30s</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/trace?seconds=5`)}" target="_blank" rel="noreferrer">Trace 5s</a>
+            </div>
+          </div>`,
+            'Admin-only runtime diagnostics'
+          )}
+        </div>
+        <div class="stack">
+          ${panel('Embedded pprof', `<div class="panel-pad"><iframe class="debug-frame" src="${escapeHTML(`${pprofBase}/`)}" title="Foundry pprof"></iframe></div>`, 'Open the index here or pop any profile out into a new tab')}
+        </div>
+      </div>`;
+  };
+
+  const commandPaletteCommands = () => {
+    const commands = [
+      { id: 'goto-overview', label: 'Go to Overview', action: () => navigate('overview') },
+      { id: 'goto-documents', label: 'Go to Documents', action: () => navigate('documents') },
+      { id: 'goto-editor', label: 'Go to Editor', action: () => navigate('editor') },
+      { id: 'goto-media', label: 'Go to Media', action: () => navigate('media') },
+      { id: 'goto-users', label: 'Go to Users', action: () => navigate('users') },
+      { id: 'goto-audit', label: 'Go to Audit', action: () => navigate('audit') },
+      { id: 'goto-plugins', label: 'Go to Plugins', action: () => navigate('plugins') },
+      { id: 'goto-themes', label: 'Go to Themes', action: () => navigate('themes') },
+      { id: 'goto-config', label: 'Go to Configuration', action: () => navigate('config') },
+      {
+        id: 'new-page',
+        label: 'Create New Page Draft',
+        action: () => {
+          navigate('editor');
+          window.setTimeout(
+            () =>
+              document.getElementById('document-create-kind') &&
+              (document.getElementById('document-create-kind').value = 'page'),
+            0
+          );
+        },
+      },
+      {
+        id: 'new-post',
+        label: 'Create New Post Draft',
+        action: () => {
+          navigate('editor');
+          window.setTimeout(
+            () =>
+              document.getElementById('document-create-kind') &&
+              (document.getElementById('document-create-kind').value = 'post'),
+            0
+          );
+        },
+      },
+    ];
+    if (debugEnabled()) {
+      commands.push({
+        id: 'goto-debug',
+        label: 'Go to Debug Dashboard',
+        action: () => navigate('debug'),
+      });
+    }
+    return commands;
+  };
+
+  const filteredCommandPaletteCommands = () => {
+    const query = String(state.commandPalette?.query || '')
+      .trim()
+      .toLowerCase();
+    const commands = commandPaletteCommands();
+    if (!query) return commands;
+    return commands.filter((command) => command.label.toLowerCase().includes(query));
+  };
+
+  const renderCommandPalette = () => {
+    if (!state.commandPalette?.open) return '';
+    const commands = filteredCommandPaletteCommands();
+    return `<div class="command-palette-backdrop" id="command-palette-close">
+      <div class="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onclick="event.stopPropagation()">
+        <div class="panel-pad stack">
+          <input id="command-palette-query" type="search" placeholder="Jump to a section or action" value="${escapeHTML(state.commandPalette.query || '')}" autocomplete="off">
+          <div class="mini-list">
+            ${
+              commands.length
+                ? commands
+                    .map(
+                      (command) =>
+                        `<button type="button" class="ghost command-palette-item" data-command-palette-action="${escapeHTML(command.id)}">${escapeHTML(command.label)}</button>`
+                    )
+                    .join('')
+                : '<div class="empty-state">No commands matched that search.</div>'
+            }
+          </div>
+        </div>
+      </div>
+    </div>`;
+  };
 
   const renderTrash = () => `
     <div class="layout-grid">
@@ -1050,15 +1342,20 @@
     </div>`;
 
   const renderUsers = () => {
+    const selectedUser = selectedUserRecord();
     const sortedUsers = sortItems(state.users, 'users', (user, field) => {
       switch (field) {
-        case 'name': return user.name;
-        case 'email': return user.email;
-        default: return user.username;
+        case 'name':
+          return user.name;
+        case 'email':
+          return user.email;
+        default:
+          return user.username;
       }
     });
     const pagedUsers = paginateItems(sortedUsers, 'users');
-    const rows = pagedUsers.items.map((user) => `
+    const rows = pagedUsers.items.map(
+      (user) => `
       <div class="table-row table-row-actions">
         <span><strong>${escapeHTML(user.username)}</strong></span>
         <span>${escapeHTML(user.name || '')}</span>
@@ -1067,81 +1364,172 @@
           <button class="ghost small" data-edit-user="${escapeHTML(user.username)}">Edit</button>
           <button class="ghost small danger" data-delete-user="${escapeHTML(user.username)}">Delete</button>
         </span>
-      </div>`);
+      </div>`
+    );
     return `
       <div class="layout-grid">
         <div class="stack">
-          ${panel('Users', `${renderTableControls('users', state.users.length, pagedUsers.totalPages)}<div class="table table-four"><div class="table-head"><span>Username</span><span>Name</span><span>Email</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No users found.</div>'}</div>`, `${state.users.length} users`)}
+          ${panel('Users', `${renderTableControls(state, 'users', state.users.length, pagedUsers.totalPages)}<div class="table table-four"><div class="table-head"><span>Username</span><span>Name</span><span>Email</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No users found.</div>'}</div>`, `${state.users.length} users`)}
         </div>
         <div class="stack">
-          ${panel('User Editor', `
-            <form id="user-save-form" class="panel-pad stack">
-              <label>Username<input id="user-username" type="text" value="${escapeHTML(state.userForm.username)}" placeholder="editor"></label>
-              <label>Name<input id="user-name" type="text" value="${escapeHTML(state.userForm.name)}" placeholder="Editor User"></label>
-              <label>Email<input id="user-email" type="email" value="${escapeHTML(state.userForm.email)}" placeholder="editor@example.com"></label>
-              <label>Role<input id="user-role" type="text" value="${escapeHTML(state.userForm.role)}" placeholder="editor"></label>
-              <label>Password<input id="user-password" type="password" value="" placeholder="Leave blank to keep current password"></label>
-              <label class="checkbox"><input id="user-disabled" type="checkbox" ${state.userForm.disabled ? 'checked' : ''}> Disabled</label>
+          ${panel(
+            'User Editor',
+            `
+            <form id="user-save-form" class="panel-pad stack" autocomplete="new-password">
+              <label>Username<input id="user-username" autocomplete="off" type="text" value="${escapeHTML(state.userForm.username)}" placeholder="editor"></label>
+              <label>Name<input id="user-name" autocomplete="off" type="text" value="${escapeHTML(state.userForm.name)}" placeholder="Editor User"></label>
+              <label>Email<input id="user-email" autocomplete="off" type="email" value="${escapeHTML(state.userForm.email)}" placeholder="editor@example.com"></label>
+              <label>Role<input id="user-role" autocomplete="off" type="text" value="${escapeHTML(state.userForm.role)}" placeholder="editor"></label>
+              <label>Password<input id="user-password" autocomplete="new-password" type="password" value="" placeholder="Leave blank to keep current password"></label>
+              <label class="checkbox"><input id="user-disabled" autocomplete="off" type="checkbox" ${state.userForm.disabled ? 'checked' : ''}> Disabled</label>
               <div class="toolbar">
                 <button type="submit">Save User</button>
                 <button type="button" class="ghost" id="user-reset-button">New User</button>
               </div>
             </form>
-          `, 'Users are stored in content/config/admin-users.yaml')}
+          `,
+            'Users are stored in content/config/admin-users.yaml'
+          )}
+          ${panel(
+            'User Security',
+            selectedUser
+              ? `<div class="panel-pad stack">
+                <div class="note">
+                  <strong>${escapeHTML(selectedUser.username)}</strong>
+                  <span class="muted">Role: ${escapeHTML(selectedUser.role || 'user')} · TOTP: ${selectedUser.totp_enabled ? 'enabled' : 'disabled'}</span>
+                </div>
+                <div class="stack">
+                  <div class="toolbar">
+                    <button type="button" class="ghost" id="user-revoke-sessions">Revoke ${escapeHTML(selectedUser.username)} Sessions</button>
+                    <button type="button" class="ghost danger" id="user-revoke-all-sessions">Revoke All Sessions</button>
+                  </div>
+                </div>
+                <div class="stack">
+                  <h3>Password Reset</h3>
+                  <div class="toolbar">
+                    <button type="button" class="ghost" id="user-reset-start">Issue Reset Token</button>
+                  </div>
+                  ${
+                    state.userSecurity.resetStart?.username === selectedUser.username
+                      ? `<div class="note">
+                        <div><strong>Reset token</strong></div>
+                        <div class="mono break-all">${escapeHTML(state.userSecurity.resetStart.reset_token || '')}</div>
+                        <div class="muted">Expires in ${escapeHTML(String(state.userSecurity.resetStart.expires_in_seconds || 0))} seconds.</div>
+                      </div>
+                      <form id="user-reset-complete-form" class="stack" autocomplete="off">
+                        <label>Reset token<input id="user-reset-token" type="text" value="${escapeHTML(state.userSecurity.resetStart.reset_token || '')}"></label>
+                        <label>New password<input id="user-reset-password" type="password" autocomplete="new-password" placeholder="Enter a new password"></label>
+                        <label>TOTP code (optional)<input id="user-reset-totp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Required if the user has TOTP enabled"></label>
+                        <button type="submit">Complete Password Reset</button>
+                      </form>`
+                      : '<div class="panel-pad empty-state">Issue a reset token here, then complete the reset directly from the admin.</div>'
+                  }
+                </div>
+                <div class="stack">
+                  <h3>Two-Factor Authentication</h3>
+                  ${
+                    selectedUser.totp_enabled
+                      ? `<div class="note">TOTP is currently enabled for this user.</div>
+                       <div class="toolbar"><button type="button" class="ghost danger" id="user-totp-disable">Disable TOTP</button></div>`
+                      : `<div class="toolbar"><button type="button" class="ghost" id="user-totp-setup">Start TOTP Setup</button></div>`
+                  }
+                  ${
+                    state.userSecurity.totpSetup?.username === selectedUser.username
+                      ? `<div class="note">
+                        <div><strong>Secret</strong></div>
+                        <div class="mono break-all">${escapeHTML(state.userSecurity.totpSetup.secret || '')}</div>
+                        <div><strong>Provisioning URI</strong></div>
+                        <div class="mono break-all">${escapeHTML(state.userSecurity.totpSetup.provisioning_uri || '')}</div>
+                      </div>
+                      <form id="user-totp-enable-form" class="stack" autocomplete="off">
+                        <label>Verification code<input id="user-totp-enable-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter the 6-digit code from your authenticator"></label>
+                        <div class="toolbar">
+                          <button type="submit">Enable TOTP</button>
+                          <button type="button" class="ghost" id="user-totp-cancel">Cancel</button>
+                        </div>
+                      </form>`
+                      : !selectedUser.totp_enabled
+                        ? '<div class="panel-pad empty-state">Start TOTP setup to generate a secret and provisioning URI for this user.</div>'
+                        : ''
+                  }
+              </div>`
+              : '<div class="panel-pad empty-state">Select a user from the list to manage password reset, sessions, and TOTP.</div>'
+          )}
         </div>
       </div>`;
   };
 
-  const renderConfig = () => panel('Configuration', `
+  const renderConfig = () =>
+    panel(
+      'Configuration',
+      `
     <form id="config-save-form" class="panel-pad stack">
       <label>Config file<textarea id="config-raw" rows="24">${escapeHTML(state.config?.raw || '')}</textarea></label>
       <button type="submit">Save Configuration</button>
-    </form>`, state.config?.path || 'content/config/site.yaml');
+      ${state.settingsSections.length ? `<div class="note"><strong>Known sections:</strong> ${escapeHTML(state.settingsSections.map((section) => section.title).join(', '))}</div>` : ''}
+      ${
+        state.settingsSections.length
+          ? `<div class="table table-three">
+        <div class="table-head"><span>Section</span><span>Source</span><span>Writable</span></div>
+        ${state.settingsSections
+          .map(
+            (section) => `
+          <div class="table-row">
+            <span><strong>${escapeHTML(section.title)}</strong><div class="muted mono">${escapeHTML(section.key)}</div></span>
+            <span>${escapeHTML(section.source || 'core')}</span>
+            <span>${section.writable ? 'yes' : 'no'}</span>
+          </div>`
+          )
+          .join('')}
+      </div>`
+          : ''
+      }
+    </form>`,
+      state.config?.path || 'content/config/site.yaml'
+    );
 
-  const renderPlugins = () => {
-    const sortedPlugins = sortItems(state.plugins, 'plugins', (plugin, field) => field === 'version' ? plugin.version : field === 'status' ? plugin.status : plugin.name);
-    const pagedPlugins = paginateItems(sortedPlugins, 'plugins');
-    const rows = pagedPlugins.items.map((plugin) => `
-      <div class="table-row table-row-actions">
-        <span><strong>${escapeHTML(plugin.title || plugin.name)}</strong></span>
-        <span>${escapeHTML(plugin.version || '-')}</span>
-        <span>${escapeHTML(plugin.status)}</span>
-        <span class="row-actions">
-          ${plugin.enabled
-            ? `<button class="ghost small" data-disable-plugin="${escapeHTML(plugin.name)}">Disable</button>`
-            : `<button class="ghost small" data-enable-plugin="${escapeHTML(plugin.name)}">Enable</button>`}
-        </span>
-      </div>`);
-    return panel('Plugins', `${renderTableControls('plugins', state.plugins.length, pagedPlugins.totalPages)}<div class="table table-four"><div class="table-head"><span>Plugin</span><span>Version</span><span>Status</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No plugins found.</div>'}</div>`, `${state.plugins.length} plugins`);
-  };
-
-  const renderThemes = () => {
-    const sortedThemes = sortItems(state.themes, 'themes', (theme, field) => field === 'version' ? theme.version : field === 'valid' ? String(theme.valid) : theme.name);
-    const pagedThemes = paginateItems(sortedThemes, 'themes');
-    const rows = pagedThemes.items.map((theme) => `
-      <div class="table-row table-row-actions">
-        <span><strong>${escapeHTML(theme.title || theme.name)}</strong></span>
-        <span>${escapeHTML(theme.version || '-')}</span>
-        <span>${theme.valid ? 'valid' : 'invalid'}</span>
-        <span class="row-actions">
-          ${theme.current ? '<span class="muted">Current</span>' : `<button class="ghost small" data-switch-theme="${escapeHTML(theme.name)}">Activate</button>`}
-        </span>
-      </div>`);
-    return panel('Themes', `${renderTableControls('themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>`, `${state.themes.length} frontend themes`);
-  };
+  const { renderPlugins, renderThemes } = createPlatformViews({
+    state,
+    panel,
+    escapeHTML,
+    renderTableControls,
+    adminBase,
+    adminPathForSection,
+    extensionPages,
+    renderWidgetPanels,
+    sortItems,
+    paginateItems,
+  });
 
   const renderSection = () => {
     switch (state.section) {
-      case 'documents': return renderDocuments();
-      case 'history': return renderHistory();
-      case 'trash': return renderTrash();
-      case 'media': return renderMedia();
-      case 'audit': return renderAudit();
-      case 'users': return renderUsers();
-      case 'config': return renderConfig();
-      case 'plugins': return renderPlugins();
-      case 'themes': return renderThemes();
-      default: return renderOverview();
+      case 'documents':
+        return renderDocuments();
+      case 'editor':
+        return renderEditor();
+      case 'history':
+        return renderHistory();
+      case 'trash':
+        return renderTrash();
+      case 'media':
+        return renderMedia();
+      case 'debug':
+        return renderDebug();
+      case 'audit':
+        return renderAudit();
+      case 'users':
+        return renderUsers();
+      case 'config':
+        return renderConfig();
+      case 'plugins':
+        return renderPlugins();
+      case 'themes':
+        return renderThemes();
+      default: {
+        const extensionPage = extensionPageBySection(state.section);
+        if (extensionPage) return renderExtensionPage();
+        return `${renderOverview(state)}${renderWidgetPanels('overview.after').join('')}`;
+      }
     }
   };
 
@@ -1155,6 +1543,7 @@
           <form id="login-form" class="login-form">
             <label>Username<input id="username" type="text" autocomplete="username" placeholder="admin"></label>
             <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Password"></label>
+            <label>Two-Factor Code<input id="totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Optional 6-digit code"></label>
             <button type="submit">Log In</button>
           </form>
           <p class="login-hint">Sessions expire after 30 minutes of inactivity and renew while you are active.</p>
@@ -1166,16 +1555,11 @@
       event.preventDefault();
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
+      const totpCode = document.getElementById('totp-code').value;
       state.loading = true;
       render();
       try {
-        await request('/api/login', {
-          method: 'POST',
-          body: JSON.stringify({
-            username,
-            password
-          })
-        });
+        await admin.session.login({ username, password, totp_code: totpCode });
         await fetchAll();
       } catch (error) {
         state.loading = false;
@@ -1187,7 +1571,7 @@
 
   const loadDocumentHistory = async (sourcePath, rerender = true) => {
     try {
-      const history = await request(`/api/documents/history?source_path=${encodeURIComponent(sourcePath)}`);
+      const history = await admin.documents.history(sourcePath);
       state.documentHistoryPath = history.source_path || sourcePath;
       state.documentHistory = Array.isArray(history.entries) ? history.entries : [];
       if (rerender) {
@@ -1201,9 +1585,9 @@
 
   const loadDocumentDiff = async (leftPath, rightPath, rerender = true) => {
     try {
-      state.documentDiff = await request('/api/documents/diff', {
-        method: 'POST',
-        body: JSON.stringify({ left_path: leftPath, right_path: rightPath })
+      state.documentDiff = await admin.documents.diff({
+        left_path: leftPath,
+        right_path: rightPath,
       });
       if (rerender) {
         navigate('history');
@@ -1216,7 +1600,7 @@
 
   const loadMediaHistory = async (path, rerender = true) => {
     try {
-      const history = await request(`/api/media/history?path=${encodeURIComponent(path)}`);
+      const history = await admin.media.history(path);
       state.mediaHistoryReference = history.path || path;
       state.mediaHistory = Array.isArray(history.entries) ? history.entries : [];
       if (rerender) {
@@ -1228,785 +1612,77 @@
     }
   };
 
-  const bindDashboardEvents = () => {
-    root.querySelectorAll('[data-section]').forEach((element) => {
-      element.addEventListener('click', (event) => {
-        event.preventDefault();
-        navigate(element.dataset.section);
-      });
+  const bindDashboardEventsLocal = () =>
+    bindDashboardEvents({
+      root,
+      state,
+      admin,
+      render,
+      navigate,
+      updateTablePage,
+      releaseCurrentDocumentLock,
+      syncStructuredEditorFromRaw,
+      compareSnapshot,
+      syncRawFromStructuredEditor,
+      slugify,
+      updateDocumentFieldValue,
+      getValueAtPath,
+      defaultValueForSchema,
+      removeNestedFieldValue,
+      insertIntoMarkdown,
+      mediaSnippet,
+      loadDocumentIntoEditor,
+      setFlash,
+      fetchAll,
+      loadDocumentHistory,
+      loadDocumentDiff,
+      resetDocumentEditor,
+      snapshotValue,
+      loadMediaDetail,
+      loadMediaHistory,
+      toggleSelection,
+      setUserForm,
+      resetUserForm,
+      resetUserSecurity,
+      selectedUserRecord,
+      parseTagInput,
+      clone,
     });
-
-    root.querySelectorAll('[data-table-sort]').forEach((select) => {
-      select.addEventListener('change', () => {
-        state.tables[select.dataset.tableSort].sort = select.value;
-        updateTablePage(select.dataset.tableSort, 1);
-        render();
-      });
-    });
-
-    root.querySelectorAll('[data-table-dir]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const table = state.tables[button.dataset.tableDir];
-        table.dir = table.dir === 'asc' ? 'desc' : 'asc';
-        render();
-      });
-    });
-
-    root.querySelectorAll('[data-table-page]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const [name, step] = button.dataset.tablePage.split('|');
-        const next = state.tables[name].page + (step === 'next' ? 1 : -1);
-        updateTablePage(name, next);
-        render();
-      });
-    });
-
-    document.getElementById('logout')?.addEventListener('click', async () => {
-      try {
-        await request('/api/logout', { method: 'POST' });
-      } catch (_error) {
-      }
-      state.session = null;
-      state.flash = '';
-      state.error = '';
-      render();
-    });
-
-    document.getElementById('document-source-path')?.addEventListener('input', () => {
-      state.documentEditor.source_path = document.getElementById('document-source-path').value;
-      syncStructuredEditorFromRaw();
-      compareSnapshot('document', state.documentEditor);
-    });
-
-    document.getElementById('document-version-comment')?.addEventListener('input', () => {
-      state.documentEditor.version_comment = document.getElementById('document-version-comment').value;
-      compareSnapshot('document', state.documentEditor);
-    });
-
-    document.getElementById('document-raw')?.addEventListener('input', () => {
-      syncStructuredEditorFromRaw();
-      compareSnapshot('document', state.documentEditor);
-    });
-
-    ['document-frontmatter-title', 'document-frontmatter-slug', 'document-frontmatter-layout', 'document-frontmatter-date', 'document-frontmatter-summary', 'document-frontmatter-tags', 'document-frontmatter-categories', 'document-frontmatter-draft', 'document-frontmatter-archived', 'document-frontmatter-lang']
-      .forEach((id) => {
-        const field = document.getElementById(id);
-        if (!field) return;
-        field.addEventListener(field.type === 'checkbox' ? 'change' : 'input', () => {
-          if (id === 'document-frontmatter-title') {
-            const slugField = document.getElementById('document-frontmatter-slug');
-            if (slugField && !slugField.value.trim()) {
-              slugField.value = slugify(field.value);
-            }
-          }
-          syncRawFromStructuredEditor();
-          compareSnapshot('document', state.documentEditor);
-        });
-      });
-
-    document.getElementById('document-media-picker-query')?.addEventListener('input', (event) => {
-      state.mediaPickerQuery = event.target.value;
-      render();
-    });
-
-    root.querySelectorAll('[data-insert-media]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const item = state.media.find((entry) => entry.reference === button.dataset.insertMedia);
-        if (!item) return;
-        insertIntoMarkdown(mediaSnippet(item, button.dataset.insertMode || 'auto'));
-      });
-    });
-
-    document.getElementById('document-create-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      try {
-        const created = await request('/api/documents/create', {
-          method: 'POST',
-          body: JSON.stringify({
-            kind: document.getElementById('document-create-kind').value,
-            slug: document.getElementById('document-create-slug').value,
-            lang: document.getElementById('document-create-lang').value,
-            archetype: document.getElementById('document-create-archetype').value
-          })
-        });
-        state.documentEditor = { source_path: created.source_path, raw: created.raw || '', version_comment: '' };
-        snapshotValue('document', state.documentEditor);
-        setFlash('Document created.');
-        await fetchAll(false);
-        navigate('documents');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('document-search-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      state.documentQuery = document.getElementById('document-search-query').value.trim();
-      await fetchAll();
-      navigate('documents');
-    });
-
-    document.getElementById('document-search-clear')?.addEventListener('click', async () => {
-      state.documentQuery = '';
-      const input = document.getElementById('document-search-query');
-      if (input) input.value = '';
-      await fetchAll();
-      navigate('documents');
-    });
-
-    document.getElementById('document-save-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      try {
-        await request('/api/documents/save', {
-          method: 'POST',
-          body: JSON.stringify({
-            source_path: document.getElementById('document-source-path').value,
-            raw: document.getElementById('document-raw').value,
-            version_comment: document.getElementById('document-version-comment').value
-          })
-        });
-        state.documentEditor = {
-          source_path: document.getElementById('document-source-path').value,
-          raw: document.getElementById('document-raw').value,
-          version_comment: ''
-        };
-        snapshotValue('document', state.documentEditor);
-        setFlash('Document saved.');
-        await fetchAll(false);
-        navigate('documents');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('document-preview-button')?.addEventListener('click', async () => {
-      try {
-        state.documentPreview = await request('/api/documents/preview', {
-          method: 'POST',
-          body: JSON.stringify({
-            source_path: document.getElementById('document-source-path').value,
-            raw: document.getElementById('document-raw').value
-          })
-        });
-        setFlash('Preview rendered.');
-        render();
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('document-reset-button')?.addEventListener('click', () => {
-      resetDocumentEditor();
-      snapshotValue('document', state.documentEditor);
-      setFlash('Editor reset.');
-      render();
-    });
-
-    root.querySelectorAll('[data-edit-document]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          const detail = await request(`/api/document?id=${encodeURIComponent(button.dataset.editDocument)}&include_drafts=1`);
-          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
-          snapshotValue('document', state.documentEditor);
-          state.documentPreview = null;
-          setFlash('Document loaded.');
-          navigate('documents');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-history-document]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        await loadDocumentHistory(button.dataset.historyDocument);
-      });
-    });
-
-    root.querySelectorAll('[data-set-document-status]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const [sourcePath, status] = button.dataset.setDocumentStatus.split('|');
-        try {
-          await request('/api/documents/status', {
-            method: 'POST',
-            body: JSON.stringify({ source_path: sourcePath, status })
-          });
-          setFlash(`Document moved to ${status}.`);
-          await fetchAll(false);
-          navigate('documents');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-restore-document]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          if (!window.confirm(`Restore ${button.dataset.restoreDocument} as the current document?`)) return;
-          const restored = await request('/api/documents/restore', {
-            method: 'POST',
-            body: JSON.stringify({ path: button.dataset.restoreDocument })
-          });
-          setFlash('Document restored.');
-          await fetchAll(false);
-          await loadDocumentHistory(restored.restored_path || restored.path, false);
-          const detail = await request(`/api/document?id=${encodeURIComponent(restored.restored_path || restored.path)}&include_drafts=1`);
-          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
-          snapshotValue('document', state.documentEditor);
-          navigate('documents');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-purge-document]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          if (!window.confirm(`Permanently purge ${button.dataset.purgeDocument}? This cannot be undone.`)) return;
-          await request('/api/documents/purge', {
-            method: 'POST',
-            body: JSON.stringify({ path: button.dataset.purgeDocument })
-          });
-          setFlash('Document version purged.');
-          await fetchAll(false);
-          if (state.documentHistoryPath) {
-            await loadDocumentHistory(state.documentHistoryPath, false);
-          }
-          navigate('history');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-diff-document]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const currentPath = state.documentHistory.find((entry) => entry.state === 'current')?.path;
-        if (!currentPath) {
-          state.error = 'Load document history before requesting a diff.';
-          render();
-          return;
-        }
-        await loadDocumentDiff(button.dataset.diffDocument, currentPath);
-      });
-    });
-
-    root.querySelectorAll('[data-diff-mode]').forEach((button) => {
-      button.addEventListener('click', () => {
-        state.documentDiffMode = button.dataset.diffMode;
-        render();
-      });
-    });
-
-    root.querySelectorAll('[data-delete-document]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          if (!window.confirm(`Move ${button.dataset.deleteDocument} to trash?`)) return;
-          await request('/api/documents/delete', {
-            method: 'POST',
-            body: JSON.stringify({ source_path: button.dataset.deleteDocument })
-          });
-          resetDocumentEditor();
-          setFlash('Document moved to trash.');
-          await fetchAll(false);
-          navigate('trash');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    document.getElementById('media-upload-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const file = document.getElementById('media-file').files[0];
-      if (!file) {
-        state.error = 'Choose a file to upload.';
-        render();
-        return;
-      }
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('dir', document.getElementById('media-dir').value);
-        formData.append('collection', document.getElementById('media-collection').value);
-        const uploaded = await request('/api/media/upload', { method: 'POST', body: formData });
-        state.selectedMediaReference = uploaded.reference;
-        setFlash('Media uploaded.');
-        await fetchAll(false);
-        await loadMediaDetail(uploaded.reference, false);
-        navigate('media');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('media-search-apply')?.addEventListener('click', async () => {
-        state.mediaQuery = document.getElementById('media-search-query').value.trim();
-      await fetchAll();
-      navigate('media');
-    });
-
-    document.getElementById('media-search-clear')?.addEventListener('click', async () => {
-      state.mediaQuery = '';
-      const input = document.getElementById('media-search-query');
-      if (input) input.value = '';
-      await fetchAll();
-      navigate('media');
-    });
-
-    root.querySelectorAll('[data-edit-media]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        await loadMediaDetail(button.dataset.editMedia);
-      });
-    });
-
-    root.querySelectorAll('[data-prepare-media-replace]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        await loadMediaDetail(button.dataset.prepareMediaReplace);
-      });
-    });
-
-    root.querySelectorAll('[data-history-media-path]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        await loadMediaHistory(button.dataset.historyMediaPath);
-      });
-    });
-
-    document.getElementById('media-metadata-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      if (!state.selectedMediaReference) return;
-      try {
-        state.mediaDetail = await request('/api/media/metadata', {
-          method: 'POST',
-          body: JSON.stringify({
-            reference: state.selectedMediaReference,
-            version_comment: document.getElementById('media-version-comment').value,
-            metadata: {
-              title: document.getElementById('media-title').value,
-              alt: document.getElementById('media-alt').value,
-              caption: document.getElementById('media-caption').value,
-              description: document.getElementById('media-description').value,
-              credit: document.getElementById('media-credit').value,
-              tags: document.getElementById('media-tags').value.split(',').map((tag) => tag.trim()).filter(Boolean)
-            }
-          })
-        });
-        state.mediaVersionComment = '';
-        snapshotValue('media', {
-          reference: state.selectedMediaReference,
-          metadata: state.mediaDetail.metadata,
-          versionComment: ''
-        });
-        setFlash('Media metadata saved.');
-        await fetchAll(false);
-        navigate('media');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('media-replace-button')?.addEventListener('click', async () => {
-      if (!state.selectedMediaReference) return;
-      const file = document.getElementById('media-replace-file').files[0];
-      if (!file) {
-        state.error = 'Choose a file to replace the current media.';
-        render();
-        return;
-      }
-      try {
-        const formData = new FormData();
-        formData.append('reference', state.selectedMediaReference);
-        formData.append('file', file);
-        await request('/api/media/replace', { method: 'POST', body: formData });
-        setFlash('Media replaced.');
-        await fetchAll(false);
-        await loadMediaDetail(state.selectedMediaReference, false);
-        navigate('media');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    root.querySelectorAll('[data-delete-media]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          if (!window.confirm(`Move ${button.dataset.deleteMedia} to trash?`)) return;
-          await request('/api/media/delete', {
-            method: 'POST',
-            body: JSON.stringify({ reference: button.dataset.deleteMedia })
-          });
-          if (state.selectedMediaReference === button.dataset.deleteMedia) {
-            state.selectedMediaReference = '';
-            state.mediaDetail = null;
-          }
-          setFlash('Media deleted.');
-          await fetchAll(false);
-          navigate('trash');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-restore-media-path]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          if (!window.confirm(`Restore ${button.dataset.restoreMediaPath} as the current media file?`)) return;
-          const restored = await request('/api/media/restore', {
-            method: 'POST',
-            body: JSON.stringify({ path: button.dataset.restoreMediaPath })
-          });
-          setFlash('Media restored.');
-          await fetchAll(false);
-          if (restored.restored_path) {
-            const restoredMedia = state.media.find((item) => item.path && (`content/${item.collection}/${item.path}` === restored.restored_path));
-            if (restoredMedia) {
-              await loadMediaHistory(`content/${restoredMedia.collection}/${restoredMedia.path}`, false);
-            } else {
-              state.mediaHistory = [];
-              state.mediaHistoryReference = '';
-            }
-          }
-          navigate('history');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-purge-media-path]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          if (!window.confirm(`Permanently purge ${button.dataset.purgeMediaPath}? This cannot be undone.`)) return;
-          await request('/api/media/purge', {
-            method: 'POST',
-            body: JSON.stringify({ path: button.dataset.purgeMediaPath })
-          });
-          setFlash('Media version purged.');
-          await fetchAll(false);
-          if (state.mediaHistoryReference) {
-            await loadMediaHistory(state.mediaHistoryReference, false);
-          }
-          navigate('history');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-edit-user]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const user = state.users.find((item) => item.username === button.dataset.editUser);
-        if (!user) return;
-        state.userForm = {
-          username: user.username,
-          name: user.name || '',
-          email: user.email || '',
-          role: user.role || '',
-          password: '',
-          disabled: !!user.disabled
-        };
-        setFlash(`Editing ${user.username}.`);
-        navigate('users');
-      });
-    });
-
-    root.querySelectorAll('[data-edit-document-path]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          const detail = await request(`/api/document?id=${encodeURIComponent(button.dataset.editDocumentPath)}&include_drafts=1`);
-          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
-          state.documentPreview = null;
-          setFlash('Document loaded.');
-          navigate('documents');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-select-trash]').forEach((checkbox) => {
-      checkbox.addEventListener('change', () => {
-        if (checkbox.dataset.trashKind === 'document') {
-          state.selectedDocumentTrash = toggleSelection(state.selectedDocumentTrash, checkbox.dataset.selectTrash, checkbox.checked);
-        } else {
-          state.selectedMediaTrash = toggleSelection(state.selectedMediaTrash, checkbox.dataset.selectTrash, checkbox.checked);
-        }
-        render();
-      });
-    });
-
-    document.getElementById('document-trash-select-all')?.addEventListener('click', () => {
-      state.selectedDocumentTrash = state.selectedDocumentTrash.length === state.documentTrash.length ? [] : state.documentTrash.map((entry) => entry.path);
-      render();
-    });
-
-    document.getElementById('media-trash-select-all')?.addEventListener('click', () => {
-      state.selectedMediaTrash = state.selectedMediaTrash.length === state.mediaTrash.length ? [] : state.mediaTrash.map((entry) => entry.path);
-      render();
-    });
-
-    document.getElementById('document-trash-restore-selected')?.addEventListener('click', async () => {
-      if (!state.selectedDocumentTrash.length || !window.confirm(`Restore ${state.selectedDocumentTrash.length} selected document(s)?`)) return;
-      try {
-        let lastRestoredPath = '';
-        for (const path of state.selectedDocumentTrash) {
-          const restored = await request('/api/documents/restore', { method: 'POST', body: JSON.stringify({ path }) });
-          lastRestoredPath = restored.restored_path || restored.path;
-        }
-        state.selectedDocumentTrash = [];
-        await fetchAll(false);
-        if (lastRestoredPath) {
-          await loadDocumentHistory(lastRestoredPath, false);
-          const detail = await request(`/api/document?id=${encodeURIComponent(lastRestoredPath)}&include_drafts=1`);
-          state.documentEditor = { source_path: detail.source_path, raw: detail.raw_body, version_comment: '' };
-        }
-        setFlash('Selected documents restored.');
-        navigate('documents');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('document-trash-purge-selected')?.addEventListener('click', async () => {
-      if (!state.selectedDocumentTrash.length || !window.confirm(`Permanently purge ${state.selectedDocumentTrash.length} selected document(s)?`)) return;
-      try {
-        for (const path of state.selectedDocumentTrash) {
-          await request('/api/documents/purge', { method: 'POST', body: JSON.stringify({ path }) });
-        }
-        state.selectedDocumentTrash = [];
-        await fetchAll(false);
-        setFlash('Selected documents purged.');
-        navigate('trash');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('media-trash-restore-selected')?.addEventListener('click', async () => {
-      if (!state.selectedMediaTrash.length || !window.confirm(`Restore ${state.selectedMediaTrash.length} selected media item(s)?`)) return;
-      try {
-        for (const path of state.selectedMediaTrash) {
-          await request('/api/media/restore', { method: 'POST', body: JSON.stringify({ path }) });
-        }
-        state.selectedMediaTrash = [];
-        await fetchAll(false);
-        setFlash('Selected media restored.');
-        navigate('trash');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('media-trash-purge-selected')?.addEventListener('click', async () => {
-      if (!state.selectedMediaTrash.length || !window.confirm(`Permanently purge ${state.selectedMediaTrash.length} selected media item(s)?`)) return;
-      try {
-        for (const path of state.selectedMediaTrash) {
-          await request('/api/media/purge', { method: 'POST', body: JSON.stringify({ path }) });
-        }
-        state.selectedMediaTrash = [];
-        await fetchAll(false);
-        setFlash('Selected media purged.');
-        navigate('trash');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('user-save-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      try {
-        await request('/api/users/save', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: document.getElementById('user-username').value,
-            name: document.getElementById('user-name').value,
-            email: document.getElementById('user-email').value,
-            role: document.getElementById('user-role').value,
-            password: document.getElementById('user-password').value,
-            disabled: document.getElementById('user-disabled').checked
-          })
-        });
-        resetUserForm();
-        snapshotValue('user', state.userForm);
-        setFlash('User saved.');
-        await fetchAll(false);
-        navigate('users');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    document.getElementById('user-reset-button')?.addEventListener('click', () => {
-      resetUserForm();
-      snapshotValue('user', state.userForm);
-      setFlash('User form reset.');
-      render();
-    });
-
-    root.querySelectorAll('[data-delete-user]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          await request('/api/users/delete', {
-            method: 'POST',
-            body: JSON.stringify({ username: button.dataset.deleteUser })
-          });
-          resetUserForm();
-          setFlash('User deleted.');
-          await fetchAll(false);
-          navigate('users');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    document.getElementById('config-save-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      try {
-        await request('/api/config/save', {
-          method: 'POST',
-          body: JSON.stringify({ raw: document.getElementById('config-raw').value })
-        });
-        setFlash('Configuration saved.');
-        snapshotValue('config', document.getElementById('config-raw').value);
-        await fetchAll(false);
-        navigate('config');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-
-    root.querySelectorAll('[data-enable-plugin]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          await request('/api/plugins/enable', { method: 'POST', body: JSON.stringify({ name: button.dataset.enablePlugin }) });
-          setFlash('Plugin enabled.');
-          await fetchAll(false);
-          navigate('plugins');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-disable-plugin]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          await request('/api/plugins/disable', { method: 'POST', body: JSON.stringify({ name: button.dataset.disablePlugin }) });
-          setFlash('Plugin disabled.');
-          await fetchAll(false);
-          navigate('plugins');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-switch-theme]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        try {
-          await request('/api/themes/switch', { method: 'POST', body: JSON.stringify({ name: button.dataset.switchTheme }) });
-          setFlash('Theme switched.');
-          await fetchAll(false);
-          navigate('themes');
-        } catch (error) {
-          state.error = error.message || String(error);
-          render();
-        }
-      });
-    });
-
-    ['media-title', 'media-alt', 'media-caption', 'media-description', 'media-credit', 'media-tags', 'media-version-comment'].forEach((id) => {
-      document.getElementById(id)?.addEventListener('input', () => {
-        compareSnapshot('media', {
-          reference: state.selectedMediaReference,
-          metadata: {
-            title: document.getElementById('media-title')?.value || '',
-            alt: document.getElementById('media-alt')?.value || '',
-            caption: document.getElementById('media-caption')?.value || '',
-            description: document.getElementById('media-description')?.value || '',
-            credit: document.getElementById('media-credit')?.value || '',
-            tags: parseTagInput(document.getElementById('media-tags')?.value || '')
-          },
-          versionComment: document.getElementById('media-version-comment')?.value || ''
-        });
-      });
-    });
-
-    ['user-username', 'user-name', 'user-email', 'user-role', 'user-password', 'user-disabled'].forEach((id) => {
-      const node = document.getElementById(id);
-      node?.addEventListener(node.type === 'checkbox' ? 'change' : 'input', () => {
-        compareSnapshot('user', {
-          username: document.getElementById('user-username')?.value || '',
-          name: document.getElementById('user-name')?.value || '',
-          email: document.getElementById('user-email')?.value || '',
-          role: document.getElementById('user-role')?.value || '',
-          password: document.getElementById('user-password')?.value || '',
-          disabled: !!document.getElementById('user-disabled')?.checked
-        });
-      });
-    });
-
-    document.getElementById('config-raw')?.addEventListener('input', () => {
-      compareSnapshot('config', document.getElementById('config-raw').value);
-    });
-  };
 
   const renderDashboard = () => {
-    const topMessage = summarizeLoadErrors() || 'WordPress-style admin shell for managing content, media, users, configuration, themes, and plugins.';
+    const topMessage =
+      summarizeLoadErrors(state) ||
+      'Manage content, media, users, configuration, themes, and plugins.';
     root.innerHTML = `
-      <div class="wp-shell">
-        ${renderToasts()}
-        ${renderKeyboardHelp()}
-        <aside class="wp-sidebar">
-          <div class="wp-brand">Foundry</div>
-          <nav class="wp-nav">${shellNav()}</nav>
-          <div class="wp-sidebar-footer">Admin theme: ${escapeHTML(root.dataset.theme || 'default')}</div>
+      <div class="foundry-shell">
+        ${renderToasts(state)}
+        ${renderKeyboardHelp(state)}
+        ${renderCommandPalette()}
+        <aside class="foundry-sidebar">
+          <div class="foundry-brand">Foundry</div>
+          <nav class="foundry-nav">${shellNav(state, adminBase, {
+            extensionPages: extensionPages(),
+            debugEnabled: debugEnabled(),
+          })}</nav>
+          <div class="foundry-sidebar-footer">Admin theme: ${escapeHTML(root.dataset.theme || 'default')}</div>
         </aside>
-        <div class="wp-main">
-          <header class="wp-topbar">
+        <div class="foundry-main">
+          <header class="foundry-topbar">
             <div>
-              ${renderBreadcrumbs()}
-              <h1>${escapeHTML(sectionTitles[state.section] || state.section.charAt(0).toUpperCase() + state.section.slice(1))}</h1>
+              ${renderBreadcrumbs(state, titleForSection)}
+              <h1>${escapeHTML(titleForSection(state.section))}</h1>
               <p>${escapeHTML(topMessage)}</p>
             </div>
-            <div class="wp-topbar-actions">
+            <div class="foundry-topbar-actions">
               ${hasUnsavedChanges() ? `<span class="dirty-pill">Unsaved: ${escapeHTML(dirtyMessage())}</span>` : ''}
               <button class="ghost" id="shortcut-help-toggle">Shortcuts</button>
               <div class="chrome-user"><strong>${escapeHTML(state.session?.name || state.session?.username || '')}</strong><span>${escapeHTML(state.session?.email || '')}</span></div>
               <button class="ghost" id="logout">Log Out</button>
             </div>
           </header>
-          <main class="wp-content">
+          <main class="foundry-content">
             ${state.error ? `<div class="panel error-panel"><div class="panel-pad"><strong>Action Failed</strong><div class="error">${escapeHTML(state.error)}</div></div></div>` : ''}
-            ${state.loadErrors.length ? `<div class="panel warning-panel"><div class="panel-pad"><strong>Partial Admin Load</strong><div class="muted">${escapeHTML(summarizeLoadErrors())}</div></div></div>` : ''}
+            ${state.loadErrors.length ? `<div class="panel warning-panel"><div class="panel-pad"><strong>Partial Admin Load</strong><div class="muted">${escapeHTML(summarizeLoadErrors(state))}</div></div></div>` : ''}
             ${renderSection()}
           </main>
         </div>
@@ -2015,7 +1691,32 @@
       state.keyboardHelp = !state.keyboardHelp;
       render();
     });
-    bindDashboardEvents();
+    document.getElementById('command-palette-close')?.addEventListener('click', () => {
+      state.commandPalette.open = false;
+      render();
+    });
+    document.getElementById('command-palette-query')?.addEventListener('input', (event) => {
+      state.commandPalette.query = event.target.value || '';
+      render();
+    });
+    root.querySelectorAll('[data-command-palette-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const command = commandPaletteCommands().find(
+          (entry) => entry.id === button.dataset.commandPaletteAction
+        );
+        if (!command) return;
+        state.commandPalette.open = false;
+        state.commandPalette.query = '';
+        command.action();
+      });
+    });
+    if (state.commandPalette?.open) {
+      window.setTimeout(() => document.getElementById('command-palette-query')?.focus(), 0);
+    }
+    bindDashboardEventsLocal();
+    publishAdminRuntime();
+    void mountActiveExtensionPage();
+    void mountVisibleExtensionWidgets();
   };
 
   const render = () => {
@@ -2026,15 +1727,22 @@
     renderDashboard();
   };
 
+  navigate = createAdminRouter({
+    adminBase,
+    getState: () => state,
+    confirmNavigation,
+    render,
+  }).navigate;
+
   const loadMediaDetail = async (reference, rerender = true) => {
     try {
-      state.mediaDetail = await request(`/api/media/detail?reference=${encodeURIComponent(reference)}`);
+      state.mediaDetail = await admin.media.getDetail(reference);
       state.selectedMediaReference = reference;
       state.mediaVersionComment = '';
       snapshotValue('media', {
         reference,
         metadata: state.mediaDetail.metadata || {},
-        versionComment: ''
+        versionComment: '',
       });
       setFlash('Media loaded.');
       if (rerender) {
@@ -2051,19 +1759,23 @@
     state.error = '';
     clearLoadErrors();
     try {
-      state.session = await request('/api/session');
+      state.session = await admin.session.get();
+      state.capabilityInfo = await admin.capabilities.get();
+      state.runtimeStatus = debugEnabled() ? await admin.raw.get('/api/debug/runtime') : null;
 
       const results = await Promise.allSettled([
-        request('/api/status'),
-        request(`/api/documents?include_drafts=1${state.documentQuery ? `&q=${encodeURIComponent(state.documentQuery)}` : ''}`),
-        request('/api/documents/trash'),
-        request(`/api/media${state.mediaQuery ? `?q=${encodeURIComponent(state.mediaQuery)}` : ''}`),
-        request('/api/media/trash'),
-        request('/api/users'),
-        request('/api/config'),
-        request('/api/plugins'),
-        request('/api/themes'),
-        request('/api/audit')
+        admin.status.get(),
+        admin.documents.list({ include_drafts: 1, q: state.documentQuery || undefined }),
+        admin.documents.trash(),
+        admin.media.list({ q: state.mediaQuery || undefined }),
+        admin.media.trash(),
+        admin.users.list(),
+        admin.settings.getConfig(),
+        admin.settings.getSections(),
+        admin.plugins.list(),
+        admin.extensions.getAdminExtensions(),
+        admin.themes.list(),
+        admin.audit.list(),
       ]);
 
       const assignResult = (index, label, onSuccess, fallback) => {
@@ -2076,21 +1788,137 @@
         state.loadErrors.push(label);
       };
 
-      assignResult(0, 'status', (value) => { state.status = value; }, () => { state.status = null; });
-      assignResult(1, 'documents', (value) => { state.documents = Array.isArray(value) ? value : []; }, () => { state.documents = []; });
-      assignResult(2, 'document trash', (value) => { state.documentTrash = Array.isArray(value) ? value : []; }, () => { state.documentTrash = []; });
-      assignResult(3, 'media', (value) => { state.media = Array.isArray(value) ? value : []; }, () => { state.media = []; });
-      assignResult(4, 'media trash', (value) => { state.mediaTrash = Array.isArray(value) ? value : []; }, () => { state.mediaTrash = []; });
-      assignResult(5, 'users', (value) => { state.users = Array.isArray(value) ? value : []; }, () => { state.users = []; });
-      assignResult(6, 'config', (value) => { state.config = value; }, () => { state.config = null; });
-      assignResult(7, 'plugins', (value) => { state.plugins = Array.isArray(value) ? value : []; }, () => { state.plugins = []; });
-      assignResult(8, 'themes', (value) => { state.themes = Array.isArray(value) ? value : []; }, () => { state.themes = []; });
-      assignResult(9, 'audit log', (value) => { state.audit = Array.isArray(value) ? value : []; }, () => { state.audit = []; });
-      state.selectedDocumentTrash = state.selectedDocumentTrash.filter((path) => state.documentTrash.some((entry) => entry.path === path));
-      state.selectedMediaTrash = state.selectedMediaTrash.filter((path) => state.mediaTrash.some((entry) => entry.path === path));
+      assignResult(
+        0,
+        'status',
+        (value) => {
+          state.status = value;
+        },
+        () => {
+          state.status = null;
+        }
+      );
+      assignResult(
+        1,
+        'documents',
+        (value) => {
+          state.documents = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.documents = [];
+        }
+      );
+      assignResult(
+        2,
+        'document trash',
+        (value) => {
+          state.documentTrash = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.documentTrash = [];
+        }
+      );
+      assignResult(
+        3,
+        'media',
+        (value) => {
+          state.media = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.media = [];
+        }
+      );
+      assignResult(
+        4,
+        'media trash',
+        (value) => {
+          state.mediaTrash = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.mediaTrash = [];
+        }
+      );
+      assignResult(
+        5,
+        'users',
+        (value) => {
+          state.users = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.users = [];
+        }
+      );
+      assignResult(
+        6,
+        'config',
+        (value) => {
+          state.config = value;
+        },
+        () => {
+          state.config = null;
+        }
+      );
+      assignResult(
+        7,
+        'settings sections',
+        (value) => {
+          state.settingsSections = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.settingsSections = [];
+        }
+      );
+      assignResult(
+        8,
+        'plugins',
+        (value) => {
+          state.plugins = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.plugins = [];
+        }
+      );
+      assignResult(
+        9,
+        'admin extensions',
+        (value) => {
+          state.adminExtensions = value || { pages: [], widgets: [], slots: [], settings: [] };
+        },
+        () => {
+          state.adminExtensions = { pages: [], widgets: [], slots: [], settings: [] };
+        }
+      );
+      assignResult(
+        10,
+        'themes',
+        (value) => {
+          state.themes = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.themes = [];
+        }
+      );
+      assignResult(
+        11,
+        'audit log',
+        (value) => {
+          state.audit = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.audit = [];
+        }
+      );
+      state.selectedDocumentTrash = state.selectedDocumentTrash.filter((path) =>
+        state.documentTrash.some((entry) => entry.path === path)
+      );
+      state.selectedMediaTrash = state.selectedMediaTrash.filter((path) =>
+        state.mediaTrash.some((entry) => entry.path === path)
+      );
 
       if (state.selectedMediaReference) {
-        const matching = state.media.find((item) => item.reference === state.selectedMediaReference);
+        const matching = state.media.find(
+          (item) => item.reference === state.selectedMediaReference
+        );
         if (matching) {
           state.mediaDetail = matching;
         } else {
@@ -2100,7 +1928,13 @@
         }
       }
       if (state.documentHistoryPath) {
-        const stillPresent = state.documents.some((doc) => doc.source_path === state.documentHistoryPath) || state.documentTrash.some((entry) => entry.path === state.documentHistoryPath || entry.original_path === state.documentHistoryPath);
+        const stillPresent =
+          state.documents.some((doc) => doc.source_path === state.documentHistoryPath) ||
+          state.documentTrash.some(
+            (entry) =>
+              entry.path === state.documentHistoryPath ||
+              entry.original_path === state.documentHistoryPath
+          );
         if (!stillPresent) {
           state.documentHistoryPath = '';
           state.documentHistory = [];
@@ -2108,8 +1942,17 @@
         }
       }
       if (state.mediaHistoryReference) {
-        const stillPresent = state.media.some((item) => `content/${item.collection}/${item.path}` === state.mediaHistoryReference);
-        if (!stillPresent && !state.mediaHistory.some((entry) => entry.path === state.mediaHistoryReference || entry.original_path === state.mediaHistoryReference)) {
+        const stillPresent = state.media.some(
+          (item) => `content/${item.collection}/${item.path}` === state.mediaHistoryReference
+        );
+        if (
+          !stillPresent &&
+          !state.mediaHistory.some(
+            (entry) =>
+              entry.path === state.mediaHistoryReference ||
+              entry.original_path === state.mediaHistoryReference
+          )
+        ) {
           state.mediaHistoryReference = '';
           state.mediaHistory = [];
         }
@@ -2119,9 +1962,15 @@
       if (!state.documentEditor.raw) {
         state.documentEditor.raw = buildDefaultMarkdown('post');
       }
-      snapshotValue('document', state.documentEditor);
+      snapshotValue('document', {
+        editor: state.documentEditor,
+        fields: state.documentFieldValues,
+        meta: state.documentMeta,
+      });
     } catch (error) {
       state.session = null;
+      state.capabilityInfo = null;
+      state.runtimeStatus = null;
       setError(error.message || String(error));
     } finally {
       state.loading = false;
@@ -2133,7 +1982,7 @@
 
   window.addEventListener('popstate', () => {
     if (!confirmNavigation()) {
-      window.history.pushState({}, '', state.section === 'overview' ? adminBase : `${adminBase}/${state.section}`);
+      window.history.pushState({}, '', adminPathForSection(adminBase, state.section));
       return;
     }
     state.section = sectionForPath(window.location.pathname);
@@ -2153,15 +2002,33 @@
     const modifier = isMac ? event.metaKey : event.ctrlKey;
     if (modifier && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      if (state.section === 'documents') document.getElementById('document-save-form')?.requestSubmit();
+      if (state.section === 'editor')
+        document.getElementById('document-save-form')?.requestSubmit();
       if (state.section === 'config') document.getElementById('config-save-form')?.requestSubmit();
       if (state.section === 'users') document.getElementById('user-save-form')?.requestSubmit();
-      if (state.section === 'media') document.getElementById('media-metadata-form')?.requestSubmit();
+      if (state.section === 'media')
+        document.getElementById('media-metadata-form')?.requestSubmit();
       return;
     }
-    if (modifier && event.key === 'Enter' && state.section === 'documents') {
+    if (modifier && event.key === 'Enter' && state.section === 'editor') {
       event.preventDefault();
       document.getElementById('document-preview-button')?.click();
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      state.commandPalette.open = !state.commandPalette.open;
+      if (!state.commandPalette.open) {
+        state.commandPalette.query = '';
+      }
+      render();
+      return;
+    }
+    if (event.key === 'Escape' && state.commandPalette?.open) {
+      event.preventDefault();
+      state.commandPalette.open = false;
+      state.commandPalette.query = '';
+      render();
       return;
     }
     if (event.shiftKey && event.key === '?') {
@@ -2170,13 +2037,15 @@
       render();
       return;
     }
-    if (event.key.toLowerCase() === 'g') {
+    if (event.key && event.key.toLowerCase() === 'g') {
       pendingGoto = 'g';
-      window.setTimeout(() => { pendingGoto = ''; }, 800);
+      window.setTimeout(() => {
+        pendingGoto = '';
+      }, 800);
       return;
     }
     if (pendingGoto === 'g') {
-      const map = { d: 'documents', m: 'media', u: 'users', a: 'audit' };
+      const map = { d: 'documents', e: 'editor', m: 'media', u: 'users', a: 'audit' };
       const next = map[event.key.toLowerCase()];
       if (next) {
         event.preventDefault();
