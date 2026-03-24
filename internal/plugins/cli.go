@@ -7,16 +7,24 @@ import (
 	"strings"
 )
 
+// CommandContext is the execution context passed to plugin CLI commands.
+//
+// Args contains only the arguments that follow the plugin command name.
 type CommandContext struct {
 	Args   []string
 	Stdout io.Writer
 	Stderr io.Writer
 }
 
+// CLIHook lets a plugin contribute subcommands to the Foundry CLI.
+//
+// Commands are discovered during command dispatch and names must be unique
+// across all enabled plugins.
 type CLIHook interface {
 	Commands() []Command
 }
 
+// Command describes a single plugin-owned CLI command.
 type Command struct {
 	Name        string
 	Summary     string
@@ -24,6 +32,8 @@ type Command struct {
 	Run         func(ctx CommandContext) error
 }
 
+// Commands returns all valid CLI commands exposed by a enabled plugins, sorted by
+// command name.
 func (m *Manager) Commands() []Command {
 	commands := make([]Command, 0)
 
@@ -48,6 +58,7 @@ func (m *Manager) Commands() []Command {
 	return commands
 }
 
+// RunCommand executes a plugin CLI command by name.
 func (m *Manager) RunCommand(name string, ctx CommandContext) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
