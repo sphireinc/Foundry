@@ -10,6 +10,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Metadata describes a plugin's declarative contract from plugin.yaml.
+//
+// Foundry uses this metadata for validation, dependency checks, admin UI
+// display, and extension discovery. Runtime hooks still come from the plugin's
+// implementation.
 type Metadata struct {
 	Name                 string                   `yaml:"name"`
 	Title                string                   `yaml:"title"`
@@ -30,12 +35,18 @@ type Metadata struct {
 	Directory            string                   `yaml:"-"`
 }
 
+// Dependency declares another plugin repo that should be present for this
+// plugin to operate correctly.
 type Dependency struct {
 	Name     string `yaml:"name"`
 	Version  string `yaml:"version,omitempty"`
 	Optional bool   `yaml:"optional,omitempty"`
 }
 
+// AdminExtensions declares the admin-facing surfaces a plugin contributes.
+//
+// These declarations are consumed by the Admin SDK and admin themes so plugin
+// UI can be mounted through stable contracts instead of internal shell details.
 type AdminExtensions struct {
 	Pages            []AdminPage            `yaml:"pages,omitempty"`
 	Widgets          []AdminWidget          `yaml:"widgets,omitempty"`
@@ -43,6 +54,11 @@ type AdminExtensions struct {
 	SettingsSections []AdminSettingsSection `yaml:"settings_sections,omitempty"`
 }
 
+// AdminPage declares a plugin-provided admin page.
+//
+// Route is the logical admin route segment, while Module and Styles point to
+// plugin-relative assets served by Foundry when the admin shell mounts the
+// page. Capability gates whether the current admin user may access the page.
 type AdminPage struct {
 	Key         string   `yaml:"key"`
 	Title       string   `yaml:"title"`
@@ -53,6 +69,9 @@ type AdminPage struct {
 	Styles      []string `yaml:"styles,omitempty"`
 }
 
+// AdminWidget declares a plugin-provided widget for a named admin theme slot.
+//
+// Slot values must match widget slots supported by the active admin theme.
 type AdminWidget struct {
 	Key         string   `yaml:"key"`
 	Title       string   `yaml:"title"`
@@ -63,11 +82,15 @@ type AdminWidget struct {
 	Styles      []string `yaml:"styles,omitempty"`
 }
 
+// AdminSlot declares a logical admin slot that the plugin expects themes to
+// expose or understand.
 type AdminSlot struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
 }
 
+// AdminSettingsSection declares plugin-owned settings that Foundry can surface
+// in the admin UI and validate against a schema.
 type AdminSettingsSection struct {
 	Key         string                   `yaml:"key"`
 	Title       string                   `yaml:"title"`
@@ -76,6 +99,8 @@ type AdminSettingsSection struct {
 	Schema      []config.FieldDefinition `yaml:"schema,omitempty"`
 }
 
+// LoadMetadata reads plugin.yaml for a single plugin directory and applies
+// Foundry defaults for omitted fields.
 func LoadMetadata(pluginsDir, name string) (Metadata, error) {
 	var err error
 	name, err = validatePluginName(name)
@@ -153,6 +178,7 @@ func LoadMetadata(pluginsDir, name string) (Metadata, error) {
 	return meta, nil
 }
 
+// LoadAllMetadata loads metadata for the enabled plugin list.
 func LoadAllMetadata(pluginsDir string, enabled []string) (map[string]Metadata, error) {
 	out := make(map[string]Metadata, len(enabled))
 
@@ -172,6 +198,11 @@ func LoadAllMetadata(pluginsDir string, enabled []string) (map[string]Metadata, 
 	return out, nil
 }
 
+// NormalizeAdminAssetPath validates a plugin-relative admin asset path.
+//
+// Plugin page and widget bundles are served from inside the plugin directory,
+// so this helper rejects absolute paths and traversal segments before those
+// paths are published to the admin shell.
 func NormalizeAdminAssetPath(rel string) (string, error) {
 	rel = strings.TrimSpace(rel)
 	if rel == "" {

@@ -12,6 +12,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Manifest is the contract Foundry reads from an admin theme's
+// admin-theme.yaml.
+//
+// Admin themes should declare the admin API version, SDK version, shell
+// components, and widget slots they support so alternate admin frontends remain
+// compatible with Foundry's extension system.
 type Manifest struct {
 	Name                 string   `yaml:"name"`
 	Title                string   `yaml:"title"`
@@ -27,17 +33,20 @@ type Manifest struct {
 	Screenshots          []string `yaml:"screenshots,omitempty"`
 }
 
+// Diagnostic is a single validation finding for an admin theme
 type Diagnostic struct {
 	Severity string
 	Path     string
 	Message  string
 }
 
+// ValidationResult summarizes admin theme validation
 type ValidationResult struct {
 	Valid       bool
 	Diagnostics []Diagnostic
 }
 
+// ThemeInfo identifies an installed admin theme directory
 type ThemeInfo struct {
 	Name string
 	Path string
@@ -63,6 +72,7 @@ var requiredWidgetSlots = []string{
 	"plugins.sidebar",
 }
 
+// ListInstalled returns all admin themes under themesDir/admin-themes.
 func ListInstalled(themesDir string) ([]ThemeInfo, error) {
 	root := filepath.Join(themesDir, "admin-themes")
 	entries, err := os.ReadDir(root)
@@ -83,6 +93,10 @@ func ListInstalled(themesDir string) ([]ThemeInfo, error) {
 	return out, nil
 }
 
+// LoadManifest reads and normalizes admin-theme.yaml for an admin theme.
+//
+// When the manifest is missing, Foundry synthesizes a default contract so the
+// built-in admin theme can still work
 func LoadManifest(themesDir, name string) (*Manifest, error) {
 	name, err := safepath.ValidatePathComponent("admin theme name", name)
 	if err != nil {
@@ -136,6 +150,8 @@ func LoadManifest(themesDir, name string) (*Manifest, error) {
 	return &manifest, nil
 }
 
+// ValidateTheme validates an installed admin theme against Foundry's required
+// contract
 func ValidateTheme(themesDir, name string) (*ValidationResult, error) {
 	name, err := safepath.ValidatePathComponent("admin theme name", name)
 	if err != nil {
