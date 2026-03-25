@@ -1,0 +1,29 @@
+{{ define "content" }}
+<section>
+  <header class="archive-header">
+    <div class="eyebrow">404</div>
+    <h1>{{ .Title }}</h1>
+    <p>The page <code>{{ .RequestPath }}</code> could not be found.</p>
+  </header>
+
+  <div class="archive-list">
+    <article class="archive-item">
+      <h2 class="archive-item-title"><a href="/">Return home</a></h2>
+      <div class="archive-item-summary">
+        Use the navigation or jump back to the homepage to keep exploring the site.
+      </div>
+    </article>
+
+    {{ range .Documents }}
+    <article class="archive-item">
+      <h2 class="archive-item-title">
+        <a href="{{ .URL }}">{{ .Title }}</a>
+      </h2>
+      {{ if .Summary }}
+      <div class="archive-item-summary">{{ .Summary }}</div>
+      {{ end }}
+    </article>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
