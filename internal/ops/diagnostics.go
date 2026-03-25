@@ -20,6 +20,8 @@ var (
 	htmlSrcRE      = regexp.MustCompile(`(?i)\bsrc="([^"]+)"`)
 )
 
+// DiagnosticReport aggregates site-level validation findings discovered outside
+// the strict config/theme validators.
 type DiagnosticReport struct {
 	BrokenMediaRefs       []string
 	BrokenInternalLinks   []string
@@ -30,6 +32,8 @@ type DiagnosticReport struct {
 	TaxonomyInconsistency []string
 }
 
+// Messages flattens all diagnostic categories into a single ordered message
+// slice suitable for CLI output.
 func (r DiagnosticReport) Messages() []string {
 	out := make([]string, 0, len(r.BrokenMediaRefs)+len(r.BrokenInternalLinks)+len(r.MissingTemplates)+len(r.OrphanedMedia)+len(r.DuplicateURLs)+len(r.DuplicateSlugs)+len(r.TaxonomyInconsistency))
 	out = append(out, r.DuplicateURLs...)
@@ -42,6 +46,8 @@ func (r DiagnosticReport) Messages() []string {
 	return out
 }
 
+// AnalyzeSite inspects the loaded graph and supporting files for operational
+// issues such as broken references, missing templates, and orphaned media.
 func AnalyzeSite(cfg *config.Config, graph *content.SiteGraph) DiagnosticReport {
 	report := DiagnosticReport{}
 	if cfg == nil || graph == nil {

@@ -1,3 +1,4 @@
+// createFrontendNavigationAPI wraps frontend navigation/menu lookups.
 export const createFrontendNavigationAPI = (transport) => ({
   async get(name = 'main') {
     const payload = await transport.getStaticOrAPI('/navigation', '/navigation.json');

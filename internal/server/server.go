@@ -30,10 +30,18 @@ import (
 	"github.com/sphireinc/foundry/internal/router"
 )
 
+// Loader produces the site graph served by the preview server.
 type Loader interface {
 	Load(context.Context) (*content.SiteGraph, error)
 }
 
+// Hooks exposes the preview-server lifecycle to integrators.
+//
+// The practical order is:
+//  1. OnRoutesAssigned during rebuild
+//  2. RegisterRoutes when the mux is assembled
+//  3. OnAssetsBuilding during asset sync
+//  4. OnServerStarted after the listener is ready
 type Hooks interface {
 	RegisterRoutes(mux *http.ServeMux)
 	OnServerStarted(addr string) error
@@ -48,6 +56,8 @@ func (noopHooks) OnServerStarted(_ string) error              { return nil }
 func (noopHooks) OnRoutesAssigned(_ *content.SiteGraph) error { return nil }
 func (noopHooks) OnAssetsBuilding(_ *config.Config) error     { return nil }
 
+// Server serves Foundry preview output, rebuilds on change, and exposes preview
+// routes such as live reload and diagnostics.
 type Server struct {
 	cfg          *config.Config
 	loader       Loader
@@ -66,6 +76,7 @@ type Server struct {
 	reloadVer    atomic.Uint64
 }
 
+// Option mutates preview-server construction behavior.
 type Option func(*Server)
 
 var requestSequence atomic.Uint64
@@ -85,12 +96,16 @@ type runtimeSnapshot struct {
 	ProcessSystemCPU time.Duration
 }
 
+// WithDebugMode enables additional debug logging and request instrumentation for
+// the preview server.
 func WithDebugMode(enabled bool) Option {
 	return func(s *Server) {
 		s.debug = enabled
 	}
 }
 
+// New constructs a preview server for the current configuration, graph loader,
+// resolver, and renderer.
 func New(
 	cfg *config.Config,
 	loader Loader,
@@ -124,6 +139,8 @@ func New(
 	return s
 }
 
+// ListenAndServe performs the initial rebuild, starts file watching, and serves
+// preview traffic until ctx is canceled or the HTTP server exits.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	if err := s.rebuild(ctx); err != nil {
 		return err
@@ -161,6 +178,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	return nil
 }
 
+// newMux builds the HTTP route tree for preview mode.
 func (s *Server) newMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -194,6 +212,8 @@ func (s *Server) newMux() *http.ServeMux {
 	return mux
 }
 
+// publicStaticHandler serves files from the generated public directory with
+// conservative headers for user-managed media collections.
 func (s *Server) publicStaticHandler(mediaCollection bool) http.Handler {
 	base := http.StripPrefix("/", http.FileServer(http.Dir(s.cfg.PublicDir)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +225,8 @@ func (s *Server) publicStaticHandler(mediaCollection bool) http.Handler {
 	})
 }
 
+// newHTTPServer applies Foundry's timeout defaults to the underlying HTTP
+// server.
 func (s *Server) newHTTPServer(handler http.Handler) *http.Server {
 	srv := &http.Server{
 		Addr:              s.cfg.Server.Addr,

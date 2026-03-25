@@ -1,3 +1,4 @@
+// createAdminThemesAPI wraps theme listing, validation, and activation flows.
 export const createAdminThemesAPI = (http) => ({
   list() {
     return http.get('/api/themes');

@@ -1,3 +1,5 @@
+// createCapabilitySet wraps a capability payload with convenience helpers used
+// by both SDKs and by admin/frontend UIs built on top of them.
 export const createCapabilitySet = (payload = {}) => {
   const rawCapabilities = Array.isArray(payload.capabilities) ? payload.capabilities : [];
   const capabilitySet = new Set(

@@ -1,3 +1,5 @@
+// createAdminSessionAPI wraps login, session, password-reset, session
+// revocation, and TOTP flows for admin clients.
 export const createAdminSessionAPI = (http, sessionStore) => ({
   async get() {
     const payload = await http.get('/api/session');

@@ -17,6 +17,21 @@ import (
 	"github.com/sphireinc/foundry/internal/markup"
 )
 
+// Hooks exposes the content-loading lifecycle to plugins and other integrators.
+//
+// The hook order for a full load is:
+//  1. OnDataLoaded
+//  2. OnGraphBuilding
+//  3. For each discovered document:
+//     a. OnContentDiscovered
+//     b. OnFrontmatterParsed
+//     c. OnMarkdownRendered
+//     d. OnDocumentParsed
+//  4. OnTaxonomyBuilt
+//  5. OnGraphBuilt
+//
+// Hook implementations may mutate Document and SiteGraph values, but should do
+// so carefully because later phases depend on normalized data.
 type Hooks interface {
 	OnContentDiscovered(path string) error
 	OnFrontmatterParsed(*Document) error
@@ -28,7 +43,7 @@ type Hooks interface {
 	OnTaxonomyBuilt(*SiteGraph) error
 }
 
-// these below are purley for type safety
+// noopHooks provides a type-safe no-op Hooks implementation.
 type noopHooks struct{}
 
 func (noopHooks) OnContentDiscovered(path string) error { _ = path; return nil }
@@ -40,12 +55,18 @@ func (noopHooks) OnGraphBuilding(*SiteGraph) error      { return nil }
 func (noopHooks) OnGraphBuilt(*SiteGraph) error         { return nil }
 func (noopHooks) OnTaxonomyBuilt(*SiteGraph) error      { return nil }
 
+// Loader reads content files and data files from disk, normalizes them into
+// Documents, and assembles the SiteGraph used by rendering and serving.
 type Loader struct {
 	cfg           *config.Config
 	hooks         Hooks
 	includeDrafts bool
 }
 
+// NewLoader constructs a loader for the current configuration.
+//
+// When includeDrafts is false, draft and scheduled-unpublished documents are
+// omitted from the resulting graph.
 func NewLoader(cfg *config.Config, hooks Hooks, includeDrafts bool) *Loader {
 	if hooks == nil {
 		hooks = noopHooks{}
@@ -58,6 +79,7 @@ func NewLoader(cfg *config.Config, hooks Hooks, includeDrafts bool) *Loader {
 	}
 }
 
+// Load reads content and data from disk and returns a fully assembled SiteGraph.
 func (l *Loader) Load(ctx context.Context) (*SiteGraph, error) {
 	_ = ctx
 
@@ -95,6 +117,8 @@ func (l *Loader) Load(ctx context.Context) (*SiteGraph, error) {
 	return graph, nil
 }
 
+// loadSection walks a content section root and adds valid Markdown documents to
+// the graph.
 func (l *Loader) loadSection(graph *SiteGraph, docType, root string) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -135,10 +159,14 @@ func (l *Loader) loadSection(graph *SiteGraph, docType, root string) error {
 	})
 }
 
+// resolveLanguage splits a section-relative path into language and document path
+// components using Foundry's language directory convention.
 func (l *Loader) resolveLanguage(rel string) (lang, relDocPath string, isDefault bool) {
 	return i18n.SplitLeadingLang(rel, l.cfg.DefaultLang)
 }
 
+// loadDocument reads, parses, normalizes, and renders a single Markdown file
+// into a Document.
 func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docType string) (*Document, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

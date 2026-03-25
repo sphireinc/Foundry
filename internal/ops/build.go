@@ -18,6 +18,8 @@ import (
 	"github.com/sphireinc/foundry/internal/site"
 )
 
+// TimingBreakdown records high-level build timings for diagnostics and doctor
+// output.
 type TimingBreakdown struct {
 	PluginConfig time.Duration
 	Loader       time.Duration
@@ -28,6 +30,7 @@ type TimingBreakdown struct {
 	Feed         time.Duration
 }
 
+// PreviewLink identifies a previewable document emitted into preview-links.json.
 type PreviewLink struct {
 	Title      string `json:"title"`
 	Status     string `json:"status"`
@@ -38,6 +41,8 @@ type PreviewLink struct {
 	PreviewURL string `json:"preview_url"`
 }
 
+// PreviewManifest is the preview-links.json payload written during preview
+// builds.
 type PreviewManifest struct {
 	GeneratedAt time.Time     `json:"generated_at"`
 	Environment string        `json:"environment"`
@@ -45,6 +50,7 @@ type PreviewManifest struct {
 	Links       []PreviewLink `json:"links"`
 }
 
+// BuildReport is the persisted operational summary for the most recent build.
 type BuildReport struct {
 	GeneratedAt   time.Time           `json:"generated_at"`
 	Environment   string              `json:"environment"`
@@ -55,6 +61,7 @@ type BuildReport struct {
 	Stats         renderer.BuildStats `json:"stats"`
 }
 
+// TimedRouteHooks wraps site route hooks and records how long they take.
 type TimedRouteHooks struct {
 	Hooks    site.RouteHooks
 	Duration time.Duration
@@ -70,6 +77,8 @@ func (h *TimedRouteHooks) OnRoutesAssigned(graph *content.SiteGraph) error {
 	return err
 }
 
+// LoadGraphWithTiming loads the site graph, assigns URLs, and records coarse
+// timing for those stages.
 func LoadGraphWithTiming(ctx context.Context, loader site.Loader, resolver *router.Resolver, hooks site.RouteHooks) (*content.SiteGraph, TimingBreakdown, error) {
 	var metrics TimingBreakdown
 	start := time.Now()
@@ -96,6 +105,7 @@ func LoadGraphWithTiming(ctx context.Context, loader site.Loader, resolver *rout
 	return graph, metrics, nil
 }
 
+// BuildFeedsWithTiming runs feed generation and records its duration.
 func BuildFeedsWithTiming(cfg *config.Config, graph *content.SiteGraph) (TimingBreakdown, error) {
 	var metrics TimingBreakdown
 	start := time.Now()
@@ -106,6 +116,7 @@ func BuildFeedsWithTiming(cfg *config.Config, graph *content.SiteGraph) (TimingB
 	return metrics, nil
 }
 
+// BuildRendererWithTiming runs the renderer build pass and records its timing.
 func BuildRendererWithTiming(ctx context.Context, r *renderer.Renderer, graph *content.SiteGraph) (TimingBreakdown, error) {
 	var metrics TimingBreakdown
 	start := time.Now()
@@ -118,6 +129,8 @@ func BuildRendererWithTiming(ctx context.Context, r *renderer.Renderer, graph *c
 	return metrics, nil
 }
 
+// WritePreviewManifest writes preview-links.json for non-published documents
+// when preview manifest output is enabled.
 func WritePreviewManifest(cfg *config.Config, graph *content.SiteGraph, target string, enabled bool) error {
 	manifestPath := filepath.Join(cfg.PublicDir, "preview-links.json")
 	if !enabled {
@@ -179,6 +192,8 @@ func WritePreviewManifest(cfg *config.Config, graph *content.SiteGraph, target s
 	return nil
 }
 
+// WriteBuildReport persists the latest build summary for admin diagnostics and
+// the Debug dashboard.
 func WriteBuildReport(cfg *config.Config, graph *content.SiteGraph, target string, preview bool, stats renderer.BuildStats) error {
 	if cfg == nil {
 		return nil

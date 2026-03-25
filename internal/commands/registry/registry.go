@@ -9,6 +9,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 )
 
+// Command is the common interface implemented by all Foundry CLI commands.
 type Command interface {
 	Name() string
 	Summary() string
@@ -18,6 +19,7 @@ type Command interface {
 	Run(cfg *config.Config, args []string) error
 }
 
+// Info is the serializable command metadata used to build usage output.
 type Info struct {
 	Name           string
 	Summary        string
@@ -28,6 +30,10 @@ type Info struct {
 
 var commands = map[string]Command{}
 
+// Register adds a command to the global CLI registry.
+//
+// Registration is expected to happen from package init functions and panics on
+// programmer errors such as duplicate names.
 func Register(cmd Command) {
 	if cmd == nil || cmd.Name() == "" {
 		panic("commands: invalid command registration")
@@ -38,6 +44,7 @@ func Register(cmd Command) {
 	commands[cmd.Name()] = cmd
 }
 
+// Lookup resolves a command from os.Args-style input.
 func Lookup(args []string) (Command, bool) {
 	if len(args) < 2 {
 		return nil, false
@@ -47,6 +54,9 @@ func Lookup(args []string) (Command, bool) {
 	return cmd, ok
 }
 
+// Run looks up and executes a registered command.
+//
+// The boolean result reports whether a matching command was found.
 func Run(cfg *config.Config, args []string) (bool, error) {
 	cmd, ok := Lookup(args)
 	if !ok {
@@ -56,6 +66,7 @@ func Run(cfg *config.Config, args []string) (bool, error) {
 	return true, cmd.Run(cfg, args)
 }
 
+// List returns all registered commands sorted by group and name.
 func List() []Info {
 	out := make([]Info, 0, len(commands))
 	for _, cmd := range commands {
@@ -78,6 +89,7 @@ func List() []Info {
 	return out
 }
 
+// Usage renders grouped CLI usage text for all registered commands.
 func Usage() string {
 	items := List()
 	if len(items) == 0 {

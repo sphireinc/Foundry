@@ -29,6 +29,11 @@ type InstallOptions struct {
 	Name       string
 }
 
+// Install clones or downloads a plugin repository into PluginsDir and returns
+// its normalized metadata.
+//
+// Foundry prefers git clone and falls back to a constrained GitHub zip
+// download. The install path is validated so plugin names remain filesystem-safe.
 func Install(opts InstallOptions) (Metadata, error) {
 	repoURL, err := validateInstallURL(opts.URL)
 	if err != nil {
@@ -95,6 +100,7 @@ func Install(opts InstallOptions) (Metadata, error) {
 	return meta, nil
 }
 
+// Uninstall removes an installed plugin directory by name.
 func Uninstall(pluginsDir, name string) error {
 	pluginsDir = strings.TrimSpace(pluginsDir)
 
@@ -126,6 +132,7 @@ func Uninstall(pluginsDir, name string) error {
 	return nil
 }
 
+// repoZipURL returns the GitHub archive URL used by the zip fallback path.
 func repoZipURL(repoURL string) (string, error) {
 	u, err := url.Parse(repoURL)
 	if err != nil {
@@ -142,6 +149,8 @@ func repoZipURL(repoURL string) (string, error) {
 	return fmt.Sprintf("https://github.com/%s/archive/refs/heads/main.zip", path), nil
 }
 
+// downloadAndExtract downloads a repository archive and extracts it into
+// targetDir with zip-slip and symlink protections.
 func downloadAndExtract(repoURL, targetDir string) error {
 	zipURL, err := repoZipURL(repoURL)
 	if err != nil {
@@ -244,6 +253,7 @@ func downloadAndExtract(repoURL, targetDir string) error {
 	return os.Rename(root, targetDir)
 }
 
+// safeArchivePath confines archive extraction paths to the provided root.
 func safeArchivePath(root, name string) (string, error) {
 	if strings.TrimSpace(name) == "" {
 		return "", fmt.Errorf("zip contains empty entry name")
@@ -271,6 +281,8 @@ func safeArchivePath(root, name string) (string, error) {
 	return targetAbs, nil
 }
 
+// normalizeInstallURL expands shorthand repository references into cloneable
+// URLs where possible.
 func normalizeInstallURL(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -307,6 +319,7 @@ func normalizeInstallURL(raw string) string {
 	return raw
 }
 
+// validateInstallURL constrains plugin install URLs to supported GitHub forms.
 func validateInstallURL(raw string) (string, error) {
 	normalized := normalizeInstallURL(raw)
 	if strings.TrimSpace(normalized) == "" {

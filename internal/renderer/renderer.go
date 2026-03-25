@@ -21,6 +21,18 @@ import (
 
 var stripHTMLTagsRE = regexp.MustCompile(`<[^>]+>`)
 
+// Hooks lets plugins participate in the render pipeline.
+//
+// The hook order for a single page render is:
+//  1. OnContext
+//  2. OnAssets
+//  3. OnHTMLSlots
+//  4. OnBeforeRender
+//  5. >> template execution
+//  6. OnAfterRender
+//
+// Implementations should keep work fast and deterministic because these hooks
+// run for every rendered output.
 type Hooks interface {
 	OnContext(*ViewData) error
 	OnAssets(*ViewData, *AssetSet) error
@@ -39,12 +51,15 @@ func (noopHooks) OnAfterRender(_ string, html []byte) ([]byte, error) { return h
 func (noopHooks) OnAssetsBuilding(*config.Config) error               { return nil }
 func (noopHooks) OnHTMLSlots(*ViewData, *Slots) error                 { return nil }
 
+// Renderer turns the site graph into HTML output using the active frontend
+// theme and the provided render hooks.
 type Renderer struct {
 	cfg    *config.Config
 	themes *theme.Manager
 	hooks  Hooks
 }
 
+// BuildStats records coarse timing breakdowns for a render/build pass.
 type BuildStats struct {
 	Prepare    time.Duration
 	Assets     time.Duration
@@ -53,6 +68,7 @@ type BuildStats struct {
 	Search     time.Duration
 }
 
+// New constructs a renderer for the active theme.
 func New(cfg *config.Config, themes *theme.Manager, hooks Hooks) *Renderer {
 	if hooks == nil {
 		hooks = noopHooks{}
@@ -65,12 +81,17 @@ func New(cfg *config.Config, themes *theme.Manager, hooks Hooks) *Renderer {
 	}
 }
 
+// NavItem is a normalized menu item exposed to templates.
 type NavItem struct {
 	Name   string
 	URL    string
 	Active bool
 }
 
+// ViewData is the template context passed to frontend theme layouts.
+//
+// Theme authors can rely on these fields in templates, and render hooks may
+// enrich or modify them before execution.
 type ViewData struct {
 	Site         *config.Config
 	Page         *content.Document
@@ -84,16 +105,25 @@ type ViewData struct {
 	Nav          []NavItem
 }
 
+// Slots collects named HTML fragments that themes expose via pluginSlot in
+// templates.
+//
+// Asset hooks and HTML slot hooks populate Slots before template execution.
 type Slots struct {
 	values map[string][]template.HTML
 }
 
+// NewSlots creates an empty slot registry for a single render pass.
 func NewSlots() *Slots {
 	return &Slots{
 		values: make(map[string][]template.HTML),
 	}
 }
 
+// Add appends an HTML fragment to a named slot.
+//
+// Slot names should match the theme manifest's declared slots. Empty names and
+// empty HTML fragments are ignored.
 func (s *Slots) Add(name string, html template.HTML) {
 	if s == nil || strings.TrimSpace(name) == "" || strings.TrimSpace(string(html)) == "" {
 		return
@@ -101,6 +131,7 @@ func (s *Slots) Add(name string, html template.HTML) {
 	s.values[name] = append(s.values[name], html)
 }
 
+// Render concatenates all fragments for a slot in insertion order.
 func (s *Slots) Render(name string) template.HTML {
 	if s == nil {
 		return ""
@@ -118,6 +149,7 @@ func (s *Slots) Render(name string) template.HTML {
 	return template.HTML(sb.String())
 }
 
+// ScriptPosition controls where a script asset is rendered in theme slots.
 type ScriptPosition string
 
 const (
@@ -125,12 +157,17 @@ const (
 	ScriptPositionBodyEnd ScriptPosition = "body.end"
 )
 
+// AssetSet accumulates CSS and JS assets for a single render pass.
+//
+// Asset hooks append to the set, and the renderer publishes them into standard
+// theme slots such as head.end and body.end.
 type AssetSet struct {
 	styles      []string
 	headScripts []string
 	bodyScripts []string
 }
 
+// NewAssetSet creates an empty asset accumulator for a render pass.
 func NewAssetSet() *AssetSet {
 	return &AssetSet{
 		styles:      make([]string, 0),
@@ -792,6 +829,12 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	files := []string{basePath, pagePath}
 	files = append(files, partials...)
 
+	// These template functions are the stable extension helpers exposed to
+	// frontend themes:
+	//   - safeHTML returns trusted template.HTML values unchanged.
+	//   - field reads schema/custom fields from the current document.
+	//   - data reads from the shared site data map loaded from content/data.
+	//   - pluginSlot renders accumulated HTML for a declared theme slot.
 	tmpl, err := template.New("base.html").Funcs(template.FuncMap{
 		"safeHTML": func(v any) template.HTML {
 			if h, ok := v.(template.HTML); ok {

@@ -13,6 +13,8 @@ import (
 	"github.com/sphireinc/foundry/internal/site"
 )
 
+// FileSystem abstracts filesystem access for admin service operations so tests
+// can substitute a controlled implementation.
 type FileSystem interface {
 	ReadFile(name string) ([]byte, error)
 	WriteFile(name string, data []byte, perm os.FileMode) error
@@ -35,13 +37,22 @@ func (osFS) MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(p
 func (osFS) Rename(oldpath, newpath string) error         { return os.Rename(oldpath, newpath) }
 func (osFS) Remove(name string) error                     { return os.Remove(name) }
 
+// GraphLoader loads a site graph for admin read operations.
+//
+// The boolean controls whether draft content should be included.
 type GraphLoader func(context.Context, *config.Config, bool) (*content.SiteGraph, error)
 
+// StatusProvider contributes one cohesive section of data to the admin status
+// dashboard.
 type StatusProvider interface {
 	Name() string
 	Provide(context.Context, *Service, *types.SystemStatus) error
 }
 
+// Service is the main business-logic layer behind the admin API.
+//
+// It owns filesystem access, graph loading, plugin metadata access, and a
+// short-lived graph cache used by multiple admin endpoints.
 type Service struct {
 	cfg             *config.Config
 	fs              FileSystem
@@ -60,8 +71,10 @@ type cachedGraph struct {
 
 const graphCacheTTL = time.Second
 
+// Option customizes Service construction for tests and embedding.
 type Option func(*Service)
 
+// WithFS overrides the filesystem implementation used by the service.
 func WithFS(fs FileSystem) Option {
 	return func(s *Service) {
 		if fs != nil {
@@ -70,6 +83,7 @@ func WithFS(fs FileSystem) Option {
 	}
 }
 
+// WithGraphLoader overrides the graph loader used by the service.
 func WithGraphLoader(loader GraphLoader) Option {
 	return func(s *Service) {
 		if loader != nil {
@@ -78,6 +92,8 @@ func WithGraphLoader(loader GraphLoader) Option {
 	}
 }
 
+// WithPluginMetadata overrides plugin metadata lookup used by admin extension
+// and plugin-management views.
 func WithPluginMetadata(loader func() map[string]plugins.Metadata) Option {
 	return func(s *Service) {
 		if loader != nil {
@@ -86,6 +102,8 @@ func WithPluginMetadata(loader func() map[string]plugins.Metadata) Option {
 	}
 }
 
+// New constructs the admin service with default providers and a default graph
+// loader based on the site package.
 func New(cfg *config.Config, opts ...Option) *Service {
 	s := &Service{
 		cfg:             cfg,
@@ -114,10 +132,12 @@ func New(cfg *config.Config, opts ...Option) *Service {
 	return s
 }
 
+// Config returns the service's active site configuration.
 func (s *Service) Config() *config.Config {
 	return s.cfg
 }
 
+// RegisterStatusProvider adds or replaces a named dashboard status provider.
 func (s *Service) RegisterStatusProvider(provider StatusProvider) {
 	if provider == nil {
 		return
@@ -128,6 +148,8 @@ func (s *Service) RegisterStatusProvider(provider StatusProvider) {
 	s.statusProviders[provider.Name()] = provider
 }
 
+// load returns a cached site graph when possible and reloads it when the cache
+// has expired.
 func (s *Service) load(ctx context.Context, includeDrafts bool) (*content.SiteGraph, error) {
 	s.mu.RLock()
 	cached, ok := s.graphCache[includeDrafts]
@@ -151,6 +173,7 @@ func (s *Service) load(ctx context.Context, includeDrafts bool) (*content.SiteGr
 	return graph, nil
 }
 
+// providers returns the registered status providers in unspecified order.
 func (s *Service) providers() []StatusProvider {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -162,6 +185,8 @@ func (s *Service) providers() []StatusProvider {
 	return out
 }
 
+// invalidateGraphCache clears all cached graph variants after content-affecting
+// admin operations.
 func (s *Service) invalidateGraphCache() {
 	s.mu.Lock()
 	s.graphCache = make(map[bool]cachedGraph)

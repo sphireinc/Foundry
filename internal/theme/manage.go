@@ -13,11 +13,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Info identifies an installed frontend theme on disk.
 type Info struct {
 	Name string
 	Path string
 }
 
+// Manifest is the contract Foundry reads from a frontend theme's theme.yaml.
+//
+// Theme authors should treat this as the supported manifest surface for
+// declaring layout coverage, slot support, screenshots, and config schema.
 type Manifest struct {
 	Name                 string                          `yaml:"name"`
 	Title                string                          `yaml:"title"`
@@ -69,6 +74,7 @@ var requiredLaunchSlotFiles = map[string]string{
 	"post.sidebar.bottom":   filepath.Join("layouts", "post.html"),
 }
 
+// ListInstalled returns all theme directories directly under themesDir
 func ListInstalled(themesDir string) ([]Info, error) {
 	entries, err := os.ReadDir(themesDir)
 	if err != nil {
@@ -97,6 +103,11 @@ func ListInstalled(themesDir string) ([]Info, error) {
 	return out, nil
 }
 
+// LoadManifest reads and normalizes theme.yaml for a frontend theme.
+//
+// When optional fields are omitted, Foundry fills in compatibility and SDK
+// defaults so theme validation and admin diagnostics can know about the theme
+// consistently.
 func LoadManifest(themesDir, name string) (*Manifest, error) {
 	var err error
 	name, err = safepath.ValidatePathComponent("theme name", name)
@@ -137,6 +148,10 @@ func LoadManifest(themesDir, name string) (*Manifest, error) {
 	return &m, nil
 }
 
+// RequiredLayouts returns the layouts this theme is expected to implement
+//
+// SupportedLayouts takes precedence over the older Layouts field. If neither is
+// declared, Foundry assumes the baseline of base, index, page, post, and list.
 func (m *Manifest) RequiredLayouts() []string {
 	if m == nil {
 		return []string{"base", "index", "page", "post", "list"}
@@ -150,6 +165,8 @@ func (m *Manifest) RequiredLayouts() []string {
 	return []string{"base", "index", "page", "post", "list"}
 }
 
+// ValidateInstalled validates frontend theme and returns the first fatal
+// validation error when one exists.
 func ValidateInstalled(themesDir, name string) error {
 	result, err := ValidateInstalledDetailed(themesDir, name)
 	if err != nil {
@@ -169,6 +186,8 @@ func ValidateInstalled(themesDir, name string) error {
 	return fmt.Errorf("theme validation failed")
 }
 
+// Scaffold creates a new frontend theme skeleton with the minimum files needed
+// to pass Foundry validation.
 func Scaffold(themesDir, name string) (string, error) {
 	var err error
 	name, err = safepath.ValidatePathComponent("theme name", name)
@@ -217,6 +236,7 @@ func Scaffold(themesDir, name string) (string, error) {
 	return root, nil
 }
 
+// SwitchInConfig updates the site's configured active frontend theme.
 func SwitchInConfig(configPath, themeName string) error {
 	var err error
 	themeName, err = safepath.ValidatePathComponent("theme name", themeName)

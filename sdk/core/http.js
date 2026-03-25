@@ -2,6 +2,8 @@ import { normalizeFoundryError } from './errors.js';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// joinURL combines a base URL and relative SDK path without forcing consumers
+// into a bundler or framework-specific URL helper.
 const joinURL = (baseURL, path) => {
   const base = String(baseURL || '').replace(/\/+$/, '');
   const next = String(path || '').trim();
@@ -11,6 +13,10 @@ const joinURL = (baseURL, path) => {
   return `${base}${next.startsWith('/') ? next : `/${next}`}`;
 };
 
+// buildQueryString converts a flat object into a URL query string.
+//
+// Undefined, null, and empty-string values are omitted so SDK callers can pass
+// optional filters without hand-trimming them first.
 export const buildQueryString = (query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query || {}).forEach(([key, value]) => {
@@ -38,6 +44,11 @@ const parseBody = async (response) => {
   return text ? { message: text } : {};
 };
 
+// createHttpClient builds the transport primitive shared by the Admin and
+// Frontend SDKs.
+//
+// Consumers normally use createAdminClient or createFrontendClient instead of
+// calling this directly.
 export const createHttpClient = ({
   baseURL = '',
   fetchImpl = globalThis.fetch?.bind(globalThis),

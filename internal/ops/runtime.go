@@ -11,23 +11,30 @@ import (
 	"github.com/sphireinc/foundry/internal/router"
 )
 
+// GraphLoader loads the site graph for operational helpers.
 type GraphLoader interface {
 	Load(context.Context) (*content.SiteGraph, error)
 }
 
+// RouteHookRunner represents post-routing hooks that must run before serving or
+// rendering.
 type RouteHookRunner interface {
 	OnRoutesAssigned(*content.SiteGraph) error
 }
 
+// AssetHookRunner represents asset-build hooks.
 type AssetHookRunner interface {
 	OnAssetsBuilding(*config.Config) error
 }
 
+// PreparedGraph combines the loaded site graph with its dependency graph.
 type PreparedGraph struct {
 	Graph    *content.SiteGraph
 	DepGraph *deps.Graph
 }
 
+// LoadPreparedGraph loads the graph, assigns routes, runs route hooks, and
+// builds the dependency graph used by preview rebuilds.
 func LoadPreparedGraph(ctx context.Context, loader GraphLoader, resolver *router.Resolver, hooks RouteHookRunner, activeTheme string) (*PreparedGraph, error) {
 	if loader == nil {
 		return nil, diag.New(diag.KindInternal, "loader is nil")
@@ -55,6 +62,8 @@ func LoadPreparedGraph(ctx context.Context, loader GraphLoader, resolver *router
 	}, nil
 }
 
+// SyncAssets runs the asset pipeline with Foundry's standard diagnostic
+// wrapping.
 func SyncAssets(cfg *config.Config, hooks AssetHookRunner) error {
 	if err := assets.Sync(cfg, hooks); err != nil {
 		return diag.Wrap(diag.KindIO, "sync assets", err)

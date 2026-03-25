@@ -7,6 +7,8 @@ import (
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
 )
 
+// registerManagementRoutes returns admin configuration, users, themes, plugins,
+// extensions, and audit routes.
 func registerManagementRoutes(r *Router) []routeDef {
 	return []routeDef{
 		{pattern: r.routePath("/api/extensions"), handler: http.HandlerFunc(r.handleExtensions), capability: "dashboard.read"},

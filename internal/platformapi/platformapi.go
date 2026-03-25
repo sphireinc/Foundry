@@ -19,11 +19,16 @@ import (
 )
 
 const (
+	// RouteBase is the public Foundry platform surface for frontend clients.
 	RouteBase = "/__foundry"
-	APIBase   = RouteBase + "/api"
-	SDKBase   = RouteBase + "/sdk"
+	// APIBase is the live JSON API consumed by the Frontend SDK.
+	APIBase = RouteBase + "/api"
+	// SDKBase serves the browser-consumable Frontend and Admin SDK bundles.
+	SDKBase = RouteBase + "/sdk"
 )
 
+// Hooks is the minimal server hook surface needed to compose the platform API
+// into the preview server.
 type Hooks interface {
 	RegisterRoutes(*http.ServeMux)
 	OnServerStarted(string) error
@@ -36,18 +41,26 @@ type hookSet struct {
 	api  *API
 }
 
+// API serves Foundry's stable frontend-facing platform contract.
+//
+// Frontend themes and JS applications should prefer this surface, or the
+// official Frontend SDK layered on top of it, rather than depending on
+// server-internal Go types.
 type API struct {
 	cfg   *config.Config
 	mu    sync.RWMutex
 	graph *content.SiteGraph
 }
 
+// CapabilitiesResponse advertises available modules and optional platform
+// features to frontend clients.
 type CapabilitiesResponse struct {
 	SDKVersion string          `json:"sdk_version"`
 	Modules    map[string]bool `json:"modules"`
 	Features   map[string]bool `json:"features"`
 }
 
+// SiteInfoResponse contains site metadata needed by frontend themes and apps.
 type SiteInfoResponse struct {
 	Name        string               `json:"name"`
 	Title       string               `json:"title"`
@@ -60,11 +73,13 @@ type SiteInfoResponse struct {
 	Taxonomies  map[string]any       `json:"taxonomies,omitempty"`
 }
 
+// NavItem is the normalized navigation item shape returned by the platform API.
 type NavItem struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
 }
 
+// RouteRecord describes a public route in the current site graph.
 type RouteRecord struct {
 	Kind         string `json:"kind"`
 	ID           string `json:"id,omitempty"`
@@ -77,6 +92,8 @@ type RouteRecord struct {
 	TaxonomyTerm string `json:"taxonomy_term,omitempty"`
 }
 
+// ContentSummary is the lightweight content shape used in collections and
+// search results.
 type ContentSummary struct {
 	ID         string              `json:"id"`
 	Type       string              `json:"type"`
@@ -92,6 +109,10 @@ type ContentSummary struct {
 	Taxonomies map[string][]string `json:"taxonomies,omitempty"`
 }
 
+// ContentDetail is the fuller content shape returned by the content endpoint.
+//
+// HTMLBody contains rendered output suitable for display. RawBody is included
+// for preview or source-aware clients.
 type ContentDetail struct {
 	ContentSummary
 	HTMLBody  string         `json:"html_body,omitempty"`
@@ -102,6 +123,7 @@ type ContentDetail struct {
 	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
 }
 
+// CollectionResponse is the normalized paginated result for collection queries.
 type CollectionResponse struct {
 	Items    []ContentSummary `json:"items"`
 	Page     int              `json:"page"`
@@ -109,6 +131,8 @@ type CollectionResponse struct {
 	Total    int              `json:"total"`
 }
 
+// SearchEntry is the normalized record returned by search endpoints and static
+// search artifacts.
 type SearchEntry struct {
 	Title      string              `json:"title"`
 	URL        string              `json:"url"`
@@ -121,6 +145,7 @@ type SearchEntry struct {
 	Taxonomies map[string][]string `json:"taxonomies,omitempty"`
 }
 
+// PreviewLink identifies a previewable content item and its URLs.
 type PreviewLink struct {
 	Title      string `json:"title"`
 	Status     string `json:"status"`
@@ -131,6 +156,7 @@ type PreviewLink struct {
 	PreviewURL string `json:"preview_url"`
 }
 
+// PreviewManifest is the persisted summary emitted during preview builds.
 type PreviewManifest struct {
 	GeneratedAt time.Time     `json:"generated_at"`
 	Environment string        `json:"environment"`
@@ -138,6 +164,8 @@ type PreviewManifest struct {
 	Links       []PreviewLink `json:"links"`
 }
 
+// NewHooks composes the platform API hook set with an existing server hook
+// chain.
 func NewHooks(cfg *config.Config, base Hooks) Hooks {
 	if cfg == nil {
 		return base
@@ -182,6 +210,7 @@ func (h hookSet) OnAssetsBuilding(cfg *config.Config) error {
 	return h.base.OnAssetsBuilding(cfg)
 }
 
+// SetGraph updates the graph used to answer live platform API requests.
 func (a *API) SetGraph(graph *content.SiteGraph) {
 	a.mu.Lock()
 	a.graph = graph
@@ -194,6 +223,7 @@ func (a *API) currentGraph() *content.SiteGraph {
 	return a.graph
 }
 
+// RegisterRoutes mounts the live platform API and SDK asset handlers.
 func (a *API) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle(SDKBase+"/", http.StripPrefix(SDKBase+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")

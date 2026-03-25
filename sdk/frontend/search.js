@@ -1,3 +1,4 @@
+// createFrontendSearchAPI wraps live and static search queries.
 export const createFrontendSearchAPI = (transport) => ({
   async query(q, params = {}) {
     if (transport.mode === 'static') {

@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// registerDebugRoutes returns optional runtime-debug and pprof routes when
+// admin.debug.pprof is enabled.
 func registerDebugRoutes(r *Router) []routeDef {
 	if r == nil || r.cfg == nil || !r.cfg.Admin.Debug.Pprof {
 		return nil
