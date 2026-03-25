@@ -1,0 +1,26 @@
+{{ define "content" }}
+<section>
+  <header class="archive-header">
+    <div class="eyebrow">Author</div>
+    <h1>{{ .AuthorName }}</h1>
+    <p>Articles and pages published under this author archive.</p>
+  </header>
+
+  <div class="archive-list">
+    {{ range .Documents }}
+    <article class="archive-item">
+      <h2 class="archive-item-title"><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      <div class="archive-meta">
+        {{ if eq .Type "post" }}Post{{ else }}Page{{ end }}
+        {{ if .Date }} · {{ .Date.Format "Jan 2, 2006" }}{{ end }} · {{ .Lang }}
+      </div>
+      {{ if .Summary }}
+      <div class="archive-item-summary">{{ .Summary }}</div>
+      {{ end }}
+    </article>
+    {{ else }}
+    <div class="empty-state">No published content is associated with this author yet.</div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
