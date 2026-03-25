@@ -9,6 +9,11 @@ import { createFrontendRoutesAPI } from './routes.js';
 import { createFrontendSearchAPI } from './search.js';
 import { createFrontendSiteAPI } from './site.js';
 
+// createFrontendClient constructs the official JavaScript client for Foundry's
+// frontend platform surface.
+//
+// In "auto" mode the client prefers the live /__foundry/api endpoints and
+// falls back to static artifacts emitted into public/__foundry when needed.
 export const createFrontendClient = ({
   baseURL = '',
   apiBase = '/__foundry/api',

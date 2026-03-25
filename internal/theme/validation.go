@@ -13,12 +13,14 @@ import (
 	"github.com/sphireinc/foundry/internal/safepath"
 )
 
+// ValidationDiagnostic is a single frontend-theme validation finding.
 type ValidationDiagnostic struct {
 	Severity string `json:"severity"`
 	Path     string `json:"path,omitempty"`
 	Message  string `json:"message"`
 }
 
+// ValidationResult summarizes frontend-theme validation.
 type ValidationResult struct {
 	Valid       bool                   `json:"valid"`
 	Diagnostics []ValidationDiagnostic `json:"diagnostics,omitempty"`
@@ -26,6 +28,11 @@ type ValidationResult struct {
 
 var templateReferencePattern = regexp.MustCompile(`{{\s*(?:template|block)\s+"([^"]+)"`)
 
+// ValidateInstalledDetailed performs Foundry's full frontend-theme validation
+// pass and returns all diagnostics.
+//
+// Validation checks manifest compatibility, required layouts and partials,
+// required launch slots, template references, and template parse validity.
 func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error) {
 	name, err := safepath.ValidatePathComponent("theme name", name)
 	if err != nil {
@@ -115,6 +122,8 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	return result, nil
 }
 
+// validateRequiredLaunchSlotsDetailed enforces the slot contract Foundry expects
+// launch-ready frontend themes to expose and actually render.
 func validateRequiredLaunchSlotsDetailed(root string, manifest *Manifest, add func(severity, path, message string)) {
 	declared := make(map[string]struct{}, len(manifest.Slots))
 	for _, slot := range manifest.Slots {
@@ -145,6 +154,8 @@ func validateRequiredLaunchSlotsDetailed(root string, manifest *Manifest, add fu
 	}
 }
 
+// validateTemplateReferences checks that template and block calls only target
+// known layouts or partials.
 func validateTemplateReferences(root string, manifest *Manifest, add func(severity, path, message string)) {
 	known := map[string]struct{}{
 		"base":    {},
@@ -179,6 +190,8 @@ func validateTemplateReferences(root string, manifest *Manifest, add func(severi
 	}
 }
 
+// validateTemplateParsing parses the theme templates with Foundry's supported
+// helper functions to catch syntax errors early.
 func validateTemplateParsing(root string, add func(severity, path, message string)) {
 	partials, _ := filepath.Glob(filepath.Join(root, "layouts", "partials", "*.html"))
 	files, _ := filepath.Glob(filepath.Join(root, "layouts", "*.html"))

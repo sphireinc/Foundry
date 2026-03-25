@@ -1,3 +1,4 @@
+// createFrontendRoutesAPI wraps current-route and path-resolution helpers.
 export const createFrontendRoutesAPI = (transport) => ({
   async current() {
     return this.resolve(transport.currentPath());

@@ -1,3 +1,8 @@
+// createUIStateHelpers centralizes non-network UI state transitions for the
+// default admin theme.
+//
+// Keeping these helpers in one module avoids spreading dirty-state, snapshots,
+// pagination, and toast behavior across unrelated view code.
 export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) => {
   const setUserForm = (value, { snapshot = false } = {}) => {
     state.userForm = {

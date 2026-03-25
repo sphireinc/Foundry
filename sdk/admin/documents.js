@@ -1,3 +1,5 @@
+// createAdminDocumentsAPI wraps document authoring, workflow, history, and lock
+// operations for admin frontends.
 export const createAdminDocumentsAPI = (http) => ({
   list(params = {}) {
     return http.get('/api/documents', { query: params });

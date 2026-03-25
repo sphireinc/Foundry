@@ -7,9 +7,14 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 )
 
+// Definition is the schema field definition type used by Foundry's structured
+// content-modeling system.
 type Definition = config.FieldDefinition
+
+// SchemaSet is the configured set of field schemas keyed by content kind.
 type SchemaSet = config.FieldSchemaSet
 
+// Normalize ensures a field-value map is always non-nil.
 func Normalize(in map[string]any) map[string]any {
 	if in == nil {
 		return map[string]any{}
@@ -17,6 +22,9 @@ func Normalize(in map[string]any) map[string]any {
 	return in
 }
 
+// DefinitionsFor returns the field definitions for a content kind.
+//
+// Kind-specific schemas take precedence over the "default" schema.
 func DefinitionsFor(cfg *config.Config, kind string) []Definition {
 	if cfg == nil {
 		return nil
@@ -31,6 +39,8 @@ func DefinitionsFor(cfg *config.Config, kind string) []Definition {
 	return nil
 }
 
+// ApplyDefaults fills missing schema-defined fields with default values or
+// empty container values for object/repeater fields.
 func ApplyDefaults(values map[string]any, defs []Definition) map[string]any {
 	out := cloneMap(values)
 	for _, def := range defs {
@@ -51,6 +61,9 @@ func ApplyDefaults(values map[string]any, defs []Definition) map[string]any {
 	return out
 }
 
+// Validate checks a field-value map against schema definitions.
+//
+// When allowAnything is false, values not declared in defs are rejected.
 func Validate(values map[string]any, defs []Definition, allowAnything bool) []error {
 	var errs []error
 	values = Normalize(values)
@@ -76,6 +89,8 @@ func Validate(values map[string]any, defs []Definition, allowAnything bool) []er
 	return errs
 }
 
+// validateValue validates a single value recursively against one field
+// definition.
 func validateValue(path string, value any, def Definition) []error {
 	var errs []error
 	switch normalizeType(def.Type) {

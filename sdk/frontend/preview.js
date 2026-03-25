@@ -1,3 +1,4 @@
+// createFrontendPreviewAPI wraps preview-manifest access for frontend clients.
 export const createFrontendPreviewAPI = (transport, capabilitiesAPI) => ({
   async getManifest() {
     const capabilities = await capabilitiesAPI.get();

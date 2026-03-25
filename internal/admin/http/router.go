@@ -16,6 +16,8 @@ import (
 	"github.com/sphireinc/foundry/internal/server"
 )
 
+// routeDef describes one admin HTTP route and the auth/capability wrapper it
+// should receive when mounted.
 type routeDef struct {
 	pattern    string
 	handler    http.Handler
@@ -23,8 +25,12 @@ type routeDef struct {
 	capability string
 }
 
+// Registrar returns a cohesive group of admin routes, such as auth, documents,
+// management, or debug.
 type Registrar func(*Router) []routeDef
 
+// Router owns the authenticated admin HTTP surface and the theme-backed admin
+// shell.
 type Router struct {
 	cfg        *config.Config
 	service    *service.Service
@@ -33,6 +39,7 @@ type Router struct {
 	registrars []Registrar
 }
 
+// New constructs the admin router and registers the built-in route groups.
 func New(cfg *config.Config, svc *service.Service) *Router {
 	r := &Router{
 		cfg:        cfg,
@@ -50,6 +57,8 @@ func New(cfg *config.Config, svc *service.Service) *Router {
 	return r
 }
 
+// NewHooks composes the admin router into the preview-server hook chain when
+// admin is enabled.
 func NewHooks(cfg *config.Config, base server.Hooks, opts ...service.Option) server.Hooks {
 	if cfg == nil || !cfg.Admin.Enabled {
 		if base == nil {
@@ -68,6 +77,7 @@ func NewHooks(cfg *config.Config, base server.Hooks, opts ...service.Option) ser
 	return WrapHooks(base, router)
 }
 
+// RegisterRegistrar appends an admin route group to the router.
 func (r *Router) RegisterRegistrar(reg Registrar) {
 	if reg == nil {
 		return
@@ -75,6 +85,8 @@ func (r *Router) RegisterRegistrar(reg Registrar) {
 	r.registrars = append(r.registrars, reg)
 }
 
+// RegisterRoutes mounts the admin shell, admin theme assets, plugin extension
+// assets, and all registered admin route groups.
 func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 	if r == nil || mux == nil || r.cfg == nil || !r.cfg.Admin.Enabled {
 		return
@@ -100,6 +112,7 @@ func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 	}
 }
 
+// handleIndex serves the admin shell for non-API admin routes.
 func (r *Router) handleIndex(w http.ResponseWriter, req *http.Request) {
 	if !strings.HasPrefix(req.URL.Path, r.adminBasePath()) ||
 		strings.HasPrefix(req.URL.Path, r.apiBasePath()+"/") ||
@@ -152,6 +165,9 @@ func (r *Router) routePath(suffix string) string {
 	return r.adminBasePath() + suffix
 }
 
+// handlePluginExtensionAsset serves plugin-declared admin JS/CSS bundles after
+// verifying the requested asset is part of the plugin's published admin
+// contract.
 func (r *Router) handlePluginExtensionAsset(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -195,6 +211,7 @@ func (r *Router) handlePluginExtensionAsset(w http.ResponseWriter, req *http.Req
 	http.ServeFile(w, req, target)
 }
 
+// WrapHooks combines an existing preview-server hook set with the admin router.
 func WrapHooks(base server.Hooks, admin *Router) server.Hooks {
 	if base == nil {
 		base = hookBase{}

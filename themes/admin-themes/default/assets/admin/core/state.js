@@ -1,3 +1,5 @@
+// sectionTitles maps router sections to the labels shown in breadcrumbs,
+// navigation, and the command palette.
 export const sectionTitles = {
   overview: 'Overview',
   documents: 'Documents',
@@ -13,6 +15,12 @@ export const sectionTitles = {
   themes: 'Themes',
 };
 
+// createInitialState builds the single in-memory state tree for the default
+// admin shell.
+//
+// The shell is intentionally stateful but framework-agnostic, so this object is
+// the source of truth for routing, editor state, table controls, and transient
+// UI feedback.
 export const createInitialState = ({ section }) => ({
   session: null,
   capabilityInfo: null,

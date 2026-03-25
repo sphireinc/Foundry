@@ -11,6 +11,12 @@ import { createAdminStatusAPI } from './status.js';
 import { createAdminThemesAPI } from './themes.js';
 import { createAdminUsersAPI } from './users.js';
 
+// createAdminClient constructs the official JavaScript client for Foundry's
+// authenticated admin surface.
+//
+// The client exposes domain-oriented modules rather than raw endpoints so
+// admin themes, alternate admin frontends, and plugin UIs can target a stable
+// contract.
 export const createAdminClient = ({
   baseURL = '/__admin',
   fetch: fetchImpl,

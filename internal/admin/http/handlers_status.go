@@ -8,6 +8,8 @@ import (
 	"github.com/sphireinc/foundry/internal/admin/types"
 )
 
+// registerStatusRoutes returns the status and capability-discovery routes used
+// by admin frontends and the Admin SDK.
 func registerStatusRoutes(r *Router) []routeDef {
 	return []routeDef{
 		{

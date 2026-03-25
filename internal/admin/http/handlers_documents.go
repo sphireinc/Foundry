@@ -13,6 +13,8 @@ import (
 
 const adminMediaUploadLimit = 256 << 20
 
+// registerDocumentRoutes returns the document-editor and media-library route
+// group for the admin API.
 func registerDocumentRoutes(r *Router) []routeDef {
 	return []routeDef{
 		{

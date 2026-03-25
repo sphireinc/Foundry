@@ -1,3 +1,9 @@
+// bindDashboardEvents attaches all DOM event handlers for the current admin
+// render pass.
+//
+// The default admin shell renders HTML strings, then rebinds event handlers
+// against the new DOM. This module keeps that wiring in one place instead of
+// scattering imperative listeners across views.
 export const bindDashboardEvents = (ctx) => {
   const {
     root,

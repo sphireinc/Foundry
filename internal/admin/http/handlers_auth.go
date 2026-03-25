@@ -9,6 +9,8 @@ import (
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
 )
 
+// registerAuthRoutes returns the authentication and session-management routes
+// for the admin API.
 func registerAuthRoutes(r *Router) []routeDef {
 	return []routeDef{
 		{

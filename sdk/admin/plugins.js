@@ -1,3 +1,4 @@
+// createAdminPluginsAPI wraps plugin management and validation endpoints.
 export const createAdminPluginsAPI = (http) => ({
   list() {
     return http.get('/api/plugins');

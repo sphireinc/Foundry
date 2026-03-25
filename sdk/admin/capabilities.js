@@ -1,5 +1,6 @@
 import { createCapabilitySet } from '../core/capabilities.js';
 
+// createAdminCapabilitiesAPI exposes capability discovery for admin clients.
 export const createAdminCapabilitiesAPI = (http, sessionStore) => ({
   async get() {
     const payload = await http.get('/api/capabilities');

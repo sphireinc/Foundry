@@ -1,3 +1,4 @@
+// normalizeMediaRef converts Foundry media: references into public URLs.
 const normalizeMediaRef = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -7,6 +8,7 @@ const normalizeMediaRef = (value) => {
   return raw;
 };
 
+// createFrontendMediaAPI provides media URL resolution helpers for themes.
 export const createFrontendMediaAPI = () => ({
   url(asset) {
     if (!asset) return '';

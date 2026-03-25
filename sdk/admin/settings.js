@@ -1,3 +1,4 @@
+// createAdminSettingsAPI wraps configuration and settings-section endpoints.
 export const createAdminSettingsAPI = (http) => ({
   getSections() {
     return http.get('/api/settings/sections');

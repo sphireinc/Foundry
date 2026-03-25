@@ -1,3 +1,4 @@
+// createFrontendContentAPI wraps content lookup by current route, path, or ID.
 export const createFrontendContentAPI = (transport, routesAPI) => ({
   async getCurrent() {
     return this.getByPath(transport.currentPath());

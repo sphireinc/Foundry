@@ -1,3 +1,5 @@
+// applyQuery mirrors the basic live collection filters against static artifacts
+// so frontend themes can use one API in both modes.
 const applyQuery = (items, params = {}) => {
   let next = [...items];
   if (params.type) next = next.filter((item) => item.type === params.type);
@@ -27,6 +29,8 @@ const applyQuery = (items, params = {}) => {
   };
 };
 
+// createFrontendCollectionsAPI wraps content collection queries with live/static
+// transport fallback.
 export const createFrontendCollectionsAPI = (transport) => ({
   async list(type, params = {}) {
     if (transport.mode === 'static') {
