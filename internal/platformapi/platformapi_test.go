@@ -53,6 +53,16 @@ func TestPublicAPIEndpoints(t *testing.T) {
 		t.Fatalf("expected route to resolve doc-1, got %#v", route)
 	}
 
+	assertJSON(APIBase+"/routes/resolve?path=/search/", &route)
+	if route.Kind != "search" {
+		t.Fatalf("expected search route record, got %#v", route)
+	}
+
+	assertJSON(APIBase+"/routes/resolve?path=/authors/jane-editor/", &route)
+	if route.Kind != "author" || route.Title != "Jane Editor" {
+		t.Fatalf("expected author route record, got %#v", route)
+	}
+
 	var detail ContentDetail
 	assertJSON(APIBase+"/content?id=doc-1", &detail)
 	if detail.Title != "Hello World" || detail.HTMLBody == "" {
@@ -146,6 +156,7 @@ func testGraph(t *testing.T) (*config.Config, *content.SiteGraph) {
 		Date:       &now,
 		Draft:      false,
 		Status:     "published",
+		Author:     "Jane Editor",
 		Taxonomies: map[string][]string{"tags": {"go"}},
 	})
 	graph.Add(&content.Document{

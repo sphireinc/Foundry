@@ -472,7 +472,7 @@ func buildNavigation(graph *content.SiteGraph) map[string][]NavItem {
 }
 
 func buildRouteRecords(graph *content.SiteGraph) []RouteRecord {
-	out := make([]RouteRecord, 0, len(graph.Documents))
+	out := make([]RouteRecord, 0, len(graph.Documents)+8)
 	for _, doc := range graph.Documents {
 		if doc == nil || doc.Draft || documentArchived(doc) {
 			continue
@@ -487,6 +487,50 @@ func buildRouteRecords(graph *content.SiteGraph) []RouteRecord {
 			ContentID: doc.ID,
 		})
 	}
+
+	langs := make(map[string]struct{})
+	for _, doc := range graph.Documents {
+		if doc == nil || doc.Draft || documentArchived(doc) {
+			continue
+		}
+		if strings.TrimSpace(doc.Lang) != "" {
+			langs[doc.Lang] = struct{}{}
+		}
+	}
+	if len(langs) == 0 && graph.Config != nil {
+		langs[graph.Config.DefaultLang] = struct{}{}
+	}
+	for lang := range langs {
+		out = append(out, RouteRecord{
+			Kind:  "search",
+			URL:   content.SearchPageURL(graph.Config.DefaultLang, lang),
+			Lang:  lang,
+			Title: "Search",
+		})
+	}
+
+	seenAuthors := make(map[string]struct{})
+	for _, doc := range graph.Documents {
+		if doc == nil || doc.Draft || documentArchived(doc) {
+			continue
+		}
+		name := strings.TrimSpace(doc.Author)
+		if name == "" {
+			continue
+		}
+		key := doc.Lang + "|" + name
+		if _, ok := seenAuthors[key]; ok {
+			continue
+		}
+		seenAuthors[key] = struct{}{}
+		out = append(out, RouteRecord{
+			Kind:  "author",
+			URL:   content.AuthorArchiveURL(graph.Config.DefaultLang, doc.Lang, name),
+			Lang:  doc.Lang,
+			Title: name,
+		})
+	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
 	return out
 }

@@ -1,0 +1,34 @@
+{{ define "content" }}
+<section>
+  <header class="archive-header">
+    <div class="eyebrow">Search</div>
+    <h1>{{ .Title }}</h1>
+    <p>Search results{{ if .SearchQuery }} for <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+  </header>
+
+  <form class="content-panel" action="/search/" method="get" role="search">
+    <label for="site-search"><strong>Find content</strong></label>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.85rem;">
+      <input id="site-search" name="q" type="search" value="{{ .SearchQuery }}" placeholder="Search articles, pages, and summaries" style="flex:1;min-width:16rem;padding:.85rem 1rem;border:1px solid rgba(17,24,39,.14);border-radius:14px;">
+      <button type="submit" class="button-primary">Search</button>
+    </div>
+  </form>
+
+  <div class="archive-list" style="margin-top:1.5rem;">
+    {{ range .Documents }}
+    <article class="archive-item">
+      <h2 class="archive-item-title"><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      <div class="archive-meta">
+        {{ if eq .Type "post" }}Post{{ else }}Page{{ end }}
+        {{ if .Date }} · {{ .Date.Format "Jan 2, 2006" }}{{ end }} · {{ .Lang }}
+      </div>
+      {{ if .Summary }}
+      <div class="archive-item-summary">{{ .Summary }}</div>
+      {{ end }}
+    </article>
+    {{ else }}
+    <div class="empty-state">No results matched your search.</div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

@@ -90,6 +90,55 @@ func TestBuildURLsRendersTaxonomyArchiveWithConfiguredLayout(t *testing.T) {
 	}
 }
 
+func TestRendererBuildsCoreSearchAuthorAndNotFoundRoutes(t *testing.T) {
+	cfg := testRendererConfig(t)
+	writeRendererTheme(t, cfg)
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "post-1",
+		Type:       "post",
+		Lang:       cfg.DefaultLang,
+		Title:      "Hello",
+		Slug:       "hello",
+		URL:        "/posts/hello/",
+		Layout:     "post",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "posts", "hello.md")),
+		HTMLBody:   template.HTML("<p>Hello</p>"),
+		Summary:    "Search me",
+		Author:     "Jane Editor",
+	})
+
+	r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil)
+	if err := r.Build(context.Background(), graph); err != nil {
+		t.Fatalf("build renderer output: %v", err)
+	}
+
+	searchPage, err := os.ReadFile(filepath.Join(cfg.PublicDir, "search", "index.html"))
+	if err != nil {
+		t.Fatalf("expected search page output: %v", err)
+	}
+	if !strings.Contains(string(searchPage), "search Search") {
+		t.Fatalf("expected search layout output, got %q", string(searchPage))
+	}
+
+	authorPage, err := os.ReadFile(filepath.Join(cfg.PublicDir, "authors", "jane-editor", "index.html"))
+	if err != nil {
+		t.Fatalf("expected author page output: %v", err)
+	}
+	if !strings.Contains(string(authorPage), "author Jane Editor") {
+		t.Fatalf("expected author layout output, got %q", string(authorPage))
+	}
+
+	notFoundPage, err := os.ReadFile(filepath.Join(cfg.PublicDir, "404.html"))
+	if err != nil {
+		t.Fatalf("expected 404 output: %v", err)
+	}
+	if !strings.Contains(string(notFoundPage), "404 Page not found") {
+		t.Fatalf("expected 404 layout output, got %q", string(notFoundPage))
+	}
+}
+
 func TestBuildURLsSkipsUnknownURLs(t *testing.T) {
 	cfg := testRendererConfig(t)
 	writeRendererTheme(t, cfg)
@@ -196,6 +245,26 @@ func TestRendererHelpersAndRenderTemplate(t *testing.T) {
 	if err != nil || !strings.Contains(string(html), "post About") || !strings.Contains(string(html), "<!--after-->") {
 		t.Fatalf("unexpected renderTemplate result: %v %q", err, string(html))
 	}
+
+	searchHTML, err := r.RenderURLWithQuery(graph, "/search/", "q=hello", false)
+	if err != nil || !strings.Contains(string(searchHTML), "search Search: hello hello") {
+		t.Fatalf("unexpected search render result: %v %q", err, string(searchHTML))
+	}
+
+	authorHTML, err := r.RenderURL(graph, "/authors/jane-editor/", false)
+	if err == nil {
+		t.Fatalf("expected missing author archive before author is added")
+	}
+	doc.Author = "Jane Editor"
+	authorHTML, err = r.RenderURL(graph, "/authors/jane-editor/", false)
+	if err != nil || !strings.Contains(string(authorHTML), "author Jane Editor") {
+		t.Fatalf("unexpected author render result: %v %q", err, string(authorHTML))
+	}
+
+	notFoundHTML, err := r.RenderNotFoundPage(graph, "/missing/", false)
+	if err != nil || !strings.Contains(string(notFoundHTML), "404 Page not found /missing/") {
+		t.Fatalf("unexpected 404 render result: %v %q", err, string(notFoundHTML))
+	}
 }
 
 func TestRendererHookFailuresAndBuild(t *testing.T) {
@@ -295,6 +364,11 @@ func writeRendererTheme(t *testing.T, cfg *config.Config) {
 	files := map[string]string{
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "base.html"):               `{{ define "base" }}{{ template "content" . }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "post.html"):               `{{ define "content" }}post {{ .Page.Title }} {{ field .Page "hero" }} {{ pluginSlot "body.end" }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"):               `{{ define "content" }}page {{ .Title }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "list.html"):               `{{ define "content" }}list {{ .Title }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "search.html"):             `{{ define "content" }}search {{ .Title }} {{ .SearchQuery }} {{ range .Documents }}{{ .Slug }} {{ end }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "author.html"):             `{{ define "content" }}author {{ .AuthorName }} {{ range .Documents }}{{ .Slug }} {{ end }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "404.html"):                `{{ define "content" }}404 {{ .Title }} {{ .RequestPath }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "index.html"):              `{{ define "content" }}index{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "taxonomy-term.html"):      `{{ define "content" }}taxonomy layout for {{ .TaxonomyName }}/{{ .TaxonomyTerm }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "head.html"):   `{{ define "head" }}{{ end }}`,
