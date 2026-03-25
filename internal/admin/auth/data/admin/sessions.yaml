@@ -1,0 +1,71 @@
+sessions:
+    - token: y1aqeNApOson3JWtTuS3mvuH1xMDQ5DukYp_erwPyrg
+      csrf_token: cx00167Xls2gzLQdLXldJY5vOFMrAG3cwhaEpykhaUc
+      username: admin
+      name: Admin User
+      email: admin@example.com
+      role: admin
+      capabilities:
+        - '*'
+      mfa_complete: true
+      issued_at: 2026-03-25T19:32:58.667908-04:00
+      last_seen: 2026-03-25T19:32:58.667908-04:00
+      expires_at: 2026-03-25T20:02:58.667908-04:00
+    - token: obXby0SdFK5rUwW-onL7pxTmYr8RogSNVWh9JlNbcg8
+      csrf_token: LT0j0Crrnz7Wp7-PNNhOjZBn2rpx_hLKlodrmVpVyTA
+      username: editor
+      name: Editor User
+      email: editor@example.com
+      role: editor
+      capabilities:
+        - dashboard.read
+        - documents.read
+        - documents.create
+        - documents.write
+        - documents.review
+        - documents.history
+        - documents.lifecycle
+        - documents.diff
+        - media.read
+        - media.write
+        - media.lifecycle
+        - audit.read
+      mfa_complete: true
+      issued_at: 2026-03-25T19:32:59.206499-04:00
+      last_seen: 2026-03-25T19:32:59.207156-04:00
+      expires_at: 2026-03-25T20:02:59.207156-04:00
+    - token: qAWRukCot8tAQK70Ef5RgoNNjPrv5E0nbC9qZb2_WKQ
+      csrf_token: mTG-6r0GtUkizXzSSsvYsOGz-UWSg_cMX7ElHpbgq1M
+      username: admin
+      name: Admin User
+      email: admin@example.com
+      role: admin
+      capabilities:
+        - '*'
+      mfa_complete: true
+      issued_at: 2026-03-25T19:33:29.002153-04:00
+      last_seen: 2026-03-25T19:33:29.002153-04:00
+      expires_at: 2026-03-25T20:03:29.002153-04:00
+    - token: xwQgeO6t_M-LZJ1H0DFP11nFXCI2cp6C_l7eoRwrScw
+      csrf_token: eNv7BuUfBj7pqFu67Ux3iKOEGR-XEqma4RaP2nxlFps
+      username: editor
+      name: Editor User
+      email: editor@example.com
+      role: editor
+      capabilities:
+        - dashboard.read
+        - documents.read
+        - documents.create
+        - documents.write
+        - documents.review
+        - documents.history
+        - documents.lifecycle
+        - documents.diff
+        - media.read
+        - media.write
+        - media.lifecycle
+        - audit.read
+      mfa_complete: true
+      issued_at: 2026-03-25T19:33:29.460548-04:00
+      last_seen: 2026-03-25T19:33:29.465891-04:00
+      expires_at: 2026-03-25T20:03:29.465891-04:00

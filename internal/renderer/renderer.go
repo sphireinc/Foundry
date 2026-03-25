@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -102,6 +104,10 @@ type ViewData struct {
 	LiveReload   bool
 	TaxonomyName string
 	TaxonomyTerm string
+	AuthorName   string
+	SearchQuery  string
+	RequestPath  string
+	StatusCode   int
 	Nav          []NavItem
 }
 
@@ -264,6 +270,10 @@ func (r *Renderer) BuildWithStats(ctx context.Context, graph *content.SiteGraph)
 	}
 	stats.Taxonomies = time.Since(start)
 
+	if err := r.buildCoreRoutes(graph, false, nil); err != nil {
+		return stats, err
+	}
+
 	start = time.Now()
 	if err := r.writeSearchIndex(graph); err != nil {
 		return stats, err
@@ -295,6 +305,10 @@ func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls
 		if err := r.writeRenderedURL(url, html); err != nil {
 			return err
 		}
+	}
+
+	if err := r.buildCoreRoutes(graph, false, nil); err != nil {
+		return err
 	}
 
 	if err := r.writeSearchIndex(graph); err != nil {
@@ -387,6 +401,10 @@ func (r *Renderer) writeRenderedURL(url string, html []byte) error {
 }
 
 func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReload bool) ([]byte, error) {
+	return r.RenderURLWithQuery(graph, urlPath, "", liveReload)
+}
+
+func (r *Renderer) RenderURLWithQuery(graph *content.SiteGraph, urlPath string, rawQuery string, liveReload bool) ([]byte, error) {
 	if doc, ok := graph.ByURL[urlPath]; ok {
 		return r.renderTemplate(doc.Layout, doc.URL, r.documentViewData(graph, doc, liveReload))
 	}
@@ -405,6 +423,16 @@ func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReloa
 		vd.Nav = r.resolveNav(graph, urlPath)
 		layout := graph.Taxonomies.Definition(vd.TaxonomyName).EffectiveTermLayout()
 		return r.renderTemplate(layout, urlPath, vd)
+	}
+
+	if vd, ok := r.findSearchPage(graph, urlPath, rawQuery, liveReload); ok {
+		vd.Nav = r.resolveNav(graph, urlPath)
+		return r.renderTemplate("search", urlPath, vd)
+	}
+
+	if vd, ok := r.findAuthorArchive(graph, urlPath, liveReload); ok {
+		vd.Nav = r.resolveNav(graph, urlPath)
+		return r.renderTemplate("author", urlPath, vd)
 	}
 
 	return nil, os.ErrNotExist
@@ -559,6 +587,62 @@ func (r *Renderer) indexViewData(graph *content.SiteGraph, lang, currentURL stri
 	}
 }
 
+func (r *Renderer) buildCoreRoutes(graph *content.SiteGraph, liveReload bool, filter map[string]struct{}) error {
+	if graph == nil {
+		return nil
+	}
+
+	searchLangs := r.knownLangs(graph)
+	for _, lang := range searchLangs {
+		searchURL := content.SearchPageURL(r.cfg.DefaultLang, lang)
+		if !shouldBuildURL(filter, searchURL) {
+			continue
+		}
+		html, err := r.renderTemplate("search", searchURL, r.searchViewData(graph, lang, "", searchURL, liveReload))
+		if err != nil {
+			return fmt.Errorf("render search page %s: %w", searchURL, err)
+		}
+		if err := r.writeRenderedURL(searchURL, html); err != nil {
+			return fmt.Errorf("write search page %s: %w", searchURL, err)
+		}
+	}
+
+	for _, author := range r.authorArchives(graph) {
+		currentURL := content.AuthorArchiveURL(r.cfg.DefaultLang, author.lang, author.name)
+		if currentURL == "" || !shouldBuildURL(filter, currentURL) {
+			continue
+		}
+		html, err := r.renderTemplate("author", currentURL, ViewData{
+			Site:       graph.Config,
+			Data:       graph.Data,
+			Lang:       author.lang,
+			Title:      fmt.Sprintf("Author: %s", author.name),
+			Documents:  author.documents,
+			LiveReload: liveReload,
+			AuthorName: author.name,
+			Nav:        r.resolveNav(graph, currentURL),
+		})
+		if err != nil {
+			return fmt.Errorf("render author archive %s: %w", currentURL, err)
+		}
+		if err := r.writeRenderedURL(currentURL, html); err != nil {
+			return fmt.Errorf("write author archive %s: %w", currentURL, err)
+		}
+	}
+
+	if len(filter) == 0 || shouldBuildURL(filter, "/404/") || shouldBuildURL(filter, "/404.html") {
+		html, err := r.RenderNotFoundPage(graph, "/", false)
+		if err != nil {
+			return fmt.Errorf("render 404 page: %w", err)
+		}
+		if err := r.writeNotFoundPage(html); err != nil {
+			return fmt.Errorf("write 404 page: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func (r *Renderer) renderTaxonomyArchive(
 	graph *content.SiteGraph,
 	layout string,
@@ -581,6 +665,32 @@ func (r *Renderer) renderTaxonomyArchive(
 		TaxonomyTerm: term,
 		Nav:          r.resolveNav(graph, currentURL),
 	})
+}
+
+func (r *Renderer) RenderNotFoundPage(graph *content.SiteGraph, requestPath string, liveReload bool) ([]byte, error) {
+	lang := r.langForPath(graph, requestPath)
+	return r.renderTemplate("404", requestPath, ViewData{
+		Site:        graph.Config,
+		Data:        graph.Data,
+		Lang:        lang,
+		Title:       "Page not found",
+		Documents:   r.documentsForLang(graph, lang),
+		LiveReload:  liveReload,
+		RequestPath: requestPath,
+		StatusCode:  http.StatusNotFound,
+		Nav:         r.resolveNav(graph, requestPath),
+	})
+}
+
+func (r *Renderer) writeNotFoundPage(html []byte) error {
+	path := filepath.Join(r.cfg.PublicDir, "404.html")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir 404 dir: %w", err)
+	}
+	if err := os.WriteFile(path, html, 0o644); err != nil {
+		return fmt.Errorf("write 404 file: %w", err)
+	}
+	return nil
 }
 
 func shouldBuildURL(filter map[string]struct{}, url string) bool {
@@ -657,6 +767,77 @@ func (r *Renderer) findTaxonomyArchive(graph *content.SiteGraph, urlPath string,
 	}, true
 }
 
+func (r *Renderer) findSearchPage(graph *content.SiteGraph, urlPath string, rawQuery string, liveReload bool) (ViewData, bool) {
+	lang := r.searchLangForPath(graph, urlPath)
+	if lang == "" {
+		return ViewData{}, false
+	}
+
+	queryValues, _ := url.ParseQuery(rawQuery)
+	query := strings.TrimSpace(queryValues.Get("q"))
+	return r.searchViewData(graph, lang, query, urlPath, liveReload), true
+}
+
+func (r *Renderer) searchViewData(graph *content.SiteGraph, lang, query, currentURL string, liveReload bool) ViewData {
+	docs := r.documentsForSearch(graph, lang, query)
+	title := "Search"
+	if query != "" {
+		title = fmt.Sprintf("Search: %s", query)
+	}
+	return ViewData{
+		Site:        graph.Config,
+		Data:        graph.Data,
+		Lang:        lang,
+		Title:       title,
+		Documents:   docs,
+		LiveReload:  liveReload,
+		SearchQuery: query,
+	}
+}
+
+func (r *Renderer) findAuthorArchive(graph *content.SiteGraph, urlPath string, liveReload bool) (ViewData, bool) {
+	clean := strings.Trim(urlPath, "/")
+	if clean == "" {
+		return ViewData{}, false
+	}
+
+	parts := strings.Split(clean, "/")
+	var lang, slug string
+	switch len(parts) {
+	case 2:
+		if parts[0] != "authors" {
+			return ViewData{}, false
+		}
+		lang = r.cfg.DefaultLang
+		slug = parts[1]
+	case 3:
+		if parts[1] != "authors" {
+			return ViewData{}, false
+		}
+		lang = parts[0]
+		slug = parts[2]
+	default:
+		return ViewData{}, false
+	}
+
+	for _, author := range r.authorArchives(graph) {
+		if author.lang != lang || content.AuthorSlug(author.name) != slug {
+			continue
+		}
+		return ViewData{
+			Site:       graph.Config,
+			Data:       graph.Data,
+			Lang:       lang,
+			Title:      fmt.Sprintf("Author: %s", author.name),
+			Documents:  author.documents,
+			LiveReload: liveReload,
+			AuthorName: author.name,
+		}, true
+	}
+
+	return ViewData{}, false
+}
+
 func (r *Renderer) taxonomyURL(lang, taxonomyName, term string) string {
 	if lang == "" || lang == r.cfg.DefaultLang {
 		return fmt.Sprintf("/%s/%s/", taxonomyName, term)
@@ -682,6 +863,125 @@ func (r *Renderer) documentsForLang(graph *content.SiteGraph, lang string) []*co
 		return docs[i].URL < docs[j].URL
 	})
 	return docs
+}
+
+func (r *Renderer) documentsForSearch(graph *content.SiteGraph, lang, query string) []*content.Document {
+	docs := make([]*content.Document, 0)
+	needle := strings.ToLower(strings.TrimSpace(query))
+	for _, doc := range graph.Documents {
+		if doc == nil || doc.Draft || documentArchived(doc) {
+			continue
+		}
+		if lang != "" && doc.Lang != lang {
+			continue
+		}
+		if needle != "" {
+			haystack := strings.ToLower(strings.Join([]string{
+				doc.Title,
+				doc.Slug,
+				doc.URL,
+				doc.Summary,
+				normalizeSearchContent(doc),
+			}, " "))
+			if !strings.Contains(haystack, needle) {
+				continue
+			}
+		}
+		docs = append(docs, doc)
+	}
+	sort.Slice(docs, func(i, j int) bool {
+		return docs[i].URL < docs[j].URL
+	})
+	return docs
+}
+
+type authorArchive struct {
+	name      string
+	lang      string
+	documents []*content.Document
+}
+
+func (r *Renderer) authorArchives(graph *content.SiteGraph) []authorArchive {
+	type key struct {
+		lang string
+		name string
+	}
+	grouped := make(map[key][]*content.Document)
+	for _, doc := range graph.Documents {
+		if doc == nil || doc.Draft || documentArchived(doc) {
+			continue
+		}
+		name := strings.TrimSpace(doc.Author)
+		if name == "" {
+			continue
+		}
+		k := key{lang: doc.Lang, name: name}
+		grouped[k] = append(grouped[k], doc)
+	}
+
+	out := make([]authorArchive, 0, len(grouped))
+	for k, docs := range grouped {
+		sort.Slice(docs, func(i, j int) bool {
+			return docs[i].URL < docs[j].URL
+		})
+		out = append(out, authorArchive{name: k.name, lang: k.lang, documents: docs})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].lang == out[j].lang {
+			return out[i].name < out[j].name
+		}
+		return out[i].lang < out[j].lang
+	})
+	return out
+}
+
+func (r *Renderer) searchLangForPath(graph *content.SiteGraph, urlPath string) string {
+	trimmed := strings.Trim(urlPath, "/")
+	switch trimmed {
+	case "search":
+		return r.cfg.DefaultLang
+	case "":
+		return ""
+	}
+
+	parts := strings.Split(trimmed, "/")
+	if len(parts) == 2 && parts[1] == "search" {
+		if _, ok := graph.ByLang[parts[0]]; ok {
+			return parts[0]
+		}
+	}
+
+	return ""
+}
+
+func (r *Renderer) langForPath(graph *content.SiteGraph, path string) string {
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" {
+		return r.cfg.DefaultLang
+	}
+	parts := strings.Split(trimmed, "/")
+	if _, ok := graph.ByLang[parts[0]]; ok {
+		return parts[0]
+	}
+	return r.cfg.DefaultLang
+}
+
+func (r *Renderer) knownLangs(graph *content.SiteGraph) []string {
+	if graph == nil || len(graph.ByLang) == 0 {
+		return []string{r.cfg.DefaultLang}
+	}
+	langs := make([]string, 0, len(graph.ByLang))
+	for lang := range graph.ByLang {
+		if strings.TrimSpace(lang) == "" {
+			continue
+		}
+		langs = append(langs, lang)
+	}
+	if !containsString(langs, r.cfg.DefaultLang) {
+		langs = append(langs, r.cfg.DefaultLang)
+	}
+	sort.Strings(langs)
+	return langs
 }
 
 func (r *Renderer) resolveNav(graph *content.SiteGraph, currentURL string) []NavItem {
@@ -819,7 +1119,7 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	}
 
 	basePath := r.themes.LayoutPath("base")
-	pagePath := r.themes.LayoutPath(name)
+	pagePath := r.layoutPathWithFallback(name)
 
 	partials, err := filepath.Glob(filepath.Join(r.cfg.ThemesDir, r.cfg.Theme, "layouts", "partials", "*.html"))
 	if err != nil {
@@ -875,4 +1175,21 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	}
 
 	return html, nil
+}
+
+func (r *Renderer) layoutPathWithFallback(name string) string {
+	candidates := []string{name}
+	switch name {
+	case "404":
+		candidates = append(candidates, "index")
+	case "search", "author":
+		candidates = append(candidates, "list", "index")
+	}
+	for _, candidate := range candidates {
+		path := r.themes.LayoutPath(candidate)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return r.themes.LayoutPath(name)
 }

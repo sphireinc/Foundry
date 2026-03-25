@@ -162,6 +162,9 @@ func TestServerHelpersAndHandlers(t *testing.T) {
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rr.Code)
 	}
+	if !strings.Contains(rr.Body.String(), "404 Page not found /missing/") {
+		t.Fatalf("expected themed 404 body, got %q", rr.Body.String())
+	}
 }
 
 func TestServerChangeClassificationAndWatchHelpers(t *testing.T) {
@@ -526,6 +529,9 @@ func writeServerTheme(t *testing.T, cfg *config.Config) {
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "base.html"):               `{{ define "base" }}{{ template "content" . }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "post.html"):               `{{ define "content" }}post {{ .Page.Title }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"):               `{{ define "content" }}page {{ .Page.Title }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "404.html"):                `{{ define "content" }}404 {{ .Title }} {{ .RequestPath }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "search.html"):             `{{ define "content" }}search {{ .Title }} {{ .SearchQuery }}{{ end }}`,
+		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "author.html"):             `{{ define "content" }}author {{ .AuthorName }}{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "index.html"):              `{{ define "content" }}index{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "list.html"):               `{{ define "content" }}list{{ end }}`,
 		filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "head.html"):   `{{ define "head" }}{{ end }}`,

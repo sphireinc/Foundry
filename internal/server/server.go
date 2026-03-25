@@ -645,10 +645,17 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, finishDebug := s.beginDebugRequest(r, path)
-	out, err := s.renderer.RenderURL(graph, path, s.cfg.Server.LiveReload)
+	out, err := s.renderer.RenderURLWithQuery(graph, path, r.URL.RawQuery, s.cfg.Server.LiveReload)
 	finishDebug(err, len(out))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			notFound, nfErr := s.renderer.RenderNotFoundPage(graph, path, s.cfg.Server.LiveReload)
+			if nfErr == nil {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write(notFound)
+				return
+			}
 			http.NotFound(w, r)
 			return
 		}
