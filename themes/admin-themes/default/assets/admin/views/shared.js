@@ -124,6 +124,7 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['audit', 'Audit'],
     ['users', 'Users'],
     ['settings', 'Settings'],
+    ['extensions', 'Extensions'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
   ];
@@ -258,6 +259,7 @@ export const renderTrashSelectionRows = (entries, selected, kind) =>
 
 export const renderOverview = (state) => {
   const content = state.status?.content || {};
+  const runtime = state.runtimeStatus || {};
   const inReview = (state.documents || []).filter((doc) => doc.status === 'in_review');
   const scheduled = (state.documents || []).filter((doc) => doc.status === 'scheduled');
   const cards = `
@@ -270,6 +272,10 @@ export const renderOverview = (state) => {
       <article class="card"><span class="card-label">Users</span><strong>${escapeHTML(state.users.length)}</strong><span class="card-copy">Filesystem-backed admin accounts.</span></article>
       <article class="card"><span class="card-label">Settings Sections</span><strong>${escapeHTML(state.settingsSections.length)}</strong><span class="card-copy">Core and plugin-defined settings groups.</span></article>
       <article class="card"><span class="card-label">Admin Extensions</span><strong>${escapeHTML((state.adminExtensions.pages?.length || 0) + (state.adminExtensions.widgets?.length || 0) + (state.adminExtensions.settings?.length || 0))}</strong><span class="card-copy">Plugin-defined pages, widgets, and settings entries.</span></article>
+      <article class="card"><span class="card-label">Broken Refs</span><strong>${escapeHTML((runtime.integrity?.broken_media_refs || 0) + (runtime.integrity?.broken_internal_links || 0))}</strong><span class="card-copy">Media and internal-link validation findings.</span></article>
+      <article class="card"><span class="card-label">Active Sessions</span><strong>${escapeHTML(runtime.activity?.active_sessions || 0)}</strong><span class="card-copy">Persisted admin sessions.</span></article>
+      <article class="card"><span class="card-label">Active Locks</span><strong>${escapeHTML(runtime.activity?.active_document_locks || 0)}</strong><span class="card-copy">Documents currently being edited.</span></article>
+      <article class="card"><span class="card-label">Validate Site</span><strong>${escapeHTML(state.siteValidation?.message_count || 0)}</strong><span class="card-copy">Latest admin validation findings.</span></article>
     </div>`;
   const queueSection = `<div class="layout-grid">
     <section class="panel">
@@ -304,6 +310,30 @@ export const renderOverview = (state) => {
   return (
     cards +
     queueSection +
+    `<div class="layout-grid">
+      <section class="panel">
+        <div class="panel-header"><div><h2>Integrity</h2><div class="muted">Current runtime validation snapshot</div></div></div>
+        <div class="panel-pad mini-list">
+          <div class="mini-list-row"><span>Broken media refs</span><strong>${escapeHTML(runtime.integrity?.broken_media_refs || 0)}</strong></div>
+          <div class="mini-list-row"><span>Broken internal links</span><strong>${escapeHTML(runtime.integrity?.broken_internal_links || 0)}</strong></div>
+          <div class="mini-list-row"><span>Missing templates</span><strong>${escapeHTML(runtime.integrity?.missing_templates || 0)}</strong></div>
+          <div class="mini-list-row"><span>Orphaned media</span><strong>${escapeHTML(runtime.integrity?.orphaned_media || 0)}</strong></div>
+          <div class="mini-list-row"><span>Duplicate URLs/slugs</span><strong>${escapeHTML((runtime.integrity?.duplicate_urls || 0) + (runtime.integrity?.duplicate_slugs || 0))}</strong></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><div><h2>Recent Activity</h2><div class="muted">${escapeHTML(runtime.activity?.recent_audit_events || 0)} audit events in window</div></div></div>
+        <div class="panel-pad mini-list">
+          ${Object.entries(runtime.activity?.recent_audit_by_action || {})
+            .slice(0, 6)
+            .map(
+              ([action, count]) =>
+                `<div class="mini-list-row"><span>${escapeHTML(action)}</span><strong>${escapeHTML(count)}</strong></div>`
+            )
+            .join('') || '<div class="empty-state">No recent audit activity yet.</div>'}
+        </div>
+      </section>
+    </div>` +
     (state.loadErrors.length
       ? `<div class="panel"><div class="panel-pad"><div class="error">${escapeHTML(summarizeLoadErrors(state))}</div></div></div>`
       : '')

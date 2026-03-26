@@ -265,6 +265,8 @@ type MediaMetadata struct {
 	Kind             string     `json:"kind,omitempty" yaml:"kind,omitempty"`
 	ContentHash      string     `json:"content_hash,omitempty" yaml:"content_hash,omitempty"`
 	FileSize         int64      `json:"file_size,omitempty" yaml:"file_size,omitempty"`
+	FocalX           string     `json:"focal_x,omitempty" yaml:"focal_x,omitempty"`
+	FocalY           string     `json:"focal_y,omitempty" yaml:"focal_y,omitempty"`
 	UploadedAt       *time.Time `json:"uploaded_at,omitempty" yaml:"uploaded_at,omitempty"`
 	UploadedBy       string     `json:"uploaded_by,omitempty" yaml:"uploaded_by,omitempty"`
 }

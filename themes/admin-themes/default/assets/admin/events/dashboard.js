@@ -38,6 +38,8 @@ export const bindDashboardEvents = (ctx) => {
     resetUserSecurity,
     selectedUserRecord,
     parseTagInput,
+    parseDocumentEditor,
+    buildDocumentRaw,
   } = ctx;
 
   root.querySelectorAll('[data-section]').forEach((element) => {
@@ -245,12 +247,17 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('document-search-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     state.documentQuery = document.getElementById('document-search-query').value.trim();
+    state.documentFilters.status = document.getElementById('document-filter-status')?.value || '';
+    state.documentFilters.type = document.getElementById('document-filter-type')?.value || '';
+    state.documentFilters.lang = document.getElementById('document-filter-lang')?.value || '';
+    state.documentFilters.author = document.getElementById('document-filter-author')?.value || '';
     await fetchAll();
     navigate('documents');
   });
 
   document.getElementById('document-search-clear')?.addEventListener('click', async () => {
     state.documentQuery = '';
+    state.documentFilters = { status: '', type: '', lang: '', author: '' };
     const input = document.getElementById('document-search-query');
     if (input) input.value = '';
     await fetchAll();
@@ -538,12 +545,16 @@ export const bindDashboardEvents = (ctx) => {
 
   document.getElementById('media-search-apply')?.addEventListener('click', async () => {
     state.mediaQuery = document.getElementById('media-search-query').value.trim();
+    state.mediaFilters.kind = document.getElementById('media-filter-kind')?.value || '';
+    state.mediaFilters.collection = document.getElementById('media-filter-collection')?.value || '';
+    state.mediaFilters.usage = '';
     await fetchAll();
     navigate('media');
   });
 
   document.getElementById('media-search-clear')?.addEventListener('click', async () => {
     state.mediaQuery = '';
+    state.mediaFilters = { kind: '', collection: '', usage: '' };
     const input = document.getElementById('media-search-query');
     if (input) input.value = '';
     await fetchAll();
@@ -581,6 +592,8 @@ export const bindDashboardEvents = (ctx) => {
           caption: document.getElementById('media-caption').value,
           description: document.getElementById('media-description').value,
           credit: document.getElementById('media-credit').value,
+          focal_x: document.getElementById('media-focal-x').value,
+          focal_y: document.getElementById('media-focal-y').value,
           tags: document
             .getElementById('media-tags')
             .value.split(',')
@@ -755,6 +768,139 @@ export const bindDashboardEvents = (ctx) => {
       }
       render();
     });
+  });
+
+  root.querySelectorAll('[data-select-document]').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      state.selectedDocuments = toggleSelection(
+        state.selectedDocuments,
+        checkbox.dataset.selectDocument,
+        checkbox.checked
+      );
+      render();
+    });
+  });
+
+  root.querySelectorAll('[data-select-media-library]').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      state.selectedMediaLibrary = toggleSelection(
+        state.selectedMediaLibrary,
+        checkbox.dataset.selectMediaLibrary,
+        checkbox.checked
+      );
+      render();
+    });
+  });
+
+  document.getElementById('document-select-all-visible')?.addEventListener('click', () => {
+    const visible = Array.from(root.querySelectorAll('[data-select-document]')).map(
+      (node) => node.dataset.selectDocument
+    );
+    state.selectedDocuments =
+      state.selectedDocuments.length === visible.length ? [] : visible.filter(Boolean);
+    render();
+  });
+
+  document.getElementById('document-clear-selection')?.addEventListener('click', () => {
+    state.selectedDocuments = [];
+    render();
+  });
+
+  document.getElementById('media-select-all-visible')?.addEventListener('click', () => {
+    const visible = Array.from(root.querySelectorAll('[data-select-media-library]')).map(
+      (node) => node.dataset.selectMediaLibrary
+    );
+    state.selectedMediaLibrary =
+      state.selectedMediaLibrary.length === visible.length ? [] : visible.filter(Boolean);
+    render();
+  });
+
+  document.getElementById('media-clear-selection')?.addEventListener('click', () => {
+    state.selectedMediaLibrary = [];
+    render();
+  });
+
+  document.getElementById('document-bulk-apply')?.addEventListener('click', async () => {
+    if (!state.selectedDocuments.length) return;
+    state.documentBulk = {
+      status: document.getElementById('document-bulk-status')?.value || '',
+      author: document.getElementById('document-bulk-author')?.value || '',
+      lang: document.getElementById('document-bulk-lang')?.value || '',
+      tags: document.getElementById('document-bulk-tags')?.value || '',
+      categories: document.getElementById('document-bulk-categories')?.value || '',
+    };
+    if (
+      !window.confirm(
+        `Apply bulk updates to ${state.selectedDocuments.length} selected document(s)?`
+      )
+    )
+      return;
+    try {
+      for (const sourcePath of state.selectedDocuments) {
+        const detail = await admin.documents.get(sourcePath, { include_drafts: 1 });
+        let raw = detail.raw_body || '';
+        const parsed = parseDocumentEditor(raw, sourcePath);
+        if (state.documentBulk.author) parsed.extraLines = parsed.extraLines.filter((line) => !/^author:\s*/i.test(line));
+        if (state.documentBulk.author) parsed.extraLines.push(`author: ${JSON.stringify(state.documentBulk.author)}`);
+        if (state.documentBulk.lang) parsed.fields.lang = state.documentBulk.lang;
+        if (state.documentBulk.tags) {
+          parsed.fields.tags = Array.from(
+            new Set([...(parsed.fields.tags || []), ...parseTagInput(state.documentBulk.tags)])
+          );
+        }
+        if (state.documentBulk.categories) {
+          parsed.fields.categories = Array.from(
+            new Set([
+              ...(parsed.fields.categories || []),
+              ...parseTagInput(state.documentBulk.categories),
+            ])
+          );
+        }
+        raw = buildDocumentRaw(parsed.fields, parsed.body, parsed.extraLines, parsed.fields.lang || 'en');
+        await admin.documents.save({ source_path: sourcePath, raw, version_comment: 'Bulk editorial update' });
+        if (state.documentBulk.status) {
+          await admin.documents.setStatus({ source_path: sourcePath, status: state.documentBulk.status });
+        }
+      }
+      state.selectedDocuments = [];
+      setFlash('Bulk document updates applied.');
+      await fetchAll(false);
+      navigate('documents');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('media-bulk-apply')?.addEventListener('click', async () => {
+    if (!state.selectedMediaLibrary.length) return;
+    state.mediaBulkTags = document.getElementById('media-bulk-tags')?.value || '';
+    if (
+      !window.confirm(`Append tags to ${state.selectedMediaLibrary.length} selected media item(s)?`)
+    )
+      return;
+    try {
+      for (const reference of state.selectedMediaLibrary) {
+        const detail = await admin.media.getDetail(reference);
+        await admin.media.updateMetadata({
+          reference,
+          version_comment: 'Bulk media tag update',
+          metadata: {
+            ...detail.metadata,
+            tags: Array.from(
+              new Set([...(detail.metadata?.tags || []), ...parseTagInput(state.mediaBulkTags)])
+            ),
+          },
+        });
+      }
+      state.selectedMediaLibrary = [];
+      setFlash('Bulk media tags applied.');
+      await fetchAll(false);
+      navigate('media');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
   });
 
   document.getElementById('document-trash-select-all')?.addEventListener('click', () => {
@@ -1187,6 +1333,8 @@ export const bindDashboardEvents = (ctx) => {
     'media-caption',
     'media-description',
     'media-credit',
+    'media-focal-x',
+    'media-focal-y',
     'media-tags',
     'media-version-comment',
   ].forEach((id) => {
@@ -1199,6 +1347,8 @@ export const bindDashboardEvents = (ctx) => {
           caption: document.getElementById('media-caption')?.value || '',
           description: document.getElementById('media-description')?.value || '',
           credit: document.getElementById('media-credit')?.value || '',
+          focal_x: document.getElementById('media-focal-x')?.value || '',
+          focal_y: document.getElementById('media-focal-y')?.value || '',
           tags: parseTagInput(document.getElementById('media-tags')?.value || ''),
         },
         versionComment: document.getElementById('media-version-comment')?.value || '',
@@ -1235,10 +1385,37 @@ export const bindDashboardEvents = (ctx) => {
     compareSnapshot('customCss', document.getElementById('custom-css-raw').value);
   });
 
+  document.getElementById('audit-filter-apply')?.addEventListener('click', () => {
+    state.auditFilters = {
+      actor: document.getElementById('audit-filter-actor')?.value.trim() || '',
+      action: document.getElementById('audit-filter-action')?.value.trim() || '',
+      outcome: document.getElementById('audit-filter-outcome')?.value || '',
+    };
+    render();
+  });
+
+  document.getElementById('audit-filter-clear')?.addEventListener('click', () => {
+    state.auditFilters = { actor: '', action: '', outcome: '' };
+    render();
+  });
+
   document.getElementById('debug-refresh-runtime')?.addEventListener('click', async () => {
     try {
       state.runtimeStatus = await admin.raw.get('/api/debug/runtime');
       setFlash('Runtime snapshot refreshed.');
+      render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('debug-validate-site')?.addEventListener('click', async () => {
+    try {
+      state.siteValidation = await admin.raw.post('/api/debug/validate', {});
+      setFlash(
+        `Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`
+      );
       render();
     } catch (error) {
       state.error = error.message || String(error);

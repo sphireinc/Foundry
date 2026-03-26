@@ -464,6 +464,8 @@ func normalizeMediaMetadata(metadata types.MediaMetadata) types.MediaMetadata {
 	metadata.MIMEType = strings.ToLower(strings.TrimSpace(metadata.MIMEType))
 	metadata.Kind = strings.TrimSpace(metadata.Kind)
 	metadata.ContentHash = strings.ToLower(strings.TrimSpace(metadata.ContentHash))
+	metadata.FocalX = strings.TrimSpace(metadata.FocalX)
+	metadata.FocalY = strings.TrimSpace(metadata.FocalY)
 	metadata.UploadedBy = strings.TrimSpace(metadata.UploadedBy)
 	if len(metadata.Tags) > 0 {
 		tags := make([]string, 0, len(metadata.Tags))
@@ -499,6 +501,8 @@ func mediaMetadataEmpty(metadata types.MediaMetadata) bool {
 		metadata.Kind == "" &&
 		metadata.ContentHash == "" &&
 		metadata.FileSize == 0 &&
+		metadata.FocalX == "" &&
+		metadata.FocalY == "" &&
 		metadata.UploadedAt == nil &&
 		metadata.UploadedBy == ""
 }
@@ -664,6 +668,8 @@ func mergeEditableMediaMetadata(existing, requested types.MediaMetadata) types.M
 	existing.Description = requested.Description
 	existing.Credit = requested.Credit
 	existing.Tags = append([]string(nil), requested.Tags...)
+	existing.FocalX = requested.FocalX
+	existing.FocalY = requested.FocalY
 	return existing
 }
 

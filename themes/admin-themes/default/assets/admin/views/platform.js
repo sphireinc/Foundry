@@ -10,6 +10,49 @@ export const createPlatformViews = ({
   sortItems,
   paginateItems,
 }) => {
+  const renderExtensions = () =>
+    panel(
+      'Extensions',
+      `<div class="panel-pad stack">
+        <div class="note">Inspect plugin-defined admin pages, widgets, settings registrations, slot usage, and bundle readiness in one place.</div>
+        <div class="cards">
+          <article class="card"><span class="card-label">Pages</span><strong>${escapeHTML(state.adminExtensions.pages?.length || 0)}</strong><span class="card-copy">Plugin-defined admin pages.</span></article>
+          <article class="card"><span class="card-label">Widgets</span><strong>${escapeHTML(state.adminExtensions.widgets?.length || 0)}</strong><span class="card-copy">Plugin-defined widgets and slot mounts.</span></article>
+          <article class="card"><span class="card-label">Settings</span><strong>${escapeHTML(state.adminExtensions.settings?.length || 0)}</strong><span class="card-copy">Plugin-defined settings sections.</span></article>
+          <article class="card"><span class="card-label">Slots</span><strong>${escapeHTML(state.adminExtensions.slots?.length || 0)}</strong><span class="card-copy">Declared admin shell slots.</span></article>
+        </div>
+        ${
+          state.adminExtensions.pages?.length
+            ? `<div class="table table-four"><div class="table-head"><span>Page</span><span>Plugin</span><span>Route</span><span>Bundle</span></div>${state.adminExtensions.pages
+                .map(
+                  (page) => `<div class="table-row">
+                    <span><strong>${escapeHTML(page.title)}</strong><div class="muted mono">${escapeHTML(page.key)}</div></span>
+                    <span>${escapeHTML(page.plugin)}</span>
+                    <span>${escapeHTML(page.route)}</span>
+                    <span>${page.module_url ? `<span class="contract-badge ok">${escapeHTML(page.module_url)}</span>` : '<span class="contract-badge missing">no module</span>'}</span>
+                  </div>`
+                )
+                .join('')}</div>`
+            : '<div class="empty-state">No plugin admin pages are registered.</div>'
+        }
+        ${
+          state.adminExtensions.widgets?.length
+            ? `<div class="table table-four"><div class="table-head"><span>Widget</span><span>Plugin</span><span>Slot</span><span>Bundle</span></div>${state.adminExtensions.widgets
+                .map(
+                  (widget) => `<div class="table-row">
+                    <span><strong>${escapeHTML(widget.title)}</strong><div class="muted mono">${escapeHTML(widget.key)}</div></span>
+                    <span>${escapeHTML(widget.plugin)}</span>
+                    <span>${escapeHTML(widget.slot)}</span>
+                    <span>${widget.module_url ? `<span class="contract-badge ok">${escapeHTML(widget.module_url)}</span>` : '<span class="contract-badge missing">no module</span>'}</span>
+                  </div>`
+                )
+                .join('')}</div>`
+            : ''
+        }
+      </div>`,
+      'Bundle readiness and extension diagnostics'
+    );
+
   const renderPlugins = () => {
     const sortedPlugins = sortItems(state.plugins, 'plugins', (plugin, field) =>
       field === 'version' ? plugin.version : field === 'status' ? plugin.status : plugin.name
@@ -257,6 +300,7 @@ export const createPlatformViews = ({
   };
 
   return {
+    renderExtensions,
     renderPlugins,
     renderThemes,
   };
