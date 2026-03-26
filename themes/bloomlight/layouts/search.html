@@ -1,0 +1,40 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="bl-frame">
+  <header class="bl-page-hero bl-panel bl-panel-petal">
+    <div class="bl-kicker">Search</div>
+    <h1>{{ .Title }}</h1>
+    <p class="bl-deck">Search results{{ if .SearchQuery }} for <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+  </header>
+
+  <form class="bl-search-form bl-panel bl-panel-ghost" action="/search/" method="get" role="search">
+    <label for="bl-search-input">Search the publication</label>
+    <div class="bl-search-row">
+      <input id="bl-search-input" name="q" type="search" value="{{ .SearchQuery }}" placeholder="Find stories, pages, and notes" />
+      <button class="bl-button bl-button-primary" type="submit">Search</button>
+    </div>
+  </form>
+
+  <div class="bl-card-grid">
+    {{ range .Documents }}
+    <article class="bl-card bl-card-archive">
+      <div class="bl-meta-row">
+        <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      {{ if .Summary }}
+      <p>{{ .Summary }}</p>
+      {{ end }}
+    </article>
+    {{ else }}
+    <div class="bl-empty-state bl-panel bl-panel-ghost">
+      <h3>No results yet</h3>
+      <p>Try a broader term or browse one of the curated archive views instead.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

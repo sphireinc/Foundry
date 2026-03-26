@@ -1,0 +1,18 @@
+{{ define "author_block" }}
+<section class="aq-surface aq-author-card">
+  <div class="aq-author-avatar">
+    {{ if .Page.Author }}{{ slice .Page.Author 0 1 }}{{ else }}A{{ end }}
+  </div>
+  <div class="aq-author-copy">
+    <span class="aq-eyebrow">Author</span>
+    <h3>{{ if .Page.Author }}{{ .Page.Author }}{{ else }}Aqua Graph Editorial{{ end }}</h3>
+    <p>
+      {{ if .Page.LastEditor }}
+      Last edited by {{ .Page.LastEditor }}. This article is presented with a modular editorial-product layout in Foundry.
+      {{ else }}
+      Published with Foundry CMS using Aqua Graph’s asymmetric magazine-inspired reading system.
+      {{ end }}
+    </p>
+  </div>
+</section>
+{{ end }}

@@ -1,0 +1,24 @@
+{{ define "footer" }}
+<footer class="lf-footer">
+  <div class="lf-frame lf-colophon">
+    <div class="lf-colophon-main">
+      <div class="lf-kicker">Colophon</div>
+      <h2>{{ .Site.Title }}</h2>
+      <p>Letterform is designed for essays, journals, criticism, and longform publishing on Foundry CMS.</p>
+    </div>
+
+    <div class="lf-colophon-side">
+      <div class="lf-colophon-links">
+        {{ range .Nav }}
+        <a href="{{ .URL }}">{{ .Name }}</a>
+        {{ end }}
+        <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+        <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+      </div>
+      <div class="lf-colophon-note">
+        Typeset with restraint. Powered by Foundry.
+      </div>
+    </div>
+  </div>
+</footer>
+{{ end }}

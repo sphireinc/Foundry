@@ -1,0 +1,28 @@
+{{ define "content" }}
+<section class="archive-hero">
+  <span class="eyebrow">404</span>
+  <h1>{{ .Title }}</h1>
+  <p class="page-intro">The route <strong>{{ .RequestPath }}</strong> does not exist here.</p>
+</section>
+
+<div class="archive-stack">
+  <article class="archive-card">
+    <div class="story-meta"><span>Recovery</span><span>Navigation</span></div>
+    <h2><a href="/">Back to the homepage</a></h2>
+    <p>Jump back to the front page or keep exploring recent entries below.</p>
+  </article>
+
+  {{ range .Documents }}
+  <article class="archive-card">
+    <div class="story-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ end }}
+</div>
+{{ end }}

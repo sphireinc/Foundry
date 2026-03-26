@@ -16,6 +16,7 @@ import (
 	"github.com/sphireinc/foundry/internal/consts"
 	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/theme"
+	"gopkg.in/yaml.v3"
 )
 
 func (s *Service) ListUsers(ctx context.Context) ([]types.UserSummary, error) {
@@ -317,6 +318,70 @@ func (s *Service) SaveConfigDocument(ctx context.Context, raw string) (*types.Co
 		return nil, err
 	}
 	return &types.ConfigDocumentResponse{Path: consts.ConfigFilePath, Raw: raw + "\n"}, nil
+}
+
+func (s *Service) LoadCustomCSSDocument(ctx context.Context) (*types.CustomCSSDocumentResponse, error) {
+	_ = ctx
+	path := filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir, "css", "custom.css")
+	b, err := s.fs.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &types.CustomCSSDocumentResponse{Path: path, Raw: ""}, nil
+		}
+		return nil, err
+	}
+	return &types.CustomCSSDocumentResponse{Path: path, Raw: string(b)}, nil
+}
+
+func (s *Service) SaveCustomCSSDocument(ctx context.Context, raw string) (*types.CustomCSSDocumentResponse, error) {
+	_ = ctx
+	path := filepath.Join(s.cfg.ContentDir, s.cfg.Content.AssetsDir, "css", "custom.css")
+	if err := s.fs.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+	normalized := strings.ReplaceAll(raw, "\r\n", "\n")
+	if normalized != "" && !strings.HasSuffix(normalized, "\n") {
+		normalized += "\n"
+	}
+	if err := s.fs.WriteFile(path, []byte(normalized), 0o644); err != nil {
+		return nil, err
+	}
+	return &types.CustomCSSDocumentResponse{Path: path, Raw: normalized}, nil
+}
+
+func (s *Service) LoadSettingsForm(ctx context.Context) (*types.SettingsFormResponse, error) {
+	_ = ctx
+	body, err := s.fs.ReadFile(consts.ConfigFilePath)
+	if err != nil {
+		return nil, err
+	}
+	var cfg config.Config
+	if err := config.UnmarshalYAML(body, &cfg); err != nil {
+		return nil, err
+	}
+	return &types.SettingsFormResponse{Path: consts.ConfigFilePath, Value: cfg}, nil
+}
+
+func (s *Service) SaveSettingsForm(ctx context.Context, value config.Config) (*types.SettingsFormResponse, error) {
+	_ = ctx
+	value.MarkAdminLocalOnlyExplicit()
+	value.ApplyDefaults()
+	if errs := config.Validate(&value); len(errs) > 0 {
+		return nil, errs[0]
+	}
+	body, err := yaml.Marshal(&value)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.fs.MkdirAll(filepath.Dir(consts.ConfigFilePath), 0o755); err != nil {
+		return nil, err
+	}
+	if err := s.fs.WriteFile(consts.ConfigFilePath, body, 0o644); err != nil {
+		return nil, err
+	}
+	s.cfg = &value
+	s.invalidateGraphCache()
+	return &types.SettingsFormResponse{Path: consts.ConfigFilePath, Value: value}, nil
 }
 
 func (s *Service) ListThemes(ctx context.Context) ([]types.ThemeRecord, error) {

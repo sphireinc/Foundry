@@ -1,0 +1,71 @@
+{{ define "content" }}
+<section class="hero-band">
+  <div class="hero-copy">
+    <div class="hero-kicker">Tomato Theme</div>
+    <h1>Bold publishing with room to breathe.</h1>
+    <p class="hero-summary">
+      A high-contrast editorial theme for modern teams that want crisp layouts, loud accents, and
+      a confident front page.
+    </p>
+
+    <div class="hero-actions">
+      <a class="button button-primary" href="/posts/hello-world/">Read the sample post</a>
+      <a class="button button-secondary" href="{{ .Site.Feed.RSSPath }}">Open the feed</a>
+    </div>
+  </div>
+
+  <aside class="hero-aside">
+    <div class="metric-card metric-card--tomato">
+      <span class="metric-label">Documents</span>
+      <strong>{{ len .Documents }}</strong>
+    </div>
+    <div class="metric-card metric-card--sky">
+      <span class="metric-label">Theme</span>
+      <strong>Tomato</strong>
+    </div>
+    <div class="metric-card metric-card--amber">
+      <span class="metric-label">Workflow</span>
+      <strong>Markdown + Go</strong>
+    </div>
+  </aside>
+</section>
+
+<section class="home-grid">
+  <div class="section-lead">
+    <span class="eyebrow">Freshly published</span>
+    <h2>Recent pages and posts</h2>
+    <p>Content rendered with generous whitespace, strong typography, and a brighter visual rhythm.</p>
+  </div>
+
+  <div class="story-grid">
+    {{ range .Documents }}
+    <article class="story-card">
+      <div class="story-meta">
+        <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+
+      <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+
+      {{ if .Summary }}
+      <p>{{ .Summary }}</p>
+      {{ end }}
+
+      <div class="story-footer">
+        <a class="story-link" href="{{ .URL }}">Read article</a>
+        {{ with index .Taxonomies "tags" }}
+        <div class="chip-row">
+          {{ range . }}
+          <a class="chip" href="/tags/{{ . }}/">{{ . }}</a>
+          {{ end }}
+        </div>
+        {{ end }}
+      </div>
+    </article>
+    {{ else }}
+    <div class="empty-panel">No content has been published yet.</div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

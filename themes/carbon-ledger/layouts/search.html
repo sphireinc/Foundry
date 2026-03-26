@@ -1,0 +1,40 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="masthead">
+  <div class="eyebrow">Search</div>
+  <h1>{{ .Title }}</h1>
+  <p class="lede">Refined search results{{ if .SearchQuery }} for <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+</section>
+
+<section class="surface side-panel" style="margin-bottom:1.5rem;">
+  <form action="/search/" method="get" role="search">
+    <label for="ledger-search"><strong>Search the site</strong></label>
+    <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.85rem;">
+      <input id="ledger-search" name="q" type="search" value="{{ .SearchQuery }}" placeholder="Search pages, posts, and summaries" style="flex:1;min-width:16rem;padding:.9rem 1rem;border:1px solid rgba(28,28,28,.14);border-radius:14px;background:#fafaff;color:#1c1c1c;">
+      <button class="button-primary" type="submit">Search</button>
+    </div>
+  </form>
+</section>
+
+<section class="archive-stack">
+  {{ range .Documents }}
+  <article class="surface archive-card">
+    <div class="content-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ else }}
+  <div class="empty-state surface">
+    <h3>No results matched your search</h3>
+    <p>Try a broader term or navigate back to a category or tag archive.</p>
+  </div>
+  {{ end }}
+</section>
+{{ end }}

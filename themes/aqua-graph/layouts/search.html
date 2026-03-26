@@ -1,0 +1,24 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="aq-masthead aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  <div class="aq-col aq-col-8 aq-col-t-6 aq-col-m-4">
+    <span class="aq-eyebrow">Search</span>
+    <h1 class="aq-display-lg">Search the site</h1>
+    <p class="aq-lede">Use Aqua Graph’s inline search tools to find documents, tags, and topics.</p>
+  </div>
+</section>
+
+<section class="aq-surface aq-panel">
+  <form class="aq-search-form" data-aq-search-form data-result-target="aq-search-page-results">
+    <label class="aq-field">
+      <span class="aq-field-label">Search all content</span>
+      <div class="aq-field-row">
+        <input type="search" name="q" placeholder="Search the site" aria-label="Search the site" />
+        <button class="aq-button aq-button-primary" type="submit">Search</button>
+      </div>
+    </label>
+  </form>
+  <div id="aq-search-page-results" class="aq-search-results" aria-live="polite"></div>
+</section>
+{{ end }}

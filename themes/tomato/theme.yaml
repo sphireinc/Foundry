@@ -1,0 +1,41 @@
+name: tomato
+title: Tomato Theme
+version: 0.1.0
+description: Bold editorial frontend theme with bright accents, generous whitespace, and modern typography.
+author: Sphire
+license: MIT
+min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
+layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+supported_layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+config_schema:
+  - name: accent_color
+    label: Accent Color
+    type: text
+    default: "#f55d3e"
+slots:
+  - head.end
+  - body.start
+  - body.end
+  - page.before_main
+  - page.after_main
+  - page.before_content
+  - page.after_content
+  - post.before_header
+  - post.after_header
+  - post.before_content
+  - post.after_content
+  - post.sidebar.top
+  - post.sidebar.overview
+  - post.sidebar.bottom

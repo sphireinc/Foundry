@@ -1,0 +1,36 @@
+{{ define "header" }}
+<header class="lf-header">
+  <div class="lf-frame lf-masthead-meta">
+    <div>Foundry publication theme</div>
+    <div>{{ .Lang | printf "Edition %s" }}</div>
+  </div>
+
+  <div class="lf-frame lf-masthead">
+    <div class="lf-masthead-rail">Issue 01</div>
+
+    <div class="lf-masthead-center">
+      <a class="lf-wordmark" href="/">{{ .Site.Title }}</a>
+      <div class="lf-tagline">Essays, journals, criticism, and beautifully measured longform.</div>
+    </div>
+
+    <div class="lf-masthead-tools">
+      <form class="lf-inline-search" data-lf-search-form data-result-target="lf-inline-search-results">
+        <label class="sr-only" for="lf-inline-search">Search the publication</label>
+        <input id="lf-inline-search" type="search" name="q" placeholder="Search" autocomplete="off" />
+      </form>
+    </div>
+  </div>
+
+  <div class="lf-frame lf-nav-row">
+    <nav class="lf-nav" aria-label="Primary">
+      {{ range .Nav }}
+      <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
+      {{ end }}
+    </nav>
+  </div>
+
+  <div class="lf-frame">
+    <div id="lf-inline-search-results" class="lf-search-results" aria-live="polite"></div>
+  </div>
+</header>
+{{ end }}

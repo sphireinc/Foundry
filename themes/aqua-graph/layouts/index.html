@@ -1,0 +1,170 @@
+{{ define "content" }}
+<section class="aq-band aq-band-masthead aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  <div class="aq-col aq-col-5 aq-col-t-4 aq-col-m-4">
+    <div class="aq-kicker">Aqua Graph</div>
+    <h1 class="aq-display-xl">Publishing with product clarity and editorial rhythm.</h1>
+    <p class="aq-lede">
+      Aqua Graph gives Foundry a cooler, more modular interface: asymmetric bands, crisp structure,
+      and a reading experience that feels simultaneously magazine-like and product-grade.
+    </p>
+
+    <div class="aq-action-row">
+      <a class="aq-button aq-button-primary" href="/posts/hello-world/">Read the featured article</a>
+      <button class="aq-button aq-button-secondary" type="button" data-aq-search-open>
+        Search the site
+      </button>
+    </div>
+  </div>
+
+  <div class="aq-col aq-col-7 aq-col-t-4 aq-col-m-4">
+    <div class="aq-card-cluster">
+      {{ $count := len .Documents }} {{ if gt $count 0 }} {{ $first := index .Documents 0 }}
+      <article class="aq-feature-card aq-feature-card-primary">
+        <div class="aq-card-meta">
+          <span>{{ if eq $first.Type "post" }}Post{{ else }}Page{{ end }}</span>
+          <span>{{ $first.Lang }}</span>
+          {{ if $first.Date }}<span>{{ $first.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+        </div>
+        <h2><a href="{{ $first.URL }}">{{ $first.Title }}</a></h2>
+        {{ if $first.Summary }}
+        <p>{{ $first.Summary }}</p>
+        {{ end }}
+        <a class="aq-text-link" href="{{ $first.URL }}">Open feature</a>
+      </article>
+      {{ end }} {{ if gt $count 1 }} {{ $second := index .Documents 1 }}
+      <article class="aq-feature-card aq-feature-card-secondary">
+        <div class="aq-card-meta">
+          <span>{{ if eq $second.Type "post" }}Post{{ else }}Page{{ end }}</span>
+          <span>{{ $second.Lang }}</span>
+        </div>
+        <h3><a href="{{ $second.URL }}">{{ $second.Title }}</a></h3>
+        {{ if $second.Summary }}
+        <p>{{ $second.Summary }}</p>
+        {{ end }}
+      </article>
+      {{ end }} {{ if gt $count 2 }} {{ $third := index .Documents 2 }}
+      <article class="aq-feature-card aq-feature-card-tertiary">
+        <div class="aq-card-meta">
+          <span>{{ if eq $third.Type "post" }}Post{{ else }}Page{{ end }}</span>
+          <span>{{ $third.Lang }}</span>
+        </div>
+        <h3><a href="{{ $third.URL }}">{{ $third.Title }}</a></h3>
+        {{ if $third.Summary }}
+        <p>{{ $third.Summary }}</p>
+        {{ end }}
+      </article>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<section class="aq-band aq-band-grid">
+  <div class="aq-section-head">
+    <div>
+      <span class="aq-eyebrow">Featured grid</span>
+      <h2 class="aq-display-lg">Controlled asymmetry, not card wallpaper.</h2>
+    </div>
+    <p>Mixed compositions create cadence: wider stories breathe, narrower ones sharpen the tempo.</p>
+  </div>
+
+  <div class="aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4 aq-gap-lg">
+    {{ range $index, $doc := .Documents }} {{ if lt $index 6 }}
+    <article
+      class="aq-col {{ if eq $index 0 }}aq-col-3{{ else if eq $index 1 }}aq-col-6{{ else if eq $index 2 }}aq-col-3{{ else if eq $index 3 }}aq-col-4{{ else if eq $index 4 }}aq-col-4{{ else }}aq-col-4{{ end }} aq-col-t-4 aq-col-m-4 aq-surface aq-content-card"
+    >
+      <div class="aq-card-meta">
+        <span>{{ if eq $doc.Type "post" }}Post{{ else }}Page{{ end }}</span>
+        <span>{{ $doc.Lang }}</span>
+        {{ if $doc.Date }}<span>{{ $doc.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+      {{ if $doc.Summary }}
+      <p>{{ $doc.Summary }}</p>
+      {{ end }}
+      <div class="aq-card-footer">
+        <a class="aq-text-link" href="{{ $doc.URL }}">Read document</a>
+        {{ with index $doc.Taxonomies "tags" }}
+        <div class="aq-pill-row">
+          {{ range . }}
+          <a class="aq-pill" href="/tags/{{ . }}/">{{ . }}</a>
+          {{ end }}
+        </div>
+        {{ end }}
+      </div>
+    </article>
+    {{ end }} {{ else }}
+    <div class="aq-col aq-col-12 aq-col-t-8 aq-col-m-4 aq-empty-state">
+      <h3>No featured content yet</h3>
+      <p>Publish pages and posts to populate Aqua Graph’s asymmetrical feature bands.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+
+<section class="aq-band aq-band-rail">
+  <div class="aq-section-head">
+    <div>
+      <span class="aq-eyebrow">Dense rail</span>
+      <h2 class="aq-display-md">A compact editorial rail for high-signal browsing.</h2>
+    </div>
+  </div>
+  <div class="aq-rail">
+    {{ range $index, $doc := .Documents }} {{ if and (ge $index 3) (lt $index 9) }}
+    <article class="aq-rail-card aq-surface">
+      <div class="aq-card-meta">
+        <span>{{ if eq $doc.Type "post" }}Post{{ else }}Page{{ end }}</span>
+        {{ if $doc.Date }}<span>{{ $doc.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+      {{ if $doc.Summary }}
+      <p>{{ $doc.Summary }}</p>
+      {{ end }}
+    </article>
+    {{ end }} {{ end }}
+  </div>
+</section>
+
+<section class="aq-band aq-band-split aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  <div class="aq-col aq-col-4 aq-col-t-3 aq-col-m-4 aq-surface aq-panel">
+    <span class="aq-eyebrow">Search</span>
+    <h2 class="aq-display-sm">Inline search, not a modal detour.</h2>
+    <p>
+      The search field expands directly in the navigation, while this home section gives you a
+      broader query surface for discovery-driven browsing.
+    </p>
+  </div>
+  <div class="aq-col aq-col-8 aq-col-t-5 aq-col-m-4 aq-surface aq-panel">
+    <form class="aq-search-form" data-aq-search-form data-result-target="aq-home-search-results">
+      <label class="aq-field">
+        <span class="aq-field-label">Search all content</span>
+        <div class="aq-field-row">
+          <input
+            type="search"
+            name="q"
+            placeholder="Search titles, summaries, tags, and topics"
+            aria-label="Search all content"
+            autocomplete="off"
+          />
+          <button class="aq-button aq-button-primary" type="submit">Search</button>
+        </div>
+      </label>
+    </form>
+    <div id="aq-home-search-results" class="aq-search-results" aria-live="polite"></div>
+  </div>
+</section>
+
+<section class="aq-band aq-band-callout">
+  {{ if gt (len .Documents) 0 }} {{ $lead := index .Documents 0 }}
+  <article class="aq-callout aq-surface">
+    <div class="aq-callout-copy">
+      <span class="aq-eyebrow">Single-feature callout</span>
+      <h2 class="aq-display-lg"><a href="{{ $lead.URL }}">{{ $lead.Title }}</a></h2>
+      {{ if $lead.Summary }}
+      <p class="aq-lede">{{ $lead.Summary }}</p>
+      {{ end }}
+      <a class="aq-button aq-button-secondary" href="{{ $lead.URL }}">Continue reading</a>
+    </div>
+  </article>
+  {{ end }}
+</section>
+{{ end }}

@@ -1,0 +1,31 @@
+{{ define "footer" }}
+<footer class="ledger-footer">
+  <div class="ledger-footer-grid">
+    <div class="footer-column">
+      <div class="footer-heading">{{ .Site.Title }}</div>
+      <p>
+        Carbon Ledger makes Foundry feel like a polished product for creators, editorial teams,
+        and enterprise publishing workflows.
+      </p>
+    </div>
+
+    <div class="footer-column">
+      <div class="footer-heading">Navigation</div>
+      <div class="footer-links">
+        {{ range .Nav }}
+        <a href="{{ .URL }}">{{ .Name }}</a>
+        {{ end }}
+      </div>
+    </div>
+
+    <div class="footer-column">
+      <div class="footer-heading">Platform</div>
+      <div class="footer-links">
+        <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+        <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+        <a href="/__admin">Admin</a>
+      </div>
+    </div>
+  </div>
+</footer>
+{{ end }}

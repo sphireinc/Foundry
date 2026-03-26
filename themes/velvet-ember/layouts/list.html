@@ -1,0 +1,54 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="ve-archive-hero ve-frame">
+  <div class="ve-kicker">Archive</div>
+  <h1>{{ .Title }}</h1>
+  {{ if and .TaxonomyName .TaxonomyTerm }}
+  <p class="ve-deck">
+    Curated entries filed under <strong>{{ .TaxonomyName }}</strong> / <strong>{{ .TaxonomyTerm }}</strong>.
+  </p>
+  {{ else }}
+  <p class="ve-deck">Alternating feature cards and exhibit rows instead of a repetitive grid.</p>
+  {{ end }}
+</section>
+
+<section class="ve-band ve-band-dark">
+  <div class="ve-frame ve-exhibit-stack">
+    {{ range $index, $doc := .Documents }}
+    {{ if or (eq $index 0) (eq $index 5) (eq $index 6) (eq $index 11) (eq $index 12) }}
+    <article class="ve-archive-feature">
+      <div class="ve-meta-row">
+        <span>{{ if eq $doc.Type "post" }}Post{{ else }}Page{{ end }}</span>
+        <span>{{ $doc.Lang }}</span>
+        {{ if $doc.Date }}<span>{{ $doc.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h2><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h2>
+      {{ if $doc.Summary }}
+      <p>{{ $doc.Summary }}</p>
+      {{ end }}
+    </article>
+    {{ else }}
+    <article class="ve-exhibit-row ve-exhibit-row-soft">
+      <div class="ve-exhibit-text">
+        <div class="ve-meta-row">
+          <span>{{ if eq $doc.Type "post" }}Post{{ else }}Page{{ end }}</span>
+          <span>{{ $doc.Lang }}</span>
+        </div>
+        <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+        {{ if $doc.Summary }}
+        <p>{{ $doc.Summary }}</p>
+        {{ end }}
+      </div>
+      <div class="ve-exhibit-mark"><span>◆</span></div>
+    </article>
+    {{ end }}
+    {{ else }}
+    <div class="ve-empty-panel">
+      <h3>No matching entries</h3>
+      <p>This exhibit is empty right now. Try another archive or run a search.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

@@ -1,0 +1,148 @@
+{{ define "content" }}
+<section class="ve-hero ve-frame ve-grid">
+  <div class="ve-hero-copy ve-span-5">
+    <div class="ve-kicker">Velvet Ember</div>
+    <h1>{{ .Site.Title }}</h1>
+    <p class="ve-deck">
+      A moody editorial stage for creators, teams, and businesses who want their publishing
+      surface to feel forged, dramatic, and unmistakably alive.
+    </p>
+    <div class="ve-hero-actions">
+      <a class="ve-button ve-button-primary" href="/search/">Search the archive</a>
+      <a class="ve-button ve-button-secondary" href="/__admin">Open Foundry</a>
+    </div>
+  </div>
+
+  <div class="ve-hero-feature ve-span-7">
+    {{ with index .Documents 0 }}
+    <article class="ve-feature-panel">
+      <div class="ve-meta-row">
+        <span>{{ if eq .Type "post" }}Feature story{{ else }}Feature page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      {{ if .Summary }}
+      <p>{{ .Summary }}</p>
+      {{ end }}
+      <a class="ve-text-link" href="{{ .URL }}">Enter the story</a>
+    </article>
+    {{ else }}
+    <article class="ve-feature-panel">
+      <div class="ve-meta-row"><span>Feature panel</span><span>Ready</span></div>
+      <h2>Your first story deserves a stage</h2>
+      <p>Add a page or post in Foundry and this cinematic hero will immediately pick it up.</p>
+    </article>
+    {{ end }}
+  </div>
+</section>
+
+<section class="ve-band ve-band-rust">
+  <div class="ve-frame">
+    <div class="ve-grid ve-feature-triptych">
+      {{ range $index, $doc := .Documents }}
+      {{ if lt $index 3 }}
+      <article class="ve-card ve-card-feature {{ if eq $index 1 }}ve-card-wide{{ end }}">
+        <div class="ve-meta-row">
+          <span>{{ if eq $doc.Type "post" }}Post{{ else }}Page{{ end }}</span>
+          <span>{{ $doc.Lang }}</span>
+        </div>
+        <h2><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h2>
+        {{ if $doc.Summary }}
+        <p>{{ $doc.Summary }}</p>
+        {{ end }}
+      </article>
+      {{ end }}
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<section class="ve-band ve-band-dark">
+  <div class="ve-frame ve-grid">
+    <div class="ve-span-6">
+      <div class="ve-section-heading">
+        <div class="ve-kicker">Editorial spread</div>
+        <h2>Wide frames. Compressed details. A homepage that moves like a sequence, not a dashboard.</h2>
+      </div>
+    </div>
+    <div class="ve-span-6 ve-story-strip">
+      {{ range $index, $doc := .Documents }}
+      {{ if and (ge $index 3) (lt $index 6) }}
+      <article class="ve-strip-row">
+        <div class="ve-strip-index">●</div>
+        <div>
+          <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+          {{ if $doc.Summary }}
+          <p>{{ $doc.Summary }}</p>
+          {{ end }}
+        </div>
+      </article>
+      {{ end }}
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<section class="ve-band ve-band-spotlight">
+  <div class="ve-frame">
+    {{ with index .Documents 1 }}
+    <article class="ve-spotlight">
+      <div class="ve-kicker">Spotlight</div>
+      <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      {{ if .Summary }}
+      <p>{{ .Summary }}</p>
+      {{ end }}
+      <div class="ve-meta-row">
+        <span>{{ .Type }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Author }}<span>{{ .Author }}</span>{{ end }}
+      </div>
+    </article>
+    {{ else }}
+    <article class="ve-spotlight">
+      <div class="ve-kicker">Spotlight</div>
+      <h2>No spotlight yet</h2>
+      <p>Publish more content to unlock the full cinematic sequence of the homepage.</p>
+    </article>
+    {{ end }}
+  </div>
+</section>
+
+<section class="ve-band ve-band-linen">
+  <div class="ve-frame">
+    <div class="ve-section-heading ve-section-heading-tight">
+      <div class="ve-kicker">Latest entries</div>
+      <h2>Curated exhibit rows instead of tidy card repetition.</h2>
+    </div>
+
+    <div class="ve-exhibit-stack">
+      {{ range $index, $doc := .Documents }}
+      {{ if ge $index 2 }}
+      <article class="ve-exhibit-row">
+        <div class="ve-exhibit-text">
+          <div class="ve-meta-row">
+            <span>{{ if eq $doc.Type "post" }}Post{{ else }}Page{{ end }}</span>
+            <span>{{ $doc.Lang }}</span>
+            {{ if $doc.Date }}<span>{{ $doc.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+          </div>
+          <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+          {{ if $doc.Summary }}
+          <p>{{ $doc.Summary }}</p>
+          {{ end }}
+        </div>
+        <div class="ve-exhibit-mark">
+          <span>◆</span>
+        </div>
+      </article>
+      {{ end }}
+      {{ else }}
+      <div class="ve-empty-panel">
+        <h3>Nothing published yet</h3>
+        <p>Velvet Ember shines once you have a few stories to stage.</p>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}

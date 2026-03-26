@@ -1,0 +1,11 @@
+{{ define "taxonomy_chips" }}
+{{ if .Page.Taxonomies }}
+<div class="bl-chip-row">
+  {{ range $taxonomy, $terms := .Page.Taxonomies }}
+    {{ range $terms }}
+    <a class="bl-chip" href="/{{ $taxonomy }}/{{ . }}/">{{ . }}</a>
+    {{ end }}
+  {{ end }}
+</div>
+{{ end }}
+{{ end }}

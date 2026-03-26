@@ -1,0 +1,60 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="aq-masthead aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  <div class="aq-col aq-col-8 aq-col-t-6 aq-col-m-4">
+    <span class="aq-eyebrow">Archive</span>
+    <h1 class="aq-display-lg">{{ .Title }}</h1>
+    {{ if and .TaxonomyName .TaxonomyTerm }}
+    <p class="aq-lede">
+      Browse content filed under <strong>{{ .TaxonomyName }}</strong> / <strong>{{ .TaxonomyTerm }}</strong>.
+    </p>
+    <div class="aq-pill-row aq-filter-row">
+      <span class="aq-pill aq-pill-active">{{ .TaxonomyTerm }}</span>
+      {{ range .Documents }} {{ with index .Taxonomies $.TaxonomyName }} {{ range . }}
+      <a class="aq-pill" href="/{{ $.TaxonomyName }}/{{ . }}/">{{ . }}</a>
+      {{ end }} {{ end }} {{ end }}
+    </div>
+    {{ else }}
+    <p class="aq-lede">A dynamic archive grid that promotes select entries into wider editorial modules.</p>
+    {{ end }}
+  </div>
+</section>
+
+<section class="aq-archive-grid aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  {{ range .Documents }}
+  <article class="aq-col aq-col-4 aq-col-t-4 aq-col-m-4 aq-surface aq-archive-card">
+    <div class="aq-card-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+    <div class="aq-card-footer">
+      <a class="aq-text-link" href="{{ .URL }}">Open entry</a>
+      {{ with index .Taxonomies "tags" }}
+      <div class="aq-pill-row">
+        {{ range . }}
+        <a class="aq-pill" href="/tags/{{ . }}/">{{ . }}</a>
+        {{ end }}
+      </div>
+      {{ end }}
+    </div>
+  </article>
+  {{ else }}
+  <div class="aq-col aq-col-12 aq-col-t-8 aq-col-m-4 aq-empty-state">
+    <h3>No matching documents</h3>
+    <p>Try another archive or use the inline search field to jump directly to a page.</p>
+  </div>
+  {{ end }}
+</section>
+
+<nav class="aq-pagination" aria-label="Archive navigation">
+  <a class="aq-pagination-link" href="/">Home</a>
+  <a class="aq-pagination-link" href="{{ .Site.Feed.RSSPath }}">RSS</a>
+  <a class="aq-pagination-link" href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+</nav>
+{{ end }}

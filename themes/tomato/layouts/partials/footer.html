@@ -1,0 +1,14 @@
+{{ define "footer" }}
+<footer class="tomato-footer">
+  <div class="tomato-footer-inner">
+    <div>
+      <strong>{{ .Site.Title }}</strong>
+      <p>Built with Foundry. Designed for bright, modern publishing.</p>
+    </div>
+    <div class="footer-links">
+      <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+      <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+    </div>
+  </div>
+</footer>
+{{ end }}

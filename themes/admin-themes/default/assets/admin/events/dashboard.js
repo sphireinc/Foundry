@@ -1035,7 +1035,23 @@ export const bindDashboardEvents = (ctx) => {
       setFlash('Configuration saved.');
       snapshotValue('config', document.getElementById('config-raw').value);
       await fetchAll(false);
-      navigate('config');
+      state.settingsTab = 'config';
+      navigate('settings');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('custom-css-save-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await admin.settings.saveCustomCSS({ raw: document.getElementById('custom-css-raw').value });
+      setFlash('Custom CSS saved.');
+      snapshotValue('customCss', document.getElementById('custom-css-raw').value);
+      await fetchAll(false);
+      state.settingsTab = 'custom-css';
+      navigate('settings');
     } catch (error) {
       state.error = error.message || String(error);
       render();
@@ -1213,6 +1229,10 @@ export const bindDashboardEvents = (ctx) => {
 
   document.getElementById('config-raw')?.addEventListener('input', () => {
     compareSnapshot('config', document.getElementById('config-raw').value);
+  });
+
+  document.getElementById('custom-css-raw')?.addEventListener('input', () => {
+    compareSnapshot('customCss', document.getElementById('custom-css-raw').value);
   });
 
   document.getElementById('debug-refresh-runtime')?.addEventListener('click', async () => {

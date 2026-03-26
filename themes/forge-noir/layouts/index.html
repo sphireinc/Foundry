@@ -1,0 +1,136 @@
+{{ define "content" }}
+<section class="hero-grid">
+  <div class="hero-copy">
+    <div class="kicker">Forge Noir</div>
+    <h1>Publishing tempered in shadow, metal, and flame.</h1>
+    <p class="lede">
+      A premium Foundry frontend for teams that want their site to feel less like a template and
+      more like a modern editorial platform.
+    </p>
+
+    <div class="button-row">
+      <a class="button button-primary" href="/posts/hello-world/">Enter the journal</a>
+      <a class="button button-secondary" href="{{ .Site.Feed.RSSPath }}">Inspect the feed</a>
+    </div>
+  </div>
+
+  <aside class="hero-stack" aria-label="Theme highlights">
+    <article class="metric-card metric-card--bronze">
+      <span class="metric-label">Documents</span>
+      <strong>{{ len .Documents }}</strong>
+      <p>Rendered in this language with Foundry’s graph and route pipeline.</p>
+    </article>
+    <article class="metric-card metric-card--mahogany">
+      <span class="metric-label">Design</span>
+      <strong>Editorial + Industrial</strong>
+      <p>Dark, refined surfaces with restrained bronze heat and sharper hierarchy.</p>
+    </article>
+    <article class="metric-card metric-card--walnut">
+      <span class="metric-label">Search</span>
+      <strong>Live via SDK</strong>
+      <p>Use the command-style search panel below to explore current content instantly.</p>
+    </article>
+  </aside>
+</section>
+
+<section class="search-spotlight panel panel-elevated">
+  <div class="section-heading">
+    <div>
+      <span class="eyebrow">Search</span>
+      <h2>Query the site in place.</h2>
+    </div>
+    <p>Search uses Foundry’s official Frontend SDK and works against live or static data.</p>
+  </div>
+
+  <form class="search-form search-form-large" data-foundry-search-form data-result-target="home-search-results">
+    <label class="field">
+      <span class="field-label">Search the site</span>
+      <div class="search-input-wrap">
+        <input
+          type="search"
+          name="q"
+          placeholder="Try a title, topic, or keyword"
+          aria-label="Search the site"
+          autocomplete="off"
+        />
+        <button type="submit" class="button button-primary">Search</button>
+      </div>
+    </label>
+  </form>
+
+  <div
+    id="home-search-results"
+    class="search-results"
+    data-foundry-search-results
+    aria-live="polite"
+  ></div>
+</section>
+
+<section class="section-stack">
+  <div class="section-heading">
+    <div>
+      <span class="eyebrow">Recent work</span>
+      <h2>Latest pages and posts</h2>
+    </div>
+    <p>Dense enough for serious publishing, spaced enough to still feel premium.</p>
+  </div>
+
+  <div class="content-grid">
+    {{ range .Documents }}
+    <article class="content-card">
+      <div class="content-card-meta">
+        <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+
+      <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+
+      {{ if .Summary }}
+      <p>{{ .Summary }}</p>
+      {{ end }}
+
+      <div class="content-card-footer">
+        <a class="text-link" href="{{ .URL }}">Read piece</a>
+        {{ with index .Taxonomies "tags" }}
+        <div class="tag-row">
+          {{ range . }}
+          <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
+          {{ end }}
+        </div>
+        {{ end }}
+      </div>
+    </article>
+    {{ else }}
+    <div class="empty-panel">
+      <h3>No documents yet</h3>
+      <p>Publish your first page or post to bring Forge Noir to life.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+
+<section class="editorial-band">
+  <div class="section-heading">
+    <div>
+      <span class="eyebrow">System</span>
+      <h2>Built for serious content operations</h2>
+    </div>
+  </div>
+
+  <div class="editorial-grid">
+    <article class="panel">
+      <h3>Strong article layouts</h3>
+      <p>Readable body copy, assertive headings, elegant tables, and code that feels native to the theme.</p>
+    </article>
+    <article class="panel">
+      <h3>Dark by design</h3>
+      <p>No inverted-light-theme compromise. Everything from hover states to form controls is designed for darkness first.</p>
+    </article>
+    <article class="panel">
+      <h3>Extensible</h3>
+      <p>Uses Foundry’s existing theme slots and SDK surface so future developers can extend it without rewrites.</p>
+    </article>
+  </div>
+</section>
+{{ end }}

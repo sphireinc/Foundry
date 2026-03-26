@@ -20,6 +20,10 @@ func NewManager(root, activeTheme string) *Manager {
 	}
 }
 
+func (m *Manager) SetActiveTheme(name string) {
+	m.activeTheme = name
+}
+
 func (m *Manager) LayoutPath(name string) string {
 	themeName, err := safepath.ValidatePathComponent("theme name", m.activeTheme)
 	if err != nil {

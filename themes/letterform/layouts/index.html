@@ -1,0 +1,121 @@
+{{ define "content" }}
+<section class="lf-frame lf-frontispiece">
+  <div class="lf-frontispiece-rule"></div>
+  <div class="lf-frontispiece-grid">
+    {{ with index .Documents 0 }}
+    <article class="lf-lead-essay">
+      <div class="lf-kicker">Lead Essay</div>
+      <h1><a href="{{ .URL }}">{{ .Title }}</a></h1>
+      {{ if .Summary }}
+      <p class="lf-dek">{{ .Summary }}</p>
+      {{ end }}
+      <div class="lf-meta-row">
+        <span>{{ if eq .Type "post" }}Essay{{ else }}Page{{ end }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "January 2, 2006" }}</span>{{ end }}
+        {{ if .Author }}<span>{{ .Author }}</span>{{ end }}
+      </div>
+    </article>
+    {{ else }}
+    <article class="lf-lead-essay">
+      <div class="lf-kicker">Letterform</div>
+      <h1>{{ .Site.Title }}</h1>
+      <p class="lf-dek">A typographic publishing surface for essays, journals, criticism, and longform writing.</p>
+    </article>
+    {{ end }}
+
+    <aside class="lf-frontispiece-notes">
+      <section>
+        <div class="lf-kicker">From the Desk</div>
+        <p>Letterform stages publishing like an issue opener: one major argument, a few marginal observations, then a measured descent into the archive.</p>
+      </section>
+      <section>
+        <div class="lf-kicker">In This Issue</div>
+        <div class="lf-chip-row lf-chip-row-tight">
+          <a class="lf-chip" href="/tags/essays/">Essays</a>
+          <a class="lf-chip" href="/tags/criticism/">Criticism</a>
+          <a class="lf-chip" href="/tags/notes/">Notes</a>
+        </div>
+      </section>
+    </aside>
+  </div>
+</section>
+
+<section class="lf-frame lf-band lf-band-annotated">
+  <div class="lf-section-head">
+    <div class="lf-kicker">Featured Pairing</div>
+    <h2>Two strong pieces placed in dialogue, with enough whitespace for them to breathe.</h2>
+  </div>
+
+  <div class="lf-dialogue-grid">
+    {{ range $index, $doc := .Documents }}
+    {{ if and (ge $index 1) (lt $index 3) }}
+    <article class="lf-dialogue-entry">
+      <div class="lf-meta-row">
+        <span>{{ if eq $doc.Type "post" }}Essay{{ else }}Page{{ end }}</span>
+        {{ if $doc.Date }}<span>{{ $doc.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+      {{ if $doc.Summary }}
+      <p>{{ $doc.Summary }}</p>
+      {{ end }}
+    </article>
+    {{ end }}
+    {{ else }}
+    <div class="lf-empty-state">
+      <h3>No featured pairing yet</h3>
+      <p>Publish a few essays and Letterform will begin arranging them into calmer editorial relationships.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+
+<section class="lf-frame lf-band lf-band-rule">
+  <div class="lf-section-head">
+    <div class="lf-kicker">Latest Writing</div>
+    <h2>Rows styled like a table of contents rather than a generic blog feed.</h2>
+  </div>
+
+  <div class="lf-contents-list">
+    {{ range $index, $doc := .Documents }}
+    {{ if and (ge $index 2) (lt $index 8) }}
+    <article class="lf-contents-row">
+      <div class="lf-contents-index">{{ printf "%02d" $index }}</div>
+      <div class="lf-story-main">
+        <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+        {{ if $doc.Summary }}
+        <p>{{ $doc.Summary }}</p>
+        {{ end }}
+      </div>
+      <div class="lf-story-meta">
+        <span>{{ if eq $doc.Type "post" }}Essay{{ else }}Page{{ end }}</span>
+        {{ if $doc.Author }}<span>{{ $doc.Author }}</span>{{ end }}
+        {{ if $doc.Date }}<span>{{ $doc.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+    </article>
+    {{ end }}
+    {{ end }}
+  </div>
+</section>
+
+<section class="lf-frame lf-band">
+  <div class="lf-section-head">
+    <div class="lf-kicker">Departments</div>
+    <h2>Quiet textual modules for recurring sections, editorial programs, and category-led reading.</h2>
+  </div>
+
+  <div class="lf-departments">
+    <section class="lf-note-panel">
+      <h3>Essays</h3>
+      <p>Longer arguments, criticism, and reflective work where rhythm and proportion matter as much as interface.</p>
+    </section>
+    <section class="lf-note-panel">
+      <h3>Notebook</h3>
+      <p>Fragments, annotations, and concise pieces that still deserve carefully typeset presentation.</p>
+    </section>
+    <section class="lf-note-panel">
+      <h3>Collections</h3>
+      <p>Series, taxonomies, and themed reading paths arranged like editorial desks instead of feature cards.</p>
+    </section>
+  </div>
+</section>
+{{ end }}

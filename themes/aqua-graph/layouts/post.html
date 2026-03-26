@@ -1,0 +1,53 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<div class="aq-article-layout aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  <aside class="aq-col aq-col-2 aq-col-t-2 aq-col-m-4 aq-article-left-rail">
+    <div class="aq-rail-sticky">
+      {{ pluginSlot "post.sidebar.top" }}
+      <section class="aq-surface aq-rail-panel">
+        <span class="aq-eyebrow">Details</span>
+        {{ template "post_meta" . }}
+      </section>
+      <section class="aq-surface aq-rail-panel" data-aq-toc-panel hidden>
+        <h3>On this page</h3>
+        <nav class="aq-toc" aria-label="Article table of contents" data-aq-toc></nav>
+      </section>
+      {{ pluginSlot "post.sidebar.overview" }}
+    </div>
+  </aside>
+
+  <section class="aq-col aq-col-7 aq-col-t-6 aq-col-m-4 aq-article-main">
+    {{ pluginSlot "post.before_header" }}
+    <header class="aq-masthead aq-article-masthead">
+      <span class="aq-eyebrow">Article</span>
+      <h1 class="aq-display-lg">{{ .Page.Title }}</h1>
+      {{ if .Page.Summary }}
+      <p class="aq-lede">{{ .Page.Summary }}</p>
+      {{ end }}
+    </header>
+    {{ pluginSlot "post.after_header" }}
+
+    <article class="aq-article-body aq-surface">
+      {{ pluginSlot "post.before_content" }}
+      <div class="aq-prose" data-aq-article-prose>{{ safeHTML .Page.HTMLBody }}</div>
+      {{ pluginSlot "post.after_content" }}
+    </article>
+  </section>
+
+  <aside class="aq-col aq-col-3 aq-col-t-8 aq-col-m-4 aq-article-right-rail">
+    <div class="aq-rail-stack">
+      <section class="aq-surface aq-rail-panel">
+        <h3>Overview</h3>
+        <dl class="aq-meta-list">
+          <div><dt>Type</dt><dd>{{ .Page.Type }}</dd></div>
+          <div><dt>Slug</dt><dd>{{ .Page.Slug }}</dd></div>
+          <div><dt>Language</dt><dd>{{ .Page.Lang }}</dd></div>
+        </dl>
+      </section>
+
+      {{ template "author_block" . }} {{ template "taxonomy_chips" . }} {{ pluginSlot "post.sidebar.bottom" }}
+    </div>
+  </aside>
+</div>
+{{ end }}

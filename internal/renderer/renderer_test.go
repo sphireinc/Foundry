@@ -139,6 +139,59 @@ func TestRendererBuildsCoreSearchAuthorAndNotFoundRoutes(t *testing.T) {
 	}
 }
 
+func TestRenderURLTracksThemeChangesOnSameRenderer(t *testing.T) {
+	cfg := testRendererConfig(t)
+	writeRendererTheme(t, cfg)
+	if err := os.MkdirAll(filepath.Join(cfg.ThemesDir, "alt", "layouts", "partials"), 0o755); err != nil {
+		t.Fatalf("mkdir alt theme: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(cfg.ThemesDir, "alt", "layouts", "base.html"),
+		[]byte(`{{ define "base" }}<html><body><main class="alt-main">{{ template "page" . }}</main></body></html>{{ end }}`),
+		0o644,
+	); err != nil {
+		t.Fatalf("write alt base: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(cfg.ThemesDir, "alt", "layouts", "page.html"),
+		[]byte(`{{ define "page" }}<article>alt page</article>{{ end }}`),
+		0o644,
+	); err != nil {
+		t.Fatalf("write alt page: %v", err)
+	}
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       cfg.DefaultLang,
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+		HTMLBody:   template.HTML("<p>About</p>"),
+	})
+
+	r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil)
+	first, err := r.RenderURL(graph, "/about/", false)
+	if err != nil {
+		t.Fatalf("render default theme: %v", err)
+	}
+	if !strings.Contains(string(first), `page About`) {
+		t.Fatalf("expected default theme layout, got %q", string(first))
+	}
+
+	cfg.Theme = "alt"
+	second, err := r.RenderURL(graph, "/about/", false)
+	if err != nil {
+		t.Fatalf("render alt theme: %v", err)
+	}
+	if !strings.Contains(string(second), `class="alt-main"`) {
+		t.Fatalf("expected alt theme layout after theme switch, got %q", string(second))
+	}
+}
+
 func TestBuildURLsSkipsUnknownURLs(t *testing.T) {
 	cfg := testRendererConfig(t)
 	writeRendererTheme(t, cfg)

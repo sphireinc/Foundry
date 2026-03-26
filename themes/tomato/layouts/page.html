@@ -1,0 +1,15 @@
+{{ define "content" }}
+<section class="page-hero">
+  <span class="eyebrow">Page</span>
+  <h1>{{ .Page.Title }}</h1>
+  {{ if .Page.Summary }}
+  <p class="page-intro">{{ .Page.Summary }}</p>
+  {{ end }}
+</section>
+
+<article class="page-panel">
+  {{ pluginSlot "page.before_content" }}
+  <div class="tomato-prose">{{ safeHTML .Page.HTMLBody }}</div>
+  {{ pluginSlot "page.after_content" }}
+</article>
+{{ end }}

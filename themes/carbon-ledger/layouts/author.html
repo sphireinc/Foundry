@@ -1,0 +1,30 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="masthead">
+  <div class="eyebrow">Author</div>
+  <h1>{{ .AuthorName }}</h1>
+  <p class="lede">A calm, high-legibility archive of documents written by this author.</p>
+</section>
+
+<section class="archive-stack">
+  {{ range .Documents }}
+  <article class="surface archive-card">
+    <div class="content-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ else }}
+  <div class="empty-state surface">
+    <h3>No published content yet</h3>
+    <p>This author archive exists, but nothing published is attached to it yet.</p>
+  </div>
+  {{ end }}
+</section>
+{{ end }}

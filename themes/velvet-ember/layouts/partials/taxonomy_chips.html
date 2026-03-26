@@ -1,0 +1,14 @@
+{{ define "taxonomy_chips" }}
+{{ if .Page.Taxonomies }}
+<section class="ve-side-module">
+  <h2>Filed under</h2>
+  <div class="ve-chip-row">
+    {{ range $taxonomy, $terms := .Page.Taxonomies }}
+      {{ range $terms }}
+      <a class="ve-chip" href="/{{ $taxonomy }}/{{ . }}/">{{ . }}</a>
+      {{ end }}
+    {{ end }}
+  </div>
+</section>
+{{ end }}
+{{ end }}

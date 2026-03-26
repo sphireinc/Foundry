@@ -548,6 +548,18 @@ func TestManagementEndpoints(t *testing.T) {
 	if rr := doReq(http.MethodGet, "/__admin/api/config", ""); rr.Code != http.StatusOK {
 		t.Fatalf("expected config 200, got %d: %s", rr.Code, rr.Body.String())
 	}
+	if rr := doReq(http.MethodGet, "/__admin/api/settings/form", ""); rr.Code != http.StatusOK {
+		t.Fatalf("expected settings form 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if rr := doReq(http.MethodPost, "/__admin/api/settings/form/save", `{"value":{"Title":"Updated Title","Theme":"default","DefaultLang":"en","ContentDir":"content","PublicDir":"public","ThemesDir":"themes","DataDir":"data","PluginsDir":"plugins","Server":{"Addr":":8080"},"Feed":{"RSSPath":"/rss.xml","SitemapPath":"/sitemap.xml"},"Admin":{"LocalOnly":false}}}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected settings form save 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if rr := doReq(http.MethodGet, "/__admin/api/settings/custom-css", ""); rr.Code != http.StatusOK {
+		t.Fatalf("expected custom css 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if rr := doReq(http.MethodPost, "/__admin/api/settings/custom-css/save", `{"raw":"body { color: #123456; }"}`); rr.Code != http.StatusOK {
+		t.Fatalf("expected save custom css 200, got %d: %s", rr.Code, rr.Body.String())
+	}
 	if rr := doReq(http.MethodGet, "/__admin/api/plugins", ""); rr.Code != http.StatusOK {
 		t.Fatalf("expected plugins 200, got %d: %s", rr.Code, rr.Body.String())
 	}

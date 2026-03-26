@@ -1,0 +1,6 @@
+{{ define "post_meta" }}
+<span>{{ .Page.Type }}</span>
+<span>{{ .Page.Lang }}</span>
+{{ if .Page.Date }}<span>{{ .Page.Date.Format "January 2, 2006" }}</span>{{ end }}
+{{ if .Page.Author }}<span>{{ .Page.Author }}</span>{{ end }}
+{{ end }}

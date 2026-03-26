@@ -1,0 +1,22 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="lf-frame lf-page-header">
+  <div class="lf-kicker">Page</div>
+  <h1>{{ .Page.Title }}</h1>
+  {{ if .Page.Summary }}
+  <p class="lf-dek">{{ .Page.Summary }}</p>
+  {{ end }}
+  <div class="lf-meta-row">
+    <span>{{ .Page.Type }}</span>
+    <span>{{ .Page.Lang }}</span>
+    {{ if .Page.Author }}<span>{{ .Page.Author }}</span>{{ end }}
+  </div>
+</section>
+
+<section class="lf-reading-frame">
+  {{ pluginSlot "page.before_content" }}
+  <div class="lf-prose lf-prose-page">{{ safeHTML .Page.HTMLBody }}</div>
+  {{ pluginSlot "page.after_content" }}
+</section>
+{{ end }}

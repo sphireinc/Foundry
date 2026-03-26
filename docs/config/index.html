@@ -62,6 +62,35 @@
             <code>content/config/example.site.yaml</code>.
           </p>
 
+          <h2>How Admin Settings Relate To <code>site.yaml</code></h2>
+          <p>
+            Foundry keeps <code>content/config/site.yaml</code> as the source of truth on disk,
+            even when you edit settings through the admin UI.
+          </p>
+          <p>
+            The admin Settings area uses structured forms because forms are safer and more usable
+            for most changes than editing a raw YAML document directly. Under the hood, the flow
+            is:
+          </p>
+          <ul>
+            <li><strong>YAML on disk</strong>: the persistent project config remains YAML.</li>
+            <li><strong>Structured object in memory</strong>: the admin loads that YAML into a config object.</li>
+            <li><strong>Forms in the UI</strong>: the object is presented as inputs, toggles, selects, and section-specific editors.</li>
+            <li><strong>Structured save back to YAML</strong>: when you save, Foundry validates the structured config and writes it back to <code>site.yaml</code>.</li>
+          </ul>
+          <p>
+            Some parts of the config surface are naturally scalar and form-friendly. Others, such
+            as taxonomy definitions, field schemas, deploy targets, menus, params, and permalinks,
+            are more deeply nested. Those still live inside the structured Settings area, but they
+            may use JSON-shaped editors in their own tabs rather than trying to force everything
+            into a single giant YAML textarea.
+          </p>
+          <p>
+            Foundry also keeps an <strong>Advanced YAML</strong> tab in admin. That exists so
+            advanced users can still edit the raw config directly when they need full manual
+            control or want to work with values that are easier to express in YAML than in a form.
+          </p>
+
           <h2>Minimal example</h2>
           <pre><code>name: "foundry"
 title: "Foundry CMS"

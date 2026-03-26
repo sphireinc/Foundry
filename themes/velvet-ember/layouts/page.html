@@ -1,0 +1,38 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="ve-page-hero ve-frame">
+  <div class="ve-kicker">Page</div>
+  <h1>{{ .Page.Title }}</h1>
+  {{ if .Page.Summary }}
+  <p class="ve-deck">{{ .Page.Summary }}</p>
+  {{ end }}
+  <div class="ve-meta-row">
+    <span>{{ .Page.Type }}</span>
+    <span>{{ .Page.Lang }}</span>
+    {{ if .Page.Author }}<span>{{ .Page.Author }}</span>{{ end }}
+  </div>
+</section>
+
+<section class="ve-page-body ve-frame ve-grid">
+  <article class="ve-page-column ve-span-8">
+    <div class="ve-content-panel">
+      {{ pluginSlot "page.before_content" }}
+      <div class="ve-prose">{{ safeHTML .Page.HTMLBody }}</div>
+      {{ pluginSlot "page.after_content" }}
+    </div>
+  </article>
+
+  <aside class="ve-page-side ve-span-4">
+    <section class="ve-side-module">
+      <h2>Document details</h2>
+      <dl class="ve-definition-list">
+        <div><dt>Slug</dt><dd>{{ .Page.Slug }}</dd></div>
+        <div><dt>Language</dt><dd>{{ .Page.Lang }}</dd></div>
+        <div><dt>Layout</dt><dd>{{ .Page.Layout }}</dd></div>
+      </dl>
+    </section>
+    {{ template "taxonomy_chips" . }}
+  </aside>
+</section>
+{{ end }}

@@ -1,0 +1,38 @@
+{{ define "header" }}
+<header class="bl-header">
+  <div class="bl-utility-bar">
+    <div class="bl-frame bl-utility-inner">
+      <span>Bloomlight for Foundry</span>
+      <div class="bl-utility-links">
+        <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+        <a href="/__admin">Account</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="bl-frame">
+    <div class="bl-header-main bl-panel bl-panel-ghost">
+      <a class="bl-brand" href="/">
+        <span class="bl-brand-mark">BL</span>
+        <span class="bl-brand-copy">
+          <span class="bl-brand-title">{{ .Site.Title }}</span>
+          <span class="bl-brand-subtitle">A soft editorial publication theme</span>
+        </span>
+      </a>
+
+      <nav class="bl-nav" aria-label="Primary">
+        {{ range .Nav }}
+        <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
+        {{ end }}
+      </nav>
+
+      <form class="bl-inline-search" data-bl-search-form data-result-target="bl-inline-search-results">
+        <label class="sr-only" for="bl-inline-search">Search the site</label>
+        <input id="bl-inline-search" type="search" name="q" placeholder="Search" autocomplete="off" />
+      </form>
+    </div>
+
+    <div id="bl-inline-search-results" class="bl-search-results" aria-live="polite"></div>
+  </div>
+</header>
+{{ end }}

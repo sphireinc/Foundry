@@ -1,0 +1,46 @@
+{{ define "header" }}
+<header class="aq-header">
+  <div class="aq-topbar">
+    <div class="aq-topbar-inner">
+      <div class="aq-topbar-left">Aqua Graph for Foundry</div>
+      <div class="aq-topbar-right">
+        <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+        <a href="/__admin">Account</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="aq-header-main">
+    <div class="aq-header-inner">
+      <a class="aq-brand" href="/">
+        <span class="aq-brand-mark">AG</span>
+        <span class="aq-brand-copy">
+          <span class="aq-brand-title">{{ .Site.Title }}</span>
+          <span class="aq-brand-subtitle">Editorial product system</span>
+        </span>
+      </a>
+
+      <nav class="aq-nav" aria-label="Primary">
+        {{ range .Nav }}
+        <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
+        {{ end }}
+      </nav>
+
+      <form class="aq-inline-search" data-aq-search-form data-result-target="aq-inline-search-results">
+        <input
+          type="search"
+          name="q"
+          placeholder="Search"
+          aria-label="Search the site"
+          autocomplete="off"
+        />
+        <button type="submit">Go</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="aq-inline-search-results-wrap">
+    <div id="aq-inline-search-results" class="aq-search-results" aria-live="polite"></div>
+  </div>
+</header>
+{{ end }}

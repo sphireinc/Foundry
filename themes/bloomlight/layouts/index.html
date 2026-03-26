@@ -1,0 +1,137 @@
+{{ define "content" }}
+<section class="bl-frame bl-hero-wrap">
+  <div class="bl-hero bl-panel bl-panel-veil">
+    <div class="bl-kicker">Bloomlight</div>
+    <h1>{{ .Site.Title }}</h1>
+    <p class="bl-deck">
+      A serene editorial surface for stories, notes, and brand publishing with room to breathe.
+    </p>
+    <div class="bl-hero-actions">
+      <a class="bl-button bl-button-primary" href="/search/">Search the journal</a>
+      <a class="bl-button bl-button-secondary" href="/__admin">Open Foundry</a>
+    </div>
+  </div>
+</section>
+
+<section class="bl-frame">
+  <div class="bl-section-head">
+    <div class="bl-kicker">Featured stories</div>
+    <h2>Curated highlights in a calm, rounded surface.</h2>
+  </div>
+  <div class="bl-panel bl-panel-petal">
+    <div class="bl-grid bl-feature-row">
+      {{ range $index, $doc := .Documents }}
+      {{ if lt $index 3 }}
+      <article class="bl-card bl-card-feature">
+        <div class="bl-meta-row">
+          <span>{{ if eq $doc.Type "post" }}Story{{ else }}Page{{ end }}</span>
+          <span>{{ $doc.Lang }}</span>
+          {{ if $doc.Date }}<span>{{ $doc.Date.Format "Jan 2, 2006" }}</span>{{ end }}
+        </div>
+        <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+        {{ if $doc.Summary }}
+        <p>{{ $doc.Summary }}</p>
+        {{ end }}
+      </article>
+      {{ end }}
+      {{ else }}
+      <div class="bl-empty-state">
+        <h3>No featured stories yet</h3>
+        <p>Publish a few entries and this area becomes a soft highlight row.</p>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+<section class="bl-frame bl-stack-lg">
+  <div class="bl-grid bl-home-grid">
+    <div class="bl-col-7">
+      <section class="bl-panel bl-panel-linen">
+        <div class="bl-section-head bl-section-head-tight">
+          <div class="bl-kicker">Latest notes</div>
+          <h2>Fresh entries collected with clear rhythm and generous spacing.</h2>
+        </div>
+        <div class="bl-story-stack">
+          {{ range $index, $doc := .Documents }}
+          {{ if and (ge $index 1) (lt $index 5) }}
+          <article class="bl-story-row">
+            <div>
+              <div class="bl-meta-row">
+                <span>{{ if eq $doc.Type "post" }}Post{{ else }}Page{{ end }}</span>
+                <span>{{ $doc.Lang }}</span>
+              </div>
+              <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+              {{ if $doc.Summary }}
+              <p>{{ $doc.Summary }}</p>
+              {{ end }}
+            </div>
+          </article>
+          {{ end }}
+          {{ end }}
+        </div>
+      </section>
+    </div>
+
+    <div class="bl-col-5 bl-stack-md">
+      <section class="bl-panel bl-panel-mint">
+        <div class="bl-section-head bl-section-head-tight">
+          <div class="bl-kicker">Spotlight category</div>
+          <h2>Rounded taxonomy chips and curated category entry points.</h2>
+        </div>
+        <div class="bl-chip-row">
+          <a class="bl-chip" href="/tags/go/">Go</a>
+          <a class="bl-chip" href="/tags/design/">Design</a>
+          <a class="bl-chip" href="/tags/editorial/">Editorial</a>
+        </div>
+      </section>
+
+      <section class="bl-panel bl-panel-blush">
+        <div class="bl-section-head bl-section-head-tight">
+          <div class="bl-kicker">Newsletter invitation</div>
+          <h2>Stay near the stories.</h2>
+        </div>
+        <p>
+          Present your newsletter, mailing list, or quiet editorial invitation inside a soft
+          premium module.
+        </p>
+        <form class="bl-newsletter-form">
+          <label class="sr-only" for="bl-newsletter-email">Email address</label>
+          <input id="bl-newsletter-email" type="email" placeholder="Email address" />
+          <button class="bl-button bl-button-primary" type="button">Join</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</section>
+
+<section class="bl-frame">
+  <div class="bl-section-head">
+    <div class="bl-kicker">Editor picks</div>
+    <h2>Small feature grids and nested content clusters instead of dense dashboards.</h2>
+  </div>
+  <div class="bl-panel bl-panel-ghost">
+    <div class="bl-grid bl-picks-grid">
+      {{ range $index, $doc := .Documents }}
+      {{ if ge $index 4 }}
+      <article class="bl-card bl-card-compact">
+        <div class="bl-meta-row">
+          <span>{{ if eq $doc.Type "post" }}Story{{ else }}Page{{ end }}</span>
+          {{ if $doc.Author }}<span>{{ $doc.Author }}</span>{{ end }}
+        </div>
+        <h3><a href="{{ $doc.URL }}">{{ $doc.Title }}</a></h3>
+        {{ if $doc.Summary }}
+        <p>{{ $doc.Summary }}</p>
+        {{ end }}
+      </article>
+      {{ end }}
+      {{ else }}
+      <div class="bl-empty-state">
+        <h3>Waiting for editor picks</h3>
+        <p>Add more content to fill this gentle content cluster.</p>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}

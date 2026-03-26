@@ -1,0 +1,53 @@
+{{ define "content" }}
+<section class="masthead masthead-archive">
+  <div class="kicker">Archive</div>
+  <h1>{{ .Title }}</h1>
+  {{ if and .TaxonomyName .TaxonomyTerm }}
+  <p class="lede">
+    Articles and pages classified under <strong>{{ .TaxonomyName }}</strong> / <strong>{{ .TaxonomyTerm }}</strong>.
+  </p>
+  {{ else }}
+  <p class="lede">A listing view tuned for dark reading, scanning, and discovery.</p>
+  {{ end }}
+</section>
+
+<section class="archive-stack">
+  {{ range .Documents }}
+  <article class="archive-card panel">
+    <div class="content-card-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+
+    <div class="archive-footer">
+      <a class="text-link" href="{{ .URL }}">Open entry</a>
+      {{ with index .Taxonomies "tags" }}
+      <div class="tag-row">
+        {{ range . }}
+        <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
+        {{ end }}
+      </div>
+      {{ end }}
+    </div>
+  </article>
+  {{ else }}
+  <div class="empty-panel">
+    <h3>Nothing matched this archive</h3>
+    <p>Try a different taxonomy term, or use the search panel to jump directly to a document.</p>
+  </div>
+  {{ end }}
+</section>
+
+<nav class="pagination" aria-label="Archive navigation">
+  <a class="pagination-link" href="/">Home</a>
+  <a class="pagination-link" href="{{ .Site.Feed.RSSPath }}">RSS</a>
+  <a class="pagination-link" href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+</nav>
+{{ end }}

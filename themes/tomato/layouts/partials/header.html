@@ -1,0 +1,19 @@
+{{ define "header" }}
+<header class="tomato-header">
+  <div class="tomato-header-inner">
+    <a class="tomato-brand" href="/">
+      <span class="tomato-brand-mark">T</span>
+      <span class="tomato-brand-text">
+        <span class="tomato-brand-title">{{ .Site.Title }}</span>
+        <span class="tomato-brand-tagline">Editorial, bright, unapologetic</span>
+      </span>
+    </a>
+
+    <nav class="tomato-nav">
+      {{ range .Nav }}
+      <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
+      {{ end }}
+    </nav>
+  </div>
+</header>
+{{ end }}

@@ -431,6 +431,11 @@ The main config file is typically:
 content/config/site.yaml
 ```
 
+The admin `Settings` area edits this same file through structured forms and an
+`Advanced YAML` tab. Foundry keeps YAML as the storage format on disk, but the
+admin works with a structured config object so common settings can be edited as
+forms and then written back safely to `site.yaml`.
+
 Important config groups:
 
 - `admin`: admin service settings

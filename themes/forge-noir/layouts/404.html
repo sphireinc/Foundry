@@ -1,0 +1,28 @@
+{{ define "content" }}
+<section class="masthead masthead-archive">
+  <div class="kicker">404</div>
+  <h1>{{ .Title }}</h1>
+  <p class="lede">The route <strong>{{ .RequestPath }}</strong> was not found in this edition.</p>
+</section>
+
+<section class="archive-stack">
+  <article class="archive-card panel">
+    <div class="content-card-meta"><span>Recovery</span><span>Navigation</span></div>
+    <h2><a href="/">Return to the front page</a></h2>
+    <p>Use the main navigation or jump into one of the recent entries below.</p>
+  </article>
+
+  {{ range .Documents }}
+  <article class="archive-card panel">
+    <div class="content-card-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ end }}
+</section>
+{{ end }}

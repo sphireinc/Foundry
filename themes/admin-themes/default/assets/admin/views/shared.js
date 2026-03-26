@@ -68,6 +68,7 @@ export const renderKeyboardHelp = (state) => {
     <div><code>g d</code> Documents</div>
     <div><code>g e</code> Editor</div>
     <div><code>g m</code> Media</div>
+    <div><code>g s</code> Settings</div>
     <div><code>g u</code> Users</div>
   </div>`;
 };
@@ -122,7 +123,7 @@ export const shellNav = (state, adminBase, options = {}) => {
     ...(options.debugEnabled ? [['debug', 'Debug']] : []),
     ['audit', 'Audit'],
     ['users', 'Users'],
-    ['config', 'Configuration'],
+    ['settings', 'Settings'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
   ];

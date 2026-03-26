@@ -1,0 +1,40 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="lf-frame lf-page-header">
+  <div class="lf-kicker">Author</div>
+  <h1>{{ .AuthorName }}</h1>
+  <p class="lf-dek">A collected archive of writing attributed to this author.</p>
+</section>
+
+<section class="lf-frame">
+  <div class="lf-author-intro">
+    <div class="lf-author-mark">{{ if .AuthorName }}{{ printf "%.1s" .AuthorName }}{{ end }}</div>
+    <p>This page is structured like an author folio: direct, quiet, and centered on the work itself.</p>
+  </div>
+
+  <div class="lf-contents-list">
+    {{ range .Documents }}
+    <article class="lf-contents-row">
+      <div class="lf-contents-index">¶</div>
+      <div class="lf-story-main">
+        <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+        {{ if .Summary }}
+        <p>{{ .Summary }}</p>
+        {{ end }}
+      </div>
+      <div class="lf-story-meta">
+        <span>{{ if eq .Type "post" }}Essay{{ else }}Page{{ end }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+        <span>{{ .Lang }}</span>
+      </div>
+    </article>
+    {{ else }}
+    <div class="lf-empty-state">
+      <h3>No published writing yet</h3>
+      <p>This author archive is ready, but nothing published has been attached to it yet.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

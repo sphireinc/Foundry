@@ -1,0 +1,19 @@
+{{ define "taxonomy_chips" }} {{ with index .Page.Taxonomies "tags" }}
+<section class="aq-surface aq-rail-panel">
+  <h3>Tags</h3>
+  <div class="aq-pill-row">
+    {{ range . }}
+    <a class="aq-pill" href="/tags/{{ . }}/">{{ . }}</a>
+    {{ end }}
+  </div>
+</section>
+{{ end }} {{ with index .Page.Taxonomies "categories" }}
+<section class="aq-surface aq-rail-panel">
+  <h3>Categories</h3>
+  <div class="aq-pill-row">
+    {{ range . }}
+    <a class="aq-pill" href="/categories/{{ . }}/">{{ . }}</a>
+    {{ end }}
+  </div>
+</section>
+{{ end }} {{ end }}

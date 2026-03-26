@@ -9,14 +9,12 @@ public_dir: "public"
 themes_dir: "themes"
 data_dir: "data"
 plugins_dir: "plugins"
-
 server:
   addr: ":8080"
   live_reload: true
   live_reload_mode: "stream"
   auto_open_browser: false
   debug_routes: false
-
 admin:
   enabled: true
   addr: ""
@@ -33,7 +31,6 @@ admin:
   totp_issuer: "Foundry"
   debug:
     pprof: true
-
 build:
   clean_public_dir: true
   include_drafts: false
@@ -41,7 +38,6 @@ build:
   copy_assets: true
   copy_images: true
   copy_uploads: true
-
 content:
   pages_dir: "pages"
   posts_dir: "posts"
@@ -55,13 +51,11 @@ content:
   default_layout_page: "page"
   default_layout_post: "post"
   default_page_slug_index: "index"
-
 permalinks:
   page_default: "/:slug/"
   page_i18n: "/:lang/:slug/"
   post_default: "/posts/:slug/"
   post_i18n: "/:lang/posts/:slug/"
-
 taxonomies:
   enabled: true
   default_set:
@@ -80,42 +74,33 @@ taxonomies:
         en: Categories
         es: Categorías
       term_layout: list
-
 plugins:
   enabled:
     - readingtime
     - toc
     - relatedposts
-
 fields:
   enabled: true
   allow_anything: true
   schemas: {}
-
 seo:
   enabled: true
   default_title_sep: "-"
-
 cache:
   enabled: true
-
 security:
   allow_unsafe_html: false
-
 feed:
   rss_path: "/rss.xml"
   sitemap_path: "/sitemap.xml"
   rss_limit: 50
   rss_title: "Foundry CMS"
   rss_description: "Latest posts from Foundry CMS"
-
 deploy:
   default_target: ""
   targets: {}
-
 params:
   company_name: "Sphire"
-
 menus:
   main:
     - name: "Home"

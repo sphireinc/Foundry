@@ -251,6 +251,7 @@ func (r *Renderer) Build(ctx context.Context, graph *content.SiteGraph) error {
 func (r *Renderer) BuildWithStats(ctx context.Context, graph *content.SiteGraph) (BuildStats, error) {
 	_ = ctx
 	var stats BuildStats
+	r.syncActiveTheme()
 
 	if err := r.prepareBuild(true, true, &stats); err != nil {
 		return stats, err
@@ -1098,6 +1099,7 @@ func parseNavigationData(v any) []NavItem {
 }
 
 func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) ([]byte, error) {
+	r.syncActiveTheme()
 	if err := r.hooks.OnContext(&data); err != nil {
 		return nil, err
 	}
@@ -1175,6 +1177,13 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	}
 
 	return html, nil
+}
+
+func (r *Renderer) syncActiveTheme() {
+	if r == nil || r.themes == nil || r.cfg == nil {
+		return
+	}
+	r.themes.SetActiveTheme(r.cfg.Theme)
 }
 
 func (r *Renderer) layoutPathWithFallback(name string) string {

@@ -1,0 +1,42 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="lf-frame lf-page-header">
+  <div class="lf-kicker">Search</div>
+  <h1>{{ .Title }}</h1>
+  <p class="lf-dek">Search results{{ if .SearchQuery }} for <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+</section>
+
+<section class="lf-frame">
+  <form class="lf-search-form" action="/search/" method="get" role="search">
+    <label for="lf-search-input">Search the publication</label>
+    <div class="lf-search-row">
+      <input id="lf-search-input" name="q" type="search" value="{{ .SearchQuery }}" placeholder="Find essays, notes, and pages" />
+      <button type="submit" class="lf-button">Search</button>
+    </div>
+  </form>
+
+  <div class="lf-contents-list">
+    {{ range .Documents }}
+    <article class="lf-contents-row">
+      <div class="lf-contents-index">⌕</div>
+      <div class="lf-story-main">
+        <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+        {{ if .Summary }}
+        <p>{{ .Summary }}</p>
+        {{ end }}
+      </div>
+      <div class="lf-story-meta">
+        <span>{{ if eq .Type "post" }}Essay{{ else }}Page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+      </div>
+    </article>
+    {{ else }}
+    <div class="lf-empty-state">
+      <h3>No results</h3>
+      <p>Try a broader search phrase or browse an archive instead.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

@@ -1,0 +1,38 @@
+{{ define "content" }}
+<section class="masthead masthead-archive">
+  <div class="kicker">Search</div>
+  <h1>{{ .Title }}</h1>
+  <p class="lede">Editorial search results{{ if .SearchQuery }} for <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+</section>
+
+<section class="panel side-panel" style="margin-bottom:1.5rem;">
+  <form action="/search/" method="get" role="search">
+    <label for="forge-search"><strong>Search the publication</strong></label>
+    <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.85rem;">
+      <input id="forge-search" name="q" type="search" value="{{ .SearchQuery }}" placeholder="Search stories and pages" style="flex:1;min-width:16rem;padding:.9rem 1rem;border:1px solid rgba(199,80,0,.28);border-radius:999px;background:rgba(255,255,255,.03);color:inherit;">
+      <button class="button-primary" type="submit">Search</button>
+    </div>
+  </form>
+</section>
+
+<section class="archive-stack">
+  {{ range .Documents }}
+  <article class="archive-card panel">
+    <div class="content-card-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ else }}
+  <div class="empty-panel">
+    <h3>No results matched that search</h3>
+    <p>Try a broader term, another archive, or a different navigation path.</p>
+  </div>
+  {{ end }}
+</section>
+{{ end }}

@@ -1,0 +1,56 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="ve-article-hero ve-frame">
+  {{ pluginSlot "post.before_header" }}
+  <div class="ve-kicker">Article</div>
+  <h1>{{ .Page.Title }}</h1>
+  {{ if .Page.Summary }}
+  <p class="ve-deck">{{ .Page.Summary }}</p>
+  {{ end }}
+  <div class="ve-article-meta">
+    {{ template "post_meta" . }}
+  </div>
+  {{ pluginSlot "post.after_header" }}
+</section>
+
+<section class="ve-article-shell">
+  <div class="ve-frame ve-grid">
+    <article class="ve-article-column ve-span-8">
+      <div class="ve-intermission">
+        <span>Intermission</span>
+        <p>Long-form reading with broad columns, strong dividers, and room for theatrical pauses.</p>
+      </div>
+
+      <div class="ve-content-panel ve-content-panel-article">
+        {{ pluginSlot "post.before_content" }}
+        <div class="ve-prose" data-ve-article-prose>{{ safeHTML .Page.HTMLBody }}</div>
+        {{ pluginSlot "post.after_content" }}
+      </div>
+
+      {{ template "author_block" . }}
+    </article>
+
+    <aside class="ve-article-side ve-span-4">
+      {{ pluginSlot "post.sidebar.top" }}
+
+      <section class="ve-side-module" data-ve-toc-panel hidden>
+        <h2>On this page</h2>
+        <nav class="ve-toc" data-ve-toc></nav>
+      </section>
+
+      <section class="ve-side-module">
+        <h2>Article details</h2>
+        <dl class="ve-definition-list">
+          <div><dt>Type</dt><dd>{{ .Page.Type }}</dd></div>
+          <div><dt>Slug</dt><dd>{{ .Page.Slug }}</dd></div>
+          <div><dt>Language</dt><dd>{{ .Page.Lang }}</dd></div>
+          {{ pluginSlot "post.sidebar.overview" }}
+        </dl>
+      </section>
+
+      {{ template "taxonomy_chips" . }} {{ pluginSlot "post.sidebar.bottom" }}
+    </aside>
+  </div>
+</section>
+{{ end }}
