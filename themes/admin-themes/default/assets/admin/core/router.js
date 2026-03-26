@@ -1,13 +1,22 @@
+const sectionPathAliases = {
+  extensions: 'a-extensions',
+};
+
+const sectionFromPathAliases = Object.fromEntries(
+  Object.entries(sectionPathAliases).map(([section, path]) => [path, section])
+);
+
 export const normalizeAdminSection = (section) => {
   const value = String(section || 'overview')
     .trim()
     .replace(/^\/+|\/+$/g, '');
-  return value || 'overview';
+  return sectionFromPathAliases[value] || value || 'overview';
 };
 
 export const adminPathForSection = (adminBase, section) => {
   const normalized = normalizeAdminSection(section);
-  return normalized === 'overview' ? adminBase : `${adminBase}/${normalized}`;
+  const pathSection = sectionPathAliases[normalized] || normalized;
+  return normalized === 'overview' ? adminBase : `${adminBase}/${pathSection}`;
 };
 
 export const createSectionForPath = (adminBase) => {

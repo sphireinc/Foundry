@@ -267,6 +267,9 @@ import {
     mount.dataset.extensionStatus = 'loading';
     try {
       const mod = await loadExtensionModule(page);
+      state.extensionRuntimeErrors = state.extensionRuntimeErrors.filter(
+        (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
+      );
       const mountFn = mod?.mountAdminExtensionPage || mod?.default;
       if (typeof mountFn === 'function') {
         await mountFn({
@@ -287,6 +290,17 @@ import {
       }
     } catch (error) {
       mount.dataset.extensionStatus = 'error';
+      state.extensionRuntimeErrors = [
+        ...state.extensionRuntimeErrors.filter(
+          (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
+        ),
+        {
+          kind: 'page',
+          plugin: page.plugin,
+          key: page.key,
+          message: error?.message || String(error),
+        },
+      ];
       mount.innerHTML = `<div class="error">Failed to load plugin admin page bundle: ${escapeHTML(error?.message || String(error))}</div>`;
     }
   };
@@ -306,6 +320,15 @@ import {
         mount.dataset.extensionStatus = 'loading';
         try {
           const mod = await loadExtensionModule(widget);
+          state.extensionRuntimeErrors = state.extensionRuntimeErrors.filter(
+            (entry) =>
+              !(
+                entry.kind === 'widget' &&
+                entry.plugin === widget.plugin &&
+                entry.key === widget.key &&
+                entry.slot === widget.slot
+              )
+          );
           const mountFn = mod?.mountAdminExtensionWidget || mod?.default;
           document.dispatchEvent(
             new CustomEvent('foundry:admin-extension-widget', {
@@ -335,6 +358,24 @@ import {
           }
         } catch (error) {
           mount.dataset.extensionStatus = 'error';
+          state.extensionRuntimeErrors = [
+            ...state.extensionRuntimeErrors.filter(
+              (entry) =>
+                !(
+                  entry.kind === 'widget' &&
+                  entry.plugin === widget.plugin &&
+                  entry.key === widget.key &&
+                  entry.slot === widget.slot
+                )
+            ),
+            {
+              kind: 'widget',
+              plugin: widget.plugin,
+              key: widget.key,
+              slot: widget.slot,
+              message: error?.message || String(error),
+            },
+          ];
           mount.innerHTML = `<div class="error">Failed to load plugin admin widget bundle: ${escapeHTML(error?.message || String(error))}</div>`;
         }
       })
@@ -470,7 +511,11 @@ import {
     if (!node) return fallback;
     const raw = String(node.value || '').trim();
     if (!raw) return fallback;
-    return JSON.parse(raw);
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      throw new Error(`${node.id}: ${error.message}`);
+    }
   };
 
   const collectSettingsFormPayload = () => {
@@ -617,8 +662,10 @@ import {
     if (!document.getElementById('settings-structured-form')) return;
     try {
       state.settingsForm = collectSettingsFormPayload();
+      state.settingsDraftError = '';
       compareSnapshot('settings', state.settingsForm);
-    } catch (_error) {
+    } catch (error) {
+      state.settingsDraftError = error.message || String(error);
     }
   };
 
@@ -877,7 +924,46 @@ import {
   };
 
   const renderDocuments = () => {
-    const sortedDocuments = sortItems(state.documents, 'documents', (doc, field) => {
+    const filteredDocuments = (state.documents || []).filter((doc) => {
+      const filters = state.documentFilters || {};
+      if (filters.status && documentStatusLabel(doc) !== filters.status) return false;
+      if (filters.type && doc.type !== filters.type) return false;
+      if (filters.lang && doc.lang !== filters.lang) return false;
+      if (
+        filters.author &&
+        !String(doc.author || '').toLowerCase().includes(String(filters.author).toLowerCase())
+      ) {
+        return false;
+      }
+      if (
+        filters.tag &&
+        !(doc.taxonomies?.tags || [])
+          .map((entry) => String(entry).toLowerCase())
+          .includes(String(filters.tag).toLowerCase())
+      ) {
+        return false;
+      }
+      if (
+        filters.category &&
+        !(doc.taxonomies?.categories || [])
+          .map((entry) => String(entry).toLowerCase())
+          .includes(String(filters.category).toLowerCase())
+      ) {
+        return false;
+      }
+      if (filters.dateFrom || filters.dateTo) {
+        const docDate = doc.date ? new Date(doc.date) : null;
+        if (!docDate || Number.isNaN(docDate.getTime())) return false;
+        if (filters.dateFrom && docDate < new Date(filters.dateFrom)) return false;
+        if (filters.dateTo) {
+          const upper = new Date(filters.dateTo);
+          upper.setHours(23, 59, 59, 999);
+          if (docDate > upper) return false;
+        }
+      }
+      return true;
+    });
+    const sortedDocuments = sortItems(filteredDocuments, 'documents', (doc, field) => {
       switch (field) {
         case 'type':
           return doc.type;
@@ -890,10 +976,11 @@ import {
       }
     });
     const pagedDocuments = paginateItems(sortedDocuments, 'documents');
+    const selectedDocCount = state.selectedDocuments.length;
     const rows = pagedDocuments.items.map(
       (doc) => `
       <div class="table-row table-row-actions">
-        <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong><div class="muted mono">${escapeHTML(doc.source_path)}</div></span>
+        <span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-document="${escapeHTML(doc.source_path)}" ${state.selectedDocuments.includes(doc.source_path) ? 'checked' : ''}><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></label><div class="muted mono">${escapeHTML(doc.source_path)}</div><div class="muted">Author ${escapeHTML(doc.author || '-')} • ${escapeHTML(doc.lang || '-')}</div>${!doc.summary ? '<div class="muted">Missing summary</div>' : ''}${!doc.author ? '<div class="muted">Missing author attribution</div>' : ''}</span>
         <span>${escapeHTML(doc.type)}</span>
         <span>${escapeHTML(documentStatusLabel(doc))}</span>
         <span class="row-actions">
@@ -939,6 +1026,16 @@ import {
             `
             <form id="document-search-form" class="panel-pad stack">
               <label>Search Documents<input id="document-search-query" type="search" value="${escapeHTML(state.documentQuery)}" placeholder="Search title, slug, URL, summary, tags, or path"></label>
+              <div class="frontmatter-grid">
+                <label>Status<select id="document-filter-status"><option value="">Any</option>${['Draft','In Review','Scheduled','Published','Archived'].map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Type<select id="document-filter-type"><option value="">Any</option>${Array.from(new Set((state.documents || []).map((doc) => doc.type).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.type === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Language<select id="document-filter-lang"><option value="">Any</option>${Array.from(new Set((state.documents || []).map((doc) => doc.lang).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.lang === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Author<input id="document-filter-author" type="text" value="${escapeHTML(state.documentFilters.author || '')}" placeholder="Filter by author"></label>
+                <label>Tag<input id="document-filter-tag" type="text" value="${escapeHTML(state.documentFilters.tag || '')}" placeholder="Exact tag"></label>
+                <label>Category<input id="document-filter-category" type="text" value="${escapeHTML(state.documentFilters.category || '')}" placeholder="Exact category"></label>
+                <label>Date From<input id="document-filter-date-from" type="date" value="${escapeHTML(state.documentFilters.dateFrom || '')}"></label>
+                <label>Date To<input id="document-filter-date-to" type="date" value="${escapeHTML(state.documentFilters.dateTo || '')}"></label>
+              </div>
               <div class="toolbar">
                 <button type="submit">Search</button>
                 <button type="button" class="ghost" id="document-search-clear">Clear</button>
@@ -948,7 +1045,24 @@ import {
           `,
             'Keep management here, then jump into Editor to write'
           )}
-          ${panel('Documents', `${renderTableControls(state, 'documents', state.documents.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search. Try a broader query or create a new page/post.</div>'}</div>`, `${state.documents.length} documents`)}
+          ${panel('Bulk Editorial Actions', `
+            <div class="panel-pad stack">
+              <div class="note">${selectedDocCount ? `${escapeHTML(selectedDocCount)} documents selected.` : 'Select documents from the list to run bulk editorial actions.'}</div>
+              <div class="frontmatter-grid">
+                <label>Status<select id="document-bulk-status"><option value="">No change</option>${['draft','in_review','scheduled','published','archived'].map((entry) => `<option value="${entry}" ${state.documentBulk.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Author<input id="document-bulk-author" type="text" value="${escapeHTML(state.documentBulk.author || '')}" placeholder="Set author"></label>
+                <label>Language<input id="document-bulk-lang" type="text" value="${escapeHTML(state.documentBulk.lang || '')}" placeholder="Set lang"></label>
+                <label>Tags<input id="document-bulk-tags" type="text" value="${escapeHTML(state.documentBulk.tags || '')}" placeholder="append tags"></label>
+                <label>Categories<input id="document-bulk-categories" type="text" value="${escapeHTML(state.documentBulk.categories || '')}" placeholder="append categories"></label>
+              </div>
+              <div class="toolbar">
+                <button type="button" id="document-select-all-visible">Select Visible</button>
+                <button type="button" class="ghost" id="document-clear-selection">Clear Selection</button>
+                <button type="button" class="ghost" id="document-bulk-apply" ${selectedDocCount ? '' : 'disabled'}>Apply Bulk Changes</button>
+              </div>
+            </div>`,
+            'Workflow, taxonomy, language, and author updates for selected documents')}
+          ${panel('Documents', `${renderTableControls(state, 'documents', filteredDocuments.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search or filters. Try a broader query, clear filters, or create a new page/post.</div>'}</div>`, `${filteredDocuments.length} matching documents`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed`)}
         </div>
         <div class="stack">
@@ -967,6 +1081,16 @@ import {
       </div>
       <div class="stack">
         ${panel(
+          'Inline Preview',
+          state.documentPreview
+            ? `<div class="panel-pad stack preview-body">
+                ${state.documentPreview.field_errors?.length ? `<div class="warning-panel panel"><div class="panel-pad"><strong>Field Validation</strong><div class="mini-list">${state.documentPreview.field_errors.map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div></div></div>` : ''}
+                ${renderPreviewFrame(state.documentPreview.html)}
+              </div>`
+            : '<div class="panel-pad empty-state">Use Preview while editing to keep the authoring loop inside Editor.</div>',
+          'Preview now lives in Editor as well as Documents'
+        )}
+        ${panel(
           'Editor Status',
           `
           <div class="panel-pad stack">
@@ -974,6 +1098,7 @@ import {
             <div class="status-line"><strong>Current Status:</strong> <span>${escapeHTML(documentStatusLabel({ status: state.documentMeta.status || 'draft' }))}</span></div>
             <div class="status-line"><strong>Author:</strong> <span>${escapeHTML(state.documentMeta.author || 'Unassigned')}</span></div>
             <div class="status-line"><strong>Last Editor:</strong> <span>${escapeHTML(state.documentMeta.last_editor || 'Unassigned')}</span></div>
+            <div class="note"><strong>Publishing flow:</strong> draft -> in review -> scheduled/published -> archived. Publishing and scheduling actions now prompt with a summary before save.</div>
             <div class="toolbar">
               <button type="button" class="ghost" data-open-documents>Open Documents</button>
               <button type="button" class="ghost" id="editor-preview-documents">Show Preview on Documents</button>
@@ -986,7 +1111,15 @@ import {
     </div>`;
 
   const renderMedia = () => {
-    const sortedMedia = sortItems(state.media, 'media', (item, field) => {
+    const filteredMedia = (state.media || []).filter((item) => {
+      const filters = state.mediaFilters || {};
+      if (filters.kind && item.kind !== filters.kind) return false;
+      if (filters.collection && item.collection !== filters.collection) return false;
+      if (filters.usage === 'used' && !(item.used_by_count > 0)) return false;
+      if (filters.usage === 'unused' && item.used_by_count > 0) return false;
+      return true;
+    });
+    const sortedMedia = sortItems(filteredMedia, 'media', (item, field) => {
       switch (field) {
         case 'kind':
           return item.kind;
@@ -997,10 +1130,19 @@ import {
       }
     });
     const pagedMedia = paginateItems(sortedMedia, 'media');
+    const duplicateHashes = Object.entries(
+      (state.media || []).reduce((acc, item) => {
+        const key = item.metadata?.content_hash || '';
+        if (!key) return acc;
+        acc[key] = acc[key] || [];
+        acc[key].push(item.reference);
+        return acc;
+      }, {})
+    ).filter(([, refs]) => refs.length > 1);
     const rows = pagedMedia.items.map(
       (item) => `
       <div class="table-row table-row-actions">
-        <span class="media-library-cell">${mediaThumb(item)}<span><strong>${escapeHTML(item.name)}</strong><div class="muted mono">${escapeHTML(item.reference)}</div></span></span>
+        <span class="media-library-cell">${mediaThumb(item)}<span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-media-library="${escapeHTML(item.reference)}" ${state.selectedMediaLibrary.includes(item.reference) ? 'checked' : ''}><strong>${escapeHTML(item.name)}</strong></label><div class="muted mono">${escapeHTML(item.reference)}</div><div class="muted">Used by ${escapeHTML(String(item.used_by_count || 0))} document(s)</div></span></span>
         <span>${escapeHTML(item.kind)}</span>
         <span>${escapeHTML(item.metadata?.title || item.metadata?.alt || '')}</span>
         <span class="row-actions">
@@ -1025,6 +1167,11 @@ import {
             `
             <form id="media-upload-form" class="panel-pad stack">
               <label>Search Library<input id="media-search-query" type="search" value="${escapeHTML(state.mediaQuery)}" placeholder="Search name, reference, metadata, or tags"></label>
+              <div class="frontmatter-grid">
+                <label>Kind<select id="media-filter-kind"><option value="">Any</option>${Array.from(new Set((state.media || []).map((item) => item.kind).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.mediaFilters.kind === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Collection<select id="media-filter-collection"><option value="">Any</option>${Array.from(new Set((state.media || []).map((item) => item.collection).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.mediaFilters.collection === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Usage<select id="media-filter-usage"><option value="">Any</option><option value="used" ${state.mediaFilters.usage === 'used' ? 'selected' : ''}>Used</option><option value="unused" ${state.mediaFilters.usage === 'unused' ? 'selected' : ''}>Unused</option></select></label>
+              </div>
               <label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="videos">videos</option><option value="audio">audio</option><option value="documents">documents</option></select></label>
               <!-- Directory uploads remain supported by the backend, but the default admin theme intentionally hides this field to avoid path confusion in the UI. -->
               <label>File<input id="media-file" type="file"></label>
@@ -1035,9 +1182,22 @@ import {
               </div>
             </form>
           `,
-            'Uploads return stable media: references that can be used in Markdown'
+          'Uploads return stable media: references that can be used in Markdown'
           )}
-          ${panel('Library', `${renderTableControls(state, 'media', state.media.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media matched the current search. Upload a file or clear the filter.</div>'}</div>`, `${state.media.length} media items`)}
+          ${panel('Bulk Media Actions', `
+            <div class="panel-pad stack">
+              <div class="note">${state.selectedMediaLibrary.length ? `${escapeHTML(state.selectedMediaLibrary.length)} media items selected.` : 'Select media from the library to apply bulk tags.'}</div>
+              <div class="frontmatter-grid">
+                <label>Append Tags<input id="media-bulk-tags" type="text" value="${escapeHTML(state.mediaBulkTags || '')}" placeholder="campaign, featured"></label>
+              </div>
+              <div class="toolbar">
+                <button type="button" id="media-select-all-visible">Select Visible</button>
+                <button type="button" class="ghost" id="media-clear-selection">Clear Selection</button>
+                <button type="button" class="ghost" id="media-bulk-apply" ${state.selectedMediaLibrary.length ? '' : 'disabled'}>Apply Tags</button>
+              </div>
+            </div>`,
+            'Bulk tag updates for selected media')}
+          ${panel('Library', `${renderTableControls(state, 'media', filteredMedia.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media matched the current search or filters. Upload a file or clear the filters.</div>'}</div>`, `${filteredMedia.length} matching media items`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed`)}
         </div>
         <div class="stack">
@@ -1053,6 +1213,13 @@ import {
                 <div class="status-line"><strong>Type:</strong> <span class="mono">${escapeHTML(metadata.mime_type || detail?.kind || '')}</span></div>
                 <div class="status-line"><strong>Hash:</strong> <span class="mono">${escapeHTML(metadata.content_hash || '')}</span></div>
                 <div class="status-line"><strong>Size:</strong> <span class="mono">${escapeHTML(String(metadata.file_size || detail?.size || ''))}</span></div>
+                <div class="status-line"><strong>Dimensions:</strong> <span class="mono">${escapeHTML(
+                  metadata.width && metadata.height
+                    ? `${metadata.width} x ${metadata.height}`
+                    : 'n/a'
+                )}</span></div>
+                <div class="status-line"><strong>Used by:</strong> <span class="mono">${escapeHTML(String(detail?.used_by?.length || detail?.used_by_count || 0))}</span></div>
+                <div class="status-line"><strong>Duplicate references:</strong> <span class="mono">${escapeHTML(String((duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).length > 1 ? (duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).join(', ') : 'none'))}</span></div>
                 <div class="status-line"><strong>Uploaded:</strong> <span>${escapeHTML(metadata.uploaded_at ? formatDateTime(metadata.uploaded_at) : '')}</span></div>
                 <div class="status-line"><strong>Uploaded by:</strong> <span>${escapeHTML(metadata.uploaded_by || '')}</span></div>
               </div>
@@ -1063,6 +1230,8 @@ import {
                 <label>Description<textarea id="media-description" rows="5">${escapeHTML(metadata.description || '')}</textarea></label>
                 <label>Credit<input id="media-credit" type="text" value="${escapeHTML(metadata.credit || '')}"></label>
                 <label>Tags<input id="media-tags" type="text" value="${escapeHTML((metadata.tags || []).join(', '))}" placeholder="product, hero, launch"></label>
+                <label>Focal Point X<input id="media-focal-x" type="text" value="${escapeHTML(String(metadata.focal_x || ''))}" placeholder="0.5"></label>
+                <label>Focal Point Y<input id="media-focal-y" type="text" value="${escapeHTML(String(metadata.focal_y || ''))}" placeholder="0.5"></label>
                 <label>Version Comment<input id="media-version-comment" type="text" value="${escapeHTML(state.mediaVersionComment || '')}" placeholder="Explain what changed in this metadata revision"></label>
                 <label>Replace File<input id="media-replace-file" type="file" ${detail ? '' : 'disabled'}></label>
                 <div class="toolbar">
@@ -1074,6 +1243,7 @@ import {
           `,
             'Metadata is stored beside the file as .meta.yaml'
           )}
+          ${panel('Duplicate Content Hashes', duplicateHashes.length ? `<div class="table table-two"><div class="table-head"><span>Hash</span><span>References</span></div>${duplicateHashes.map(([hash, refs]) => `<div class="table-row"><span class="mono">${escapeHTML(hash)}</span><span class="muted">${escapeHTML(refs.join(', '))}</span></div>`).join('')}</div>` : '<div class="panel-pad empty-state">No duplicate media hashes detected in the current library snapshot.</div>', 'Hash-level duplicate detection for DAM hygiene')}
           ${panel(
             'Used By',
             `
@@ -1136,7 +1306,26 @@ import {
       'Audit Log',
       `
     ${(() => {
-      const sortedAudit = sortItems(state.audit, 'audit', (entry, field) => {
+      const filters = state.auditFilters || {};
+      const filteredAudit = (state.audit || []).filter((entry) => {
+        if (
+          filters.actor &&
+          !String(entry.actor || '').toLowerCase().includes(String(filters.actor).toLowerCase())
+        )
+          return false;
+        if (
+          filters.action &&
+          !String(entry.action || '').toLowerCase().includes(String(filters.action).toLowerCase())
+        )
+          return false;
+        if (
+          filters.outcome &&
+          String(entry.outcome || '').toLowerCase() !== String(filters.outcome).toLowerCase()
+        )
+          return false;
+        return true;
+      });
+      const sortedAudit = sortItems(filteredAudit, 'audit', (entry, field) => {
         switch (field) {
           case 'action':
             return entry.action;
@@ -1149,7 +1338,14 @@ import {
         }
       });
       const pagedAudit = paginateItems(sortedAudit, 'audit');
-      return `${renderTableControls(state, 'audit', state.audit.length, pagedAudit.totalPages)}
+      return `<div class="panel-pad stack">
+        <div class="frontmatter-grid">
+          <label>Actor<input id="audit-filter-actor" type="text" value="${escapeHTML(filters.actor || '')}" placeholder="actor"></label>
+          <label>Action<input id="audit-filter-action" type="text" value="${escapeHTML(filters.action || '')}" placeholder="action"></label>
+          <label>Outcome<select id="audit-filter-outcome"><option value="">Any</option><option value="success" ${filters.outcome === 'success' ? 'selected' : ''}>success</option><option value="fail" ${filters.outcome === 'fail' ? 'selected' : ''}>fail</option></select></label>
+          <div class="toolbar"><button type="button" class="ghost" id="audit-filter-apply">Apply Filters</button><button type="button" class="ghost" id="audit-filter-clear">Clear</button></div>
+        </div>
+      </div>${renderTableControls(state, 'audit', filteredAudit.length, pagedAudit.totalPages)}
     <div class="table table-four">
       <div class="table-head"><span>Action</span><span>Actor</span><span>Outcome</span><span>Details</span></div>
       ${
@@ -1169,7 +1365,7 @@ import {
       }
     </div>`;
     })()}`,
-      `${state.audit.length} recent events`
+      `${(state.audit || []).length} recent events`
     );
 
   const formatBytes = (value) => {
@@ -1391,6 +1587,26 @@ import {
             'Reference health, route safety, and recent admin activity'
           )}
           ${panel(
+            'Site Validation',
+            state.siteValidation
+              ? `<div class="panel-pad stack">
+                <div class="toolbar">
+                  <button type="button" class="ghost" id="debug-validate-site">Run Validation</button>
+                </div>
+                <div class="cards">
+                  <article class="card"><span class="card-label">Findings</span><strong>${escapeHTML(String(state.siteValidation.message_count || 0))}</strong><span class="card-copy">Latest on-demand site validation result.</span></article>
+                </div>
+                <div class="debug-grid-two">
+                  <div><h3>Broken Media</h3>${state.siteValidation.broken_media_refs?.length ? `<div class="mini-list">${state.siteValidation.broken_media_refs.slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No broken media refs.</div>'}</div>
+                  <div><h3>Broken Links</h3>${state.siteValidation.broken_internal_links?.length ? `<div class="mini-list">${state.siteValidation.broken_internal_links.slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No broken internal links.</div>'}</div>
+                  <div><h3>Templates & Routes</h3>${[...(state.siteValidation.missing_templates || []), ...(state.siteValidation.duplicate_urls || []), ...(state.siteValidation.duplicate_slugs || [])].length ? `<div class="mini-list">${[...(state.siteValidation.missing_templates || []), ...(state.siteValidation.duplicate_urls || []), ...(state.siteValidation.duplicate_slugs || [])].slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No template or route issues.</div>'}</div>
+                  <div><h3>Other</h3>${[...(state.siteValidation.orphaned_media || []), ...(state.siteValidation.taxonomy_inconsistency || [])].length ? `<div class="mini-list">${[...(state.siteValidation.orphaned_media || []), ...(state.siteValidation.taxonomy_inconsistency || [])].slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No orphaned media or taxonomy issues.</div>'}</div>
+                </div>
+              </div>`
+              : `<div class="panel-pad stack"><div class="note">Run a full validation pass from the admin to surface broken references, duplicate routes/slugs, missing templates, orphaned media, and taxonomy inconsistencies.</div><div class="toolbar"><button type="button" class="ghost" id="debug-validate-site">Run Validation</button></div></div>`,
+            'On-demand validation without leaving the admin'
+          )}
+          ${panel(
             'pprof Profiles',
             `<div class="panel-pad stack">
             <p class="muted">Inspect live runtime state from the admin surface. These endpoints are served through Go\'s standard <code>net/http/pprof</code> handlers.</p>
@@ -1423,6 +1639,7 @@ import {
       { id: 'goto-users', label: 'Go to Users', action: () => navigate('users') },
       { id: 'goto-audit', label: 'Go to Audit', action: () => navigate('audit') },
       { id: 'goto-settings', label: 'Go to Settings', action: () => navigate('settings') },
+      { id: 'goto-extensions', label: 'Go to Extensions', action: () => navigate('extensions') },
       { id: 'goto-plugins', label: 'Go to Plugins', action: () => navigate('plugins') },
       { id: 'goto-themes', label: 'Go to Themes', action: () => navigate('themes') },
       {
@@ -1545,6 +1762,7 @@ import {
               <label>Email<input id="user-email" autocomplete="off" type="email" value="${escapeHTML(state.userForm.email)}" placeholder="editor@example.com"></label>
               <label>Role<input id="user-role" autocomplete="off" type="text" value="${escapeHTML(state.userForm.role)}" placeholder="editor"></label>
               <label>Password<input id="user-password" autocomplete="new-password" type="password" value="" placeholder="Leave blank to keep current password"></label>
+              <div class="note">Password policy: minimum ${escapeHTML(String(state.settingsForm?.Admin?.PasswordMinLength || 12))} characters. TOTP can be managed below for higher-assurance accounts.</div>
               <label class="checkbox"><input id="user-disabled" autocomplete="off" type="checkbox" ${state.userForm.disabled ? 'checked' : ''}> Disabled</label>
               <div class="toolbar">
                 <button type="submit">Save User</button>
@@ -1774,6 +1992,7 @@ import {
               ${renderSettingsCheckbox('settings-taxonomies-enabled', 'Enable Taxonomies', !!taxonomies.Enabled)}
               ${renderSettingsText('settings-taxonomies-default-set', 'Default Set', (taxonomies.DefaultSet || []).join(', '), { placeholder: 'tags, categories' })}
             </div>
+            <div class="note">Definitions JSON example: {"tags":{"label":"Tags","archive_layout":"list","order":"alpha"}}</div>
             ${renderSettingsTextarea('settings-taxonomies-definitions', 'Definitions JSON', settingsJSON(taxonomies.Definitions, '{}'), 18)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1786,6 +2005,7 @@ import {
               ${renderSettingsCheckbox('settings-fields-enabled', 'Enable Fields', !!fields.Enabled)}
               ${renderSettingsCheckbox('settings-fields-allow-anything', 'Allow Anything', !!fields.AllowAnything)}
             </div>
+            <div class="note">Schemas JSON example: {"post":[{"name":"summary","type":"text","required":true},{"name":"hero","type":"object","fields":[{"name":"caption","type":"text"}]}]}</div>
             ${renderSettingsTextarea('settings-fields-schemas', 'Schemas JSON', settingsJSON(fields.Schemas, '{}'), 18)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1794,6 +2014,7 @@ import {
         return {
           subtitle: topLevelSubtitleMap[activeTab],
           body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="note">Enabled plugins are stored as a JSON array of plugin names, for example ["readingtime","relatedposts"].</div>
             ${renderSettingsTextarea('settings-plugins-enabled', 'Enabled Plugins JSON Array', settingsJSON(pluginsCfg.Enabled || [], '[]'), 10)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1814,6 +2035,7 @@ import {
               ${renderSettingsText('settings-feed-rss-description', 'RSS Description', feed.RSSDescription)}
               ${renderSettingsText('settings-deploy-default-target', 'Default Deploy Target', deploy.DefaultTarget)}
             </div>
+            <div class="note">Deploy targets JSON example: {"production":{"kind":"local","path":"./public"}}.</div>
             ${renderSettingsTextarea('settings-deploy-targets', 'Deploy Targets JSON', settingsJSON(deploy.Targets, '{}'), 16)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1822,6 +2044,7 @@ import {
         return {
           subtitle: topLevelSubtitleMap[activeTab],
           body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="note">Permalinks, menus, and params stay fully editable here. Use JSON objects such as {"main":[{"name":"Home","url":"/"}]} for menus and {"company_name":"Foundry"} for params.</div>
             ${renderSettingsTextarea('settings-permalinks', 'Permalinks JSON', settingsJSON(cfg.Permalinks, '{}'), 10)}
             ${renderSettingsTextarea('settings-menus', 'Menus JSON', settingsJSON(cfg.Menus, '{}'), 14)}
             ${renderSettingsTextarea('settings-params', 'Params JSON', settingsJSON(cfg.Params, '{}'), 14)}
@@ -1909,13 +2132,18 @@ import {
             )
             .join('')}
         </div>
+        ${
+          state.settingsDraftError && activeTab !== 'config' && activeTab !== 'custom-css'
+            ? `<div class="note error">${escapeHTML(state.settingsDraftError)}</div>`
+            : ''
+        }
       </div>
       ${body}`,
       subtitle
     );
   };
 
-  const { renderPlugins, renderThemes } = createPlatformViews({
+  const { renderExtensions, renderPlugins, renderThemes } = createPlatformViews({
     state,
     panel,
     escapeHTML,
@@ -1949,6 +2177,8 @@ import {
       case 'settings':
       case 'config':
         return renderSettings();
+      case 'extensions':
+        return renderExtensions();
       case 'plugins':
         return renderPlugins();
       case 'themes':
@@ -2074,6 +2304,8 @@ import {
       resetUserSecurity,
       selectedUserRecord,
       parseTagInput,
+      parseDocumentEditor,
+      buildDocumentRaw,
       clone,
     });
 
@@ -2146,13 +2378,18 @@ import {
       event.preventDefault();
       try {
         state.settingsForm = collectSettingsFormPayload();
+        state.settingsDraftError = '';
         await admin.settings.saveForm({ value: state.settingsForm });
         setFlash('Settings saved.');
         snapshotValue('settings', state.settingsForm);
         await fetchAll(false);
         navigate('settings');
       } catch (error) {
-        state.error = error.message || String(error);
+        if (String(error.message || error).includes('settings-')) {
+          state.settingsDraftError = error.message || String(error);
+        } else {
+          state.error = error.message || String(error);
+        }
         render();
       }
     });

@@ -1,11 +1,16 @@
 package media
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -96,6 +101,8 @@ type UploadInfo struct {
 	Kind             Kind
 	ContentHash      string
 	Size             int64
+	Width            int
+	Height           int
 }
 
 func ResolveReference(ref string) (Reference, error) {
@@ -274,6 +281,7 @@ func PrepareUpload(requestedCollection, filename string, body []byte, now time.T
 	if err != nil {
 		return UploadInfo{}, err
 	}
+	dim := imageDimensions(body, kind)
 	return UploadInfo{
 		Collection:       collection,
 		OriginalFilename: filepath.Base(strings.TrimSpace(filename)),
@@ -284,7 +292,25 @@ func PrepareUpload(requestedCollection, filename string, body []byte, now time.T
 		Kind:             kind,
 		ContentHash:      ContentHash(body),
 		Size:             int64(len(body)),
+		Width:            dim.Width,
+		Height:           dim.Height,
 	}, nil
+}
+
+type dimensions struct {
+	Width  int
+	Height int
+}
+
+func imageDimensions(body []byte, kind Kind) dimensions {
+	if kind != KindImage || len(body) == 0 {
+		return dimensions{}
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(body))
+	if err != nil {
+		return dimensions{}
+	}
+	return dimensions{Width: cfg.Width, Height: cfg.Height}
 }
 
 func canonicalCollection(collection string) string {

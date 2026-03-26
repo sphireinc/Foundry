@@ -86,6 +86,30 @@ func (s *Service) GetRuntimeStatus(ctx context.Context) (*types.RuntimeStatus, e
 	return status, nil
 }
 
+func (s *Service) ValidateSite(ctx context.Context) (*types.SiteValidationResponse, error) {
+	graph, err := s.load(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	report := ops.AnalyzeSite(s.cfg, graph)
+	return &types.SiteValidationResponse{
+		BrokenMediaRefs:       append([]string(nil), report.BrokenMediaRefs...),
+		BrokenInternalLinks:   append([]string(nil), report.BrokenInternalLinks...),
+		MissingTemplates:      append([]string(nil), report.MissingTemplates...),
+		OrphanedMedia:         append([]string(nil), report.OrphanedMedia...),
+		DuplicateURLs:         append([]string(nil), report.DuplicateURLs...),
+		DuplicateSlugs:        append([]string(nil), report.DuplicateSlugs...),
+		TaxonomyInconsistency: append([]string(nil), report.TaxonomyInconsistency...),
+		MessageCount: len(report.BrokenMediaRefs) +
+			len(report.BrokenInternalLinks) +
+			len(report.MissingTemplates) +
+			len(report.OrphanedMedia) +
+			len(report.DuplicateURLs) +
+			len(report.DuplicateSlugs) +
+			len(report.TaxonomyInconsistency),
+	}, nil
+}
+
 func (s *Service) populateRuntimeGraphMetrics(ctx context.Context, status *types.RuntimeStatus) {
 	if s == nil || status == nil {
 		return

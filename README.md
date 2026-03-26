@@ -160,7 +160,7 @@ The shipped themes use these SDKs too:
 - the default admin theme imports the Admin SDK from `/__foundry/sdk/admin/index.js`
 - the default frontend theme boots a small SDK-based runtime from `/theme/js/foundry-theme.js`
 
-Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals.
+Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals. The built-in Extensions admin page itself uses a separate route, `<admin.path>/a-extensions`, so it does not collide with the plugin asset namespace.
 
 ## Quick start
 
@@ -729,3 +729,23 @@ go run ./cmd/plugin-sync
 ```
 
 The main CI workflow also verifies formatting, syncs generated plugin imports, builds the project, runs tests, and publishes the coverage report to GitHub Pages on `main`.
+
+
+# License
+
+Please see `LICENSE`, `LICENSE.PLUGIN.EXCEPTION`, and `LICENSE.THEMES.EXCEPTION` for full license information.
+
+```text
+Foundry includes additional permissions under AGPLv3 section 7 for
+third-party plugins and themes. Plugins, extensions, modules, themes,
+templates, skins, style packages, and similar customizations that work
+with Foundry solely through its documented public extension and theming
+interfaces are treated as separate and independent works. They are not
+subject to the AGPL solely because they interoperate with Foundry
+through those public interfaces, and their authors may license them
+under terms of their choice, including proprietary terms.
+
+These permissions do not apply to Foundry itself, to modifications of
+Foundry, to works based on non-public or internal interfaces, or to
+works that copy code from Foundry except as otherwise permitted.
+```
