@@ -1,0 +1,19 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="aq-masthead aq-page-masthead aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  <div class="aq-col aq-col-8 aq-col-t-6 aq-col-m-4">
+    <span class="aq-eyebrow">Page</span>
+    <h1 class="aq-display-lg">{{ .Page.Title }}</h1>
+    {{ if .Page.Summary }}
+    <p class="aq-lede">{{ .Page.Summary }}</p>
+    {{ end }}
+  </div>
+</section>
+
+<article class="aq-page-body aq-surface">
+  {{ pluginSlot "page.before_content" }}
+  <div class="aq-prose">{{ safeHTML .Page.HTMLBody }}</div>
+  {{ pluginSlot "page.after_content" }}
+</article>
+{{ end }}

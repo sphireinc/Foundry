@@ -1,0 +1,54 @@
+{{ define "header" }}
+<header class="forge-header">
+  <div class="forge-header-bar">
+    <a class="forge-brand" href="/">
+      <span class="forge-mark" aria-hidden="true"></span>
+      <span class="forge-brand-copy">
+        <span class="forge-brand-title">{{ .Site.Title }}</span>
+        <span class="forge-brand-subtitle">Forged for modern publishing</span>
+      </span>
+    </a>
+
+    <nav class="forge-nav" aria-label="Primary">
+      {{ range .Nav }}
+      <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
+      {{ end }}
+    </nav>
+
+    <button
+      class="search-launch"
+      type="button"
+      data-foundry-search-toggle
+      aria-expanded="false"
+      aria-controls="forge-search-panel"
+    >
+      Search
+    </button>
+  </div>
+
+  <div id="forge-search-panel" class="search-panel" hidden>
+    <form class="search-form" data-foundry-search-form data-result-target="header-search-results">
+      <label class="field">
+        <span class="field-label">Search Foundry content</span>
+        <div class="search-input-wrap">
+          <input
+            type="search"
+            name="q"
+            placeholder="Search articles, topics, and keywords"
+            autocomplete="off"
+            aria-label="Search site content"
+          />
+          <button type="submit" class="button button-primary">Run search</button>
+        </div>
+      </label>
+    </form>
+
+    <div
+      id="header-search-results"
+      class="search-results"
+      data-foundry-search-results
+      aria-live="polite"
+    ></div>
+  </div>
+</header>
+{{ end }}

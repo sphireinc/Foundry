@@ -1,0 +1,19 @@
+{{ define "taxonomy_chips" }} {{ with index .Page.Taxonomies "tags" }}
+<section class="panel side-panel">
+  <h3>Tags</h3>
+  <div class="tag-row">
+    {{ range . }}
+    <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
+    {{ end }}
+  </div>
+</section>
+{{ end }} {{ with index .Page.Taxonomies "categories" }}
+<section class="panel side-panel">
+  <h3>Categories</h3>
+  <div class="tag-row">
+    {{ range . }}
+    <a class="tag" href="/categories/{{ . }}/">{{ . }}</a>
+    {{ end }}
+  </div>
+</section>
+{{ end }} {{ end }}

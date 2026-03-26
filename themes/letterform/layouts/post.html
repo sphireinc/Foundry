@@ -1,0 +1,60 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="lf-frame lf-article-header">
+  {{ pluginSlot "post.before_header" }}
+  <div class="lf-kicker">Article</div>
+  <h1>{{ .Page.Title }}</h1>
+  {{ if .Page.Summary }}
+  <p class="lf-dek">{{ .Page.Summary }}</p>
+  {{ end }}
+  <div class="lf-meta-row">
+    {{ template "post_meta" . }}
+  </div>
+  {{ pluginSlot "post.after_header" }}
+</section>
+
+<section class="lf-reading-grid">
+  <aside class="lf-reading-rail">
+    {{ pluginSlot "post.sidebar.top" }}
+
+    <section class="lf-rail-module" data-lf-toc-panel hidden>
+      <h2>On This Page</h2>
+      <nav class="lf-toc" data-lf-toc></nav>
+    </section>
+
+    <section class="lf-rail-module">
+      <h2>Article Details</h2>
+      <div class="lf-rail-list">
+        <div><span>Type</span><strong>{{ .Page.Type }}</strong></div>
+        <div><span>Slug</span><strong>{{ .Page.Slug }}</strong></div>
+        <div><span>Language</span><strong>{{ .Page.Lang }}</strong></div>
+      </div>
+      {{ pluginSlot "post.sidebar.overview" }}
+    </section>
+  </aside>
+
+  <article class="lf-reading-frame lf-article-body">
+    {{ pluginSlot "post.before_content" }}
+    <div class="lf-prose" data-lf-article-prose>{{ safeHTML .Page.HTMLBody }}</div>
+    {{ pluginSlot "post.after_content" }}
+  </article>
+</section>
+
+<section class="lf-frame lf-afterword">
+  {{ template "author_block" . }}
+  <div class="lf-afterword-grid">
+    <div class="lf-continue-panel">
+      <div class="lf-kicker">Continue Reading</div>
+      <p>Use the archive paths below to stay inside the same conversation.</p>
+      <div class="lf-chip-row">{{ template "taxonomy_chips" . }}</div>
+    </div>
+
+    <div class="lf-marginal-note">
+      <div class="lf-kicker">Reading Note</div>
+      <p>Letterform keeps the supporting context below the essay, like an afterword, instead of surrounding the body with interface chrome.</p>
+    </div>
+  </div>
+  {{ pluginSlot "post.sidebar.bottom" }}
+</section>
+{{ end }}

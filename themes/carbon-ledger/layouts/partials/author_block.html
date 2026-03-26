@@ -1,0 +1,16 @@
+{{ define "author_block" }}
+<section class="surface author-block">
+  <div class="author-avatar">{{ if .Page.Author }}{{ slice .Page.Author 0 1 }}{{ else }}C{{ end }}</div>
+  <div class="author-copy">
+    <div class="eyebrow">Author</div>
+    <h2>{{ if .Page.Author }}{{ .Page.Author }}{{ else }}Carbon Ledger Editorial{{ end }}</h2>
+    <p>
+      {{ if .Page.LastEditor }}
+      Last edited by {{ .Page.LastEditor }}. Managed through Foundry CMS with a calm, enterprise-grade presentation layer.
+      {{ else }}
+      Published with Foundry CMS using a theme tuned for highly legible business and editorial content.
+      {{ end }}
+    </p>
+  </div>
+</section>
+{{ end }}

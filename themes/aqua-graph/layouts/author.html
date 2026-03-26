@@ -1,0 +1,31 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="aq-masthead aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  <div class="aq-col aq-col-8 aq-col-t-6 aq-col-m-4">
+    <span class="aq-eyebrow">Author</span>
+    <h1 class="aq-display-lg">{{ .Title }}</h1>
+    <p class="aq-lede">Author-oriented archive view for publications that organize content around contributors.</p>
+  </div>
+</section>
+
+<section class="aq-archive-grid aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+  {{ range .Documents }}
+  <article class="aq-col aq-col-4 aq-col-t-4 aq-col-m-4 aq-surface aq-archive-card">
+    <div class="aq-card-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ else }}
+  <div class="aq-col aq-col-12 aq-col-t-8 aq-col-m-4 aq-empty-state">
+    <h3>No author content yet</h3>
+    <p>Publish documents attributed to this author to populate the archive.</p>
+  </div>
+  {{ end }}
+</section>
+{{ end }}

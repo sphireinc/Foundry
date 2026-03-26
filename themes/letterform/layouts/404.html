@@ -1,0 +1,18 @@
+{{ define "content" }}
+<section class="lf-frame lf-page-header">
+  <div class="lf-kicker">404</div>
+  <h1>{{ .Title }}</h1>
+  <p class="lf-dek">The page <strong>{{ .RequestPath }}</strong> could not be found.</p>
+</section>
+
+<section class="lf-frame">
+  <div class="lf-empty-state">
+    <h3>Try another reading path</h3>
+    <p>Return home, browse the latest writing, or search the publication.</p>
+    <div class="lf-button-row">
+      <a class="lf-button" href="/">Home</a>
+      <a class="lf-button" href="/search/">Search</a>
+    </div>
+  </div>
+</section>
+{{ end }}

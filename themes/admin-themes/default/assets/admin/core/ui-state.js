@@ -94,7 +94,7 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
   const dirtyMessage = () =>
     Object.entries(state.dirty)
       .filter(([, value]) => value)
-      .map(([key]) => key)
+      .map(([key]) => ({ customCss: 'custom css', settings: 'settings form' }[key] || key))
       .join(', ');
 
   const hasUnsavedChanges = () => Object.values(state.dirty).some(Boolean);

@@ -172,6 +172,10 @@ type MenuItem struct {
 	URL  string `yaml:"url"`
 }
 
+func (c *Config) MarkAdminLocalOnlyExplicit() {
+	c.Admin.localOnlySet = true
+}
+
 func (c *Config) ApplyDefaults() {
 	if c.Name == "" {
 		c.Name = "foundry"

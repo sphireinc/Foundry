@@ -1,0 +1,584 @@
+:root {
+  --tomato: #f55d3e;
+  --olive: #878e88;
+  --amber: #f7cb15;
+  --white: #ffffff;
+  --sky: #76bed0;
+  --ink: #101315;
+  --soft-ink: #40484a;
+  --line: rgba(16, 19, 21, 0.12);
+  --line-strong: rgba(16, 19, 21, 0.24);
+  --shadow: 0 24px 60px rgba(16, 19, 21, 0.08);
+  --page-bg:
+    radial-gradient(circle at top right, rgba(118, 190, 208, 0.2), transparent 28%),
+    radial-gradient(circle at top left, rgba(245, 93, 62, 0.12), transparent 26%),
+    #fffdfa;
+  --font-display: "Sora", "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-body: "Manrope", "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --container: 1240px;
+  --content: 760px;
+  --radius-sm: 16px;
+  --radius-md: 24px;
+  --radius-lg: 36px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--page-bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.7;
+  text-rendering: optimizeLegibility;
+}
+
+img,
+video {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--tomato);
+}
+
+.tomato-shell {
+  min-height: 100vh;
+}
+
+.tomato-header {
+  padding: 1.5rem 1.4rem 0;
+}
+
+.tomato-header-inner,
+.tomato-frame,
+.tomato-footer-inner {
+  width: min(calc(100% - 2rem), var(--container));
+  margin: 0 auto;
+}
+
+.tomato-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.15rem 1.35rem;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(16, 19, 21, 0.08);
+  border-radius: 999px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px rgba(16, 19, 21, 0.04);
+}
+
+.tomato-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tomato-brand-mark {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 1rem;
+  background: var(--tomato);
+  color: var(--white);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  box-shadow: 0 18px 35px rgba(245, 93, 62, 0.28);
+}
+
+.tomato-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.tomato-brand-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-size: 1.05rem;
+}
+
+.tomato-brand-tagline {
+  color: var(--olive);
+  font-size: 0.8rem;
+}
+
+.tomato-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.tomato-nav a {
+  padding: 0.65rem 0.95rem;
+  border-radius: 999px;
+  color: var(--soft-ink);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.tomato-nav a:hover,
+.tomato-nav a.is-active {
+  background: rgba(245, 93, 62, 0.1);
+  color: var(--ink);
+}
+
+.tomato-main {
+  padding: 3.5rem 0 5rem;
+
+  /*width: 56% !important;*/
+  /*margin: auto !important;*/
+  /*margin-top: 40px !important;*/
+  /*margin-bottom: 40px !important;*/
+}
+
+.hero-band {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.72fr);
+  gap: 2rem;
+  align-items: start;
+  padding: 1rem 0 4.5rem;
+}
+
+.hero-copy h1,
+.page-hero h1,
+.post-hero h1,
+.archive-hero h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  line-height: 0.96;
+}
+
+.hero-copy h1 {
+  max-width: 9ch;
+  font-size: clamp(3.8rem, 11vw, 7.4rem);
+}
+
+.hero-kicker,
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+  padding: 0.38rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(247, 203, 21, 0.2);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-summary,
+.page-intro {
+  max-width: 40rem;
+  margin: 1.75rem 0 0;
+  color: var(--soft-ink);
+  font-size: 1.16rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.3rem;
+  padding: 0.9rem 1.35rem;
+  border-radius: 999px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.button-primary {
+  background: var(--tomato);
+  color: var(--white);
+  box-shadow: 0 18px 35px rgba(245, 93, 62, 0.22);
+}
+
+.button-primary:hover {
+  color: var(--white);
+  transform: translateY(-1px);
+}
+
+.button-secondary {
+  background: rgba(118, 190, 208, 0.16);
+  border: 1px solid rgba(118, 190, 208, 0.38);
+}
+
+.hero-aside {
+  display: grid;
+  gap: 1rem;
+}
+
+.metric-card,
+.story-card,
+.page-panel,
+.aside-card,
+.archive-card,
+.empty-panel {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+}
+
+.metric-card {
+  padding: 1.25rem 1.3rem;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 0.3rem;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  letter-spacing: -0.05em;
+}
+
+.metric-label {
+  color: var(--olive);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metric-card--tomato {
+  background: linear-gradient(180deg, rgba(245, 93, 62, 0.12), rgba(255, 255, 255, 0.92));
+}
+
+.metric-card--sky {
+  background: linear-gradient(180deg, rgba(118, 190, 208, 0.14), rgba(255, 255, 255, 0.92));
+}
+
+.metric-card--amber {
+  background: linear-gradient(180deg, rgba(247, 203, 21, 0.16), rgba(255, 255, 255, 0.92));
+}
+
+.home-grid {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.section-lead {
+  max-width: 48rem;
+  padding-bottom: 1rem;
+}
+
+.section-lead h2 {
+  margin: 0.45rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  letter-spacing: -0.05em;
+}
+
+.section-lead p {
+  margin: 0.9rem 0 0;
+  color: var(--soft-ink);
+}
+
+.story-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.story-card,
+.archive-card {
+  padding: 1.45rem;
+}
+
+.story-card h3,
+.archive-card h2 {
+  margin: 0.8rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.story-card p,
+.archive-card p {
+  margin: 0.9rem 0 0;
+  color: var(--soft-ink);
+}
+
+.story-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  color: var(--olive);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.story-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+}
+
+.story-link {
+  font-weight: 800;
+  color: var(--tomato);
+}
+
+.chip-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.chip,
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(135, 142, 136, 0.1);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pill {
+  background: rgba(118, 190, 208, 0.12);
+}
+
+.page-hero,
+.post-hero,
+.archive-hero {
+  max-width: min(100%, 54rem);
+  padding: 0.5rem 0 2rem;
+}
+
+.page-hero h1,
+.post-hero h1,
+.archive-hero h1 {
+  font-size: clamp(2.8rem, 6vw, 5rem);
+}
+
+.page-panel {
+  max-width: min(100%, 56rem);
+  padding: 2rem 2.2rem;
+}
+
+.post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 2rem;
+}
+
+.post-pills {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 1.35rem;
+}
+
+.post-aside {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.aside-card {
+  padding: 1.25rem;
+}
+
+.aside-card h3 {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: -0.03em;
+}
+
+.overview-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+}
+
+.overview-list div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.overview-list dt {
+  color: var(--olive);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.overview-list dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.archive-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.empty-panel {
+  padding: 2rem;
+  color: var(--soft-ink);
+}
+
+.tomato-prose {
+  max-width: var(--content);
+  font-size: 1.08rem;
+}
+
+.tomato-prose > *:first-child {
+  margin-top: 0;
+}
+
+.tomato-prose h2,
+.tomato-prose h3,
+.tomato-prose h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.04em;
+  line-height: 1.06;
+}
+
+.tomato-prose h2 {
+  margin-top: 2.7rem;
+  font-size: 2.2rem;
+}
+
+.tomato-prose h3 {
+  margin-top: 2rem;
+  font-size: 1.6rem;
+}
+
+.tomato-prose p,
+.tomato-prose ul,
+.tomato-prose ol,
+.tomato-prose blockquote {
+  margin: 1.1rem 0;
+}
+
+.tomato-prose blockquote {
+  margin-left: 0;
+  padding: 1.25rem 1.4rem;
+  border-left: 4px solid var(--tomato);
+  background: rgba(245, 93, 62, 0.06);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--soft-ink);
+}
+
+.tomato-prose pre,
+.tomato-prose code {
+  font-family:
+    "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.tomato-prose pre {
+  overflow-x: auto;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-sm);
+  background: #161b1d;
+  color: #f3f6f8;
+}
+
+.tomato-footer {
+  padding: 1rem 1.4rem 2.5rem;
+}
+
+.tomato-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1.4rem 1.5rem;
+  border-top: 1px solid var(--line-strong);
+  color: var(--soft-ink);
+}
+
+.tomato-footer-inner p {
+  margin: 0.35rem 0 0;
+}
+
+.footer-links {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-weight: 700;
+}
+
+@media (max-width: 980px) {
+  .hero-band,
+  .post-layout,
+  .story-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tomato-header-inner {
+    border-radius: 1.6rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .tomato-header {
+    padding-inline: 0.8rem;
+  }
+
+  .tomato-header-inner,
+  .tomato-frame,
+  .tomato-footer-inner {
+    width: min(calc(100% - 1rem), var(--container));
+  }
+
+  .tomato-header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(3rem, 16vw, 4.6rem);
+  }
+
+  .page-panel,
+  .story-card,
+  .archive-card {
+    padding: 1.25rem;
+  }
+}

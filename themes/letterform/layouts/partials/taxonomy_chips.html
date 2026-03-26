@@ -1,0 +1,9 @@
+{{ define "taxonomy_chips" }}
+{{ if .Page.Taxonomies }}
+  {{ range $taxonomy, $terms := .Page.Taxonomies }}
+    {{ range $terms }}
+    <a class="lf-chip" href="/{{ $taxonomy }}/{{ . }}/">{{ . }}</a>
+    {{ end }}
+  {{ end }}
+{{ end }}
+{{ end }}

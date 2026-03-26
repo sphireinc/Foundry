@@ -1,0 +1,54 @@
+{{ define "header" }}
+<header class="ledger-header">
+  <div class="ledger-header-bar">
+    <a class="ledger-brand" href="/">
+      <span class="ledger-brand-mark">CL</span>
+      <span class="ledger-brand-copy">
+        <span class="ledger-brand-title">{{ .Site.Title }}</span>
+        <span class="ledger-brand-subtitle">Premium Foundry publishing</span>
+      </span>
+    </a>
+
+    <nav class="ledger-nav" aria-label="Primary navigation">
+      {{ range .Nav }}
+      <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
+      {{ end }}
+    </nav>
+
+    <div class="ledger-actions">
+      <button class="button button-tertiary" type="button" data-ledger-search-open>Search</button>
+      <a class="button button-secondary" href="/__admin">Account</a>
+    </div>
+  </div>
+
+  <aside class="search-drawer" id="ledger-search-drawer" hidden aria-labelledby="ledger-search-title">
+    <div class="search-drawer-head">
+      <div>
+        <div class="eyebrow">Search</div>
+        <h2 id="ledger-search-title">Search Carbon Ledger</h2>
+      </div>
+      <button class="drawer-close" type="button" data-ledger-search-close aria-label="Close search panel">
+        Close
+      </button>
+    </div>
+
+    <form class="ledger-search-form" data-ledger-search-form data-result-target="drawer-search-results">
+      <label class="field">
+        <span class="field-label">Search all content</span>
+        <div class="field-row">
+          <input
+            type="search"
+            name="q"
+            placeholder="Search by title, topic, or summary"
+            autocomplete="off"
+            aria-label="Search all content"
+          />
+          <button class="button button-primary" type="submit">Search</button>
+        </div>
+      </label>
+    </form>
+
+    <div id="drawer-search-results" class="search-results" aria-live="polite"></div>
+  </aside>
+</header>
+{{ end }}

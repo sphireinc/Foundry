@@ -1,0 +1,35 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="bl-frame">
+  <div class="bl-author-hero bl-panel bl-panel-mint">
+    <div class="bl-author-avatar">{{ if .AuthorName }}{{ printf "%.1s" .AuthorName }}{{ end }}</div>
+    <div>
+      <div class="bl-kicker">Author</div>
+      <h1>{{ .AuthorName }}</h1>
+      <p class="bl-deck">A warm, profile-first archive of curated writing.</p>
+    </div>
+  </div>
+
+  <div class="bl-story-stack bl-story-stack-roomy">
+    {{ range .Documents }}
+    <article class="bl-card bl-card-feature">
+      <div class="bl-meta-row">
+        <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      {{ if .Summary }}
+      <p>{{ .Summary }}</p>
+      {{ end }}
+    </article>
+    {{ else }}
+    <div class="bl-empty-state bl-panel bl-panel-ghost">
+      <h3>No published writing yet</h3>
+      <p>This author archive is ready, but nothing published is attached to it yet.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

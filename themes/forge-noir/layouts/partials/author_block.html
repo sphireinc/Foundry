@@ -1,0 +1,16 @@
+{{ define "author_block" }}
+<section class="author-block panel">
+  <div class="author-avatar" aria-hidden="true">{{ if .Page.Author }}{{ slice .Page.Author 0 1 }}{{ else }}F{{ end }}</div>
+  <div class="author-copy">
+    <span class="eyebrow">Author</span>
+    <h2>{{ if .Page.Author }}{{ .Page.Author }}{{ else }}Foundry Editorial{{ end }}</h2>
+    <p>
+      {{ if .Page.LastEditor }}
+      Last edited by {{ .Page.LastEditor }}. This article is part of a publication stack built on Foundry CMS.
+      {{ else }}
+      Published through Foundry CMS with a layout tuned for dark editorial reading.
+      {{ end }}
+    </p>
+  </div>
+</section>
+{{ end }}

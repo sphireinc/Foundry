@@ -1,0 +1,28 @@
+{{ define "content" }}
+<section class="masthead masthead-archive">
+  <div class="kicker">Author</div>
+  <h1>{{ .AuthorName }}</h1>
+  <p class="lede">A dark archive of articles and pages attributed to this author.</p>
+</section>
+
+<section class="archive-stack">
+  {{ range .Documents }}
+  <article class="archive-card panel">
+    <div class="content-card-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ else }}
+  <div class="empty-panel">
+    <h3>No published work yet</h3>
+    <p>This author archive is ready, but there are no published documents attached to it yet.</p>
+  </div>
+  {{ end }}
+</section>
+{{ end }}

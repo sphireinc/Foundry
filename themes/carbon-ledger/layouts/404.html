@@ -1,0 +1,30 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="masthead">
+  <div class="eyebrow">404</div>
+  <h1>{{ .Title }}</h1>
+  <p class="lede">The path <strong>{{ .RequestPath }}</strong> does not map to a published document.</p>
+</section>
+
+<section class="archive-stack">
+  <article class="surface archive-card">
+    <div class="content-meta"><span>Recovery</span><span>Navigation</span></div>
+    <h2><a href="/">Return home</a></h2>
+    <p>Use the main navigation, search, or the recent content below to continue browsing.</p>
+  </article>
+
+  {{ range .Documents }}
+  <article class="surface archive-card">
+    <div class="content-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ end }}
+</section>
+{{ end }}

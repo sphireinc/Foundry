@@ -1,0 +1,10 @@
+{{ define "post_meta" }}
+<div class="post-pills">
+  {{ if .Page.Date }}
+  <span class="pill">Published {{ .Page.Date.Format "Jan 2, 2006" }}</span>
+  {{ end }} {{ if .Page.UpdatedAt }}
+  <span class="pill">Updated {{ .Page.UpdatedAt.Format "Jan 2, 2006" }}</span>
+  {{ end }}
+  <span class="pill">{{ .Page.Lang }}</span>
+</div>
+{{ end }}

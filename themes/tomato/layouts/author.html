@@ -1,0 +1,25 @@
+{{ define "content" }}
+<section class="archive-hero">
+  <span class="eyebrow">Author</span>
+  <h1>{{ .AuthorName }}</h1>
+  <p class="page-intro">A running archive of work attributed to this author.</p>
+</section>
+
+<div class="archive-stack">
+  {{ range .Documents }}
+  <article class="archive-card">
+    <div class="story-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ else }}
+  <div class="empty-panel">This author does not have published content yet.</div>
+  {{ end }}
+</div>
+{{ end }}

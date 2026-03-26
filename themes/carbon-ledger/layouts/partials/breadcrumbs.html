@@ -1,0 +1,13 @@
+{{ define "breadcrumbs" }}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Home</a>
+  <span>/</span>
+  {{ if .Page }}
+  <span>{{ if eq .Page.Type "post" }}Articles{{ else }}Pages{{ end }}</span>
+  <span>/</span>
+  <span aria-current="page">{{ .Page.Title }}</span>
+  {{ else }}
+  <span aria-current="page">{{ .Title }}</span>
+  {{ end }}
+</nav>
+{{ end }}

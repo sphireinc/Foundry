@@ -1,0 +1,25 @@
+{{ define "breadcrumbs" }}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Home</a>
+  <span>/</span>
+  {{ if .Page }}
+  <span>{{ if eq .Page.Type "post" }}Articles{{ else }}Pages{{ end }}</span>
+  <span>/</span>
+  <span aria-current="page">{{ .Page.Title }}</span>
+  {{ else if .TaxonomyName }}
+  <span>{{ .TaxonomyName }}</span>
+  {{ if .TaxonomyTerm }}
+  <span>/</span>
+  <span aria-current="page">{{ .TaxonomyTerm }}</span>
+  {{ end }}
+  {{ else if .AuthorName }}
+  <span>Authors</span>
+  <span>/</span>
+  <span aria-current="page">{{ .AuthorName }}</span>
+  {{ else if .SearchQuery }}
+  <span aria-current="page">Search</span>
+  {{ else }}
+  <span aria-current="page">{{ .Title }}</span>
+  {{ end }}
+</nav>
+{{ end }}

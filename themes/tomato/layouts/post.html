@@ -1,0 +1,38 @@
+{{ define "content" }}
+<div class="post-layout">
+  <section class="post-column">
+    {{ pluginSlot "post.before_header" }}
+    <header class="post-hero">
+      <span class="eyebrow">Post</span>
+      <h1>{{ .Page.Title }}</h1>
+      {{ if .Page.Summary }}
+      <p class="page-intro">{{ .Page.Summary }}</p>
+      {{ end }}
+      {{ template "post_meta" . }}
+    </header>
+    {{ pluginSlot "post.after_header" }}
+
+    <article class="page-panel">
+      {{ pluginSlot "post.before_content" }}
+      <div class="tomato-prose">{{ safeHTML .Page.HTMLBody }}</div>
+      {{ pluginSlot "post.after_content" }}
+    </article>
+  </section>
+
+  <aside class="post-aside">
+    {{ pluginSlot "post.sidebar.top" }}
+
+    <section class="aside-card">
+      <h3>Overview</h3>
+      <dl class="overview-list">
+        <div><dt>Type</dt><dd>{{ .Page.Type }}</dd></div>
+        <div><dt>Slug</dt><dd>{{ .Page.Slug }}</dd></div>
+        <div><dt>Language</dt><dd>{{ .Page.Lang }}</dd></div>
+      </dl>
+      {{ pluginSlot "post.sidebar.overview" }}
+    </section>
+
+    {{ template "taxonomy_chips" . }} {{ pluginSlot "post.sidebar.bottom" }}
+  </aside>
+</div>
+{{ end }}

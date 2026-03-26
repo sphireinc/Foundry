@@ -1,0 +1,32 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="ve-archive-hero ve-frame">
+  <div class="ve-kicker">Author</div>
+  <h1>{{ .AuthorName }}</h1>
+  <p class="ve-deck">A dedicated archive of stories and pages attributed to this author.</p>
+</section>
+
+<section class="ve-band ve-band-rust">
+  <div class="ve-frame ve-exhibit-stack">
+    {{ range .Documents }}
+    <article class="ve-archive-feature">
+      <div class="ve-meta-row">
+        <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+      <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+      {{ if .Summary }}
+      <p>{{ .Summary }}</p>
+      {{ end }}
+    </article>
+    {{ else }}
+    <div class="ve-empty-panel">
+      <h3>No published work yet</h3>
+      <p>This author archive is ready, but nothing published is attached to it yet.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

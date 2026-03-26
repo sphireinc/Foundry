@@ -1,0 +1,52 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="masthead">
+  <div class="eyebrow">Archive</div>
+  <h1>{{ .Title }}</h1>
+  {{ if and .TaxonomyName .TaxonomyTerm }}
+  <p class="lede">
+    Browse everything filed under <strong>{{ .TaxonomyName }}</strong> / <strong>{{ .TaxonomyTerm }}</strong>.
+  </p>
+  {{ else }}
+  <p class="lede">A clean listing surface for categories, tags, and archive views.</p>
+  {{ end }}
+</section>
+
+<section class="archive-stack">
+  {{ range .Documents }}
+  <article class="surface archive-card">
+    <div class="content-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+    <div class="content-footer">
+      <a class="text-link" href="{{ .URL }}">Open</a>
+      {{ with index .Taxonomies "tags" }}
+      <div class="tag-row">
+        {{ range . }}
+        <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
+        {{ end }}
+      </div>
+      {{ end }}
+    </div>
+  </article>
+  {{ else }}
+  <div class="empty-state surface">
+    <h3>No matching documents</h3>
+    <p>Try another archive, or use search to move directly to the right page.</p>
+  </div>
+  {{ end }}
+</section>
+
+<nav class="pagination" aria-label="Archive navigation">
+  <a class="pagination-link" href="/">Home</a>
+  <a class="pagination-link" href="{{ .Site.Feed.RSSPath }}">RSS</a>
+  <a class="pagination-link" href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+</nav>
+{{ end }}

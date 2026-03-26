@@ -1,0 +1,22 @@
+{{ define "breadcrumbs" }}
+<nav class="lf-frame lf-breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Home</a>
+  {{ if .TaxonomyName }}
+  <span>/</span>
+  <a href="/{{ .TaxonomyName }}/">{{ .TaxonomyName }}</a>
+  {{ end }}
+  {{ if .TaxonomyTerm }}
+  <span>/</span>
+  <span>{{ .TaxonomyTerm }}</span>
+  {{ else if .AuthorName }}
+  <span>/</span>
+  <span>{{ .AuthorName }}</span>
+  {{ else if .Page }}
+  <span>/</span>
+  <span>{{ .Page.Title }}</span>
+  {{ else if .SearchQuery }}
+  <span>/</span>
+  <span>Search</span>
+  {{ end }}
+</nav>
+{{ end }}

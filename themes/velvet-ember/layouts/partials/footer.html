@@ -1,0 +1,37 @@
+{{ define "footer" }}
+<footer class="ve-footer">
+  <div class="ve-frame ve-footer-grid">
+    <section class="ve-footer-zone ve-footer-zone-large">
+      <div class="ve-kicker">Velvet Ember</div>
+      <h2>{{ .Site.Title }}</h2>
+      <p>
+        A theatrical frontend theme for Foundry CMS with bold editorial framing, dramatic
+        negative space, and moody publishing energy.
+      </p>
+    </section>
+
+    <section class="ve-footer-zone">
+      <h3>Navigation</h3>
+      <div class="ve-footer-links">
+        {{ range .Nav }}
+        <a href="{{ .URL }}">{{ .Name }}</a>
+        {{ end }}
+      </div>
+    </section>
+
+    <section class="ve-footer-zone">
+      <h3>Platform</h3>
+      <div class="ve-footer-links">
+        <a href="{{ .Site.Feed.RSSPath }}">RSS feed</a>
+        <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+        <a href="/search/">Search</a>
+      </div>
+    </section>
+
+    <section class="ve-footer-zone">
+      <h3>Foundry</h3>
+      <p>Official Frontend SDK enabled. Built for creators, teams, and businesses.</p>
+    </section>
+  </div>
+</footer>
+{{ end }}

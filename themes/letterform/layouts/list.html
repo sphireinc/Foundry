@@ -1,0 +1,46 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="lf-frame lf-page-header">
+  <div class="lf-kicker">Archive</div>
+  <h1>{{ .Title }}</h1>
+  {{ if and .TaxonomyName .TaxonomyTerm }}
+  <p class="lf-dek">Browse writing filed under <strong>{{ .TaxonomyName }}</strong> / <strong>{{ .TaxonomyTerm }}</strong>.</p>
+  {{ else }}
+  <p class="lf-dek">Orderly archive views focused on scanability and publishing rhythm.</p>
+  {{ end }}
+</section>
+
+<section class="lf-frame">
+  <div class="lf-chip-row lf-chip-row-spacious">
+    <a class="lf-chip" href="/tags/go/">Go</a>
+    <a class="lf-chip" href="/tags/design/">Design</a>
+    <a class="lf-chip" href="/categories/essays/">Essays</a>
+    <a class="lf-chip" href="/categories/notes/">Notes</a>
+  </div>
+
+  <div class="lf-contents-list">
+    {{ range .Documents }}
+    <article class="lf-contents-row">
+      <div class="lf-contents-index">§</div>
+      <div class="lf-story-main">
+        <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+        {{ if .Summary }}
+        <p>{{ .Summary }}</p>
+        {{ end }}
+      </div>
+      <div class="lf-story-meta">
+        <span>{{ if eq .Type "post" }}Essay{{ else }}Page{{ end }}</span>
+        <span>{{ .Lang }}</span>
+        {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+      </div>
+    </article>
+    {{ else }}
+    <div class="lf-empty-state">
+      <h3>No matching entries</h3>
+      <p>This archive is empty right now. Try another category or search term.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

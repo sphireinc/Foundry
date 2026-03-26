@@ -51,7 +51,10 @@ import {
   const adminBase = root.dataset.adminBase || '/__admin';
   const defaultLang = root.dataset.defaultLang || 'en';
   const sectionForPath = createSectionForPath(adminBase);
-  const state = createInitialState({ section: sectionForPath(window.location.pathname) });
+  const initialSection = sectionForPath(window.location.pathname);
+  const state = createInitialState({
+    section: initialSection === 'config' ? 'settings' : initialSection,
+  });
   const admin = createAdminClient({ baseURL: adminBase, getSession: () => state.session });
   let navigate = () => {};
   const extensionModuleCache = new Map();
@@ -99,6 +102,10 @@ import {
       extensionPageBySection(normalized)?.title ||
       normalized.charAt(0).toUpperCase() + normalized.slice(1)
     );
+  };
+  const isSettingsSection = (section) => {
+    const normalized = normalizeAdminSection(section);
+    return normalized === 'settings' || normalized === 'config';
   };
   const renderWidgetPanels = (slot) =>
     extensionWidgetsForSlot(slot).map((widget) =>
@@ -457,6 +464,163 @@ import {
     render: () => render(),
     buildDefaultMarkdown,
   });
+
+  const parseJSONInput = (id, fallback) => {
+    const node = document.getElementById(id);
+    if (!node) return fallback;
+    const raw = String(node.value || '').trim();
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  };
+
+  const collectSettingsFormPayload = () => {
+    const next = clone(state.settingsForm || {});
+    next.Admin = next.Admin || {};
+    next.Admin.Debug = next.Admin.Debug || {};
+    next.Server = next.Server || {};
+    next.Build = next.Build || {};
+    next.Content = next.Content || {};
+    next.Taxonomies = next.Taxonomies || {};
+    next.Fields = next.Fields || {};
+    next.Plugins = next.Plugins || {};
+    next.SEO = next.SEO || {};
+    next.Cache = next.Cache || {};
+    next.Security = next.Security || {};
+    next.Feed = next.Feed || {};
+    next.Deploy = next.Deploy || {};
+    const setPathValue = (path, value) => {
+      const wrapper = { documentFieldValues: next };
+      updateNestedFieldValue(wrapper, path.split('.'), value);
+      return wrapper.documentFieldValues;
+    };
+
+    const setText = (path, id) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      Object.assign(next, setPathValue(path, node.value));
+    };
+    const setBool = (path, id) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      Object.assign(next, setPathValue(path, !!node.checked));
+    };
+    const setInt = (path, id) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      const value = Number.parseInt(node.value || '0', 10);
+      Object.assign(next, setPathValue(path, Number.isFinite(value) ? value : 0));
+    };
+
+    setText('Name', 'settings-name');
+    setText('Title', 'settings-title');
+    setText('BaseURL', 'settings-base-url');
+    setText('Theme', 'settings-theme');
+    setText('Environment', 'settings-environment');
+    setText('DefaultLang', 'settings-default-lang');
+    setText('ContentDir', 'settings-content-dir');
+    setText('PublicDir', 'settings-public-dir');
+    setText('ThemesDir', 'settings-themes-dir');
+    setText('DataDir', 'settings-data-dir');
+    setText('PluginsDir', 'settings-plugins-dir');
+
+    setText('Server.Addr', 'settings-server-addr');
+    setText('Server.LiveReloadMode', 'settings-server-live-reload-mode');
+    setBool('Server.LiveReload', 'settings-server-live-reload');
+    setBool('Server.AutoOpenBrowser', 'settings-server-auto-open-browser');
+    setBool('Server.DebugRoutes', 'settings-server-debug-routes');
+
+    setText('Content.PagesDir', 'settings-content-pages-dir');
+    setText('Content.PostsDir', 'settings-content-posts-dir');
+    setText('Content.ImagesDir', 'settings-content-images-dir');
+    setText('Content.VideoDir', 'settings-content-video-dir');
+    setText('Content.AudioDir', 'settings-content-audio-dir');
+    setText('Content.DocumentsDir', 'settings-content-documents-dir');
+    setText('Content.AssetsDir', 'settings-content-assets-dir');
+    setText('Content.UploadsDir', 'settings-content-uploads-dir');
+    setInt('Content.MaxVersionsPerFile', 'settings-content-max-versions');
+    setText('Content.DefaultLayoutPage', 'settings-content-default-layout-page');
+    setText('Content.DefaultLayoutPost', 'settings-content-default-layout-post');
+    setText('Content.DefaultPageSlugIndex', 'settings-content-default-page-slug-index');
+
+    setBool('Admin.Enabled', 'settings-admin-enabled');
+    setBool('Admin.LocalOnly', 'settings-admin-local-only');
+    setBool('Admin.Debug.Pprof', 'settings-admin-debug-pprof');
+    setText('Admin.Addr', 'settings-admin-addr');
+    setText('Admin.Path', 'settings-admin-path');
+    setText('Admin.AccessToken', 'settings-admin-access-token');
+    setText('Admin.Theme', 'settings-admin-theme');
+    setText('Admin.UsersFile', 'settings-admin-users-file');
+    setText('Admin.SessionStoreFile', 'settings-admin-session-store-file');
+    setText('Admin.LockFile', 'settings-admin-lock-file');
+    setInt('Admin.SessionTTLMinutes', 'settings-admin-session-ttl');
+    setInt('Admin.PasswordMinLength', 'settings-admin-password-min-length');
+    setInt('Admin.PasswordResetTTL', 'settings-admin-password-reset-ttl');
+    setText('Admin.TOTPIssuer', 'settings-admin-totp-issuer');
+
+    setBool('Build.CleanPublicDir', 'settings-build-clean-public-dir');
+    setBool('Build.IncludeDrafts', 'settings-build-include-drafts');
+    setBool('Build.MinifyHTML', 'settings-build-minify-html');
+    setBool('Build.CopyAssets', 'settings-build-copy-assets');
+    setBool('Build.CopyImages', 'settings-build-copy-images');
+    setBool('Build.CopyUploads', 'settings-build-copy-uploads');
+
+    setBool('Taxonomies.Enabled', 'settings-taxonomies-enabled');
+    const defaultSetNode = document.getElementById('settings-taxonomies-default-set');
+    if (defaultSetNode) {
+      next.Taxonomies.DefaultSet = parseTagInput(defaultSetNode.value || '');
+    }
+    if (document.getElementById('settings-taxonomies-definitions')) {
+      next.Taxonomies.Definitions = parseJSONInput(
+        'settings-taxonomies-definitions',
+        next.Taxonomies.Definitions || {}
+      );
+    }
+
+    setBool('Fields.Enabled', 'settings-fields-enabled');
+    setBool('Fields.AllowAnything', 'settings-fields-allow-anything');
+    if (document.getElementById('settings-fields-schemas')) {
+      next.Fields.Schemas = parseJSONInput('settings-fields-schemas', next.Fields.Schemas || {});
+    }
+
+    if (document.getElementById('settings-plugins-enabled')) {
+      next.Plugins.Enabled = parseJSONInput('settings-plugins-enabled', next.Plugins.Enabled || []);
+    }
+
+    setBool('SEO.Enabled', 'settings-seo-enabled');
+    setText('SEO.DefaultTitleSep', 'settings-seo-default-title-sep');
+    setBool('Cache.Enabled', 'settings-cache-enabled');
+    setBool('Security.AllowUnsafeHTML', 'settings-security-allow-unsafe-html');
+    setText('Feed.RSSPath', 'settings-feed-rss-path');
+    setText('Feed.SitemapPath', 'settings-feed-sitemap-path');
+    setInt('Feed.RSSLimit', 'settings-feed-rss-limit');
+    setText('Feed.RSSTitle', 'settings-feed-rss-title');
+    setText('Feed.RSSDescription', 'settings-feed-rss-description');
+    setText('Deploy.DefaultTarget', 'settings-deploy-default-target');
+    if (document.getElementById('settings-deploy-targets')) {
+      next.Deploy.Targets = parseJSONInput('settings-deploy-targets', next.Deploy.Targets || {});
+    }
+
+    if (document.getElementById('settings-permalinks')) {
+      next.Permalinks = parseJSONInput('settings-permalinks', next.Permalinks || {});
+    }
+    if (document.getElementById('settings-menus')) {
+      next.Menus = parseJSONInput('settings-menus', next.Menus || {});
+    }
+    if (document.getElementById('settings-params')) {
+      next.Params = parseJSONInput('settings-params', next.Params || {});
+    }
+
+    return next;
+  };
+
+  const syncSettingsDraftFromDOM = () => {
+    if (!document.getElementById('settings-structured-form')) return;
+    try {
+      state.settingsForm = collectSettingsFormPayload();
+      compareSnapshot('settings', state.settingsForm);
+    } catch (_error) {
+    }
+  };
 
   const renderFieldSchemaControl = (schema, path = []) => {
     const fullPath = [...path, schema.name];
@@ -1258,9 +1422,9 @@ import {
       { id: 'goto-media', label: 'Go to Media', action: () => navigate('media') },
       { id: 'goto-users', label: 'Go to Users', action: () => navigate('users') },
       { id: 'goto-audit', label: 'Go to Audit', action: () => navigate('audit') },
+      { id: 'goto-settings', label: 'Go to Settings', action: () => navigate('settings') },
       { id: 'goto-plugins', label: 'Go to Plugins', action: () => navigate('plugins') },
       { id: 'goto-themes', label: 'Go to Themes', action: () => navigate('themes') },
-      { id: 'goto-config', label: 'Go to Configuration', action: () => navigate('config') },
       {
         id: 'new-page',
         label: 'Create New Page Draft',
@@ -1459,34 +1623,297 @@ import {
       </div>`;
   };
 
-  const renderConfig = () =>
-    panel(
-      'Configuration',
-      `
-    <form id="config-save-form" class="panel-pad stack">
-      <label>Config file<textarea id="config-raw" rows="24">${escapeHTML(state.config?.raw || '')}</textarea></label>
-      <button type="submit">Save Configuration</button>
-      ${state.settingsSections.length ? `<div class="note"><strong>Known sections:</strong> ${escapeHTML(state.settingsSections.map((section) => section.title).join(', '))}</div>` : ''}
-      ${
-        state.settingsSections.length
-          ? `<div class="table table-three">
-        <div class="table-head"><span>Section</span><span>Source</span><span>Writable</span></div>
-        ${state.settingsSections
-          .map(
-            (section) => `
-          <div class="table-row">
-            <span><strong>${escapeHTML(section.title)}</strong><div class="muted mono">${escapeHTML(section.key)}</div></span>
-            <span>${escapeHTML(section.source || 'core')}</span>
-            <span>${section.writable ? 'yes' : 'no'}</span>
+  const settingsValue = () => state.settingsForm || {};
+  const settingsJSON = (value, empty = '{}') => {
+    if (value == null) return empty;
+    if (Array.isArray(value)) return JSON.stringify(value, null, 2);
+    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    return empty;
+  };
+  const renderSettingsText = (id, label, value, options = {}) =>
+    `<label>${escapeHTML(label)}<input id="${escapeHTML(id)}" data-settings-input type="${escapeHTML(options.type || 'text')}" value="${escapeHTML(value ?? '')}" ${options.placeholder ? `placeholder="${escapeHTML(options.placeholder)}"` : ''}></label>`;
+  const renderSettingsNumber = (id, label, value) =>
+    `<label>${escapeHTML(label)}<input id="${escapeHTML(id)}" data-settings-input type="number" value="${escapeHTML(value ?? 0)}"></label>`;
+  const renderSettingsCheckbox = (id, label, checked) =>
+    `<label class="checkbox"><input id="${escapeHTML(id)}" data-settings-input type="checkbox" ${checked ? 'checked' : ''}> ${escapeHTML(label)}</label>`;
+  const renderSettingsTextarea = (id, label, value, rows = 10) =>
+    `<label>${escapeHTML(label)}<textarea id="${escapeHTML(id)}" data-settings-json rows="${rows}" spellcheck="false">${escapeHTML(value ?? '')}</textarea></label>`;
+  const renderSettingsThemeOptions = (kind, current) =>
+    (state.themes || [])
+      .filter((themeRecord) => themeRecord.kind === kind)
+      .map(
+        (themeRecord) =>
+          `<option value="${escapeHTML(themeRecord.name)}" ${themeRecord.name === current ? 'selected' : ''}>${escapeHTML(themeRecord.title || themeRecord.name)}</option>`
+      )
+      .join('');
+  const renderSettingsFormTab = (activeTab) => {
+    const cfg = settingsValue();
+    const adminCfg = cfg.Admin || {};
+    const server = cfg.Server || {};
+    const build = cfg.Build || {};
+    const contentCfg = cfg.Content || {};
+    const taxonomies = cfg.Taxonomies || {};
+    const fields = cfg.Fields || {};
+    const pluginsCfg = cfg.Plugins || {};
+    const seo = cfg.SEO || {};
+    const cache = cfg.Cache || {};
+    const security = cfg.Security || {};
+    const feed = cfg.Feed || {};
+    const deploy = cfg.Deploy || {};
+    const topLevelSubtitleMap = {
+      general: 'Site identity, theme selection, runtime paths, and base language settings',
+      server: 'Preview server behavior, live reload, and local serve options',
+      content: 'Content roots, media directories, and default layout behavior',
+      admin: 'Admin runtime, auth/session policy, and debug settings',
+      build: 'Build output behavior and content copy settings',
+      taxonomies: 'Taxonomy defaults and term/archive definitions',
+      fields: 'Schema-driven field modeling for structured content',
+      plugins: 'Plugin enablement as stored in site.yaml',
+      publish: 'SEO, feed, cache, security, and deploy targets',
+      navigation: 'Permalinks, menus, and arbitrary params',
+    };
+    switch (activeTab) {
+      case 'general':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsText('settings-name', 'Name', cfg.Name)}
+              ${renderSettingsText('settings-title', 'Title', cfg.Title)}
+              ${renderSettingsText('settings-base-url', 'Base URL', cfg.BaseURL, { placeholder: 'https://example.com' })}
+              <label>Frontend Theme<select id="settings-theme" data-settings-input>${renderSettingsThemeOptions('frontend', cfg.Theme)}</select></label>
+              ${renderSettingsText('settings-environment', 'Environment', cfg.Environment)}
+              ${renderSettingsText('settings-default-lang', 'Default Language', cfg.DefaultLang)}
+              ${renderSettingsText('settings-content-dir', 'Content Dir', cfg.ContentDir)}
+              ${renderSettingsText('settings-public-dir', 'Public Dir', cfg.PublicDir)}
+              ${renderSettingsText('settings-themes-dir', 'Themes Dir', cfg.ThemesDir)}
+              ${renderSettingsText('settings-data-dir', 'Data Dir', cfg.DataDir)}
+              ${renderSettingsText('settings-plugins-dir', 'Plugins Dir', cfg.PluginsDir)}
+            </div>
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'server':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsText('settings-server-addr', 'Server Addr', server.Addr, { placeholder: ':8080' })}
+              ${renderSettingsText('settings-server-live-reload-mode', 'Live Reload Mode', server.LiveReloadMode)}
+              ${renderSettingsCheckbox('settings-server-live-reload', 'Enable Live Reload', !!server.LiveReload)}
+              ${renderSettingsCheckbox('settings-server-auto-open-browser', 'Auto Open Browser', !!server.AutoOpenBrowser)}
+              ${renderSettingsCheckbox('settings-server-debug-routes', 'Debug Routes', !!server.DebugRoutes)}
+            </div>
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'content':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsText('settings-content-pages-dir', 'Pages Dir', contentCfg.PagesDir)}
+              ${renderSettingsText('settings-content-posts-dir', 'Posts Dir', contentCfg.PostsDir)}
+              ${renderSettingsText('settings-content-images-dir', 'Images Dir', contentCfg.ImagesDir)}
+              ${renderSettingsText('settings-content-video-dir', 'Videos Dir', contentCfg.VideoDir)}
+              ${renderSettingsText('settings-content-audio-dir', 'Audio Dir', contentCfg.AudioDir)}
+              ${renderSettingsText('settings-content-documents-dir', 'Documents Dir', contentCfg.DocumentsDir)}
+              ${renderSettingsText('settings-content-assets-dir', 'Assets Dir', contentCfg.AssetsDir)}
+              ${renderSettingsText('settings-content-uploads-dir', 'Uploads Dir', contentCfg.UploadsDir)}
+              ${renderSettingsNumber('settings-content-max-versions', 'Max Versions Per File', contentCfg.MaxVersionsPerFile)}
+              ${renderSettingsText('settings-content-default-layout-page', 'Default Layout Page', contentCfg.DefaultLayoutPage)}
+              ${renderSettingsText('settings-content-default-layout-post', 'Default Layout Post', contentCfg.DefaultLayoutPost)}
+              ${renderSettingsText('settings-content-default-page-slug-index', 'Default Page Slug Index', contentCfg.DefaultPageSlugIndex)}
+            </div>
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'admin':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsCheckbox('settings-admin-enabled', 'Enable Admin', !!adminCfg.Enabled)}
+              ${renderSettingsCheckbox('settings-admin-local-only', 'Local Only', !!adminCfg.LocalOnly)}
+              ${renderSettingsCheckbox('settings-admin-debug-pprof', 'Enable pprof Debug', !!adminCfg.Debug?.Pprof)}
+              ${renderSettingsText('settings-admin-addr', 'Admin Addr', adminCfg.Addr)}
+              ${renderSettingsText('settings-admin-path', 'Admin Path', adminCfg.Path)}
+              ${renderSettingsText('settings-admin-access-token', 'Access Token', adminCfg.AccessToken)}
+              <label>Admin Theme<select id="settings-admin-theme" data-settings-input>${renderSettingsThemeOptions('admin', adminCfg.Theme)}</select></label>
+              ${renderSettingsText('settings-admin-users-file', 'Users File', adminCfg.UsersFile)}
+              ${renderSettingsText('settings-admin-session-store-file', 'Session Store File', adminCfg.SessionStoreFile)}
+              ${renderSettingsText('settings-admin-lock-file', 'Lock File', adminCfg.LockFile)}
+              ${renderSettingsNumber('settings-admin-session-ttl', 'Session TTL Minutes', adminCfg.SessionTTLMinutes)}
+              ${renderSettingsNumber('settings-admin-password-min-length', 'Password Min Length', adminCfg.PasswordMinLength)}
+              ${renderSettingsNumber('settings-admin-password-reset-ttl', 'Password Reset TTL Minutes', adminCfg.PasswordResetTTL)}
+              ${renderSettingsText('settings-admin-totp-issuer', 'TOTP Issuer', adminCfg.TOTPIssuer)}
+            </div>
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'build':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsCheckbox('settings-build-clean-public-dir', 'Clean Public Dir', !!build.CleanPublicDir)}
+              ${renderSettingsCheckbox('settings-build-include-drafts', 'Include Drafts', !!build.IncludeDrafts)}
+              ${renderSettingsCheckbox('settings-build-minify-html', 'Minify HTML', !!build.MinifyHTML)}
+              ${renderSettingsCheckbox('settings-build-copy-assets', 'Copy Assets', !!build.CopyAssets)}
+              ${renderSettingsCheckbox('settings-build-copy-images', 'Copy Images', !!build.CopyImages)}
+              ${renderSettingsCheckbox('settings-build-copy-uploads', 'Copy Uploads', !!build.CopyUploads)}
+            </div>
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'taxonomies':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsCheckbox('settings-taxonomies-enabled', 'Enable Taxonomies', !!taxonomies.Enabled)}
+              ${renderSettingsText('settings-taxonomies-default-set', 'Default Set', (taxonomies.DefaultSet || []).join(', '), { placeholder: 'tags, categories' })}
+            </div>
+            ${renderSettingsTextarea('settings-taxonomies-definitions', 'Definitions JSON', settingsJSON(taxonomies.Definitions, '{}'), 18)}
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'fields':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsCheckbox('settings-fields-enabled', 'Enable Fields', !!fields.Enabled)}
+              ${renderSettingsCheckbox('settings-fields-allow-anything', 'Allow Anything', !!fields.AllowAnything)}
+            </div>
+            ${renderSettingsTextarea('settings-fields-schemas', 'Schemas JSON', settingsJSON(fields.Schemas, '{}'), 18)}
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'plugins':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            ${renderSettingsTextarea('settings-plugins-enabled', 'Enabled Plugins JSON Array', settingsJSON(pluginsCfg.Enabled || [], '[]'), 10)}
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'publish':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="frontmatter-grid">
+              ${renderSettingsCheckbox('settings-seo-enabled', 'Enable SEO', !!seo.Enabled)}
+              ${renderSettingsText('settings-seo-default-title-sep', 'Default Title Separator', seo.DefaultTitleSep)}
+              ${renderSettingsCheckbox('settings-cache-enabled', 'Enable Cache', !!cache.Enabled)}
+              ${renderSettingsCheckbox('settings-security-allow-unsafe-html', 'Allow Unsafe HTML', !!security.AllowUnsafeHTML)}
+              ${renderSettingsText('settings-feed-rss-path', 'RSS Path', feed.RSSPath)}
+              ${renderSettingsText('settings-feed-sitemap-path', 'Sitemap Path', feed.SitemapPath)}
+              ${renderSettingsNumber('settings-feed-rss-limit', 'RSS Limit', feed.RSSLimit)}
+              ${renderSettingsText('settings-feed-rss-title', 'RSS Title', feed.RSSTitle)}
+              ${renderSettingsText('settings-feed-rss-description', 'RSS Description', feed.RSSDescription)}
+              ${renderSettingsText('settings-deploy-default-target', 'Default Deploy Target', deploy.DefaultTarget)}
+            </div>
+            ${renderSettingsTextarea('settings-deploy-targets', 'Deploy Targets JSON', settingsJSON(deploy.Targets, '{}'), 16)}
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      case 'navigation':
+        return {
+          subtitle: topLevelSubtitleMap[activeTab],
+          body: `<form id="settings-structured-form" class="panel-pad stack">
+            ${renderSettingsTextarea('settings-permalinks', 'Permalinks JSON', settingsJSON(cfg.Permalinks, '{}'), 10)}
+            ${renderSettingsTextarea('settings-menus', 'Menus JSON', settingsJSON(cfg.Menus, '{}'), 14)}
+            ${renderSettingsTextarea('settings-params', 'Params JSON', settingsJSON(cfg.Params, '{}'), 14)}
+            <div class="toolbar"><button type="submit">Save Settings</button></div>
+          </form>`,
+        };
+      default:
+        return { subtitle: '', body: '' };
+    }
+  };
+  const renderSettings = () => {
+    const activeTab = state.settingsTab || 'general';
+    const tabs = [
+      ['general', 'General'],
+      ['server', 'Server'],
+      ['content', 'Content'],
+      ['admin', 'Admin'],
+      ['build', 'Build'],
+      ['taxonomies', 'Taxonomies'],
+      ['fields', 'Fields'],
+      ['plugins', 'Plugins'],
+      ['publish', 'Publish'],
+      ['navigation', 'Navigation'],
+      ['config', 'Advanced YAML'],
+      ['custom-css', 'Custom CSS'],
+      ['sections', 'Sections'],
+    ];
+    let body = '';
+    let subtitle = '';
+    if (activeTab === 'custom-css') {
+      subtitle = state.customCSS?.path || 'content/assets/css/custom.css';
+      body = `
+        <form id="custom-css-save-form" class="panel-pad stack">
+          <label>Custom stylesheet<textarea id="custom-css-raw" rows="24" spellcheck="false">${escapeHTML(state.customCSS?.raw || '')}</textarea></label>
+          <div class="note">
+            <strong>Path:</strong> <span class="mono">${escapeHTML(state.customCSS?.path || 'content/assets/css/custom.css')}</span><br>
+            Loaded with the site asset pipeline as the site-level override layer for the active frontend theme.
+          </div>
+          <div class="toolbar"><button type="submit">Save Custom CSS</button></div>
+        </form>`;
+    } else if (activeTab === 'sections') {
+      subtitle = 'Core and plugin-defined settings groups';
+      body = `
+        <div class="panel-pad stack">
+          ${state.settingsSections.length ? `<div class="note"><strong>Known sections:</strong> ${escapeHTML(state.settingsSections.map((section) => section.title).join(', '))}</div>` : ''}
+          ${
+            state.settingsSections.length
+              ? `<div class="table table-three">
+            <div class="table-head"><span>Section</span><span>Source</span><span>Writable</span></div>
+            ${state.settingsSections
+              .map(
+                (section) => `
+              <div class="table-row">
+                <span><strong>${escapeHTML(section.title)}</strong><div class="muted mono">${escapeHTML(section.key)}</div></span>
+                <span>${escapeHTML(section.source || 'core')}</span>
+                <span>${section.writable ? 'yes' : 'no'}</span>
+              </div>`
+              )
+              .join('')}
           </div>`
-          )
-          .join('')}
-      </div>`
-          : ''
-      }
-    </form>`,
-      state.config?.path || 'content/config/site.yaml'
+              : '<div class="empty-state">No settings sections are currently registered.</div>'
+          }
+        </div>`;
+    } else if (activeTab === 'config') {
+      subtitle = state.config?.path || 'content/config/site.yaml';
+      body = `
+        <form id="config-save-form" class="panel-pad stack">
+          <label>Config file<textarea id="config-raw" rows="24" spellcheck="false">${escapeHTML(state.config?.raw || '')}</textarea></label>
+          <div class="toolbar"><button type="submit">Save Configuration</button></div>
+        </form>`;
+    } else {
+      const rendered = renderSettingsFormTab(activeTab);
+      subtitle = rendered.subtitle;
+      body = rendered.body;
+    }
+    return panel(
+      'Settings',
+      `
+      <div class="panel-pad stack">
+        <div class="toolbar settings-tabs">
+          ${tabs
+            .map(
+              ([key, label]) =>
+                `<button type="button" class="ghost small ${activeTab === key ? 'active-toggle' : ''}" data-settings-tab="${escapeHTML(key)}">${escapeHTML(label)}</button>`
+            )
+            .join('')}
+        </div>
+      </div>
+      ${body}`,
+      subtitle
     );
+  };
 
   const { renderPlugins, renderThemes } = createPlatformViews({
     state,
@@ -1519,8 +1946,9 @@ import {
         return renderAudit();
       case 'users':
         return renderUsers();
+      case 'settings':
       case 'config':
-        return renderConfig();
+        return renderSettings();
       case 'plugins':
         return renderPlugins();
       case 'themes':
@@ -1539,7 +1967,7 @@ import {
         <div class="login-card">
           <div class="login-mark">F</div>
           <h1>Foundry Admin</h1>
-          <p class="login-copy">Sign in to manage documents, media, users, configuration, themes, and plugins.</p>
+          <p class="login-copy">Sign in to manage documents, media, users, settings, themes, and plugins.</p>
           <form id="login-form" class="login-form">
             <label>Username<input id="username" type="text" autocomplete="username" placeholder="admin"></label>
             <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Password"></label>
@@ -1652,7 +2080,7 @@ import {
   const renderDashboard = () => {
     const topMessage =
       summarizeLoadErrors(state) ||
-      'Manage content, media, users, configuration, themes, and plugins.';
+      'Manage content, media, users, settings, themes, and plugins.';
     root.innerHTML = `
       <div class="foundry-shell">
         ${renderToasts(state)}
@@ -1714,6 +2142,34 @@ import {
       window.setTimeout(() => document.getElementById('command-palette-query')?.focus(), 0);
     }
     bindDashboardEventsLocal();
+    document.getElementById('settings-structured-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        state.settingsForm = collectSettingsFormPayload();
+        await admin.settings.saveForm({ value: state.settingsForm });
+        setFlash('Settings saved.');
+        snapshotValue('settings', state.settingsForm);
+        await fetchAll(false);
+        navigate('settings');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+    root
+      .querySelectorAll('[data-settings-input], [data-settings-json]')
+      .forEach((node) =>
+        node.addEventListener(node.type === 'checkbox' ? 'change' : 'input', () => {
+          syncSettingsDraftFromDOM();
+        })
+      );
+    root.querySelectorAll('[data-settings-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        syncSettingsDraftFromDOM();
+        state.settingsTab = button.dataset.settingsTab || 'general';
+        render();
+      });
+    });
     publishAdminRuntime();
     void mountActiveExtensionPage();
     void mountVisibleExtensionWidgets();
@@ -1770,7 +2226,9 @@ import {
         admin.media.list({ q: state.mediaQuery || undefined }),
         admin.media.trash(),
         admin.users.list(),
+        admin.settings.getForm(),
         admin.settings.getConfig(),
+        admin.settings.getCustomCSS(),
         admin.settings.getSections(),
         admin.plugins.list(),
         admin.extensions.getAdminExtensions(),
@@ -1850,6 +2308,16 @@ import {
       );
       assignResult(
         6,
+        'settings form',
+        (value) => {
+          state.settingsForm = value?.value || null;
+        },
+        () => {
+          state.settingsForm = null;
+        }
+      );
+      assignResult(
+        7,
         'config',
         (value) => {
           state.config = value;
@@ -1859,7 +2327,17 @@ import {
         }
       );
       assignResult(
-        7,
+        8,
+        'custom css',
+        (value) => {
+          state.customCSS = value;
+        },
+        () => {
+          state.customCSS = null;
+        }
+      );
+      assignResult(
+        9,
         'settings sections',
         (value) => {
           state.settingsSections = Array.isArray(value) ? value : [];
@@ -1869,7 +2347,7 @@ import {
         }
       );
       assignResult(
-        8,
+        10,
         'plugins',
         (value) => {
           state.plugins = Array.isArray(value) ? value : [];
@@ -1879,7 +2357,7 @@ import {
         }
       );
       assignResult(
-        9,
+        11,
         'admin extensions',
         (value) => {
           state.adminExtensions = value || { pages: [], widgets: [], slots: [], settings: [] };
@@ -1889,7 +2367,7 @@ import {
         }
       );
       assignResult(
-        10,
+        12,
         'themes',
         (value) => {
           state.themes = Array.isArray(value) ? value : [];
@@ -1899,7 +2377,7 @@ import {
         }
       );
       assignResult(
-        11,
+        13,
         'audit log',
         (value) => {
           state.audit = Array.isArray(value) ? value : [];
@@ -1957,7 +2435,9 @@ import {
           state.mediaHistory = [];
         }
       }
+      snapshotValue('settings', state.settingsForm || {});
       snapshotValue('config', state.config?.raw || '');
+      snapshotValue('customCss', state.customCSS?.raw || '');
       snapshotValue('user', state.userForm);
       if (!state.documentEditor.raw) {
         state.documentEditor.raw = buildDefaultMarkdown('post');
@@ -1985,7 +2465,8 @@ import {
       window.history.pushState({}, '', adminPathForSection(adminBase, state.section));
       return;
     }
-    state.section = sectionForPath(window.location.pathname);
+    const nextSection = sectionForPath(window.location.pathname);
+    state.section = nextSection === 'config' ? 'settings' : nextSection;
     render();
   });
 
@@ -2004,7 +2485,15 @@ import {
       event.preventDefault();
       if (state.section === 'editor')
         document.getElementById('document-save-form')?.requestSubmit();
-      if (state.section === 'config') document.getElementById('config-save-form')?.requestSubmit();
+      if (isSettingsSection(state.section)) {
+        if (state.settingsTab === 'custom-css') {
+          document.getElementById('custom-css-save-form')?.requestSubmit();
+        } else if (state.settingsTab === 'config') {
+          document.getElementById('config-save-form')?.requestSubmit();
+        } else {
+          document.getElementById('settings-structured-form')?.requestSubmit();
+        }
+      }
       if (state.section === 'users') document.getElementById('user-save-form')?.requestSubmit();
       if (state.section === 'media')
         document.getElementById('media-metadata-form')?.requestSubmit();
@@ -2045,7 +2534,14 @@ import {
       return;
     }
     if (pendingGoto === 'g') {
-      const map = { d: 'documents', e: 'editor', m: 'media', u: 'users', a: 'audit' };
+      const map = {
+        d: 'documents',
+        e: 'editor',
+        m: 'media',
+        s: 'settings',
+        u: 'users',
+        a: 'audit',
+      };
       const next = map[event.key.toLowerCase()];
       if (next) {
         event.preventDefault();

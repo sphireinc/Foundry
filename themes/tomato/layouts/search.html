@@ -1,0 +1,33 @@
+{{ define "content" }}
+<section class="archive-hero">
+  <span class="eyebrow">Search</span>
+  <h1>{{ .Title }}</h1>
+  <p class="page-intro">Browse search results{{ if .SearchQuery }} for <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+</section>
+
+<form class="page-panel" action="/search/" method="get" role="search" style="margin-bottom:1.5rem;">
+  <label for="tomato-search"><strong>Search the site</strong></label>
+  <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.85rem;">
+    <input id="tomato-search" name="q" type="search" value="{{ .SearchQuery }}" placeholder="Find posts and pages" style="flex:1;min-width:16rem;padding:.9rem 1rem;border:1px solid rgba(49,46,46,.12);border-radius:999px;">
+    <button class="cta-button" type="submit">Search</button>
+  </div>
+</form>
+
+<div class="archive-stack">
+  {{ range .Documents }}
+  <article class="archive-card">
+    <div class="story-meta">
+      <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+      <span>{{ .Lang }}</span>
+      {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+    </div>
+    <h2><a href="{{ .URL }}">{{ .Title }}</a></h2>
+    {{ if .Summary }}
+    <p>{{ .Summary }}</p>
+    {{ end }}
+  </article>
+  {{ else }}
+  <div class="empty-panel">No results matched your search.</div>
+  {{ end }}
+</div>
+{{ end }}

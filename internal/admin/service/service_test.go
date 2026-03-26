@@ -907,9 +907,29 @@ func TestManagementServices(t *testing.T) {
 	if err != nil || !strings.Contains(configDoc.Raw, "theme: default") {
 		t.Fatalf("load config: %v %#v", err, configDoc)
 	}
+	settingsForm, err := svc.LoadSettingsForm(context.Background())
+	if err != nil || settingsForm.Value.Theme != "default" {
+		t.Fatalf("load settings form: %v %#v", err, settingsForm)
+	}
+	settingsForm.Value.Title = "Updated Foundry"
+	savedSettings, err := svc.SaveSettingsForm(context.Background(), settingsForm.Value)
+	if err != nil || savedSettings.Value.Title != "Updated Foundry" {
+		t.Fatalf("save settings form: %v %#v", err, savedSettings)
+	}
 	savedConfig, err := svc.SaveConfigDocument(context.Background(), strings.Replace(configDoc.Raw, "theme: default", "theme: alt", 1))
 	if err != nil || !strings.Contains(savedConfig.Raw, "theme: alt") {
 		t.Fatalf("save config: %v %#v", err, savedConfig)
+	}
+	customCSS, err := svc.LoadCustomCSSDocument(context.Background())
+	if err != nil {
+		t.Fatalf("load custom css: %v", err)
+	}
+	if customCSS.Path != filepath.Join("content", "assets", "css", "custom.css") {
+		t.Fatalf("unexpected custom css path: %#v", customCSS)
+	}
+	savedCustomCSS, err := svc.SaveCustomCSSDocument(context.Background(), "body { color: #123456; }")
+	if err != nil || !strings.Contains(savedCustomCSS.Raw, "color: #123456") {
+		t.Fatalf("save custom css: %v %#v", err, savedCustomCSS)
 	}
 
 	themes, err := svc.ListThemes(context.Background())

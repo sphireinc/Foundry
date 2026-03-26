@@ -1,0 +1,11 @@
+{{ define "author_block" }}
+{{ if .Page.Author }}
+<section class="bl-panel bl-panel-blush">
+  <div class="bl-section-head bl-section-head-tight">
+    <div class="bl-kicker">Author</div>
+    <h2>{{ .Page.Author }}</h2>
+  </div>
+  <p>A gentle author module for biographies, notes, and warm editorial context.</p>
+</section>
+{{ end }}
+{{ end }}

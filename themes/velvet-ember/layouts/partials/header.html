@@ -1,0 +1,42 @@
+{{ define "header" }}
+<header class="ve-header">
+  <div class="ve-topline">
+    <div class="ve-frame ve-topline-inner">
+      <div class="ve-section-label">Foundry publication theme</div>
+      <div class="ve-top-actions">
+        <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+        <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+        <a href="/__admin">Admin</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="ve-nav-shell">
+    <div class="ve-frame ve-nav-inner">
+      <a class="ve-brand" href="/">
+        <span class="ve-brand-mark">VE</span>
+        <span class="ve-brand-copy">
+          <span class="ve-brand-title">{{ .Site.Title }}</span>
+          <span class="ve-brand-subtitle">Cinematic publishing surface</span>
+        </span>
+      </a>
+
+      <nav class="ve-nav" aria-label="Primary">
+        {{ range .Nav }}
+        <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
+        {{ end }}
+      </nav>
+
+      <form class="ve-inline-search" data-ve-search-form data-result-target="ve-inline-search-results">
+        <label class="sr-only" for="ve-inline-search">Search the site</label>
+        <input id="ve-inline-search" type="search" name="q" placeholder="Search" autocomplete="off" />
+        <button type="submit">Go</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="ve-frame">
+    <div id="ve-inline-search-results" class="ve-search-results" aria-live="polite"></div>
+  </div>
+</header>
+{{ end }}

@@ -1,0 +1,63 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="bl-frame bl-article-wrap">
+  <header class="bl-article-hero bl-panel bl-panel-petal">
+    {{ pluginSlot "post.before_header" }}
+    <div class="bl-kicker">Article</div>
+    <h1>{{ .Page.Title }}</h1>
+    {{ if .Page.Summary }}
+    <p class="bl-deck">{{ .Page.Summary }}</p>
+    {{ end }}
+    <div class="bl-article-meta">
+      {{ template "post_meta" . }}
+    </div>
+    {{ pluginSlot "post.after_header" }}
+  </header>
+
+  <article class="bl-reading-panel bl-panel bl-panel-ghost">
+    {{ pluginSlot "post.before_content" }}
+    <div class="bl-prose" data-bl-article-prose>{{ safeHTML .Page.HTMLBody }}</div>
+    {{ pluginSlot "post.after_content" }}
+  </article>
+
+  <div class="bl-article-support">
+    {{ pluginSlot "post.sidebar.top" }}
+
+    <section class="bl-panel bl-panel-mint" data-bl-toc-panel hidden>
+      <div class="bl-section-head bl-section-head-tight">
+        <div class="bl-kicker">On this page</div>
+        <h2>Gentle reading guide</h2>
+      </div>
+      <nav class="bl-toc" data-bl-toc></nav>
+    </section>
+
+    <section class="bl-panel bl-panel-ghost">
+      <div class="bl-section-head bl-section-head-tight">
+        <div class="bl-kicker">Article details</div>
+        <h2>Reading overview</h2>
+      </div>
+      <div class="bl-meta-row">
+        <span>{{ .Page.Type }}</span>
+        <span>{{ .Page.Lang }}</span>
+        <span>{{ .Page.Slug }}</span>
+      </div>
+      {{ pluginSlot "post.sidebar.overview" }}
+    </section>
+
+    {{ template "author_block" . }}
+
+    <section class="bl-panel bl-panel-blush">
+      <div class="bl-section-head bl-section-head-tight">
+        <div class="bl-kicker">Continue reading</div>
+        <h2>More calm editorial moments</h2>
+      </div>
+      <div class="bl-continue-row">
+        {{ template "taxonomy_chips" . }}
+      </div>
+    </section>
+
+    {{ pluginSlot "post.sidebar.bottom" }}
+  </div>
+</section>
+{{ end }}

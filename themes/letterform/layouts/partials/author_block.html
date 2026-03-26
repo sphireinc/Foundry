@@ -1,0 +1,9 @@
+{{ define "author_block" }}
+{{ if .Page.Author }}
+<section class="lf-author-note">
+  <div class="lf-kicker">Author</div>
+  <h2>{{ .Page.Author }}</h2>
+  <p>A subtle editorial note for author context, biography, or publication metadata.</p>
+</section>
+{{ end }}
+{{ end }}

@@ -1,0 +1,45 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="ve-page-hero ve-frame">
+  <div class="ve-kicker">Search</div>
+  <h1>{{ .Title }}</h1>
+  <p class="ve-deck">Search results{{ if .SearchQuery }} for <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+</section>
+
+<section class="ve-frame">
+  <form class="ve-search-form-block" action="/search/" method="get" role="search">
+    <label for="ve-search-input">Search the publication</label>
+    <div class="ve-search-row">
+      <input id="ve-search-input" name="q" type="search" value="{{ .SearchQuery }}" placeholder="Find stories, pages, and notes" />
+      <button class="ve-button ve-button-primary" type="submit">Search</button>
+    </div>
+  </form>
+</section>
+
+<section class="ve-band ve-band-linen">
+  <div class="ve-frame ve-exhibit-stack">
+    {{ range .Documents }}
+    <article class="ve-exhibit-row ve-exhibit-row-soft">
+      <div class="ve-exhibit-text">
+        <div class="ve-meta-row">
+          <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+          <span>{{ .Lang }}</span>
+          {{ if .Date }}<span>{{ .Date.Format "Jan 2, 2006" }}</span>{{ end }}
+        </div>
+        <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+        {{ if .Summary }}
+        <p>{{ .Summary }}</p>
+        {{ end }}
+      </div>
+      <div class="ve-exhibit-mark"><span>→</span></div>
+    </article>
+    {{ else }}
+    <div class="ve-empty-panel">
+      <h3>No results</h3>
+      <p>Nothing matched that search. Try a broader term or browse an archive instead.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

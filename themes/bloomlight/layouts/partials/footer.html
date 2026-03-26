@@ -1,0 +1,34 @@
+{{ define "footer" }}
+<footer class="bl-footer">
+  <div class="bl-frame">
+    <div class="bl-footer-grid">
+      <section class="bl-panel bl-panel-veil">
+        <div class="bl-kicker">Bloomlight</div>
+        <h2>{{ .Site.Title }}</h2>
+        <p>
+          A lifestyle-editorial Foundry theme designed for creators, teams, and businesses that
+          prefer softness, clarity, and calm.
+        </p>
+      </section>
+
+      <section class="bl-panel bl-panel-ghost">
+        <h3>Navigation</h3>
+        <div class="bl-footer-links">
+          {{ range .Nav }}
+          <a href="{{ .URL }}">{{ .Name }}</a>
+          {{ end }}
+        </div>
+      </section>
+
+      <section class="bl-panel bl-panel-mint">
+        <h3>Explore</h3>
+        <div class="bl-footer-links">
+          <a href="/search/">Search</a>
+          <a href="{{ .Site.Feed.RSSPath }}">RSS feed</a>
+          <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+        </div>
+      </section>
+    </div>
+  </div>
+</footer>
+{{ end }}

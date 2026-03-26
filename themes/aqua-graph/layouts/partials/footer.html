@@ -1,0 +1,32 @@
+{{ define "footer" }}
+<footer class="aq-footer">
+  <div class="aq-footer-grid aq-grid aq-grid-desktop-12 aq-grid-tablet-8 aq-grid-mobile-4">
+    <div class="aq-col aq-col-5 aq-col-t-4 aq-col-m-4 aq-footer-column">
+      <div class="aq-footer-heading">{{ .Site.Title }}</div>
+      <p>
+        Aqua Graph turns Foundry into a sharper editorial-product hybrid with structured grids,
+        cool accents, and layout cadence that feels designed, not generated.
+      </p>
+    </div>
+    <div class="aq-col aq-col-3 aq-col-t-2 aq-col-m-4 aq-footer-column">
+      <div class="aq-footer-heading">Navigation</div>
+      <div class="aq-footer-links">
+        {{ range .Nav }}
+        <a href="{{ .URL }}">{{ .Name }}</a>
+        {{ end }}
+      </div>
+    </div>
+    <div class="aq-col aq-col-2 aq-col-t-2 aq-col-m-4 aq-footer-column">
+      <div class="aq-footer-heading">Platform</div>
+      <div class="aq-footer-links">
+        <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+        <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+      </div>
+    </div>
+    <div class="aq-col aq-col-2 aq-col-t-8 aq-col-m-4 aq-footer-column">
+      <div class="aq-footer-heading">Status</div>
+      <p>Built with Foundry CMS and the official Frontend SDK.</p>
+    </div>
+  </div>
+</footer>
+{{ end }}

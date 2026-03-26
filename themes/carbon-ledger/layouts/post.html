@@ -1,0 +1,51 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<div class="article-layout">
+  <section class="article-column">
+    {{ pluginSlot "post.before_header" }}
+    <header class="masthead">
+      <div class="eyebrow">Article</div>
+      <h1>{{ .Page.Title }}</h1>
+      {{ if .Page.Summary }}
+      <p class="lede">{{ .Page.Summary }}</p>
+      {{ end }}
+      {{ template "post_meta" . }}
+    </header>
+    {{ pluginSlot "post.after_header" }}
+
+    <article class="surface article-panel">
+      {{ pluginSlot "post.before_content" }}
+      <div class="ledger-prose">{{ safeHTML .Page.HTMLBody }}</div>
+      {{ pluginSlot "post.after_content" }}
+    </article>
+
+    {{ template "author_block" . }}
+  </section>
+
+  <aside class="article-sidebar">
+    {{ pluginSlot "post.sidebar.top" }}
+
+    <section class="surface side-panel">
+      <h3>Document details</h3>
+      <dl class="definition-list">
+        <div>
+          <dt>Type</dt>
+          <dd>{{ .Page.Type }}</dd>
+        </div>
+        <div>
+          <dt>Slug</dt>
+          <dd>{{ .Page.Slug }}</dd>
+        </div>
+        <div>
+          <dt>Language</dt>
+          <dd>{{ .Page.Lang }}</dd>
+        </div>
+      </dl>
+      {{ pluginSlot "post.sidebar.overview" }}
+    </section>
+
+    {{ template "taxonomy_chips" . }} {{ pluginSlot "post.sidebar.bottom" }}
+  </aside>
+</div>
+{{ end }}

@@ -1,5 +1,7 @@
 package types
 
+import "github.com/sphireinc/foundry/internal/config"
+
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -111,6 +113,24 @@ type ConfigDocumentResponse struct {
 
 type ConfigSaveRequest struct {
 	Raw string `json:"raw"`
+}
+
+type CustomCSSDocumentResponse struct {
+	Path string `json:"path"`
+	Raw  string `json:"raw"`
+}
+
+type CustomCSSSaveRequest struct {
+	Raw string `json:"raw"`
+}
+
+type SettingsFormResponse struct {
+	Path  string        `json:"path"`
+	Value config.Config `json:"value"`
+}
+
+type SettingsFormSaveRequest struct {
+	Value config.Config `json:"value"`
 }
 
 type ThemeRecord struct {

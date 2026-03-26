@@ -1,0 +1,36 @@
+{{ define "content" }}
+<section class="ve-page-hero ve-frame">
+  <div class="ve-kicker">404</div>
+  <h1>{{ .Title }}</h1>
+  <p class="ve-deck">The route <strong>{{ .RequestPath }}</strong> could not be staged.</p>
+  <div class="ve-hero-actions">
+    <a class="ve-button ve-button-primary" href="/">Return home</a>
+    <a class="ve-button ve-button-secondary" href="/search/">Search the site</a>
+  </div>
+</section>
+
+<section class="ve-band ve-band-dark">
+  <div class="ve-frame ve-exhibit-stack">
+    {{ range .Documents }}
+    <article class="ve-exhibit-row">
+      <div class="ve-exhibit-text">
+        <div class="ve-meta-row">
+          <span>{{ if eq .Type "post" }}Post{{ else }}Page{{ end }}</span>
+          <span>{{ .Lang }}</span>
+        </div>
+        <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
+        {{ if .Summary }}
+        <p>{{ .Summary }}</p>
+        {{ end }}
+      </div>
+      <div class="ve-exhibit-mark"><span>404</span></div>
+    </article>
+    {{ else }}
+    <div class="ve-empty-panel">
+      <h3>No fallback content</h3>
+      <p>Publish a few stories and Velvet Ember will use them as recovery suggestions here.</p>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}

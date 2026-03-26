@@ -1,0 +1,17 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="masthead">
+  <div class="eyebrow">Page</div>
+  <h1>{{ .Page.Title }}</h1>
+  {{ if .Page.Summary }}
+  <p class="lede">{{ .Page.Summary }}</p>
+  {{ end }}
+</section>
+
+<article class="surface article-panel">
+  {{ pluginSlot "page.before_content" }}
+  <div class="ledger-prose">{{ safeHTML .Page.HTMLBody }}</div>
+  {{ pluginSlot "page.after_content" }}
+</article>
+{{ end }}

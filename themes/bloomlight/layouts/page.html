@@ -1,0 +1,24 @@
+{{ define "content" }}
+{{ template "breadcrumbs" . }}
+
+<section class="bl-frame bl-page-shell">
+  <header class="bl-page-hero bl-panel bl-panel-veil">
+    <div class="bl-kicker">Page</div>
+    <h1>{{ .Page.Title }}</h1>
+    {{ if .Page.Summary }}
+    <p class="bl-deck">{{ .Page.Summary }}</p>
+    {{ end }}
+    <div class="bl-meta-row">
+      <span>{{ .Page.Type }}</span>
+      <span>{{ .Page.Lang }}</span>
+      {{ if .Page.Author }}<span>{{ .Page.Author }}</span>{{ end }}
+    </div>
+  </header>
+
+  <div class="bl-page-column bl-panel bl-panel-ghost">
+    {{ pluginSlot "page.before_content" }}
+    <div class="bl-prose">{{ safeHTML .Page.HTMLBody }}</div>
+    {{ pluginSlot "page.after_content" }}
+  </div>
+</section>
+{{ end }}
