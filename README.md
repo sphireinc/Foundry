@@ -160,7 +160,7 @@ The shipped themes use these SDKs too:
 - the default admin theme imports the Admin SDK from `/__foundry/sdk/admin/index.js`
 - the default frontend theme boots a small SDK-based runtime from `/theme/js/foundry-theme.js`
 
-Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals.
+Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals. The built-in Extensions admin page itself uses a separate route, `<admin.path>/a-extensions`, so it does not collide with the plugin asset namespace.
 
 ## Quick start
 

@@ -49,6 +49,25 @@ export const createPlatformViews = ({
                 .join('')}</div>`
             : ''
         }
+        ${
+          state.extensionRuntimeErrors?.length
+            ? `<div class="stack">
+                <h3>Runtime Mount Failures</h3>
+                <div class="table table-three">
+                  <div class="table-head"><span>Extension</span><span>Kind</span><span>Error</span></div>
+                  ${state.extensionRuntimeErrors
+                    .map(
+                      (entry) => `<div class="table-row">
+                        <span><strong>${escapeHTML(entry.plugin)}</strong><div class="muted mono">${escapeHTML(entry.key)}</div></span>
+                        <span>${escapeHTML(entry.kind)}${entry.slot ? ` • ${escapeHTML(entry.slot)}` : ''}</span>
+                        <span>${escapeHTML(entry.message || 'Unknown error')}</span>
+                      </div>`
+                    )
+                    .join('')}
+                </div>
+              </div>`
+            : ''
+        }
       </div>`,
       'Bundle readiness and extension diagnostics'
     );

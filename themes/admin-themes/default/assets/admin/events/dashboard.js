@@ -251,13 +251,28 @@ export const bindDashboardEvents = (ctx) => {
     state.documentFilters.type = document.getElementById('document-filter-type')?.value || '';
     state.documentFilters.lang = document.getElementById('document-filter-lang')?.value || '';
     state.documentFilters.author = document.getElementById('document-filter-author')?.value || '';
+    state.documentFilters.tag = document.getElementById('document-filter-tag')?.value || '';
+    state.documentFilters.category =
+      document.getElementById('document-filter-category')?.value || '';
+    state.documentFilters.dateFrom =
+      document.getElementById('document-filter-date-from')?.value || '';
+    state.documentFilters.dateTo = document.getElementById('document-filter-date-to')?.value || '';
     await fetchAll();
     navigate('documents');
   });
 
   document.getElementById('document-search-clear')?.addEventListener('click', async () => {
     state.documentQuery = '';
-    state.documentFilters = { status: '', type: '', lang: '', author: '' };
+    state.documentFilters = {
+      status: '',
+      type: '',
+      lang: '',
+      author: '',
+      tag: '',
+      category: '',
+      dateFrom: '',
+      dateTo: '',
+    };
     const input = document.getElementById('document-search-query');
     if (input) input.value = '';
     await fetchAll();
@@ -547,7 +562,7 @@ export const bindDashboardEvents = (ctx) => {
     state.mediaQuery = document.getElementById('media-search-query').value.trim();
     state.mediaFilters.kind = document.getElementById('media-filter-kind')?.value || '';
     state.mediaFilters.collection = document.getElementById('media-filter-collection')?.value || '';
-    state.mediaFilters.usage = '';
+    state.mediaFilters.usage = document.getElementById('media-filter-usage')?.value || '';
     await fetchAll();
     navigate('media');
   });
@@ -1416,6 +1431,19 @@ export const bindDashboardEvents = (ctx) => {
         `Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`
       );
       render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('overview-validate-site')?.addEventListener('click', async () => {
+    try {
+      state.siteValidation = await admin.raw.post('/api/debug/validate', {});
+      setFlash(
+        `Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`
+      );
+      navigate('debug');
     } catch (error) {
       state.error = error.message || String(error);
       render();

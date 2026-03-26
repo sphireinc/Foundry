@@ -267,6 +267,9 @@ import {
     mount.dataset.extensionStatus = 'loading';
     try {
       const mod = await loadExtensionModule(page);
+      state.extensionRuntimeErrors = state.extensionRuntimeErrors.filter(
+        (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
+      );
       const mountFn = mod?.mountAdminExtensionPage || mod?.default;
       if (typeof mountFn === 'function') {
         await mountFn({
@@ -287,6 +290,17 @@ import {
       }
     } catch (error) {
       mount.dataset.extensionStatus = 'error';
+      state.extensionRuntimeErrors = [
+        ...state.extensionRuntimeErrors.filter(
+          (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
+        ),
+        {
+          kind: 'page',
+          plugin: page.plugin,
+          key: page.key,
+          message: error?.message || String(error),
+        },
+      ];
       mount.innerHTML = `<div class="error">Failed to load plugin admin page bundle: ${escapeHTML(error?.message || String(error))}</div>`;
     }
   };
@@ -306,6 +320,15 @@ import {
         mount.dataset.extensionStatus = 'loading';
         try {
           const mod = await loadExtensionModule(widget);
+          state.extensionRuntimeErrors = state.extensionRuntimeErrors.filter(
+            (entry) =>
+              !(
+                entry.kind === 'widget' &&
+                entry.plugin === widget.plugin &&
+                entry.key === widget.key &&
+                entry.slot === widget.slot
+              )
+          );
           const mountFn = mod?.mountAdminExtensionWidget || mod?.default;
           document.dispatchEvent(
             new CustomEvent('foundry:admin-extension-widget', {
@@ -335,6 +358,24 @@ import {
           }
         } catch (error) {
           mount.dataset.extensionStatus = 'error';
+          state.extensionRuntimeErrors = [
+            ...state.extensionRuntimeErrors.filter(
+              (entry) =>
+                !(
+                  entry.kind === 'widget' &&
+                  entry.plugin === widget.plugin &&
+                  entry.key === widget.key &&
+                  entry.slot === widget.slot
+                )
+            ),
+            {
+              kind: 'widget',
+              plugin: widget.plugin,
+              key: widget.key,
+              slot: widget.slot,
+              message: error?.message || String(error),
+            },
+          ];
           mount.innerHTML = `<div class="error">Failed to load plugin admin widget bundle: ${escapeHTML(error?.message || String(error))}</div>`;
         }
       })
@@ -470,7 +511,11 @@ import {
     if (!node) return fallback;
     const raw = String(node.value || '').trim();
     if (!raw) return fallback;
-    return JSON.parse(raw);
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      throw new Error(`${node.id}: ${error.message}`);
+    }
   };
 
   const collectSettingsFormPayload = () => {
@@ -617,8 +662,10 @@ import {
     if (!document.getElementById('settings-structured-form')) return;
     try {
       state.settingsForm = collectSettingsFormPayload();
+      state.settingsDraftError = '';
       compareSnapshot('settings', state.settingsForm);
-    } catch (_error) {
+    } catch (error) {
+      state.settingsDraftError = error.message || String(error);
     }
   };
 
@@ -888,6 +935,32 @@ import {
       ) {
         return false;
       }
+      if (
+        filters.tag &&
+        !(doc.taxonomies?.tags || [])
+          .map((entry) => String(entry).toLowerCase())
+          .includes(String(filters.tag).toLowerCase())
+      ) {
+        return false;
+      }
+      if (
+        filters.category &&
+        !(doc.taxonomies?.categories || [])
+          .map((entry) => String(entry).toLowerCase())
+          .includes(String(filters.category).toLowerCase())
+      ) {
+        return false;
+      }
+      if (filters.dateFrom || filters.dateTo) {
+        const docDate = doc.date ? new Date(doc.date) : null;
+        if (!docDate || Number.isNaN(docDate.getTime())) return false;
+        if (filters.dateFrom && docDate < new Date(filters.dateFrom)) return false;
+        if (filters.dateTo) {
+          const upper = new Date(filters.dateTo);
+          upper.setHours(23, 59, 59, 999);
+          if (docDate > upper) return false;
+        }
+      }
       return true;
     });
     const sortedDocuments = sortItems(filteredDocuments, 'documents', (doc, field) => {
@@ -907,7 +980,7 @@ import {
     const rows = pagedDocuments.items.map(
       (doc) => `
       <div class="table-row table-row-actions">
-        <span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-document="${escapeHTML(doc.source_path)}" ${state.selectedDocuments.includes(doc.source_path) ? 'checked' : ''}><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></label><div class="muted mono">${escapeHTML(doc.source_path)}</div><div class="muted">Author ${escapeHTML(doc.author || '-')} • ${escapeHTML(doc.lang || '-') }</div></span>
+        <span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-document="${escapeHTML(doc.source_path)}" ${state.selectedDocuments.includes(doc.source_path) ? 'checked' : ''}><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></label><div class="muted mono">${escapeHTML(doc.source_path)}</div><div class="muted">Author ${escapeHTML(doc.author || '-')} • ${escapeHTML(doc.lang || '-')}</div>${!doc.summary ? '<div class="muted">Missing summary</div>' : ''}${!doc.author ? '<div class="muted">Missing author attribution</div>' : ''}</span>
         <span>${escapeHTML(doc.type)}</span>
         <span>${escapeHTML(documentStatusLabel(doc))}</span>
         <span class="row-actions">
@@ -958,6 +1031,10 @@ import {
                 <label>Type<select id="document-filter-type"><option value="">Any</option>${Array.from(new Set((state.documents || []).map((doc) => doc.type).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.type === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
                 <label>Language<select id="document-filter-lang"><option value="">Any</option>${Array.from(new Set((state.documents || []).map((doc) => doc.lang).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.lang === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
                 <label>Author<input id="document-filter-author" type="text" value="${escapeHTML(state.documentFilters.author || '')}" placeholder="Filter by author"></label>
+                <label>Tag<input id="document-filter-tag" type="text" value="${escapeHTML(state.documentFilters.tag || '')}" placeholder="Exact tag"></label>
+                <label>Category<input id="document-filter-category" type="text" value="${escapeHTML(state.documentFilters.category || '')}" placeholder="Exact category"></label>
+                <label>Date From<input id="document-filter-date-from" type="date" value="${escapeHTML(state.documentFilters.dateFrom || '')}"></label>
+                <label>Date To<input id="document-filter-date-to" type="date" value="${escapeHTML(state.documentFilters.dateTo || '')}"></label>
               </div>
               <div class="toolbar">
                 <button type="submit">Search</button>
@@ -1038,6 +1115,8 @@ import {
       const filters = state.mediaFilters || {};
       if (filters.kind && item.kind !== filters.kind) return false;
       if (filters.collection && item.collection !== filters.collection) return false;
+      if (filters.usage === 'used' && !(item.used_by_count > 0)) return false;
+      if (filters.usage === 'unused' && item.used_by_count > 0) return false;
       return true;
     });
     const sortedMedia = sortItems(filteredMedia, 'media', (item, field) => {
@@ -1063,7 +1142,7 @@ import {
     const rows = pagedMedia.items.map(
       (item) => `
       <div class="table-row table-row-actions">
-        <span class="media-library-cell">${mediaThumb(item)}<span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-media-library="${escapeHTML(item.reference)}" ${state.selectedMediaLibrary.includes(item.reference) ? 'checked' : ''}><strong>${escapeHTML(item.name)}</strong></label><div class="muted mono">${escapeHTML(item.reference)}</div></span></span>
+        <span class="media-library-cell">${mediaThumb(item)}<span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-media-library="${escapeHTML(item.reference)}" ${state.selectedMediaLibrary.includes(item.reference) ? 'checked' : ''}><strong>${escapeHTML(item.name)}</strong></label><div class="muted mono">${escapeHTML(item.reference)}</div><div class="muted">Used by ${escapeHTML(String(item.used_by_count || 0))} document(s)</div></span></span>
         <span>${escapeHTML(item.kind)}</span>
         <span>${escapeHTML(item.metadata?.title || item.metadata?.alt || '')}</span>
         <span class="row-actions">
@@ -1091,6 +1170,7 @@ import {
               <div class="frontmatter-grid">
                 <label>Kind<select id="media-filter-kind"><option value="">Any</option>${Array.from(new Set((state.media || []).map((item) => item.kind).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.mediaFilters.kind === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
                 <label>Collection<select id="media-filter-collection"><option value="">Any</option>${Array.from(new Set((state.media || []).map((item) => item.collection).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.mediaFilters.collection === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Usage<select id="media-filter-usage"><option value="">Any</option><option value="used" ${state.mediaFilters.usage === 'used' ? 'selected' : ''}>Used</option><option value="unused" ${state.mediaFilters.usage === 'unused' ? 'selected' : ''}>Unused</option></select></label>
               </div>
               <label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="videos">videos</option><option value="audio">audio</option><option value="documents">documents</option></select></label>
               <!-- Directory uploads remain supported by the backend, but the default admin theme intentionally hides this field to avoid path confusion in the UI. -->
@@ -1133,6 +1213,12 @@ import {
                 <div class="status-line"><strong>Type:</strong> <span class="mono">${escapeHTML(metadata.mime_type || detail?.kind || '')}</span></div>
                 <div class="status-line"><strong>Hash:</strong> <span class="mono">${escapeHTML(metadata.content_hash || '')}</span></div>
                 <div class="status-line"><strong>Size:</strong> <span class="mono">${escapeHTML(String(metadata.file_size || detail?.size || ''))}</span></div>
+                <div class="status-line"><strong>Dimensions:</strong> <span class="mono">${escapeHTML(
+                  metadata.width && metadata.height
+                    ? `${metadata.width} x ${metadata.height}`
+                    : 'n/a'
+                )}</span></div>
+                <div class="status-line"><strong>Used by:</strong> <span class="mono">${escapeHTML(String(detail?.used_by?.length || detail?.used_by_count || 0))}</span></div>
                 <div class="status-line"><strong>Duplicate references:</strong> <span class="mono">${escapeHTML(String((duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).length > 1 ? (duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).join(', ') : 'none'))}</span></div>
                 <div class="status-line"><strong>Uploaded:</strong> <span>${escapeHTML(metadata.uploaded_at ? formatDateTime(metadata.uploaded_at) : '')}</span></div>
                 <div class="status-line"><strong>Uploaded by:</strong> <span>${escapeHTML(metadata.uploaded_by || '')}</span></div>
@@ -1676,6 +1762,7 @@ import {
               <label>Email<input id="user-email" autocomplete="off" type="email" value="${escapeHTML(state.userForm.email)}" placeholder="editor@example.com"></label>
               <label>Role<input id="user-role" autocomplete="off" type="text" value="${escapeHTML(state.userForm.role)}" placeholder="editor"></label>
               <label>Password<input id="user-password" autocomplete="new-password" type="password" value="" placeholder="Leave blank to keep current password"></label>
+              <div class="note">Password policy: minimum ${escapeHTML(String(state.settingsForm?.Admin?.PasswordMinLength || 12))} characters. TOTP can be managed below for higher-assurance accounts.</div>
               <label class="checkbox"><input id="user-disabled" autocomplete="off" type="checkbox" ${state.userForm.disabled ? 'checked' : ''}> Disabled</label>
               <div class="toolbar">
                 <button type="submit">Save User</button>
@@ -1905,6 +1992,7 @@ import {
               ${renderSettingsCheckbox('settings-taxonomies-enabled', 'Enable Taxonomies', !!taxonomies.Enabled)}
               ${renderSettingsText('settings-taxonomies-default-set', 'Default Set', (taxonomies.DefaultSet || []).join(', '), { placeholder: 'tags, categories' })}
             </div>
+            <div class="note">Definitions JSON example: {"tags":{"label":"Tags","archive_layout":"list","order":"alpha"}}</div>
             ${renderSettingsTextarea('settings-taxonomies-definitions', 'Definitions JSON', settingsJSON(taxonomies.Definitions, '{}'), 18)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1917,6 +2005,7 @@ import {
               ${renderSettingsCheckbox('settings-fields-enabled', 'Enable Fields', !!fields.Enabled)}
               ${renderSettingsCheckbox('settings-fields-allow-anything', 'Allow Anything', !!fields.AllowAnything)}
             </div>
+            <div class="note">Schemas JSON example: {"post":[{"name":"summary","type":"text","required":true},{"name":"hero","type":"object","fields":[{"name":"caption","type":"text"}]}]}</div>
             ${renderSettingsTextarea('settings-fields-schemas', 'Schemas JSON', settingsJSON(fields.Schemas, '{}'), 18)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1925,6 +2014,7 @@ import {
         return {
           subtitle: topLevelSubtitleMap[activeTab],
           body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="note">Enabled plugins are stored as a JSON array of plugin names, for example ["readingtime","relatedposts"].</div>
             ${renderSettingsTextarea('settings-plugins-enabled', 'Enabled Plugins JSON Array', settingsJSON(pluginsCfg.Enabled || [], '[]'), 10)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1945,6 +2035,7 @@ import {
               ${renderSettingsText('settings-feed-rss-description', 'RSS Description', feed.RSSDescription)}
               ${renderSettingsText('settings-deploy-default-target', 'Default Deploy Target', deploy.DefaultTarget)}
             </div>
+            <div class="note">Deploy targets JSON example: {"production":{"kind":"local","path":"./public"}}.</div>
             ${renderSettingsTextarea('settings-deploy-targets', 'Deploy Targets JSON', settingsJSON(deploy.Targets, '{}'), 16)}
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
@@ -1953,6 +2044,7 @@ import {
         return {
           subtitle: topLevelSubtitleMap[activeTab],
           body: `<form id="settings-structured-form" class="panel-pad stack">
+            <div class="note">Permalinks, menus, and params stay fully editable here. Use JSON objects such as {"main":[{"name":"Home","url":"/"}]} for menus and {"company_name":"Foundry"} for params.</div>
             ${renderSettingsTextarea('settings-permalinks', 'Permalinks JSON', settingsJSON(cfg.Permalinks, '{}'), 10)}
             ${renderSettingsTextarea('settings-menus', 'Menus JSON', settingsJSON(cfg.Menus, '{}'), 14)}
             ${renderSettingsTextarea('settings-params', 'Params JSON', settingsJSON(cfg.Params, '{}'), 14)}
@@ -2040,6 +2132,11 @@ import {
             )
             .join('')}
         </div>
+        ${
+          state.settingsDraftError && activeTab !== 'config' && activeTab !== 'custom-css'
+            ? `<div class="note error">${escapeHTML(state.settingsDraftError)}</div>`
+            : ''
+        }
       </div>
       ${body}`,
       subtitle
@@ -2281,13 +2378,18 @@ import {
       event.preventDefault();
       try {
         state.settingsForm = collectSettingsFormPayload();
+        state.settingsDraftError = '';
         await admin.settings.saveForm({ value: state.settingsForm });
         setFlash('Settings saved.');
         snapshotValue('settings', state.settingsForm);
         await fetchAll(false);
         navigate('settings');
       } catch (error) {
-        state.error = error.message || String(error);
+        if (String(error.message || error).includes('settings-')) {
+          state.settingsDraftError = error.message || String(error);
+        } else {
+          state.error = error.message || String(error);
+        }
         render();
       }
     });

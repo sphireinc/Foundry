@@ -966,6 +966,14 @@ func TestAdminCustomPathRoutesAndAssets(t *testing.T) {
 		t.Fatalf("unexpected custom plugin extension asset response: %d %s", rr.Code, rr.Body.String())
 	}
 
+	req = httptest.NewRequest(http.MethodGet, "/cms-admin/a-extensions", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `data-admin-base="/cms-admin"`) {
+		t.Fatalf("expected admin extensions section route to serve the admin shell, got %d: %s", rr.Code, rr.Body.String())
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/cms-admin/extensions/search/admin/secret.txt", nil)
 	req.RemoteAddr = "127.0.0.1:10000"
 	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)

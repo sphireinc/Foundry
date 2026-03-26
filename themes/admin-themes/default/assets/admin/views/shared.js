@@ -1,3 +1,4 @@
+import { adminPathForSection, normalizeAdminSection } from '../core/router.js';
 import { escapeHTML, formatDateTime, lifecycleLabel } from '../core/utils.js';
 
 export const renderTableControls = (state, tableName, totalCount, totalPages) => {
@@ -113,6 +114,7 @@ export const mediaThumb = (item) => {
 };
 
 export const shellNav = (state, adminBase, options = {}) => {
+  const currentSection = normalizeAdminSection(state.section);
   const items = [
     ['overview', 'Overview'],
     ['documents', 'Documents'],
@@ -131,11 +133,11 @@ export const shellNav = (state, adminBase, options = {}) => {
   const extensionPages = Array.isArray(options.extensionPages) ? options.extensionPages : [];
   const builtins = items.map(
     ([key, label]) =>
-      `<a class="foundry-nav-item${state.section === key ? ' active' : ''}" href="${adminBase}/${key === 'overview' ? '' : key}" data-section="${key}">${label}</a>`
+      `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
   );
   const extensions = extensionPages.map(
     (page) =>
-      `<a class="foundry-nav-item foundry-nav-item-extension${state.section === page.section ? ' active' : ''}" href="${adminBase}/${page.section === 'overview' ? '' : page.section}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
+      `<a class="foundry-nav-item foundry-nav-item-extension${currentSection === normalizeAdminSection(page.section) ? ' active' : ''}" href="${adminPathForSection(adminBase, page.section)}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
   );
   return builtins.concat(extensions).join('');
 };
@@ -279,7 +281,7 @@ export const renderOverview = (state) => {
     </div>`;
   const queueSection = `<div class="layout-grid">
     <section class="panel">
-      <div class="panel-header"><div><h2>Review Queue</h2><div class="muted">${escapeHTML(String(inReview.length))} documents in review</div></div></div>
+      <div class="panel-header"><div><h2>Review Queue</h2><div class="muted">${escapeHTML(String(inReview.length))} documents in review</div></div><div class="toolbar"><button type="button" class="ghost small" data-section="documents">Open Documents</button></div></div>
       ${
         inReview.length
           ? `<div class="mini-list panel-pad">${inReview
@@ -293,7 +295,7 @@ export const renderOverview = (state) => {
       }
     </section>
     <section class="panel">
-      <div class="panel-header"><div><h2>Scheduled Queue</h2><div class="muted">${escapeHTML(String(scheduled.length))} scheduled documents</div></div></div>
+      <div class="panel-header"><div><h2>Scheduled Queue</h2><div class="muted">${escapeHTML(String(scheduled.length))} scheduled documents</div></div><div class="toolbar"><button type="button" class="ghost small" data-section="documents">Open Documents</button></div></div>
       ${
         scheduled.length
           ? `<div class="mini-list panel-pad">${scheduled
@@ -312,7 +314,7 @@ export const renderOverview = (state) => {
     queueSection +
     `<div class="layout-grid">
       <section class="panel">
-        <div class="panel-header"><div><h2>Integrity</h2><div class="muted">Current runtime validation snapshot</div></div></div>
+        <div class="panel-header"><div><h2>Integrity</h2><div class="muted">Current runtime validation snapshot</div></div><div class="toolbar"><button type="button" class="ghost small" id="overview-validate-site">Run Validation</button><button type="button" class="ghost small" data-section="debug">Open Debug</button></div></div>
         <div class="panel-pad mini-list">
           <div class="mini-list-row"><span>Broken media refs</span><strong>${escapeHTML(runtime.integrity?.broken_media_refs || 0)}</strong></div>
           <div class="mini-list-row"><span>Broken internal links</span><strong>${escapeHTML(runtime.integrity?.broken_internal_links || 0)}</strong></div>

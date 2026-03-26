@@ -239,6 +239,7 @@ type MediaItem struct {
 	PublicURL  string        `json:"public_url"`
 	Kind       string        `json:"kind"`
 	Size       int64         `json:"size"`
+	UsedByCount int          `json:"used_by_count,omitempty"`
 	Metadata   MediaMetadata `json:"metadata,omitempty"`
 }
 
@@ -265,6 +266,8 @@ type MediaMetadata struct {
 	Kind             string     `json:"kind,omitempty" yaml:"kind,omitempty"`
 	ContentHash      string     `json:"content_hash,omitempty" yaml:"content_hash,omitempty"`
 	FileSize         int64      `json:"file_size,omitempty" yaml:"file_size,omitempty"`
+	Width            int        `json:"width,omitempty" yaml:"width,omitempty"`
+	Height           int        `json:"height,omitempty" yaml:"height,omitempty"`
 	FocalX           string     `json:"focal_x,omitempty" yaml:"focal_x,omitempty"`
 	FocalY           string     `json:"focal_y,omitempty" yaml:"focal_y,omitempty"`
 	UploadedAt       *time.Time `json:"uploaded_at,omitempty" yaml:"uploaded_at,omitempty"`

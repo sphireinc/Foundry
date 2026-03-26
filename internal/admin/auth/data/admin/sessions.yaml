@@ -1,6 +1,6 @@
 sessions:
-    - token: jX6Swinmuo6kG1DBxSyrnU2_lB2F-odF4rX_644f7zg
-      csrf_token: ULpmSYy3dGZxHzk2GJQdEqdWGdcPQsjti3p4Rp1AOq8
+    - token: TlcRbqeJhFgLNuTkmuIfvpdzjld6jnGiyWBeiw1L0VM
+      csrf_token: 5RrOvOA1aBfLfxB2NsD_T9Boanbluwc082X-uLFCxa4
       username: admin
       name: Admin User
       email: admin@example.com
@@ -8,11 +8,11 @@ sessions:
       capabilities:
         - '*'
       mfa_complete: true
-      issued_at: 2026-03-25T23:44:16.625691-04:00
-      last_seen: 2026-03-25T23:44:16.625691-04:00
-      expires_at: 2026-03-26T00:14:16.625691-04:00
-    - token: VhQzlY6i1kr4FhGU-JVxlywFxpxBHCVq9gel5V2O_N8
-      csrf_token: YNFNObjUQWUP-lkpBR3kIsywt91r9VMwFAfdoe0kSx0
+      issued_at: 2026-03-26T00:22:48.884985-04:00
+      last_seen: 2026-03-26T00:22:48.884985-04:00
+      expires_at: 2026-03-26T00:52:48.884985-04:00
+    - token: iT9aU4mXDlZvDfV80krTOpPMcUA_Drhy4uANqxSGQ78
+      csrf_token: Y2E-yi-AKgRr1lmnnQQEgSLgI4HELywwFE6woSK5mVA
       username: editor
       name: Editor User
       email: editor@example.com
@@ -31,6 +31,6 @@ sessions:
         - media.lifecycle
         - audit.read
       mfa_complete: true
-      issued_at: 2026-03-25T23:44:17.141073-04:00
-      last_seen: 2026-03-25T23:44:17.141697-04:00
-      expires_at: 2026-03-26T00:14:17.141697-04:00
+      issued_at: 2026-03-26T00:22:49.475967-04:00
+      last_seen: 2026-03-26T00:22:49.477393-04:00
+      expires_at: 2026-03-26T00:52:49.477393-04:00
