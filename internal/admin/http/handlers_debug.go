@@ -19,6 +19,11 @@ func registerDebugRoutes(r *Router) []routeDef {
 			capability: "debug.read",
 		},
 		{
+			pattern:    r.routePath("/api/debug/validate"),
+			handler:    http.HandlerFunc(r.handleSiteValidation),
+			capability: "debug.read",
+		},
+		{
 			pattern:    r.routePath("/debug/pprof/"),
 			handler:    http.HandlerFunc(r.handlePprofIndex),
 			capability: "debug.read",
@@ -52,6 +57,19 @@ func (r *Router) handleRuntimeStatus(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	status, err := r.service.GetRuntimeStatus(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (r *Router) handleSiteValidation(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	status, err := r.service.ValidateSite(req.Context())
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err)
 		return

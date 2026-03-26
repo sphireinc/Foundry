@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ import (
 
 const maxMediaUploadSize = 256 << 20
 
+var mediaReferencePattern = regexp.MustCompile(`media:[a-z]+/[^\s"'<>]+`)
+
 func (s *Service) ListMedia(ctx context.Context, query ...string) ([]types.MediaItem, error) {
 	if err := requireCapability(ctx, "media.read"); err != nil {
 		return nil, err
@@ -30,6 +33,10 @@ func (s *Service) ListMedia(ctx context.Context, query ...string) ([]types.Media
 	}
 
 	var items []types.MediaItem
+	usageCounts, err := s.mediaUsageCounts()
+	if err != nil {
+		return nil, err
+	}
 	for _, collection := range []string{"images", "videos", "audio", "documents", "uploads", "assets"} {
 		root, err := s.mediaRoot(collection)
 		if err != nil {
@@ -78,14 +85,15 @@ func (s *Service) ListMedia(ctx context.Context, query ...string) ([]types.Media
 			}
 
 			items = append(items, types.MediaItem{
-				Collection: collection,
-				Path:       resolved.Path,
-				Name:       filepath.Base(resolved.Path),
-				Reference:  ref,
-				PublicURL:  resolved.PublicURL,
-				Kind:       string(resolved.Kind),
-				Size:       info.Size(),
-				Metadata:   metadata,
+				Collection:  collection,
+				Path:        resolved.Path,
+				Name:        filepath.Base(resolved.Path),
+				Reference:   ref,
+				PublicURL:   resolved.PublicURL,
+				Kind:        string(resolved.Kind),
+				Size:        info.Size(),
+				UsedByCount: usageCounts[ref],
+				Metadata:    metadata,
 			})
 			return nil
 		})
@@ -212,6 +220,8 @@ func (s *Service) SaveMedia(ctx context.Context, collection, dir, filename, cont
 				Kind:             string(uploadInfo.Kind),
 				ContentHash:      uploadInfo.ContentHash,
 				FileSize:         uploadInfo.Size,
+				Width:            uploadInfo.Width,
+				Height:           uploadInfo.Height,
 				UploadedAt:       timePtr(now.UTC()),
 				UploadedBy:       actorLabelFromContext(ctx),
 			},
@@ -464,6 +474,10 @@ func normalizeMediaMetadata(metadata types.MediaMetadata) types.MediaMetadata {
 	metadata.MIMEType = strings.ToLower(strings.TrimSpace(metadata.MIMEType))
 	metadata.Kind = strings.TrimSpace(metadata.Kind)
 	metadata.ContentHash = strings.ToLower(strings.TrimSpace(metadata.ContentHash))
+	metadata.Width = max(metadata.Width, 0)
+	metadata.Height = max(metadata.Height, 0)
+	metadata.FocalX = strings.TrimSpace(metadata.FocalX)
+	metadata.FocalY = strings.TrimSpace(metadata.FocalY)
 	metadata.UploadedBy = strings.TrimSpace(metadata.UploadedBy)
 	if len(metadata.Tags) > 0 {
 		tags := make([]string, 0, len(metadata.Tags))
@@ -499,6 +513,10 @@ func mediaMetadataEmpty(metadata types.MediaMetadata) bool {
 		metadata.Kind == "" &&
 		metadata.ContentHash == "" &&
 		metadata.FileSize == 0 &&
+		metadata.Width == 0 &&
+		metadata.Height == 0 &&
+		metadata.FocalX == "" &&
+		metadata.FocalY == "" &&
 		metadata.UploadedAt == nil &&
 		metadata.UploadedBy == ""
 }
@@ -616,6 +634,8 @@ func (s *Service) writeUploadedMediaMetadata(primaryPath string, info media.Uplo
 		Kind:             string(info.Kind),
 		ContentHash:      info.ContentHash,
 		FileSize:         info.Size,
+		Width:            info.Width,
+		Height:           info.Height,
 		UploadedAt:       timePtr(now.UTC()),
 		UploadedBy:       strings.TrimSpace(actor),
 	}
@@ -643,6 +663,8 @@ func preserveEditableMediaMetadata(existing types.MediaMetadata, info media.Uplo
 	existing.Kind = string(info.Kind)
 	existing.ContentHash = info.ContentHash
 	existing.FileSize = info.Size
+	existing.Width = info.Width
+	existing.Height = info.Height
 	if existing.UploadedAt == nil {
 		existing.UploadedAt = timePtr(now.UTC())
 	}
@@ -664,7 +686,31 @@ func mergeEditableMediaMetadata(existing, requested types.MediaMetadata) types.M
 	existing.Description = requested.Description
 	existing.Credit = requested.Credit
 	existing.Tags = append([]string(nil), requested.Tags...)
+	existing.FocalX = requested.FocalX
+	existing.FocalY = requested.FocalY
 	return existing
+}
+
+func (s *Service) mediaUsageCounts() (map[string]int, error) {
+	graph, err := s.load(context.Background(), true)
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int)
+	for _, doc := range graph.Documents {
+		raw, err := s.fs.ReadFile(doc.SourcePath)
+		if err != nil {
+			return nil, err
+		}
+		seen := make(map[string]struct{})
+		for _, match := range mediaReferencePattern.FindAllString(string(raw), -1) {
+			seen[match] = struct{}{}
+		}
+		for ref := range seen {
+			counts[ref]++
+		}
+	}
+	return counts, nil
 }
 
 func uploadTitle(filename string) string {

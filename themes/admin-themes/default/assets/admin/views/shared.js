@@ -1,3 +1,4 @@
+import { adminPathForSection, normalizeAdminSection } from '../core/router.js';
 import { escapeHTML, formatDateTime, lifecycleLabel } from '../core/utils.js';
 
 export const renderTableControls = (state, tableName, totalCount, totalPages) => {
@@ -113,6 +114,7 @@ export const mediaThumb = (item) => {
 };
 
 export const shellNav = (state, adminBase, options = {}) => {
+  const currentSection = normalizeAdminSection(state.section);
   const items = [
     ['overview', 'Overview'],
     ['documents', 'Documents'],
@@ -124,17 +126,18 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['audit', 'Audit'],
     ['users', 'Users'],
     ['settings', 'Settings'],
+    ['extensions', 'Extensions'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
   ];
   const extensionPages = Array.isArray(options.extensionPages) ? options.extensionPages : [];
   const builtins = items.map(
     ([key, label]) =>
-      `<a class="foundry-nav-item${state.section === key ? ' active' : ''}" href="${adminBase}/${key === 'overview' ? '' : key}" data-section="${key}">${label}</a>`
+      `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
   );
   const extensions = extensionPages.map(
     (page) =>
-      `<a class="foundry-nav-item foundry-nav-item-extension${state.section === page.section ? ' active' : ''}" href="${adminBase}/${page.section === 'overview' ? '' : page.section}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
+      `<a class="foundry-nav-item foundry-nav-item-extension${currentSection === normalizeAdminSection(page.section) ? ' active' : ''}" href="${adminPathForSection(adminBase, page.section)}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
   );
   return builtins.concat(extensions).join('');
 };
@@ -258,6 +261,7 @@ export const renderTrashSelectionRows = (entries, selected, kind) =>
 
 export const renderOverview = (state) => {
   const content = state.status?.content || {};
+  const runtime = state.runtimeStatus || {};
   const inReview = (state.documents || []).filter((doc) => doc.status === 'in_review');
   const scheduled = (state.documents || []).filter((doc) => doc.status === 'scheduled');
   const cards = `
@@ -270,10 +274,14 @@ export const renderOverview = (state) => {
       <article class="card"><span class="card-label">Users</span><strong>${escapeHTML(state.users.length)}</strong><span class="card-copy">Filesystem-backed admin accounts.</span></article>
       <article class="card"><span class="card-label">Settings Sections</span><strong>${escapeHTML(state.settingsSections.length)}</strong><span class="card-copy">Core and plugin-defined settings groups.</span></article>
       <article class="card"><span class="card-label">Admin Extensions</span><strong>${escapeHTML((state.adminExtensions.pages?.length || 0) + (state.adminExtensions.widgets?.length || 0) + (state.adminExtensions.settings?.length || 0))}</strong><span class="card-copy">Plugin-defined pages, widgets, and settings entries.</span></article>
+      <article class="card"><span class="card-label">Broken Refs</span><strong>${escapeHTML((runtime.integrity?.broken_media_refs || 0) + (runtime.integrity?.broken_internal_links || 0))}</strong><span class="card-copy">Media and internal-link validation findings.</span></article>
+      <article class="card"><span class="card-label">Active Sessions</span><strong>${escapeHTML(runtime.activity?.active_sessions || 0)}</strong><span class="card-copy">Persisted admin sessions.</span></article>
+      <article class="card"><span class="card-label">Active Locks</span><strong>${escapeHTML(runtime.activity?.active_document_locks || 0)}</strong><span class="card-copy">Documents currently being edited.</span></article>
+      <article class="card"><span class="card-label">Validate Site</span><strong>${escapeHTML(state.siteValidation?.message_count || 0)}</strong><span class="card-copy">Latest admin validation findings.</span></article>
     </div>`;
   const queueSection = `<div class="layout-grid">
     <section class="panel">
-      <div class="panel-header"><div><h2>Review Queue</h2><div class="muted">${escapeHTML(String(inReview.length))} documents in review</div></div></div>
+      <div class="panel-header"><div><h2>Review Queue</h2><div class="muted">${escapeHTML(String(inReview.length))} documents in review</div></div><div class="toolbar"><button type="button" class="ghost small" data-section="documents">Open Documents</button></div></div>
       ${
         inReview.length
           ? `<div class="mini-list panel-pad">${inReview
@@ -287,7 +295,7 @@ export const renderOverview = (state) => {
       }
     </section>
     <section class="panel">
-      <div class="panel-header"><div><h2>Scheduled Queue</h2><div class="muted">${escapeHTML(String(scheduled.length))} scheduled documents</div></div></div>
+      <div class="panel-header"><div><h2>Scheduled Queue</h2><div class="muted">${escapeHTML(String(scheduled.length))} scheduled documents</div></div><div class="toolbar"><button type="button" class="ghost small" data-section="documents">Open Documents</button></div></div>
       ${
         scheduled.length
           ? `<div class="mini-list panel-pad">${scheduled
@@ -304,6 +312,30 @@ export const renderOverview = (state) => {
   return (
     cards +
     queueSection +
+    `<div class="layout-grid">
+      <section class="panel">
+        <div class="panel-header"><div><h2>Integrity</h2><div class="muted">Current runtime validation snapshot</div></div><div class="toolbar"><button type="button" class="ghost small" id="overview-validate-site">Run Validation</button><button type="button" class="ghost small" data-section="debug">Open Debug</button></div></div>
+        <div class="panel-pad mini-list">
+          <div class="mini-list-row"><span>Broken media refs</span><strong>${escapeHTML(runtime.integrity?.broken_media_refs || 0)}</strong></div>
+          <div class="mini-list-row"><span>Broken internal links</span><strong>${escapeHTML(runtime.integrity?.broken_internal_links || 0)}</strong></div>
+          <div class="mini-list-row"><span>Missing templates</span><strong>${escapeHTML(runtime.integrity?.missing_templates || 0)}</strong></div>
+          <div class="mini-list-row"><span>Orphaned media</span><strong>${escapeHTML(runtime.integrity?.orphaned_media || 0)}</strong></div>
+          <div class="mini-list-row"><span>Duplicate URLs/slugs</span><strong>${escapeHTML((runtime.integrity?.duplicate_urls || 0) + (runtime.integrity?.duplicate_slugs || 0))}</strong></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><div><h2>Recent Activity</h2><div class="muted">${escapeHTML(runtime.activity?.recent_audit_events || 0)} audit events in window</div></div></div>
+        <div class="panel-pad mini-list">
+          ${Object.entries(runtime.activity?.recent_audit_by_action || {})
+            .slice(0, 6)
+            .map(
+              ([action, count]) =>
+                `<div class="mini-list-row"><span>${escapeHTML(action)}</span><strong>${escapeHTML(count)}</strong></div>`
+            )
+            .join('') || '<div class="empty-state">No recent audit activity yet.</div>'}
+        </div>
+      </section>
+    </div>` +
     (state.loadErrors.length
       ? `<div class="panel"><div class="panel-pad"><div class="error">${escapeHTML(summarizeLoadErrors(state))}</div></div></div>`
       : '')

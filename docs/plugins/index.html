@@ -131,6 +131,11 @@ admin:
             paths and keeping them inside the plugin root.
           </p>
           <p>
+            The default admin shell's Extensions page itself lives at
+            <code>&lt;admin.path&gt;/a-extensions</code>. That route is separate from the
+            plugin bundle asset namespace so the shell page and plugin assets do not collide.
+          </p>
+          <p>
             When that page is active, the default admin shell dispatches
             <code>foundry:admin-extension-page</code>, exposes <code>window.FoundryAdmin</code>, and
             will automatically import the plugin module if one is declared. A page bundle can export

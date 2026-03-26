@@ -105,6 +105,17 @@ type RuntimeBuildStatus struct {
 	SearchMS      int64     `json:"search_ms"`
 }
 
+type SiteValidationResponse struct {
+	BrokenMediaRefs       []string `json:"broken_media_refs,omitempty"`
+	BrokenInternalLinks   []string `json:"broken_internal_links,omitempty"`
+	MissingTemplates      []string `json:"missing_templates,omitempty"`
+	OrphanedMedia         []string `json:"orphaned_media,omitempty"`
+	DuplicateURLs         []string `json:"duplicate_urls,omitempty"`
+	DuplicateSlugs        []string `json:"duplicate_slugs,omitempty"`
+	TaxonomyInconsistency []string `json:"taxonomy_inconsistency,omitempty"`
+	MessageCount          int      `json:"message_count"`
+}
+
 type ContentStatus struct {
 	DocumentCount int            `json:"document_count"`
 	RouteCount    int            `json:"route_count"`

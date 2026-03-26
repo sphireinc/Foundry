@@ -40,5 +40,6 @@ jobs:
         with:
           comment-summary-in-pr: always
           fail-on-severity: high
+          allow-dependencies-licenses: pkg:githubactions/actions/checkout, pkg:githubactions/actions/setup-go, pkg:githubactions/actions/go-dependency-submission
+          retry-on-snapshot-warnings: true
         #   deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
-        #   retry-on-snapshot-warnings: true
