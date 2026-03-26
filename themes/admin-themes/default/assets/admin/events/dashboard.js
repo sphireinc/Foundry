@@ -1398,7 +1398,6 @@ export const bindDashboardEvents = (ctx) => {
     state.auditFilters = { actor: '', action: '', outcome: '' };
     render();
   });
-
   document.getElementById('debug-refresh-runtime')?.addEventListener('click', async () => {
     try {
       state.runtimeStatus = await admin.raw.get('/api/debug/runtime');

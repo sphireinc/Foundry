@@ -1,0 +1,50 @@
+Additional Permission: Plugin Exception
+
+This file is part of Foundry.
+
+Foundry is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Additional permission under GNU Affero General Public License version 3,
+section 7:
+
+Notwithstanding any other provision of the GNU Affero General Public
+License, version 3, a work that is designed to be loaded by Foundry
+through the documented plugin, extension, module, or hook interfaces
+provided by Foundry, and that uses only those published interfaces,
+shall be deemed a separate and independent work and not a covered work
+based on Foundry solely by reason of being loaded by, linked with,
+or communicating with Foundry.
+
+Accordingly, the license terms of this License do not apply to such
+plugins solely because they are used with or for Foundry. Authors of
+such plugins may license them under terms of their choice, including
+proprietary terms.
+
+This additional permission applies only to plugins, extensions, modules,
+or adapters that:
+  (1) are developed independently of Foundry;
+  (2) are not derived from or based on non-interface portions of
+      Foundry;
+  (3) do not copy code from Foundry except for minimal code snippets
+      that are themselves separately licensed or otherwise permitted for
+      such use;
+  (4) use only the stable, documented, public plugin APIs, hook APIs,
+      event APIs, service APIs, or command interfaces that Foundry
+      designates for third-party extensions; and
+  (5) do not require modification of Foundry itself in order to run,
+      other than ordinary installation, configuration, or use of
+      supported extension mechanisms.
+
+For the avoidance of doubt, if a plugin, extension, module, or adapter
+includes code from Foundry other than as permitted above, depends on
+non-public or internal interfaces of Foundry, or is otherwise a
+derivative work of Foundry under applicable copyright law, then this
+additional permission does not apply to that work.
+
+This additional permission does not limit the copyleft terms applicable
+to Foundry itself, nor to any modifications to Foundry. If you
+modify Foundry, those modifications remain subject to the GNU Affero
+General Public License, including section 13 where applicable.
