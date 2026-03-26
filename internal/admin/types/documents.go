@@ -232,15 +232,15 @@ type DocumentLifecycleResponse struct {
 }
 
 type MediaItem struct {
-	Collection string        `json:"collection"`
-	Path       string        `json:"path"`
-	Name       string        `json:"name"`
-	Reference  string        `json:"reference"`
-	PublicURL  string        `json:"public_url"`
-	Kind       string        `json:"kind"`
-	Size       int64         `json:"size"`
-	UsedByCount int          `json:"used_by_count,omitempty"`
-	Metadata   MediaMetadata `json:"metadata,omitempty"`
+	Collection  string        `json:"collection"`
+	Path        string        `json:"path"`
+	Name        string        `json:"name"`
+	Reference   string        `json:"reference"`
+	PublicURL   string        `json:"public_url"`
+	Kind        string        `json:"kind"`
+	Size        int64         `json:"size"`
+	UsedByCount int           `json:"used_by_count,omitempty"`
+	Metadata    MediaMetadata `json:"metadata,omitempty"`
 }
 
 type MediaUploadResponse struct {

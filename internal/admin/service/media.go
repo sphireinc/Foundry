@@ -85,15 +85,15 @@ func (s *Service) ListMedia(ctx context.Context, query ...string) ([]types.Media
 			}
 
 			items = append(items, types.MediaItem{
-				Collection: collection,
-				Path:       resolved.Path,
-				Name:       filepath.Base(resolved.Path),
-				Reference:  ref,
-				PublicURL:  resolved.PublicURL,
-				Kind:       string(resolved.Kind),
-				Size:       info.Size(),
+				Collection:  collection,
+				Path:        resolved.Path,
+				Name:        filepath.Base(resolved.Path),
+				Reference:   ref,
+				PublicURL:   resolved.PublicURL,
+				Kind:        string(resolved.Kind),
+				Size:        info.Size(),
 				UsedByCount: usageCounts[ref],
-				Metadata:   metadata,
+				Metadata:    metadata,
 			})
 			return nil
 		})
