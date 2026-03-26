@@ -40,5 +40,5 @@ jobs:
         with:
           comment-summary-in-pr: always
           fail-on-severity: high
+          retry-on-snapshot-warnings: true
         #   deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
-        #   retry-on-snapshot-warnings: true
