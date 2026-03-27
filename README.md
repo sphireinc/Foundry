@@ -26,6 +26,16 @@ The project is aimed at teams that want a file-based workflow without giving up 
 - Serves the site locally with live reload during development
 - Tracks document, template, data, and taxonomy dependencies for incremental rebuilds
 
+## Quick Start
+
+The fastest way to get the project running locally is via Docker:
+
+```bash
+docker-compose up
+```
+
+Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, and run Foundry locally.
+
 ## Project layout
 
 ```text
@@ -162,7 +172,7 @@ The shipped themes use these SDKs too:
 
 Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals. The built-in Extensions admin page itself uses a separate route, `<admin.path>/a-extensions`, so it does not collide with the plugin asset namespace.
 
-## Quick start
+## Getting Started
 
 ### Prerequisites
 
