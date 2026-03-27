@@ -36,6 +36,10 @@ docker-compose up
 
 Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, and run Foundry locally.
 
+Foundry will run on `http://localhost:8080/` by default, and the admin panel
+is reachable at `http://localhost:8080/__admin`. The default login on a 
+new install is `admin:admin`.
+
 ## Project layout
 
 ```text
