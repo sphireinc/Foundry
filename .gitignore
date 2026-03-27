@@ -15,6 +15,12 @@ assessment-security.txt
 assessment-static-analysis.txt
 assessment-esm.txt
 
+### Foundry Development
+saas-backend/
+react-foundry-saas-dashboard/
+foundry-saas-dashboard/
+.github/workflows/saas-backend-ci.yml
+
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,windows,macos,dotenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=go,windows,macos,dotenv
