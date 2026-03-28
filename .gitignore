@@ -16,10 +16,8 @@ assessment-static-analysis.txt
 assessment-esm.txt
 
 ### Foundry Development
-saas-backend/
-react-foundry-saas-dashboard/
-foundry-saas-dashboard/
-.github/workflows/saas-backend-ci.yml
+Foundry-Cloud-API
+Foundry-Cloud-Dashboard
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,windows,macos,dotenv
