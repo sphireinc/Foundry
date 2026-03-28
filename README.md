@@ -14,6 +14,8 @@ Foundry is a Markdown-first CMS written in Go. It keeps content in files, render
 
 The project is aimed at teams that want a file-based workflow without giving up CMS-style features such as taxonomies, fields, feeds, plugin hooks, and an admin surface.
 
+See more of Foundry here: [Foundry Screenshots](README_SCREENSHOTS.md)
+
 ## What Foundry does
 
 - Stores pages and posts as Markdown with frontmatter
