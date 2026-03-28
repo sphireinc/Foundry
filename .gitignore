@@ -3,10 +3,8 @@ public/
 bin/
 node_modules
 
-### Foundry specific files
-.jsonl
+### Foundry planning files
 assessment-*.txt
-
 assessment-admin.txt
 assessment-product.txt
 assessment-roadmap.txt
@@ -15,7 +13,7 @@ assessment-security.txt
 assessment-static-analysis.txt
 assessment-esm.txt
 
-### Foundry Development
+### Foundry Internal
 Foundry-Cloud-API
 Foundry-Cloud-Dashboard
 
