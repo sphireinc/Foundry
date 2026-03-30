@@ -12,10 +12,13 @@ assessment-technical-debt.txt
 assessment-security.txt
 assessment-static-analysis.txt
 assessment-esm.txt
+assessment-customer.txt
 
 ### Foundry Internal
 Foundry-Cloud-API
 Foundry-Cloud-Dashboard
+Foundry-Cloud-Landing
+planning-docs
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,windows,macos,dotenv
