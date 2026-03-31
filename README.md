@@ -36,7 +36,7 @@ The fastest way to get the project running locally is via Docker:
 docker-compose up
 ```
 
-Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, and run Foundry locally.
+Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, run Foundry locally, or run it in portable standalone mode without Docker.
 
 Foundry will run on `http://localhost:8080/` by default, and the admin panel
 is reachable at `http://localhost:8080/__admin`. The default login on a 
@@ -262,6 +262,20 @@ foundry serve
 
 Then open `http://localhost:8080/`.
 
+If you want Foundry to stay running after you close the terminal, use standalone mode:
+
+```bash
+foundry serve-standalone
+foundry status
+foundry logs -f
+foundry stop
+```
+
+Standalone mode stores its runtime files under `.foundry/run/` in the project:
+
+- `standalone.json`
+- `standalone.log`
+
 To produce static output:
 
 ```bash
@@ -287,7 +301,12 @@ foundry build --preview
 foundry build --env preview --target production
 foundry serve
 foundry serve --debug
+foundry serve-standalone
 foundry serve-preview
+foundry status
+foundry restart
+foundry stop
+foundry logs -f
 foundry plugin list --enabled
 foundry theme list
 foundry routes check
@@ -302,6 +321,30 @@ foundry admin hash-password your-password
 4. Reference media from Markdown with the `media:` scheme.
 5. Run `foundry serve` during development.
 6. Run `foundry build` before publishing or checking generated output.
+
+### Standalone mode
+
+For simple self-hosting or local development where you want Foundry to keep running in the background without Docker, use:
+
+```bash
+foundry serve-standalone
+```
+
+Then manage it with:
+
+```bash
+foundry status
+foundry logs
+foundry logs -f
+foundry restart
+foundry stop
+```
+
+Notes:
+
+- standalone mode is designed for macOS and Linux
+- it writes state and logs under `.foundry/run/`
+- it is a portable convenience runtime, not a replacement for Docker, `systemd`, or `launchd` in more serious production setups
 
 Embedded media uses normal Markdown image syntax:
 
