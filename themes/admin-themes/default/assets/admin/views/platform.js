@@ -313,7 +313,12 @@ export const createPlatformViews = ({
       .join('');
     return panel(
       'Themes',
-      `${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
+      `<form id="theme-install-form" class="inline-form compact-inline-form">
+        <label class="frontmatter-span-2">Install Theme URL<input id="theme-install-url" type="text" placeholder="github.com/acme/aurora"></label>
+        <label>Directory Name<input id="theme-install-name" type="text" placeholder="aurora"></label>
+        <label class="frontmatter-span-2">Kind<select id="theme-install-kind"><option value="frontend">Frontend</option><option value="admin">Admin</option></select></label>
+        <button type="submit">Install</button>
+      </form>${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
       `${state.themes.length} frontend and admin themes`
     );
   };

@@ -400,6 +400,7 @@ func (s *Service) ListThemes(ctx context.Context) ([]types.ThemeRecord, error) {
 			record.Title = manifest.Title
 			record.Version = manifest.Version
 			record.Description = manifest.Description
+			record.Repo = manifest.Repo
 			record.SDKVersion = manifest.SDKVersion
 			record.CompatibilityVersion = manifest.CompatibilityVersion
 			record.MinFoundryVersion = manifest.MinFoundryVersion
@@ -423,6 +424,7 @@ func (s *Service) ListThemes(ctx context.Context) ([]types.ThemeRecord, error) {
 			record.Title = manifest.Title
 			record.Version = manifest.Version
 			record.Description = manifest.Description
+			record.Repo = manifest.Repo
 			record.AdminAPI = manifest.AdminAPI
 			record.SDKVersion = manifest.SDKVersion
 			record.CompatibilityVersion = manifest.CompatibilityVersion
@@ -437,6 +439,68 @@ func (s *Service) ListThemes(ctx context.Context) ([]types.ThemeRecord, error) {
 		out = append(out, record)
 	}
 	return out, nil
+}
+
+func (s *Service) InstallTheme(ctx context.Context, url, name, kind string) (*types.ThemeRecord, error) {
+	_ = ctx
+	installKind := theme.InstallKind(strings.TrimSpace(kind))
+	if installKind == "" {
+		installKind = theme.InstallKindFrontend
+	}
+	meta, err := theme.Install(theme.InstallOptions{
+		ThemesDir: s.cfg.ThemesDir,
+		URL:       url,
+		Name:      name,
+		Kind:      installKind,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	switch m := meta.(type) {
+	case *theme.Manifest:
+		record := &types.ThemeRecord{
+			Name:                 m.Name,
+			Kind:                 "frontend",
+			Title:                m.Title,
+			Version:              m.Version,
+			Description:          m.Description,
+			Repo:                 m.Repo,
+			SDKVersion:           m.SDKVersion,
+			CompatibilityVersion: m.CompatibilityVersion,
+			MinFoundryVersion:    m.MinFoundryVersion,
+			SupportedLayouts:     append([]string(nil), m.RequiredLayouts()...),
+			Screenshots:          append([]string(nil), m.Screenshots...),
+			ConfigSchema:         toFieldSchema(m.ConfigSchema),
+		}
+		if validation, err := theme.ValidateInstalledDetailed(s.cfg.ThemesDir, m.Name); err == nil {
+			record.Valid = validation.Valid
+			record.Diagnostics = toValidationDiagnostics(validation.Diagnostics)
+		}
+		return record, nil
+	case *adminui.Manifest:
+		record := &types.ThemeRecord{
+			Name:                 m.Name,
+			Kind:                 "admin",
+			Title:                m.Title,
+			Version:              m.Version,
+			Description:          m.Description,
+			Repo:                 m.Repo,
+			AdminAPI:             m.AdminAPI,
+			SDKVersion:           m.SDKVersion,
+			CompatibilityVersion: m.CompatibilityVersion,
+			Components:           append([]string(nil), m.Components...),
+			WidgetSlots:          append([]string(nil), m.WidgetSlots...),
+			Screenshots:          append([]string(nil), m.Screenshots...),
+		}
+		if validation, err := adminui.ValidateTheme(s.cfg.ThemesDir, m.Name); err == nil {
+			record.Valid = validation.Valid
+			record.Diagnostics = toAdminThemeDiagnostics(validation.Diagnostics)
+		}
+		return record, nil
+	default:
+		return nil, fmt.Errorf("unexpected installed theme metadata type")
+	}
 }
 
 func (s *Service) SwitchTheme(ctx context.Context, name string) error {

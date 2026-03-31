@@ -23,6 +23,7 @@ func registerManagementRoutes(r *Router) []routeDef {
 		{pattern: r.routePath("/api/config"), handler: http.HandlerFunc(r.handleConfigDocument), capability: "config.manage"},
 		{pattern: r.routePath("/api/config/save"), handler: http.HandlerFunc(r.handleSaveConfigDocument), capability: "config.manage"},
 		{pattern: r.routePath("/api/themes"), handler: http.HandlerFunc(r.handleThemes), capability: "themes.manage"},
+		{pattern: r.routePath("/api/themes/install"), handler: http.HandlerFunc(r.handleInstallTheme), capability: "themes.manage"},
 		{pattern: r.routePath("/api/themes/validate"), handler: http.HandlerFunc(r.handleValidateTheme), capability: "themes.manage"},
 		{pattern: r.routePath("/api/themes/switch"), handler: http.HandlerFunc(r.handleThemeSwitch), capability: "themes.manage"},
 		{pattern: r.routePath("/api/plugins"), handler: http.HandlerFunc(r.handlePlugins), capability: "plugins.manage"},
@@ -259,6 +260,31 @@ func (r *Router) handleThemeSwitch(w http.ResponseWriter, req *http.Request) {
 	}
 	r.logAuditRequest(req, "theme.switch", "success", target, nil)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (r *Router) handleInstallTheme(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.ThemeInstallRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	record, err := r.service.InstallTheme(req.Context(), body.URL, body.Name, body.Kind)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	target := record.Name
+	if record.Kind == "admin" {
+		target = "admin:" + record.Name
+	}
+	r.logAuditRequest(req, "theme.install", "success", target, nil)
+	writeJSON(w, http.StatusOK, record)
 }
 
 func (r *Router) handleValidateTheme(w http.ResponseWriter, req *http.Request) {

@@ -139,6 +139,7 @@ type ThemeRecord struct {
 	Title                string                 `json:"title"`
 	Version              string                 `json:"version"`
 	Description          string                 `json:"description"`
+	Repo                 string                 `json:"repo,omitempty"`
 	Current              bool                   `json:"current"`
 	Valid                bool                   `json:"valid"`
 	AdminAPI             string                 `json:"admin_api,omitempty"`
@@ -155,6 +156,12 @@ type ThemeRecord struct {
 
 type ThemeSwitchRequest struct {
 	Name string `json:"name"`
+	Kind string `json:"kind,omitempty"`
+}
+
+type ThemeInstallRequest struct {
+	URL  string `json:"url"`
+	Name string `json:"name,omitempty"`
 	Kind string `json:"kind,omitempty"`
 }
 
