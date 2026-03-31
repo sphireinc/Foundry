@@ -39,7 +39,7 @@ func CreateManagedSnapshot(cfg *config.Config) (*Snapshot, error) {
 	if err := os.MkdirAll(cfg.Backup.Dir, 0o755); err != nil {
 		return nil, err
 	}
-	target := filepath.Join(cfg.Backup.Dir, generatedName(time.Now()))
+	target := nextManagedSnapshotPath(cfg.Backup.Dir, time.Now())
 	snapshot, err := CreateZipSnapshot(cfg, target)
 	if err != nil {
 		return nil, err
@@ -221,7 +221,22 @@ func requiredFreeBytes(sourceBytes int64, headroomPercent int, minFreeMB int64) 
 }
 
 func generatedName(now time.Time) string {
-	return fmt.Sprintf("content-backup-%s.zip", now.UTC().Format("20060102-150405.000"))
+	return fmt.Sprintf("content-backup-%s.zip", now.UTC().Format("20060102-150405.000000000"))
+}
+
+func nextManagedSnapshotPath(dir string, now time.Time) string {
+	base := generatedName(now)
+	target := filepath.Join(dir, base)
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		return target
+	}
+	stamp := now.UTC().Format("20060102-150405.000000000")
+	for i := 1; ; i++ {
+		candidate := filepath.Join(dir, fmt.Sprintf("content-backup-%s-%02d.zip", stamp, i))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
 }
 
 func dirSize(root string) (int64, error) {
