@@ -8,6 +8,12 @@ services:
       - "8080:8080"
     volumes:
       - .:/app
+      - foundry_data:/app/data
+      - foundry_public:/app/public
     working_dir: /app
     command: ["foundry", "--config-overlay", "content/config/site.docker.yaml", "serve"]
     restart: unless-stopped
+
+volumes:
+  foundry_data:
+  foundry_public:
