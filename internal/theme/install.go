@@ -97,6 +97,10 @@ func Install(opts InstallOptions) (any, error) {
 			return nil, fmt.Errorf("git clone failed and zip fallback failed: %w", err)
 		}
 	}
+	if err := stripThemeVCSMetadata(targetDir); err != nil {
+		_ = os.RemoveAll(targetDir)
+		return nil, err
+	}
 
 	if kind == InstallKindAdmin {
 		meta, err := adminui.LoadManifest(themesDir, name)
@@ -314,6 +318,16 @@ func downloadAndExtractTheme(repoURL, targetDir string) error {
 		return fmt.Errorf("zip extraction failed: root entry is not a directory")
 	}
 	return os.Rename(root, targetDir)
+}
+
+func stripThemeVCSMetadata(targetDir string) error {
+	for _, rel := range []string{".git", ".gitmodules"} {
+		path := filepath.Join(targetDir, rel)
+		if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove VCS metadata %q: %w", rel, err)
+		}
+	}
+	return nil
 }
 
 func safeArchivePath(root, name string) (string, error) {
