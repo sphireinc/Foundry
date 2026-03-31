@@ -13,6 +13,7 @@ import (
 	_ "github.com/sphireinc/foundry/internal/commands/i18n"
 	_ "github.com/sphireinc/foundry/internal/commands/plugin"
 	_ "github.com/sphireinc/foundry/internal/commands/routes"
+	_ "github.com/sphireinc/foundry/internal/commands/standalone"
 	_ "github.com/sphireinc/foundry/internal/commands/theme"
 	_ "github.com/sphireinc/foundry/internal/commands/validate"
 	_ "github.com/sphireinc/foundry/internal/commands/version"
