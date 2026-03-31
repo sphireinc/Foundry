@@ -315,6 +315,7 @@ foundry service install
 foundry service status
 foundry service restart
 foundry service uninstall
+foundry release cut v1.3.3
 foundry update check
 foundry update apply
 foundry plugin list --enabled
@@ -551,6 +552,35 @@ This repository also includes a GitHub Actions release workflow at
 
 The admin Themes screen also shows current version, latest release version,
 install mode, and whether self-update is supported.
+
+## Cutting a release
+
+To cut a release tag locally:
+
+```bash
+foundry release cut v1.3.3
+```
+
+To cut and push the tag in one step:
+
+```bash
+foundry release cut v1.3.3 --push
+```
+
+You can also use the repo-local wrapper:
+
+```bash
+scripts/release.sh v1.3.3 --push
+```
+
+Release cutting rules:
+
+- run it from the repository root
+- the worktree must be clean
+- versions must be in `vX.Y.Z` format
+
+When the tag is pushed, `.github/workflows/release.yml` builds and uploads the
+`foundry-*.tar.gz` archives and matching `.sha256` files to GitHub Releases.
 
 ## Content model
 
