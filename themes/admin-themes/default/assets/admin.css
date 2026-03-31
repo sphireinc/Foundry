@@ -671,6 +671,7 @@ button.danger,
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   align-items: end;
+  padding-right: 30px;
 }
 
 .editor-grid {
@@ -710,8 +711,8 @@ button.danger,
 
 .frontmatter-span-2 {
   grid-column: span 2;
-  padding-left: 10px;
-  padding-top: 10px;
+  padding-left: 20px;
+  padding-top: 15px;
 }
 
 .frontmatter-span-3 {

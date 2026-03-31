@@ -25,6 +25,7 @@ type Manifest struct {
 	Description          string   `yaml:"description"`
 	Author               string   `yaml:"author"`
 	License              string   `yaml:"license"`
+	Repo                 string   `yaml:"repo,omitempty"`
 	AdminAPI             string   `yaml:"admin_api"`
 	SDKVersion           string   `yaml:"sdk_version,omitempty"`
 	CompatibilityVersion string   `yaml:"compatibility_version,omitempty"`

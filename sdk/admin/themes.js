@@ -3,6 +3,9 @@ export const createAdminThemesAPI = (http) => ({
   list() {
     return http.get('/api/themes');
   },
+  install(input) {
+    return http.post('/api/themes/install', input);
+  },
   validate(input) {
     return http.post('/api/themes/validate', input);
   },
