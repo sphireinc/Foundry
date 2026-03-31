@@ -26,6 +26,7 @@ func Validate(cfg *Config) []error {
 
 	require("theme", cfg.Theme)
 	require("default_lang", cfg.DefaultLang)
+	require("backup.dir", cfg.Backup.Dir)
 	require("content_dir", cfg.ContentDir)
 	require("public_dir", cfg.PublicDir)
 	require("themes_dir", cfg.ThemesDir)
@@ -69,6 +70,18 @@ func Validate(cfg *Config) []error {
 		default:
 			errs = append(errs, fmt.Errorf("server.live_reload_mode must be one of: stream, poll"))
 		}
+	}
+	if cfg.Backup.DebounceSeconds <= 0 {
+		errs = append(errs, fmt.Errorf("backup.debounce_seconds must be greater than zero"))
+	}
+	if cfg.Backup.RetentionCount < 0 {
+		errs = append(errs, fmt.Errorf("backup.retention_count must not be negative"))
+	}
+	if cfg.Backup.MinFreeMB < 0 {
+		errs = append(errs, fmt.Errorf("backup.min_free_mb must not be negative"))
+	}
+	if cfg.Backup.HeadroomPercent < 100 {
+		errs = append(errs, fmt.Errorf("backup.headroom_percent must be at least 100"))
 	}
 
 	if cfg.DefaultLang != "" && strings.Contains(cfg.DefaultLang, "/") {

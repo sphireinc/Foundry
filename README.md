@@ -269,6 +269,10 @@ foundry serve-standalone
 foundry status
 foundry logs -f
 foundry stop
+foundry update check
+foundry service install
+foundry service status
+foundry service restart
 ```
 
 Standalone mode stores its runtime files under `.foundry/run/` in the project:
@@ -307,6 +311,12 @@ foundry status
 foundry restart
 foundry stop
 foundry logs -f
+foundry service install
+foundry service status
+foundry service restart
+foundry service uninstall
+foundry update check
+foundry update apply
 foundry plugin list --enabled
 foundry theme list
 foundry routes check
@@ -338,13 +348,44 @@ foundry logs
 foundry logs -f
 foundry restart
 foundry stop
+foundry update check
+foundry update apply
 ```
 
 Notes:
 
 - standalone mode is designed for macOS and Linux
 - it writes state and logs under `.foundry/run/`
+- if you launch standalone from source with `go run`, Foundry first builds a managed binary under `.foundry/run/` and keeps that binary running instead of keeping `go run` alive after logout
 - it is a portable convenience runtime, not a replacement for Docker, `systemd`, or `launchd` in more serious production setups
+
+### Managed service mode
+
+For a more durable self-hosted runtime that behaves more like `nginx`, install
+Foundry as a user-level OS service:
+
+```bash
+foundry service install
+foundry service status
+foundry service restart
+foundry service uninstall
+```
+
+Behavior by platform:
+
+- Linux: installs a user service under `~/.config/systemd/user/`
+- macOS: installs a LaunchAgent under `~/Library/LaunchAgents/`
+
+Foundry stores service metadata and logs under `.foundry/run/` in the project.
+If Foundry was launched from source via `go run`, service installation first
+builds a managed binary under `.foundry/run/` and points the service at that
+binary.
+
+On Linux, user services may need lingering enabled to survive logout and reboot:
+
+```bash
+loginctl enable-linger "$USER"
+```
 
 Embedded media uses normal Markdown image syntax:
 
@@ -421,11 +462,96 @@ The content command set also includes portability and migration helpers:
 
 ```bash
 foundry content export bundle.zip
+foundry backup create
+foundry backup list
 foundry content import markdown ./legacy-markdown
 foundry content import wordpress ./wordpress.xml
 foundry content migrate layout page landing --dry-run
 foundry content migrate field-rename marketing old_field new_field --dry-run
 ```
+
+## Backups
+
+Foundry now has a dedicated backup flow for the content tree:
+
+```bash
+foundry backup create
+foundry backup create ./archives/manual-snapshot.zip
+foundry backup list
+foundry backup git-snapshot "before launch"
+foundry backup git-log 10
+```
+
+By default, managed backups are written under:
+
+```text
+.foundry/backups
+```
+
+Backups are zip archives of `content/` plus a small `backup-manifest.json`
+entry. Before writing the archive, Foundry checks free disk space on the target
+filesystem and refuses to start the backup if there is not enough headroom.
+
+Foundry also supports local Git-backed snapshots as a second backup format:
+
+- the snapshot repo lives under `.foundry/backups/git`
+- each snapshot copies the current `content/` tree into that repo
+- Foundry commits only when there are actual content changes
+- this is a local history mechanism today, not a remote Git push integration yet
+
+You can also enable debounced on-change backups in `content/config/site.yaml`:
+
+```yaml
+backup:
+  enabled: true
+  dir: ".foundry/backups"
+  on_change: true
+  debounce_seconds: 45
+  retention_count: 20
+  min_free_mb: 256
+  headroom_percent: 125
+```
+
+When `backup.on_change` is enabled, `foundry serve` and `foundry serve-preview`
+will create a backup after the content tree goes quiet for the configured
+debounce window. Foundry also prunes older backups beyond `retention_count`.
+
+The admin Themes screen now also exposes manual zip backup creation, download,
+and restore actions for the same archive set.
+
+## Release updates
+
+Foundry includes a release-aware updater for managed standalone installs:
+
+```bash
+foundry update check
+foundry update apply
+```
+
+Behavior depends on install mode:
+
+- `standalone`: self-update supported
+- `docker`: update availability only, roll out a new image manually
+- `source`: update availability only, pull and rebuild manually
+- `binary`: update availability only unless you run it under `serve-standalone`
+
+Self-update uses GitHub Releases metadata, compares the running version against
+the latest release tag, downloads the matching release asset, verifies a
+published `.sha256` asset when available, replaces the binary, and restarts the
+standalone runtime.
+
+This repository also includes a GitHub Actions release workflow at
+`.github/workflows/release.yml`. Pushing a `v*.*.*` tag now generates and uploads:
+
+- `foundry-linux-amd64.tar.gz`
+- `foundry-linux-arm64.tar.gz`
+- `foundry-darwin-amd64.tar.gz`
+- `foundry-darwin-arm64.tar.gz`
+- `foundry-windows-amd64.tar.gz`
+- matching `.sha256` files for each archive
+
+The admin Themes screen also shows current version, latest release version,
+install mode, and whether self-update is supported.
 
 ## Content model
 

@@ -79,6 +79,12 @@ foundry status
 foundry restart
 foundry stop
 foundry logs -f
+foundry service install
+foundry service status
+foundry service restart
+foundry service uninstall
+foundry update check
+foundry update apply
 foundry plugin list --enabled
 foundry theme list
 foundry routes check
@@ -95,8 +101,18 @@ foundry admin hash-password your-password</code></pre>
             If you want Foundry to keep running after the terminal closes, use
             <code>foundry serve-standalone</code>. Manage that background runtime with
             <code>foundry status</code>, <code>foundry restart</code>,
-            <code>foundry stop</code>, and <code>foundry logs -f</code>. Foundry stores its
-            runtime files under <code>.foundry/run/</code> in the project root.
+            <code>foundry stop</code>, <code>foundry logs -f</code>, and
+            <code>foundry update check</code>. Foundry stores its runtime files under
+            <code>.foundry/run/</code> in the project root. If you launch standalone
+            from source with <code>go run</code>, Foundry first builds a managed binary
+            under that directory and keeps the managed binary running.
+          </p>
+          <p>
+            For a more durable self-hosted runtime, use
+            <code>foundry service install</code>. That installs Foundry as a user-level OS
+            service: <code>systemd --user</code> on Linux or a LaunchAgent on macOS. You can
+            then manage it with <code>foundry service status</code>,
+            <code>foundry service restart</code>, and <code>foundry service uninstall</code>.
           </p>
           <p>
             Live reload supports two transport modes: <code>stream</code> uses Server-Sent-Events
@@ -172,12 +188,64 @@ foundry admin hash-password your-password</code></pre>
               routes/slugs, and taxonomy inconsistencies.
             </li>
             <li>
-              <code>foundry content export</code>, <code>foundry content import</code>, and
-              <code>foundry content migrate</code> cover basic portability and schema/layout
-              migration workflows, including <code>--dry-run</code> support for layout and
-              field-rename migrations.
+              <code>foundry backup create</code> and <code>foundry backup list</code> manage zip
+              snapshots of the content tree, while <code>foundry content export</code>,
+              <code>foundry content import</code>, and <code>foundry content migrate</code> cover
+              portability and schema/layout migration workflows, including <code>--dry-run</code>
+              support for layout and field-rename migrations.
             </li>
           </ul>
+
+          <h2>Backup workflow</h2>
+          <p>
+            Foundry keeps backup archives simple and portable. The default backup target is
+            <code>.foundry/backups</code>, and each managed backup is a zip file containing the
+            current <code>content/</code> tree plus a small manifest entry.
+          </p>
+          <pre><code>foundry backup create
+foundry backup create ./archives/pre-launch.zip
+foundry backup list
+foundry backup git-snapshot "before launch"
+foundry backup git-log 10</code></pre>
+          <p>
+            You can also enable debounced automatic backups during
+            <code>foundry serve</code> or <code>foundry serve-preview</code>:
+          </p>
+          <pre><code>backup:
+  enabled: true
+  dir: ".foundry/backups"
+  on_change: true
+  debounce_seconds: 45
+  retention_count: 20
+  min_free_mb: 256
+  headroom_percent: 125</code></pre>
+          <p>
+            Before Foundry writes a backup archive, it checks free disk space on the destination
+            filesystem and fails early if the archive would not have enough headroom.
+          </p>
+          <p>
+            Foundry also keeps a local Git-backed snapshot history under
+            <code>.foundry/backups/git</code>. That path is intended for versioned local history;
+            it does not push to a remote Git provider yet.
+          </p>
+
+          <h2>Release updates</h2>
+          <p>
+            Foundry can check GitHub Releases and, for managed standalone installs, apply the
+            latest release automatically:
+          </p>
+          <pre><code>foundry update check
+foundry update apply</code></pre>
+          <p>
+            Self-update is intentionally limited to <code>serve-standalone</code> deployments.
+            Docker and source installs still get update availability and release notes, but the
+            actual rollout remains manual.
+          </p>
+          <p>
+            Version tags in this repository also trigger a GitHub Actions release workflow that
+            publishes <code>foundry-*.tar.gz</code> archives and matching <code>.sha256</code>
+            files for supported platforms.
+          </p>
 
           <h2>Admin shortcuts</h2>
           <ul>

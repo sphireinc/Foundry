@@ -14,6 +14,7 @@ type Config struct {
 	Theme       string                `yaml:"theme"`
 	Environment string                `yaml:"environment"`
 	Admin       AdminConfig           `yaml:"admin"`
+	Backup      BackupConfig          `yaml:"backup"`
 	DefaultLang string                `yaml:"default_lang"`
 	ContentDir  string                `yaml:"content_dir"`
 	PublicDir   string                `yaml:"public_dir"`
@@ -56,6 +57,16 @@ type AdminConfig struct {
 
 type AdminDebugConfig struct {
 	Pprof bool `yaml:"pprof"`
+}
+
+type BackupConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	Dir             string `yaml:"dir"`
+	OnChange        bool   `yaml:"on_change"`
+	DebounceSeconds int    `yaml:"debounce_seconds"`
+	RetentionCount  int    `yaml:"retention_count"`
+	MinFreeMB       int64  `yaml:"min_free_mb"`
+	HeadroomPercent int    `yaml:"headroom_percent"`
 }
 
 type ServerConfig struct {
@@ -204,6 +215,21 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.DefaultLang == "" {
 		c.DefaultLang = "en"
+	}
+	if strings.TrimSpace(c.Backup.Dir) == "" {
+		c.Backup.Dir = filepath.Join(".foundry", "backups")
+	}
+	if c.Backup.DebounceSeconds <= 0 {
+		c.Backup.DebounceSeconds = 45
+	}
+	if c.Backup.RetentionCount <= 0 {
+		c.Backup.RetentionCount = 20
+	}
+	if c.Backup.MinFreeMB <= 0 {
+		c.Backup.MinFreeMB = 256
+	}
+	if c.Backup.HeadroomPercent < 100 {
+		c.Backup.HeadroomPercent = 125
 	}
 	if c.ContentDir == "" {
 		c.ContentDir = "content"

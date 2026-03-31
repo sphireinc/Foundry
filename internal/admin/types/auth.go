@@ -165,6 +165,35 @@ type ThemeInstallRequest struct {
 	Kind string `json:"kind,omitempty"`
 }
 
+type BackupRecord struct {
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"size_bytes"`
+	CreatedAt string `json:"created_at"`
+}
+
+type BackupCreateRequest struct {
+	Name string `json:"name,omitempty"`
+}
+
+type BackupRestoreRequest struct {
+	Name string `json:"name"`
+}
+
+type UpdateStatusResponse struct {
+	Repo           string `json:"repo"`
+	CurrentVersion string `json:"current_version"`
+	LatestVersion  string `json:"latest_version"`
+	HasUpdate      bool   `json:"has_update"`
+	InstallMode    string `json:"install_mode"`
+	ApplySupported bool   `json:"apply_supported"`
+	ReleaseURL     string `json:"release_url,omitempty"`
+	PublishedAt    string `json:"published_at,omitempty"`
+	Body           string `json:"body,omitempty"`
+	AssetName      string `json:"asset_name,omitempty"`
+	Instructions   string `json:"instructions,omitempty"`
+}
+
 type PluginRecord struct {
 	Name                 string                 `json:"name"`
 	Title                string                 `json:"title"`

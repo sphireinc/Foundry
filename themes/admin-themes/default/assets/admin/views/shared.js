@@ -59,6 +59,16 @@ export const renderToasts = (state) => {
   return `<div class="toast-stack">${state.toasts.map((toast) => `<div class="toast ${escapeHTML(toast.tone)}">${escapeHTML(toast.message)}</div>`).join('')}</div>`;
 };
 
+export const renderUpdateNotice = (state) => {
+  if (!state.updateInfo?.has_update) return '';
+  return `<div class="panel warning-panel">
+    <div class="panel-pad">
+      <strong>Foundry ${escapeHTML(state.updateInfo.latest_version || 'update')} is available</strong>
+      <div class="muted">${escapeHTML(state.updateInfo.instructions || 'Open Themes to review the release and update options.')}</div>
+    </div>
+  </div>`;
+};
+
 export const renderKeyboardHelp = (state) => {
   if (!state.keyboardHelp) return '';
   return `<div class="shortcut-help">
@@ -278,6 +288,7 @@ export const renderOverview = (state) => {
       <article class="card"><span class="card-label">Active Sessions</span><strong>${escapeHTML(runtime.activity?.active_sessions || 0)}</strong><span class="card-copy">Persisted admin sessions.</span></article>
       <article class="card"><span class="card-label">Active Locks</span><strong>${escapeHTML(runtime.activity?.active_document_locks || 0)}</strong><span class="card-copy">Documents currently being edited.</span></article>
       <article class="card"><span class="card-label">Validate Site</span><strong>${escapeHTML(state.siteValidation?.message_count || 0)}</strong><span class="card-copy">Latest admin validation findings.</span></article>
+      <article class="card"><span class="card-label">Release</span><strong>${escapeHTML(state.updateInfo?.has_update ? state.updateInfo.latest_version || 'available' : state.updateInfo?.current_version || 'current')}</strong><span class="card-copy">${escapeHTML(state.updateInfo?.has_update ? 'New release available.' : 'Running the latest known release.')}</span></article>
     </div>`;
   const queueSection = `<div class="layout-grid">
     <section class="panel">

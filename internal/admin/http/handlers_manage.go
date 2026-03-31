@@ -2,6 +2,7 @@ package httpadmin
 
 import (
 	"net/http"
+	"path/filepath"
 
 	adminaudit "github.com/sphireinc/foundry/internal/admin/audit"
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
@@ -26,6 +27,12 @@ func registerManagementRoutes(r *Router) []routeDef {
 		{pattern: r.routePath("/api/themes/install"), handler: http.HandlerFunc(r.handleInstallTheme), capability: "themes.manage"},
 		{pattern: r.routePath("/api/themes/validate"), handler: http.HandlerFunc(r.handleValidateTheme), capability: "themes.manage"},
 		{pattern: r.routePath("/api/themes/switch"), handler: http.HandlerFunc(r.handleThemeSwitch), capability: "themes.manage"},
+		{pattern: r.routePath("/api/backups"), handler: http.HandlerFunc(r.handleBackups), capability: "config.manage"},
+		{pattern: r.routePath("/api/backups/create"), handler: http.HandlerFunc(r.handleCreateBackup), capability: "config.manage"},
+		{pattern: r.routePath("/api/backups/restore"), handler: http.HandlerFunc(r.handleRestoreBackup), capability: "config.manage"},
+		{pattern: r.routePath("/api/backups/download"), handler: http.HandlerFunc(r.handleDownloadBackup), capability: "config.manage"},
+		{pattern: r.routePath("/api/update"), handler: http.HandlerFunc(r.handleUpdateStatus), capability: "dashboard.read"},
+		{pattern: r.routePath("/api/update/apply"), handler: http.HandlerFunc(r.handleApplyUpdate), capability: "config.manage"},
 		{pattern: r.routePath("/api/plugins"), handler: http.HandlerFunc(r.handlePlugins), capability: "plugins.manage"},
 		{pattern: r.routePath("/api/plugins/validate"), handler: http.HandlerFunc(r.handleValidatePlugin), capability: "plugins.manage"},
 		{pattern: r.routePath("/api/plugins/install"), handler: http.HandlerFunc(r.handleInstallPlugin), capability: "plugins.manage"},
@@ -35,6 +42,104 @@ func registerManagementRoutes(r *Router) []routeDef {
 		{pattern: r.routePath("/api/plugins/disable"), handler: http.HandlerFunc(r.handleDisablePlugin), capability: "plugins.manage"},
 		{pattern: r.routePath("/api/audit"), handler: http.HandlerFunc(r.handleAudit), capability: "audit.read"},
 	}
+}
+
+func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	items, err := r.service.ListBackups(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (r *Router) handleCreateBackup(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.BackupCreateRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	record, err := r.service.CreateBackup(req.Context(), body.Name)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "backup.create", "success", record.Name, nil)
+	writeJSON(w, http.StatusOK, record)
+}
+
+func (r *Router) handleRestoreBackup(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.BackupRestoreRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	record, err := r.service.RestoreBackup(req.Context(), body.Name)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "backup.restore", "success", record.Name, nil)
+	writeJSON(w, http.StatusOK, record)
+}
+
+func (r *Router) handleDownloadBackup(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	target, err := r.service.BackupPath(req.URL.Query().Get("name"))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filepath.Base(target)+"\"")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeFile(w, req, target)
+}
+
+func (r *Router) handleUpdateStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := r.service.CheckForUpdates(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleApplyUpdate(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := r.service.ApplyUpdate(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "system.update.apply", "success", resp.LatestVersion, nil)
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
 func (r *Router) handleExtensions(w http.ResponseWriter, req *http.Request) {

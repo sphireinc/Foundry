@@ -1,6 +1,7 @@
 import { createHttpClient } from '../core/http.js';
 import { FoundryUnsupportedError } from '../core/errors.js';
 import { createAdminAuditAPI } from './audit.js';
+import { createAdminBackupsAPI } from './backups.js';
 import { createAdminCapabilitiesAPI } from './capabilities.js';
 import { createAdminDocumentsAPI } from './documents.js';
 import { createAdminMediaAPI } from './media.js';
@@ -9,6 +10,7 @@ import { createAdminSessionAPI } from './session.js';
 import { createAdminSettingsAPI } from './settings.js';
 import { createAdminStatusAPI } from './status.js';
 import { createAdminThemesAPI } from './themes.js';
+import { createAdminUpdatesAPI } from './updates.js';
 import { createAdminUsersAPI } from './users.js';
 
 // createAdminClient constructs the official JavaScript client for Foundry's
@@ -64,6 +66,8 @@ export const createAdminClient = ({
     themes: createAdminThemesAPI(http),
     plugins: createAdminPluginsAPI(http),
     audit: createAdminAuditAPI(http),
+    backups: createAdminBackupsAPI(http),
+    updates: createAdminUpdatesAPI(http),
     extensions: {
       async getAdminExtensions() {
         const capabilitySet = await capabilities.get();

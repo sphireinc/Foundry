@@ -40,6 +40,21 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Admin.Debug.Pprof {
 		t.Fatal("expected admin pprof debug to default to disabled")
 	}
+	if cfg.Backup.Dir != filepath.Join(".foundry", "backups") {
+		t.Fatalf("expected default backup dir, got %q", cfg.Backup.Dir)
+	}
+	if cfg.Backup.DebounceSeconds != 45 {
+		t.Fatalf("expected default backup debounce, got %d", cfg.Backup.DebounceSeconds)
+	}
+	if cfg.Backup.RetentionCount != 20 {
+		t.Fatalf("expected default backup retention, got %d", cfg.Backup.RetentionCount)
+	}
+	if cfg.Backup.MinFreeMB != 256 {
+		t.Fatalf("expected default backup min free MB, got %d", cfg.Backup.MinFreeMB)
+	}
+	if cfg.Backup.HeadroomPercent != 125 {
+		t.Fatalf("expected default backup headroom, got %d", cfg.Backup.HeadroomPercent)
+	}
 	if cfg.Content.MaxVersionsPerFile != 10 {
 		t.Fatalf("expected default content max versions, got %d", cfg.Content.MaxVersionsPerFile)
 	}
@@ -87,6 +102,7 @@ func TestValidateAndSequenceHelpersErrors(t *testing.T) {
 	cfg := &Config{
 		Theme:   "..",
 		Admin:   AdminConfig{Enabled: true, Theme: "../escape"},
+		Backup:  BackupConfig{Dir: "", DebounceSeconds: 0, RetentionCount: -1, MinFreeMB: -1, HeadroomPercent: 99},
 		Plugins: PluginConfig{Enabled: []string{"../escape"}},
 		Server:  ServerConfig{LiveReloadMode: "invalid"},
 		Feed: FeedConfig{

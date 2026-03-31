@@ -68,6 +68,8 @@ export const createInitialState = ({ section }) => ({
   adminExtensions: { pages: [], widgets: [], slots: [], settings: [] },
   extensionRuntimeErrors: [],
   themes: [],
+  backups: [],
+  updateInfo: null,
   audit: [],
   auditFilters: { actor: '', action: '', outcome: '' },
   siteValidation: null,

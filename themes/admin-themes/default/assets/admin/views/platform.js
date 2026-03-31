@@ -311,6 +311,20 @@ export const createPlatformViews = ({
           </article>`;
       })
       .join('');
+    const backupRows = (state.backups || [])
+      .map(
+        (item) => `<div class="table-row table-row-actions">
+          <span><strong>${escapeHTML(item.name)}</strong><div class="muted mono">${escapeHTML(item.created_at || '')}</div></span>
+          <span>${escapeHTML(String(item.size_bytes || 0))}</span>
+          <span>${escapeHTML(item.created_at || '')}</span>
+          <span class="row-actions">
+            <a class="ghost small" href="${escapeHTML(`${adminBase}/api/backups/download?name=${encodeURIComponent(item.name)}`)}">Download</a>
+            <button class="ghost small" type="button" data-restore-backup="${escapeHTML(item.name)}">Restore</button>
+          </span>
+        </div>`
+      )
+      .join('');
+    const updateInfo = state.updateInfo || null;
     return panel(
       'Themes',
       `<form id="theme-install-form" class="inline-form compact-inline-form">
@@ -318,7 +332,26 @@ export const createPlatformViews = ({
         <label>Directory Name<input id="theme-install-name" type="text" placeholder="aurora"></label>
         <label class="frontmatter-span-2">Kind<select id="theme-install-kind"><option value="frontend">Frontend</option><option value="admin">Admin</option></select></label>
         <button type="submit">Install</button>
-      </form>${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
+      </form>
+      <div class="panel-pad stack">
+        <div class="toolbar">
+          <button class="ghost small" type="button" id="update-refresh">Refresh Update Status</button>
+          ${updateInfo?.apply_supported && updateInfo?.has_update ? '<button class="ghost small" type="button" id="update-apply">Apply Update</button>' : ''}
+        </div>
+        <div class="cards">
+          <article class="card"><span class="card-label">Current</span><strong>${escapeHTML(updateInfo?.current_version || 'unknown')}</strong><span class="card-copy">Running Foundry version.</span></article>
+          <article class="card"><span class="card-label">Latest</span><strong>${escapeHTML(updateInfo?.latest_version || 'unknown')}</strong><span class="card-copy">Latest GitHub release.</span></article>
+          <article class="card"><span class="card-label">Install Mode</span><strong>${escapeHTML(updateInfo?.install_mode || 'unknown')}</strong><span class="card-copy">Update support depends on deployment mode.</span></article>
+          <article class="card"><span class="card-label">Self-Update</span><strong>${updateInfo?.apply_supported ? 'available' : 'manual'}</strong><span class="card-copy">${escapeHTML(updateInfo?.instructions || 'No update guidance available.')}</span></article>
+        </div>
+      </div>
+      <div class="panel-pad stack">
+        <div class="toolbar">
+          <button class="ghost small" type="button" id="backup-create">Create Zip Backup</button>
+        </div>
+        <div class="table table-four"><div class="table-head"><span>Backup</span><span>Bytes</span><span>Created</span><span>Action</span></div>${backupRows || '<div class="panel-pad empty-state">No backups found.</div>'}</div>
+      </div>
+      ${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
       `${state.themes.length} frontend and admin themes`
     );
   };

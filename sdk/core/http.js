@@ -112,6 +112,7 @@ export const createHttpClient = ({
   };
 
   return {
+    baseURL,
     request,
     get: (path, options = {}) => request(path, { ...options, method: 'GET' }),
     post: (path, body, options = {}) => request(path, { ...options, method: 'POST', body }),
