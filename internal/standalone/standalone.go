@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -16,8 +17,23 @@ const (
 	RunDirName   = ".foundry/run"
 	StateFile    = "standalone.json"
 	LogFile      = "standalone.log"
+	ManagedBin   = "foundry-standalone"
 	defaultLines = 120
 )
+
+var buildStandaloneBinary = func(projectDir, target string) error {
+	cmd := exec.Command("go", "build", "-o", target, "./cmd/foundry")
+	cmd.Dir = projectDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = append(os.Environ(),
+		"CGO_ENABLED=0",
+		"GOOS="+runtime.GOOS,
+		"GOARCH="+runtime.GOARCH,
+	)
+	return cmd.Run()
+}
 
 type State struct {
 	PID        int       `json:"pid"`
@@ -216,11 +232,10 @@ func LaunchCommand(projectDir string, rawArgs []string) ([]string, error) {
 	}
 
 	if shouldUseGoRun(exe, projectDir) {
-		goExe, err := exec.LookPath("go")
+		managedBinary, err := ensureManagedBinary(projectDir)
 		if err != nil {
-			return nil, fmt.Errorf("foundry was launched via go run but go is not available in PATH")
+			return nil, err
 		}
-		args := []string{"run", "./cmd/foundry"}
 		raw := append([]string(nil), rawArgs[1:]...)
 		replaced := false
 		for i, arg := range raw {
@@ -233,7 +248,7 @@ func LaunchCommand(projectDir string, rawArgs []string) ([]string, error) {
 		if !replaced {
 			raw = append([]string{"serve"}, raw...)
 		}
-		return append([]string{goExe}, append(args, raw...)...), nil
+		return append([]string{managedBinary}, raw...), nil
 	}
 
 	args := append([]string(nil), rawArgs[1:]...)
@@ -251,6 +266,24 @@ func LaunchCommand(projectDir string, rawArgs []string) ([]string, error) {
 	return append([]string{exe}, args...), nil
 }
 
+func ensureManagedBinary(projectDir string) (string, error) {
+	paths, err := EnsureRunDir(projectDir)
+	if err != nil {
+		return "", err
+	}
+	name := ManagedBin
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	target := filepath.Join(paths.RunDir, name)
+	if _, err := exec.LookPath("go"); err != nil {
+		return "", fmt.Errorf("foundry was launched via go run but go is not available in PATH")
+	}
+	if err := buildStandaloneBinary(projectDir, target); err != nil {
+		return "", fmt.Errorf("build managed standalone binary: %w", err)
+	}
+	return target, nil
+}
 func shouldUseGoRun(executablePath, projectDir string) bool {
 	exe := filepath.Clean(executablePath)
 	tmp := filepath.Clean(os.TempDir())

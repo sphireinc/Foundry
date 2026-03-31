@@ -97,6 +97,10 @@ title: "Foundry CMS"
 base_url: "http://localhost:8080"
 theme: "default"
 
+backup:
+  enabled: false
+  dir: ".foundry/backups"
+
 server:
   addr: ":8080"
   live_reload: true
@@ -164,6 +168,62 @@ content:
               >: plugin installation directory. <strong>Default: </strong><code>plugins</code>.
             </li>
           </ul>
+
+          <h2><code>backup</code></h2>
+          <p>
+            This group controls zip backups for the content tree and the optional debounced
+            on-change backup flow while the preview server is running.
+          </p>
+          <ul>
+            <li>
+              <strong><code>enabled</code></strong
+              >: enables managed backup behavior. <strong>Default: </strong><code>false</code>.
+            </li>
+            <li>
+              <strong><code>dir</code></strong
+              >: output directory for managed backup archives. <strong>Default: </strong
+              ><code>.foundry/backups</code>.
+            </li>
+            <li>
+              <strong><code>on_change</code></strong
+              >: when true, <code>foundry serve</code> and <code>foundry serve-preview</code>
+              create backups after content changes settle. <strong>Default: </strong
+              ><code>false</code>.
+            </li>
+            <li>
+              <strong><code>debounce_seconds</code></strong
+              >: quiet period before an on-change backup fires. <strong>Default: </strong
+              ><code>45</code>.
+            </li>
+            <li>
+              <strong><code>retention_count</code></strong
+              >: number of backup archives to keep in <code>backup.dir</code> before older ones
+              are pruned. <strong>Default: </strong><code>20</code>.
+            </li>
+            <li>
+              <strong><code>min_free_mb</code></strong
+              >: minimum safety buffer added to backup free-space checks. <strong>Default:
+              </strong><code>256</code>.
+            </li>
+            <li>
+              <strong><code>headroom_percent</code></strong
+              >: minimum free-space multiplier relative to the source size before a backup starts.
+              <strong>Default: </strong><code>125</code>.
+            </li>
+          </ul>
+          <pre><code>backup:
+  enabled: true
+  dir: ".foundry/backups"
+  on_change: true
+  debounce_seconds: 45
+  retention_count: 20
+  min_free_mb: 256
+  headroom_percent: 125</code></pre>
+          <p>
+            Zip backups are the primary export and restore format. Foundry also supports local
+            Git-backed snapshots via <code>foundry backup git-snapshot</code> and
+            <code>foundry backup git-log</code>, stored under <code>.foundry/backups/git</code>.
+          </p>
 
           <h2><code>server</code></h2>
           <p>This group controls the preview server and live reload behavior.</p>

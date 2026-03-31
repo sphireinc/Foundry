@@ -19,6 +19,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/sphireinc/foundry/internal/backup"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/deps"
@@ -409,6 +410,10 @@ func (s *Server) watch(ctx context.Context) {
 	}(w)
 
 	s.walkWatchRoots(w)
+	autoBackup := backup.NewAutoRunner(s.cfg)
+	if autoBackup != nil {
+		defer autoBackup.Stop()
+	}
 
 	var changedPaths []string
 	var debounce <-chan time.Time
@@ -419,8 +424,14 @@ func (s *Server) watch(ctx context.Context) {
 			return
 		case ev := <-w.Events:
 			if ev.Op != 0 {
+				if backup.PathIsUnderBackupRoot(s.cfg, ev.Name) {
+					continue
+				}
 				if shouldAddWatch(ev.Name) {
 					_ = addWatchRecursively(w, ev.Name)
+				}
+				if autoBackup != nil {
+					autoBackup.Notify(ev.Name)
 				}
 				changedPaths = append(changedPaths, ev.Name)
 				debounce = time.After(250 * time.Millisecond)

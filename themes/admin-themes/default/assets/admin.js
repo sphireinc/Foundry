@@ -40,6 +40,7 @@ import {
   renderTableControls,
   renderToasts,
   renderTrashSelectionRows,
+  renderUpdateNotice,
   shellNav,
   summarizeLoadErrors,
 } from './admin/views/shared.js';
@@ -2343,6 +2344,7 @@ import {
           <main class="foundry-content">
             ${state.error ? `<div class="panel error-panel"><div class="panel-pad"><strong>Action Failed</strong><div class="error">${escapeHTML(state.error)}</div></div></div>` : ''}
             ${state.loadErrors.length ? `<div class="panel warning-panel"><div class="panel-pad"><strong>Partial Admin Load</strong><div class="muted">${escapeHTML(summarizeLoadErrors(state))}</div></div></div>` : ''}
+            ${renderUpdateNotice(state)}
             ${renderSection()}
           </main>
         </div>
@@ -2470,6 +2472,8 @@ import {
         admin.plugins.list(),
         admin.extensions.getAdminExtensions(),
         admin.themes.list(),
+        admin.backups.list(),
+        admin.updates.get(),
         admin.audit.list(),
       ]);
 
@@ -2615,6 +2619,26 @@ import {
       );
       assignResult(
         13,
+        'backups',
+        (value) => {
+          state.backups = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.backups = [];
+        }
+      );
+      assignResult(
+        14,
+        'update status',
+        (value) => {
+          state.updateInfo = value || null;
+        },
+        () => {
+          state.updateInfo = null;
+        }
+      );
+      assignResult(
+        15,
         'audit log',
         (value) => {
           state.audit = Array.isArray(value) ? value : [];

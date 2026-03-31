@@ -330,6 +330,66 @@ func TestSaveAndPreviewEndpoints(t *testing.T) {
 	}
 }
 
+func TestBackupCreateDownloadAndRestoreEndpoints(t *testing.T) {
+	cfg := testConfig(t)
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/__admin/api/backups/create", strings.NewReader(`{}`))
+	createReq.RemoteAddr = "127.0.0.1:10000"
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	createRR := httptest.NewRecorder()
+	mux.ServeHTTP(createRR, createReq)
+	if createRR.Code != http.StatusOK {
+		t.Fatalf("expected backup create 200, got %d: %s", createRR.Code, createRR.Body.String())
+	}
+
+	var record admintypes.BackupRecord
+	if err := json.Unmarshal(createRR.Body.Bytes(), &record); err != nil {
+		t.Fatalf("decode backup create response: %v", err)
+	}
+	if record.Name == "" {
+		t.Fatalf("expected backup name, got %#v", record)
+	}
+
+	downloadReq := httptest.NewRequest(http.MethodGet, "/__admin/api/backups/download?name="+record.Name, nil)
+	downloadReq.RemoteAddr = "127.0.0.1:10000"
+	downloadReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	downloadRR := httptest.NewRecorder()
+	mux.ServeHTTP(downloadRR, downloadReq)
+	if downloadRR.Code != http.StatusOK {
+		t.Fatalf("expected backup download 200, got %d: %s", downloadRR.Code, downloadRR.Body.String())
+	}
+	if got := downloadRR.Header().Get("Content-Type"); !strings.Contains(got, "application/zip") {
+		t.Fatalf("expected zip content type, got %q", got)
+	}
+
+	contentPath := filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "about.md")
+	if err := os.WriteFile(contentPath, []byte("---\ntitle: About\nslug: about\nlayout: page\n---\n\nChanged"), 0o644); err != nil {
+		t.Fatalf("mutate content: %v", err)
+	}
+
+	restoreReq := httptest.NewRequest(http.MethodPost, "/__admin/api/backups/restore", strings.NewReader(`{"name":"`+record.Name+`"}`))
+	restoreReq.RemoteAddr = "127.0.0.1:10000"
+	restoreReq.Header.Set("Content-Type", "application/json")
+	restoreReq.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	restoreRR := httptest.NewRecorder()
+	mux.ServeHTTP(restoreRR, restoreReq)
+	if restoreRR.Code != http.StatusOK {
+		t.Fatalf("expected backup restore 200, got %d: %s", restoreRR.Code, restoreRR.Body.String())
+	}
+
+	body, err := os.ReadFile(contentPath)
+	if err != nil {
+		t.Fatalf("read restored content: %v", err)
+	}
+	if strings.Contains(string(body), "Changed") {
+		t.Fatalf("expected restored content, got %q", string(body))
+	}
+}
+
 func TestAdminRoutesRequireTokenWhenConfigured(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Admin.LocalOnly = false

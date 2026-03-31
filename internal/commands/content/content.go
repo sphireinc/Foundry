@@ -1,7 +1,6 @@
 package contentcmd
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
 	"io"
@@ -12,9 +11,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sphireinc/foundry/internal/backup"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
-	"github.com/sphireinc/foundry/internal/consts"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/site"
 	"gopkg.in/yaml.v3"
@@ -330,27 +329,8 @@ func runExport(cfg *config.Config, args []string) error {
 	if target == "" {
 		return fmt.Errorf("bundle path must not be empty")
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if _, err := backup.CreateZipSnapshot(cfg, target); err != nil {
 		return err
-	}
-	file, err := os.Create(target)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	zw := zip.NewWriter(file)
-	defer zw.Close()
-
-	for _, rel := range []string{cfg.ContentDir, cfg.DataDir} {
-		if err := addPathToZip(zw, rel, rel); err != nil {
-			return err
-		}
-	}
-	if _, err := os.Stat(consts.ConfigFilePath); err == nil {
-		if err := addPathToZip(zw, consts.ConfigFilePath, consts.ConfigFilePath); err != nil {
-			return err
-		}
 	}
 
 	fmt.Printf("exported content bundle to %s\n", target)
@@ -406,36 +386,6 @@ func loadGraph(cfg *config.Config, includeDrafts bool) (*content.SiteGraph, erro
 		return nil, err
 	}
 	return graph, nil
-}
-
-func addPathToZip(zw *zip.Writer, root, source string) error {
-	return filepath.Walk(source, func(current string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info == nil {
-			return nil
-		}
-		if info.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(filepath.Dir(root), current)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		writer, err := zw.Create(rel)
-		if err != nil {
-			return err
-		}
-		file, err := os.Open(current)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		_, err = io.Copy(writer, file)
-		return err
-	})
 }
 
 func importMarkdownTree(cfg *config.Config, source string) error {

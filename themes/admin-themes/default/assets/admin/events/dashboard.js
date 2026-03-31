@@ -1361,6 +1361,60 @@ export const bindDashboardEvents = (ctx) => {
     });
   });
 
+  document.getElementById('backup-create')?.addEventListener('click', async () => {
+    try {
+      const record = await admin.backups.create({});
+      setFlash(`Backup ${record.name || 'created'} created.`);
+      await fetchAll(false);
+      navigate('themes');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  root.querySelectorAll('[data-restore-backup]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (!window.confirm(`Restore backup ${button.dataset.restoreBackup}? The current content tree will be snapshotted first.`)) {
+        return;
+      }
+      try {
+        await admin.backups.restore({ name: button.dataset.restoreBackup });
+        setFlash('Backup restored.');
+        await fetchAll(false);
+        navigate('themes');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+  });
+
+  document.getElementById('update-refresh')?.addEventListener('click', async () => {
+    try {
+      state.updateInfo = await admin.updates.get();
+      setFlash('Update status refreshed.');
+      render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('update-apply')?.addEventListener('click', async () => {
+    if (!window.confirm('Apply the latest Foundry release and restart the standalone runtime?')) {
+      return;
+    }
+    try {
+      await admin.updates.apply();
+      setFlash('Update scheduled. Foundry will restart.');
+      render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
   [
     'media-title',
     'media-alt',
