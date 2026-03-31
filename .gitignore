@@ -19,6 +19,7 @@ Foundry-Cloud-API
 Foundry-Cloud-Dashboard
 Foundry-Cloud-Landing
 planning-docs
+.foundry/
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,windows,macos,dotenv

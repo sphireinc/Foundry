@@ -73,7 +73,12 @@ foundry build --preview
 foundry build --env preview --target production
 foundry serve
 foundry serve --debug
+foundry serve-standalone
 foundry serve-preview
+foundry status
+foundry restart
+foundry stop
+foundry logs -f
 foundry plugin list --enabled
 foundry theme list
 foundry routes check
@@ -85,6 +90,13 @@ foundry admin hash-password your-password</code></pre>
             connections, and process CPU time deltas. If <code>admin.debug.pprof</code> is enabled,
             the admin Debug page also surfaces runtime, content, storage, integrity, activity, and
             persisted build-report snapshots alongside authenticated <code>pprof</code> links.
+          </p>
+          <p>
+            If you want Foundry to keep running after the terminal closes, use
+            <code>foundry serve-standalone</code>. Manage that background runtime with
+            <code>foundry status</code>, <code>foundry restart</code>,
+            <code>foundry stop</code>, and <code>foundry logs -f</code>. Foundry stores its
+            runtime files under <code>.foundry/run/</code> in the project root.
           </p>
           <p>
             Live reload supports two transport modes: <code>stream</code> uses Server-Sent-Events
