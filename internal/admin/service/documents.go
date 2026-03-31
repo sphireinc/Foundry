@@ -477,11 +477,15 @@ func matchesDocumentQuery(doc *content.Document, query string) bool {
 }
 
 func toSummary(doc *content.Document) types.DocumentSummary {
+	status := strings.TrimSpace(doc.Status)
+	if stored := storedWorkflowStatus(doc.Params); stored != "" {
+		status = stored
+	}
 	return types.DocumentSummary{
 		ID:         doc.ID,
 		Type:       doc.Type,
 		Lang:       doc.Lang,
-		Status:     doc.Status,
+		Status:     status,
 		Title:      doc.Title,
 		Slug:       doc.Slug,
 		URL:        doc.URL,
@@ -496,6 +500,26 @@ func toSummary(doc *content.Document) types.DocumentSummary {
 		Author:     doc.Author,
 		LastEditor: doc.LastEditor,
 		Taxonomies: doc.Taxonomies,
+	}
+}
+
+func storedWorkflowStatus(params map[string]any) string {
+	if len(params) == 0 {
+		return ""
+	}
+	value, ok := params["workflow"]
+	if !ok {
+		return ""
+	}
+	raw, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "draft", "in_review", "scheduled", "published", "archived":
+		return strings.ToLower(strings.TrimSpace(raw))
+	default:
+		return ""
 	}
 }
 

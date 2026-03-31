@@ -1325,6 +1325,25 @@ export const bindDashboardEvents = (ctx) => {
     });
   });
 
+  document.getElementById('theme-install-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const record = await admin.themes.install({
+        url: document.getElementById('theme-install-url').value,
+        name: document.getElementById('theme-install-name').value,
+        kind: document.getElementById('theme-install-kind').value || 'frontend',
+      });
+      setFlash(
+        `${record.kind === 'admin' ? 'Admin theme' : 'Theme'} ${record.name || 'installed'} installed.`
+      );
+      await fetchAll(false);
+      navigate('themes');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
   root.querySelectorAll('[data-validate-theme]').forEach((button) => {
     button.addEventListener('click', async () => {
       try {
