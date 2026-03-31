@@ -33,8 +33,13 @@ See more of Foundry here: [Foundry Screenshots](README_SCREENSHOTS.md)
 The fastest way to get the project running locally is via Docker:
 
 ```bash
-docker-compose up
+docker compose up -d --build
 ```
+
+The compose setup bind-mounts the project into the container for source-driven
+development, but keeps `data/` and `public/` on named Docker volumes so the
+runtime can write sessions, admin state, and generated output without host-file
+permission issues.
 
 Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, run Foundry locally, or run it in portable standalone mode without Docker.
 
