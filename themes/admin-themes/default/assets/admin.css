@@ -352,6 +352,20 @@ button.danger,
   border-radius: 4px;
 }
 
+button.panel {
+  display: block;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.panel:hover {
+  background: var(--foundry-panel);
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -1036,6 +1050,10 @@ button.small {
 .warning-panel {
   border-color: #e5d18d;
   background: #fffaf0;
+}
+
+button.warning-panel:hover {
+  background: #fff6e4;
 }
 
 .mono {

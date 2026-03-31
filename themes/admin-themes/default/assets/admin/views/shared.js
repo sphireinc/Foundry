@@ -61,12 +61,12 @@ export const renderToasts = (state) => {
 
 export const renderUpdateNotice = (state) => {
   if (!state.updateInfo?.has_update) return '';
-  return `<div class="panel warning-panel">
+  return `<button type="button" class="panel warning-panel" data-section="operations" aria-label="Open Operations to review available Foundry update">
     <div class="panel-pad">
       <strong>Foundry ${escapeHTML(state.updateInfo.latest_version || 'update')} is available</strong>
-      <div class="muted">${escapeHTML(state.updateInfo.instructions || 'Open Themes to review the release and update options.')}</div>
+      <div class="muted">${escapeHTML(state.updateInfo.instructions || 'Open Operations to review the release and update options.')}</div>
     </div>
-  </div>`;
+  </button>`;
 };
 
 export const renderKeyboardHelp = (state) => {
@@ -75,12 +75,9 @@ export const renderKeyboardHelp = (state) => {
     <strong>Keyboard Shortcuts</strong>
     <div><code>Cmd/Ctrl+S</code> Save current form</div>
     <div><code>Cmd/Ctrl+Enter</code> Preview current document</div>
+    <div><code>Cmd/Ctrl+K</code> Open command palette</div>
     <div><code>Shift+/</code> Toggle shortcut help</div>
-    <div><code>g d</code> Documents</div>
-    <div><code>g e</code> Editor</div>
-    <div><code>g m</code> Media</div>
-    <div><code>g s</code> Settings</div>
-    <div><code>g u</code> Users</div>
+    <div><code>Use the command palette</code> Navigate sections and run quick actions</div>
   </div>`;
 };
 
@@ -139,6 +136,7 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['extensions', 'Extensions'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
+    ['operations', 'Operations'],
   ];
   const extensionPages = Array.isArray(options.extensionPages) ? options.extensionPages : [];
   const builtins = items.map(

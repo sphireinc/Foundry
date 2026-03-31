@@ -29,7 +29,7 @@ func (command) Details() []string {
 	return []string{
 		"foundry backup create [target.zip]",
 		"foundry backup list",
-		"foundry backup git-snapshot [message]",
+		"foundry backup git-snapshot [message] [--push]",
 		"foundry backup git-log [limit]",
 	}
 }
@@ -96,10 +96,21 @@ func runList(cfg *config.Config) error {
 
 func runGitSnapshot(cfg *config.Config, args []string) error {
 	message := ""
-	if len(args) >= 4 {
-		message = strings.TrimSpace(args[3])
+	push := false
+	for _, arg := range args[3:] {
+		switch strings.TrimSpace(arg) {
+		case "":
+		case "--push":
+			push = true
+		default:
+			if message == "" {
+				message = strings.TrimSpace(arg)
+				continue
+			}
+			return fmt.Errorf("usage: foundry backup git-snapshot [message] [--push]")
+		}
 	}
-	snapshot, err := backup.CreateGitSnapshot(cfg, message)
+	snapshot, err := backup.CreateGitSnapshot(cfg, message, push)
 	if err != nil {
 		return err
 	}
@@ -110,6 +121,11 @@ func runGitSnapshot(cfg *config.Config, args []string) error {
 	}
 	fmt.Printf("%s %s\n", cliout.Label("Repo:"), snapshot.RepoDir)
 	fmt.Printf("%s %s\n", cliout.Label("Revision:"), snapshot.Revision)
+	if snapshot.RemoteURL != "" {
+		fmt.Printf("%s %s\n", cliout.Label("Remote:"), snapshot.RemoteURL)
+		fmt.Printf("%s %s\n", cliout.Label("Branch:"), snapshot.Branch)
+		fmt.Printf("%s %t\n", cliout.Label("Pushed:"), snapshot.Pushed)
+	}
 	fmt.Printf("%s %s\n", cliout.Label("Created:"), snapshot.CreatedAt.Format(time.RFC3339))
 	return nil
 }

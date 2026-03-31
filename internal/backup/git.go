@@ -18,9 +18,12 @@ type GitSnapshot struct {
 	CreatedAt time.Time
 	Message   string
 	Changed   bool
+	Pushed    bool
+	RemoteURL string
+	Branch    string
 }
 
-func CreateGitSnapshot(cfg *config.Config, message string) (*GitSnapshot, error) {
+func CreateGitSnapshot(cfg *config.Config, message string, push bool) (*GitSnapshot, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -30,6 +33,16 @@ func CreateGitSnapshot(cfg *config.Config, message string) (*GitSnapshot, error)
 	}
 	if err := ensureGitRepo(repoDir); err != nil {
 		return nil, err
+	}
+	remoteURL := strings.TrimSpace(cfg.Backup.GitRemoteURL)
+	branch := strings.TrimSpace(cfg.Backup.GitBranch)
+	if branch == "" {
+		branch = "main"
+	}
+	if remoteURL != "" {
+		if err := ensureGitRemote(repoDir, remoteURL); err != nil {
+			return nil, err
+		}
 	}
 	if err := syncContentWorkingTree(repoDir, cfg.ContentDir); err != nil {
 		return nil, err
@@ -52,6 +65,8 @@ func CreateGitSnapshot(cfg *config.Config, message string) (*GitSnapshot, error)
 			CreatedAt: time.Now().UTC(),
 			Message:   message,
 			Changed:   false,
+			RemoteURL: remoteURL,
+			Branch:    branch,
 		}, nil
 	}
 	if _, err := gitOutputWithConfig(repoDir, []string{"-c", "user.name=Foundry", "-c", "user.email=foundry@localhost", "commit", "-m", message}); err != nil {
@@ -69,13 +84,22 @@ func CreateGitSnapshot(cfg *config.Config, message string) (*GitSnapshot, error)
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	return &GitSnapshot{
+	snapshot := &GitSnapshot{
 		RepoDir:   repoDir,
 		Revision:  strings.TrimSpace(rev),
 		CreatedAt: createdAt,
 		Message:   message,
 		Changed:   true,
-	}, nil
+		RemoteURL: remoteURL,
+		Branch:    branch,
+	}
+	if remoteURL != "" && (push || cfg.Backup.GitPushOnChange) {
+		if err := pushGitSnapshot(repoDir, branch); err != nil {
+			return nil, err
+		}
+		snapshot.Pushed = true
+	}
+	return snapshot, nil
 }
 
 func ListGitSnapshots(cfg *config.Config, limit int) ([]GitSnapshot, error) {
@@ -116,6 +140,8 @@ func ListGitSnapshots(cfg *config.Config, limit int) ([]GitSnapshot, error) {
 			CreatedAt: createdAt,
 			Message:   parts[2],
 			Changed:   true,
+			RemoteURL: strings.TrimSpace(cfg.Backup.GitRemoteURL),
+			Branch:    strings.TrimSpace(cfg.Backup.GitBranch),
 		})
 	}
 	return items, nil
@@ -126,6 +152,27 @@ func ensureGitRepo(repoDir string) error {
 		return nil
 	}
 	_, err := gitOutput(repoDir, "init")
+	return err
+}
+
+func ensureGitRemote(repoDir, remoteURL string) error {
+	current, err := gitOutput(repoDir, "remote", "get-url", "origin")
+	if err == nil {
+		if strings.TrimSpace(current) == strings.TrimSpace(remoteURL) {
+			return nil
+		}
+		_, err = gitOutput(repoDir, "remote", "set-url", "origin", remoteURL)
+		return err
+	}
+	_, err = gitOutput(repoDir, "remote", "add", "origin", remoteURL)
+	return err
+}
+
+func pushGitSnapshot(repoDir, branch string) error {
+	if strings.TrimSpace(branch) == "" {
+		branch = "main"
+	}
+	_, err := gitOutput(repoDir, "push", "-u", "origin", "HEAD:"+branch)
 	return err
 }
 

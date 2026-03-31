@@ -15,6 +15,7 @@ export const sectionTitles = {
   extensions: 'Extensions',
   plugins: 'Plugins',
   themes: 'Themes',
+  operations: 'Operations',
 };
 
 // createInitialState builds the single in-memory state tree for the default
@@ -69,7 +70,10 @@ export const createInitialState = ({ section }) => ({
   extensionRuntimeErrors: [],
   themes: [],
   backups: [],
+  gitBackups: [],
   updateInfo: null,
+  operationsStatus: null,
+  operationsLog: null,
   audit: [],
   auditFilters: { actor: '', action: '', outcome: '' },
   siteValidation: null,

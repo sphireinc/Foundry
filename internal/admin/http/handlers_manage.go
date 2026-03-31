@@ -6,6 +6,7 @@ import (
 
 	adminaudit "github.com/sphireinc/foundry/internal/admin/audit"
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
+	"github.com/sphireinc/foundry/internal/logx"
 )
 
 // registerManagementRoutes returns admin configuration, users, themes, plugins,
@@ -27,10 +28,17 @@ func registerManagementRoutes(r *Router) []routeDef {
 		{pattern: r.routePath("/api/themes/install"), handler: http.HandlerFunc(r.handleInstallTheme), capability: "themes.manage"},
 		{pattern: r.routePath("/api/themes/validate"), handler: http.HandlerFunc(r.handleValidateTheme), capability: "themes.manage"},
 		{pattern: r.routePath("/api/themes/switch"), handler: http.HandlerFunc(r.handleThemeSwitch), capability: "themes.manage"},
+		{pattern: r.routePath("/api/operations"), handler: http.HandlerFunc(r.handleOperationsStatus), capability: "dashboard.read"},
+		{pattern: r.routePath("/api/operations/logs"), handler: http.HandlerFunc(r.handleOperationsLogs), capability: "dashboard.read"},
+		{pattern: r.routePath("/api/operations/validate"), handler: http.HandlerFunc(r.handleOperationsValidate), capability: "dashboard.read"},
+		{pattern: r.routePath("/api/operations/cache/clear"), handler: http.HandlerFunc(r.handleOperationsClearCache), capability: "config.manage"},
+		{pattern: r.routePath("/api/operations/rebuild"), handler: http.HandlerFunc(r.handleOperationsRebuild), capability: "config.manage"},
 		{pattern: r.routePath("/api/backups"), handler: http.HandlerFunc(r.handleBackups), capability: "config.manage"},
 		{pattern: r.routePath("/api/backups/create"), handler: http.HandlerFunc(r.handleCreateBackup), capability: "config.manage"},
 		{pattern: r.routePath("/api/backups/restore"), handler: http.HandlerFunc(r.handleRestoreBackup), capability: "config.manage"},
 		{pattern: r.routePath("/api/backups/download"), handler: http.HandlerFunc(r.handleDownloadBackup), capability: "config.manage"},
+		{pattern: r.routePath("/api/backups/git"), handler: http.HandlerFunc(r.handleGitBackups), capability: "config.manage"},
+		{pattern: r.routePath("/api/backups/git/create"), handler: http.HandlerFunc(r.handleCreateGitBackup), capability: "config.manage"},
 		{pattern: r.routePath("/api/update"), handler: http.HandlerFunc(r.handleUpdateStatus), capability: "dashboard.read"},
 		{pattern: r.routePath("/api/update/apply"), handler: http.HandlerFunc(r.handleApplyUpdate), capability: "config.manage"},
 		{pattern: r.routePath("/api/plugins"), handler: http.HandlerFunc(r.handlePlugins), capability: "plugins.manage"},
@@ -128,16 +136,118 @@ func (r *Router) handleUpdateStatus(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (r *Router) handleOperationsStatus(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := r.service.GetOperationsStatus(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleOperationsLogs(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := r.service.ReadOperationsLog(req.Context(), 120)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleOperationsValidate(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	status, err := r.service.ValidateSite(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (r *Router) handleOperationsClearCache(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.service.ClearOperationalCaches(req.Context()); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	r.logAuditRequest(req, "operations.cache.clear", "success", "graph-cache", nil)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (r *Router) handleOperationsRebuild(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.service.RebuildSite(req.Context()); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "operations.rebuild", "success", "build", nil)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (r *Router) handleGitBackups(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	items, err := r.service.ListGitBackupSnapshots(req.Context(), 20)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (r *Router) handleCreateGitBackup(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.BackupGitSnapshotRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	record, err := r.service.CreateGitBackupSnapshot(req.Context(), body.Message, body.Push)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "backup.git_snapshot.create", "success", record.Revision, nil)
+	writeJSON(w, http.StatusOK, record)
+}
+
 func (r *Router) handleApplyUpdate(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	logx.Info("admin api update apply started", "path", req.URL.Path)
 	resp, err := r.service.ApplyUpdate(req.Context())
 	if err != nil {
+		logx.Error("admin api update apply failed", "path", req.URL.Path, "error", err)
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
+	logx.Info("admin api update apply accepted", "latest_version", resp.LatestVersion, "install_mode", resp.InstallMode, "apply_supported", resp.ApplySupported)
 	r.logAuditRequest(req, "system.update.apply", "success", resp.LatestVersion, nil)
 	writeJSON(w, http.StatusAccepted, resp)
 }

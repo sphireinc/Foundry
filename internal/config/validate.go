@@ -83,6 +83,9 @@ func Validate(cfg *Config) []error {
 	if cfg.Backup.HeadroomPercent < 100 {
 		errs = append(errs, fmt.Errorf("backup.headroom_percent must be at least 100"))
 	}
+	if strings.TrimSpace(cfg.Backup.GitRemoteURL) != "" && strings.TrimSpace(cfg.Backup.GitBranch) == "" {
+		errs = append(errs, fmt.Errorf("backup.git_branch must not be empty when backup.git_remote_url is set"))
+	}
 
 	if cfg.DefaultLang != "" && strings.Contains(cfg.DefaultLang, "/") {
 		errs = append(errs, fmt.Errorf("default_lang must not contain '/'"))

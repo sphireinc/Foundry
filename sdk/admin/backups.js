@@ -11,4 +11,10 @@ export const createAdminBackupsAPI = (http) => ({
   downloadURL(name) {
     return `${http.baseURL}/api/backups/download?name=${encodeURIComponent(name)}`;
   },
+  listGit() {
+    return http.get('/api/backups/git');
+  },
+  createGit(input = {}) {
+    return http.post('/api/backups/git/create', input);
+  },
 });

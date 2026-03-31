@@ -180,6 +180,42 @@ type BackupRestoreRequest struct {
 	Name string `json:"name"`
 }
 
+type BackupGitSnapshotRequest struct {
+	Message string `json:"message,omitempty"`
+	Push    bool   `json:"push,omitempty"`
+}
+
+type BackupGitSnapshotRecord struct {
+	RepoDir   string `json:"repo_dir"`
+	Revision  string `json:"revision"`
+	CreatedAt string `json:"created_at"`
+	Message   string `json:"message"`
+	Changed   bool   `json:"changed"`
+	Pushed    bool   `json:"pushed,omitempty"`
+	RemoteURL string `json:"remote_url,omitempty"`
+	Branch    string `json:"branch,omitempty"`
+}
+
+type OperationsStatusResponse struct {
+	ServiceInstalled bool          `json:"service_installed"`
+	ServiceRunning   bool          `json:"service_running"`
+	ServiceEnabled   bool          `json:"service_enabled"`
+	ServiceMessage   string        `json:"service_message,omitempty"`
+	ServiceName      string        `json:"service_name,omitempty"`
+	ServiceFile      string        `json:"service_file,omitempty"`
+	ServiceLog       string        `json:"service_log,omitempty"`
+	StandalonePID    int           `json:"standalone_pid,omitempty"`
+	StandaloneLog    string        `json:"standalone_log,omitempty"`
+	StandaloneActive bool          `json:"standalone_active"`
+	Checks           []HealthCheck `json:"checks,omitempty"`
+}
+
+type OperationsLogResponse struct {
+	Source  string `json:"source"`
+	LogPath string `json:"log_path,omitempty"`
+	Content string `json:"content"`
+}
+
 type UpdateStatusResponse struct {
 	Repo           string `json:"repo"`
 	CurrentVersion string `json:"current_version"`

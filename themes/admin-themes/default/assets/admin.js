@@ -2144,7 +2144,7 @@ import {
     );
   };
 
-  const { renderExtensions, renderPlugins, renderThemes } = createPlatformViews({
+  const { renderExtensions, renderPlugins, renderThemes, renderOperations } = createPlatformViews({
     state,
     panel,
     escapeHTML,
@@ -2184,6 +2184,8 @@ import {
         return renderPlugins();
       case 'themes':
         return renderThemes();
+      case 'operations':
+        return renderOperations();
       default: {
         const extensionPage = extensionPageBySection(state.section);
         if (extensionPage) return renderExtensionPage();
@@ -2473,6 +2475,9 @@ import {
         admin.extensions.getAdminExtensions(),
         admin.themes.list(),
         admin.backups.list(),
+        admin.backups.listGit(),
+        admin.operations.get(),
+        admin.operations.logs(),
         admin.updates.get(),
         admin.audit.list(),
       ]);
@@ -2629,6 +2634,36 @@ import {
       );
       assignResult(
         14,
+        'git backups',
+        (value) => {
+          state.gitBackups = Array.isArray(value) ? value : [];
+        },
+        () => {
+          state.gitBackups = [];
+        }
+      );
+      assignResult(
+        15,
+        'operations status',
+        (value) => {
+          state.operationsStatus = value || null;
+        },
+        () => {
+          state.operationsStatus = null;
+        }
+      );
+      assignResult(
+        16,
+        'operations logs',
+        (value) => {
+          state.operationsLog = value || null;
+        },
+        () => {
+          state.operationsLog = null;
+        }
+      );
+      assignResult(
+        17,
         'update status',
         (value) => {
           state.updateInfo = value || null;
@@ -2638,7 +2673,7 @@ import {
         }
       );
       assignResult(
-        15,
+        18,
         'audit log',
         (value) => {
           state.audit = Array.isArray(value) ? value : [];
@@ -2737,11 +2772,18 @@ import {
     event.returnValue = '';
   });
 
-  let pendingGoto = '';
+  const isEditableTarget = (target) => {
+    if (!target) return false;
+    if (target.closest?.('[contenteditable="true"]')) return true;
+    const tagName = target.tagName?.toLowerCase();
+    return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable;
+  };
+
   window.addEventListener('keydown', (event) => {
     if (!state.session?.authenticated) return;
     const isMac = /Mac|iPhone|iPad/.test(window.navigator.platform);
     const modifier = isMac ? event.metaKey : event.ctrlKey;
+    const typing = isEditableTarget(event.target);
     if (modifier && event.key.toLowerCase() === 's') {
       event.preventDefault();
       if (state.section === 'editor')
@@ -2781,34 +2823,12 @@ import {
       render();
       return;
     }
+    if (typing) return;
     if (event.shiftKey && event.key === '?') {
       event.preventDefault();
       state.keyboardHelp = !state.keyboardHelp;
       render();
       return;
-    }
-    if (event.key && event.key.toLowerCase() === 'g') {
-      pendingGoto = 'g';
-      window.setTimeout(() => {
-        pendingGoto = '';
-      }, 800);
-      return;
-    }
-    if (pendingGoto === 'g') {
-      const map = {
-        d: 'documents',
-        e: 'editor',
-        m: 'media',
-        s: 'settings',
-        u: 'users',
-        a: 'audit',
-      };
-      const next = map[event.key.toLowerCase()];
-      if (next) {
-        event.preventDefault();
-        pendingGoto = '';
-        navigate(next);
-      }
     }
   });
 

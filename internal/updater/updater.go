@@ -20,6 +20,7 @@ import (
 	"time"
 
 	versioncmd "github.com/sphireinc/foundry/internal/commands/version"
+	"github.com/sphireinc/foundry/internal/logx"
 	"github.com/sphireinc/foundry/internal/standalone"
 )
 
@@ -80,6 +81,7 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 	}
 	mode := DetectInstallMode(projectDir)
 	current := normalizeVersion(versioncmd.Version)
+	logx.Info("updater release check started", "project_dir", projectDir, "repo", repo, "install_mode", mode, "current_version", current)
 	info := &ReleaseInfo{
 		Repo:           repo,
 		CurrentVersion: current,
@@ -123,6 +125,7 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 	}
 	info.ApplySupported = info.HasUpdate && mode == ModeStandalone && info.AssetURL != ""
 	info.Instructions = instructionsForMode(mode)
+	logx.Info("updater release check completed", "project_dir", projectDir, "latest_version", latest, "has_update", info.HasUpdate, "install_mode", mode, "apply_supported", info.ApplySupported, "asset_name", info.AssetName)
 	return info, nil
 }
 
@@ -147,11 +150,13 @@ func DetectInstallMode(projectDir string) InstallMode {
 }
 
 func ScheduleApply(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
+	logx.Info("updater schedule apply started", "project_dir", projectDir)
 	info, err := Check(ctx, projectDir)
 	if err != nil {
 		return nil, err
 	}
 	if !info.ApplySupported {
+		logx.Info("updater schedule apply rejected", "project_dir", projectDir, "install_mode", info.InstallMode, "has_update", info.HasUpdate, "asset_name", info.AssetName)
 		return nil, fmt.Errorf("self-update is not supported for install mode %q", info.InstallMode)
 	}
 	exe, err := os.Executable()
@@ -163,15 +168,18 @@ func ScheduleApply(ctx context.Context, projectDir string) (*ReleaseInfo, error)
 		return nil, err
 	}
 	if state == nil || !running {
+		logx.Info("updater schedule apply rejected", "project_dir", projectDir, "reason", "standalone runtime is not running")
 		return nil, fmt.Errorf("standalone runtime is not running")
 	}
 	newBinaryPath, err := downloadReleaseBinary(ctx, projectDir, info)
 	if err != nil {
 		return nil, err
 	}
+	logx.Info("updater binary downloaded", "project_dir", projectDir, "binary_path", newBinaryPath, "asset_name", info.AssetName)
 	if err := StartHelper(projectDir, state.PID, exe, newBinaryPath); err != nil {
 		return nil, err
 	}
+	logx.Info("updater helper started", "project_dir", projectDir, "target_pid", state.PID, "asset_name", info.AssetName)
 	return info, nil
 }
 
@@ -180,6 +188,7 @@ func StartHelper(projectDir string, pid int, targetExe, sourceBinary string) err
 	if err != nil {
 		return err
 	}
+	logx.Info("updater starting helper process", "project_dir", projectDir, "target_pid", pid, "target_executable", targetExe, "source_binary", sourceBinary)
 	cmd := execCommand(exe, "__update-helper",
 		"--pid="+strconv.Itoa(pid),
 		"--project-dir="+projectDir,
@@ -192,6 +201,7 @@ func StartHelper(projectDir string, pid int, targetExe, sourceBinary string) err
 }
 
 func RunHelper(projectDir, targetExe, sourceBinary string, pid int) error {
+	logx.Info("updater helper running", "project_dir", projectDir, "target_pid", pid, "target_executable", targetExe, "source_binary", sourceBinary)
 	if pid > 0 {
 		_ = terminatePID(pid)
 		_ = waitForExit(pid, 10*time.Second)
@@ -214,8 +224,10 @@ func RunHelper(projectDir, targetExe, sourceBinary string, pid int) error {
 	if err := os.Chmod(targetExe, info.Mode()|0o111); err != nil {
 		return err
 	}
+	logx.Info("updater helper swapped binary", "project_dir", projectDir, "target_executable", targetExe, "backup_path", backupPath)
 	cmd := execCommand(targetExe, "restart")
 	cmd.Dir = projectDir
+	logx.Info("updater helper restarting target", "project_dir", projectDir, "target_executable", targetExe)
 	return cmd.Start()
 }
 

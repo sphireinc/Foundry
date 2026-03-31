@@ -82,7 +82,7 @@ func TestCreateGitSnapshot(t *testing.T) {
 		t.Skip("git not installed")
 	}
 	cfg := testConfig(t)
-	snapshot, err := CreateGitSnapshot(cfg, "initial snapshot")
+	snapshot, err := CreateGitSnapshot(cfg, "initial snapshot", false)
 	if err != nil {
 		t.Fatalf("create git snapshot: %v", err)
 	}

@@ -311,7 +311,31 @@ export const createPlatformViews = ({
           </article>`;
       })
       .join('');
-    const backupRows = (state.backups || [])
+    return panel(
+      'Themes',
+      `<form id="theme-install-form" class="inline-form compact-inline-form">
+        <label class="frontmatter-span-2">Install Theme URL<input id="theme-install-url" type="text" placeholder="github.com/acme/aurora"></label>
+        <label>Directory Name<input id="theme-install-name" type="text" placeholder="aurora"></label>
+        <label class="frontmatter-span-2">Kind<select id="theme-install-kind"><option value="frontend">Frontend</option><option value="admin">Admin</option></select></label>
+        <button type="submit">Install</button>
+      </form>${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
+      `${state.themes.length} frontend and admin themes`
+    );
+  };
+
+  const renderOperations = () => {
+    const updateInfo = state.updateInfo || null;
+    const operations = state.operationsStatus || {};
+    const runtime = state.runtimeStatus || {};
+    const backupConfig = state.settingsForm?.Backup || {};
+    const updateReason = !updateInfo
+      ? 'Update status has not been loaded yet.'
+      : updateInfo.has_update && updateInfo.apply_supported
+        ? 'A new release is available and this install can update in place.'
+        : updateInfo.has_update
+          ? updateInfo.instructions || 'A new release is available, but this install mode cannot self-update in place.'
+          : 'You are already on the latest release.';
+    const zipRows = (state.backups || [])
       .map(
         (item) => `<div class="table-row table-row-actions">
           <span><strong>${escapeHTML(item.name)}</strong><div class="muted mono">${escapeHTML(item.created_at || '')}</div></span>
@@ -324,35 +348,103 @@ export const createPlatformViews = ({
         </div>`
       )
       .join('');
-    const updateInfo = state.updateInfo || null;
+    const gitRows = (state.gitBackups || [])
+      .map(
+        (item) => `<div class="table-row">
+          <span><strong>${escapeHTML((item.revision || '').slice(0, 12))}</strong><div class="muted mono">${escapeHTML(item.message || '')}</div></span>
+          <span>${escapeHTML(item.branch || '-')}</span>
+          <span>${escapeHTML(item.created_at || '')}</span>
+          <span>${item.pushed ? 'pushed' : item.changed ? 'local' : 'unchanged'}</span>
+        </div>`
+      )
+      .join('');
+    const checkRows = (operations.checks || [])
+      .map(
+        (item) => `<div class="mini-list-row"><span>${escapeHTML(item.name)}</span><strong>${escapeHTML(item.status || 'unknown')}</strong></div>`
+      )
+      .join('');
+    const logContent = state.operationsLog?.content
+      ? `<pre class="diff-viewer">${escapeHTML(state.operationsLog.content)}</pre>`
+      : '<div class="empty-state">No service or standalone log output available.</div>';
+    const validationSummary = state.siteValidation
+      ? `<div class="cards">
+          <article class="card"><span class="card-label">Findings</span><strong>${escapeHTML(String(state.siteValidation.message_count || 0))}</strong><span class="card-copy">Latest on-demand validation result.</span></article>
+          <article class="card"><span class="card-label">Broken Media</span><strong>${escapeHTML(String((state.siteValidation.broken_media_refs || []).length))}</strong><span class="card-copy">Unresolved media references.</span></article>
+          <article class="card"><span class="card-label">Broken Links</span><strong>${escapeHTML(String((state.siteValidation.broken_internal_links || []).length))}</strong><span class="card-copy">Internal links that do not resolve.</span></article>
+          <article class="card"><span class="card-label">Templates</span><strong>${escapeHTML(String((state.siteValidation.missing_templates || []).length))}</strong><span class="card-copy">Missing layouts or duplicate routes.</span></article>
+        </div>`
+      : '<div class="empty-state">Run validation to capture the latest site integrity snapshot.</div>';
+
     return panel(
-      'Themes',
-      `<form id="theme-install-form" class="inline-form compact-inline-form">
-        <label class="frontmatter-span-2">Install Theme URL<input id="theme-install-url" type="text" placeholder="github.com/acme/aurora"></label>
-        <label>Directory Name<input id="theme-install-name" type="text" placeholder="aurora"></label>
-        <label class="frontmatter-span-2">Kind<select id="theme-install-kind"><option value="frontend">Frontend</option><option value="admin">Admin</option></select></label>
-        <button type="submit">Install</button>
-      </form>
-      <div class="panel-pad stack">
-        <div class="toolbar">
-          <button class="ghost small" type="button" id="update-refresh">Refresh Update Status</button>
-          ${updateInfo?.apply_supported && updateInfo?.has_update ? '<button class="ghost small" type="button" id="update-apply">Apply Update</button>' : ''}
-        </div>
+      'Operations',
+      `<div class="panel-pad stack">
         <div class="cards">
-          <article class="card"><span class="card-label">Current</span><strong>${escapeHTML(updateInfo?.current_version || 'unknown')}</strong><span class="card-copy">Running Foundry version.</span></article>
-          <article class="card"><span class="card-label">Latest</span><strong>${escapeHTML(updateInfo?.latest_version || 'unknown')}</strong><span class="card-copy">Latest GitHub release.</span></article>
+          <article class="card"><span class="card-label">Current Release</span><strong>${escapeHTML(updateInfo?.current_version || 'unknown')}</strong><span class="card-copy">Running Foundry version.</span></article>
+          <article class="card"><span class="card-label">Latest Release</span><strong>${escapeHTML(updateInfo?.latest_version || 'unknown')}</strong><span class="card-copy">Latest GitHub release.</span></article>
           <article class="card"><span class="card-label">Install Mode</span><strong>${escapeHTML(updateInfo?.install_mode || 'unknown')}</strong><span class="card-copy">Update support depends on deployment mode.</span></article>
-          <article class="card"><span class="card-label">Self-Update</span><strong>${updateInfo?.apply_supported ? 'available' : 'manual'}</strong><span class="card-copy">${escapeHTML(updateInfo?.instructions || 'No update guidance available.')}</span></article>
+          <article class="card"><span class="card-label">Service</span><strong>${operations.service_running ? 'running' : operations.standalone_active ? 'standalone' : 'inactive'}</strong><span class="card-copy">${escapeHTML(operations.service_message || 'No managed service detected.')}</span></article>
         </div>
+        <div class="toolbar">
+          <button class="ghost small" type="button" id="operations-refresh">Refresh Operations</button>
+          <button class="ghost small" type="button" id="update-refresh">Refresh Update Status</button>
+          <button class="ghost small" type="button" id="update-apply" ${updateInfo?.apply_supported && updateInfo?.has_update ? '' : 'disabled aria-disabled="true" title="Self-update is not currently available"'}>Apply Update</button>
+          <button class="ghost small" type="button" id="operations-clear-cache">Clear Cache</button>
+          <button class="ghost small" type="button" id="operations-rebuild">Rebuild</button>
+          <button class="ghost small" type="button" id="operations-validate">Run Validation</button>
+          <button class="ghost small" type="button" id="operations-logs-refresh">Refresh Logs</button>
+        </div>
+        <div class="subtle-meta">
+          <div><strong>Service:</strong> ${escapeHTML(operations.service_name || 'not installed')}</div>
+          <div><strong>Service file:</strong> ${escapeHTML(operations.service_file || '-')}</div>
+          <div><strong>Standalone PID:</strong> ${escapeHTML(String(operations.standalone_pid || 0))}</div>
+          <div><strong>Log:</strong> ${escapeHTML(operations.service_log || operations.standalone_log || '-')}</div>
+        </div>
+        <div class="note">${escapeHTML(updateReason)}</div>
       </div>
       <div class="panel-pad stack">
+        <h3>Health Checks</h3>
+        <div class="mini-list">${checkRows || '<div class="empty-state">No health checks loaded.</div>'}</div>
+      </div>
+      <div class="panel-pad stack">
+        <h3>Backup Targets</h3>
+        <form id="operations-backup-git-form" class="inline-form compact-inline-form">
+          <label class="frontmatter-span-2">Git Remote URL<input id="operations-git-remote-url" type="text" value="${escapeHTML(backupConfig.GitRemoteURL || '')}" placeholder="git@github.com:you/foundry-backups.git"></label>
+          <label>Branch<input id="operations-git-branch" type="text" value="${escapeHTML(backupConfig.GitBranch || 'main')}" placeholder="main"></label>
+          <label class="checkbox frontmatter-span-2"><input id="operations-git-push-on-change" type="checkbox" ${backupConfig.GitPushOnChange ? 'checked' : ''}> Push automatically after Git snapshots</label>
+          <button type="submit">Save Git Backup Settings</button>
+        </form>
         <div class="toolbar">
           <button class="ghost small" type="button" id="backup-create">Create Zip Backup</button>
+          <button class="ghost small" type="button" id="backup-git-create">Create Git Snapshot</button>
+          ${backupConfig.GitRemoteURL ? '<button class="ghost small" type="button" id="backup-git-push">Create & Push Git Snapshot</button>' : ''}
         </div>
-        <div class="table table-four"><div class="table-head"><span>Backup</span><span>Bytes</span><span>Created</span><span>Action</span></div>${backupRows || '<div class="panel-pad empty-state">No backups found.</div>'}</div>
       </div>
-      ${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
-      `${state.themes.length} frontend and admin themes`
+      <div class="panel-pad stack">
+        <h3>Zip Backups</h3>
+        <div class="table table-four"><div class="table-head"><span>Backup</span><span>Bytes</span><span>Created</span><span>Action</span></div>${zipRows || '<div class="panel-pad empty-state">No zip backups found.</div>'}</div>
+      </div>
+      <div class="panel-pad stack">
+        <h3>Git Snapshots</h3>
+        <div class="table table-four"><div class="table-head"><span>Revision</span><span>Branch</span><span>Created</span><span>Status</span></div>${gitRows || '<div class="panel-pad empty-state">No Git snapshots found.</div>'}</div>
+      </div>
+      <div class="panel-pad stack">
+        <h3>Validation</h3>
+        ${validationSummary}
+      </div>
+      <div class="panel-pad stack">
+        <h3>Runtime</h3>
+        <div class="cards">
+          <article class="card"><span class="card-label">Uptime</span><strong>${escapeHTML(String(runtime.uptime_seconds || 0))}s</strong><span class="card-copy">Current process uptime.</span></article>
+          <article class="card"><span class="card-label">Goroutines</span><strong>${escapeHTML(String(runtime.goroutines || 0))}</strong><span class="card-copy">Live goroutines.</span></article>
+          <article class="card"><span class="card-label">Heap</span><strong>${escapeHTML(String(runtime.heap_alloc_bytes || 0))}</strong><span class="card-copy">Heap allocation bytes.</span></article>
+          <article class="card"><span class="card-label">Last Build</span><strong>${escapeHTML(runtime.last_build?.generated_at || 'n/a')}</strong><span class="card-copy">Latest persisted build report.</span></article>
+        </div>
+      </div>
+      <div class="panel-pad stack">
+        <h3>Logs</h3>
+        ${logContent}
+      </div>`,
+      'Updates, backups, logs, cache, rebuilds, and runtime health'
     );
   };
 
@@ -360,5 +452,6 @@ export const createPlatformViews = ({
     renderExtensions,
     renderPlugins,
     renderThemes,
+    renderOperations,
   };
 };

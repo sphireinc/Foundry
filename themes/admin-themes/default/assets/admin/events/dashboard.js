@@ -1366,7 +1366,7 @@ export const bindDashboardEvents = (ctx) => {
       const record = await admin.backups.create({});
       setFlash(`Backup ${record.name || 'created'} created.`);
       await fetchAll(false);
-      navigate('themes');
+      navigate('operations');
     } catch (error) {
       state.error = error.message || String(error);
       render();
@@ -1382,12 +1382,57 @@ export const bindDashboardEvents = (ctx) => {
         await admin.backups.restore({ name: button.dataset.restoreBackup });
         setFlash('Backup restored.');
         await fetchAll(false);
-        navigate('themes');
+        navigate('operations');
       } catch (error) {
         state.error = error.message || String(error);
         render();
       }
     });
+  });
+
+  document.getElementById('backup-git-create')?.addEventListener('click', async () => {
+    try {
+      const record = await admin.backups.createGit({});
+      setFlash(`Git snapshot ${record.revision?.slice(0, 12) || 'created'} created.`);
+      await fetchAll(false);
+      navigate('operations');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('backup-git-push')?.addEventListener('click', async () => {
+    try {
+      const record = await admin.backups.createGit({ push: true });
+      setFlash(
+        `Git snapshot ${record.revision?.slice(0, 12) || 'created'} ${record.pushed ? 'pushed' : 'created'}.`
+      );
+      await fetchAll(false);
+      navigate('operations');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('operations-backup-git-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const next = structuredClone(state.settingsForm || {});
+      next.Backup = next.Backup || {};
+      next.Backup.GitRemoteURL = document.getElementById('operations-git-remote-url')?.value || '';
+      next.Backup.GitBranch = document.getElementById('operations-git-branch')?.value || 'main';
+      next.Backup.GitPushOnChange = !!document.getElementById('operations-git-push-on-change')?.checked;
+      const saved = await admin.settings.saveForm({ value: next });
+      state.settingsForm = saved?.value || next;
+      setFlash('Git backup settings saved.');
+      await fetchAll(false);
+      navigate('operations');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
   });
 
   document.getElementById('update-refresh')?.addEventListener('click', async () => {
@@ -1401,13 +1446,87 @@ export const bindDashboardEvents = (ctx) => {
     }
   });
 
+  document.getElementById('operations-refresh')?.addEventListener('click', async () => {
+    try {
+      state.operationsStatus = await admin.operations.get();
+      state.gitBackups = await admin.backups.listGit();
+      state.operationsLog = await admin.operations.logs();
+      setFlash('Operations status refreshed.');
+      render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('operations-clear-cache')?.addEventListener('click', async () => {
+    try {
+      await admin.operations.clearCache();
+      setFlash('Runtime cache cleared.');
+      await fetchAll(false);
+      navigate('operations');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('operations-rebuild')?.addEventListener('click', async () => {
+    if (!window.confirm('Run a full Foundry build now?')) {
+      return;
+    }
+    try {
+      await admin.operations.rebuild();
+      setFlash('Build completed.');
+      await fetchAll(false);
+      navigate('operations');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('operations-logs-refresh')?.addEventListener('click', async () => {
+    try {
+      state.operationsLog = await admin.operations.logs();
+      setFlash('Logs refreshed.');
+      render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('operations-validate')?.addEventListener('click', async () => {
+    try {
+      state.siteValidation = await admin.operations.validate();
+      setFlash(`Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`);
+      render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
   document.getElementById('update-apply')?.addEventListener('click', async () => {
     if (!window.confirm('Apply the latest Foundry release and restart the standalone runtime?')) {
       return;
     }
     try {
-      await admin.updates.apply();
-      setFlash('Update scheduled. Foundry will restart.');
+      state.error = '';
+      state.flash = 'Scheduling Foundry update...';
+      render();
+      const resp = await admin.updates.apply();
+      state.updateInfo = resp || state.updateInfo;
+      setFlash(
+        `Update to ${resp?.latest_version || 'the latest release'} scheduled. Refresh logs below to follow progress.`
+      );
+      try {
+        state.operationsLog = await admin.operations.logs();
+      } catch (_error) {}
+      try {
+        state.operationsStatus = await admin.operations.get();
+      } catch (_error) {}
       render();
     } catch (error) {
       state.error = error.message || String(error);

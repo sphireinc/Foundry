@@ -67,6 +67,9 @@ type BackupConfig struct {
 	RetentionCount  int    `yaml:"retention_count"`
 	MinFreeMB       int64  `yaml:"min_free_mb"`
 	HeadroomPercent int    `yaml:"headroom_percent"`
+	GitRemoteURL    string `yaml:"git_remote_url,omitempty"`
+	GitBranch       string `yaml:"git_branch,omitempty"`
+	GitPushOnChange bool   `yaml:"git_push_on_change,omitempty"`
 }
 
 type ServerConfig struct {
@@ -218,6 +221,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if strings.TrimSpace(c.Backup.Dir) == "" {
 		c.Backup.Dir = filepath.Join(".foundry", "backups")
+	}
+	if strings.TrimSpace(c.Backup.GitBranch) == "" {
+		c.Backup.GitBranch = "main"
 	}
 	if c.Backup.DebounceSeconds <= 0 {
 		c.Backup.DebounceSeconds = 45
