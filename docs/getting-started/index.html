@@ -83,6 +83,7 @@ foundry service install
 foundry service status
 foundry service restart
 foundry service uninstall
+foundry release cut v1.3.3
 foundry update check
 foundry update apply
 foundry plugin list --enabled
@@ -245,6 +246,12 @@ foundry update apply</code></pre>
             Version tags in this repository also trigger a GitHub Actions release workflow that
             publishes <code>foundry-*.tar.gz</code> archives and matching <code>.sha256</code>
             files for supported platforms.
+          </p>
+          <p>
+            To cut a release locally, run <code>foundry release cut v1.3.3</code> from the
+            repository root. Add <code>--push</code> to push the tag immediately, or use
+            <code>scripts/release.sh v1.3.3 --push</code> as a repo-local wrapper around the same
+            command. Foundry requires a clean worktree and a <code>vX.Y.Z</code> version string.
           </p>
 
           <h2>Admin shortcuts</h2>

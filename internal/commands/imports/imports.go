@@ -13,6 +13,7 @@ import (
 	_ "github.com/sphireinc/foundry/internal/commands/feed"
 	_ "github.com/sphireinc/foundry/internal/commands/i18n"
 	_ "github.com/sphireinc/foundry/internal/commands/plugin"
+	_ "github.com/sphireinc/foundry/internal/commands/release"
 	_ "github.com/sphireinc/foundry/internal/commands/routes"
 	_ "github.com/sphireinc/foundry/internal/commands/service"
 	_ "github.com/sphireinc/foundry/internal/commands/standalone"
