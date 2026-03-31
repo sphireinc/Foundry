@@ -1,6 +1,6 @@
 sessions:
-    - token: TlcRbqeJhFgLNuTkmuIfvpdzjld6jnGiyWBeiw1L0VM
-      csrf_token: 5RrOvOA1aBfLfxB2NsD_T9Boanbluwc082X-uLFCxa4
+    - token: 7XqcuUHla340IAYQvx-o2WGd2tabhEyRJtGASyPhohM
+      csrf_token: KpkBwKfXBk8BfyO9iBFjzUD0XbGUuDZqNSjChkGKoFc
       username: admin
       name: Admin User
       email: admin@example.com
@@ -8,11 +8,23 @@ sessions:
       capabilities:
         - '*'
       mfa_complete: true
-      issued_at: 2026-03-26T00:22:48.884985-04:00
-      last_seen: 2026-03-26T00:22:48.884985-04:00
-      expires_at: 2026-03-26T00:52:48.884985-04:00
-    - token: iT9aU4mXDlZvDfV80krTOpPMcUA_Drhy4uANqxSGQ78
-      csrf_token: Y2E-yi-AKgRr1lmnnQQEgSLgI4HELywwFE6woSK5mVA
+      issued_at: 2026-03-30T23:38:29.232466-04:00
+      last_seen: 2026-03-30T23:38:29.232466-04:00
+      expires_at: 2026-03-31T00:08:29.232466-04:00
+    - token: Qb78vUmQAq3WJeJcG5xkglssByPB-lhBwLR5r4FqaAw
+      csrf_token: nybS3qS0vXcb760J-MhKmiIfTaK92m2bWDyyInP5z-o
+      username: admin
+      name: Admin User
+      email: admin@example.com
+      role: admin
+      capabilities:
+        - '*'
+      mfa_complete: true
+      issued_at: 2026-03-30T23:35:05.274065-04:00
+      last_seen: 2026-03-30T23:35:05.274065-04:00
+      expires_at: 2026-03-31T00:05:05.274065-04:00
+    - token: MrumL8YaLXsvn1qaVaehfWdRzxHHpi-JnBxaLLjpyys
+      csrf_token: 7mt_SadRslP7AAvaT3-G44ojgh5uFx2NLVScVL7bthw
       username: editor
       name: Editor User
       email: editor@example.com
@@ -31,6 +43,99 @@ sessions:
         - media.lifecycle
         - audit.read
       mfa_complete: true
-      issued_at: 2026-03-26T00:22:49.475967-04:00
-      last_seen: 2026-03-26T00:22:49.477393-04:00
-      expires_at: 2026-03-26T00:52:49.477393-04:00
+      issued_at: 2026-03-30T23:35:05.738749-04:00
+      last_seen: 2026-03-30T23:35:05.739387-04:00
+      expires_at: 2026-03-31T00:05:05.739387-04:00
+    - token: OqlaTwysHMyeJEukQjcj1_bSczr5rRrkfhKu1uAz1N4
+      csrf_token: nHocNpEfpjtmQTMIWApOXvueaIUvlLdgj0G7mQv98XI
+      username: editor
+      name: Editor User
+      email: editor@example.com
+      role: editor
+      capabilities:
+        - dashboard.read
+        - documents.read
+        - documents.create
+        - documents.write
+        - documents.review
+        - documents.history
+        - documents.lifecycle
+        - documents.diff
+        - media.read
+        - media.write
+        - media.lifecycle
+        - audit.read
+      mfa_complete: true
+      issued_at: 2026-03-30T23:38:29.676779-04:00
+      last_seen: 2026-03-30T23:38:29.677187-04:00
+      expires_at: 2026-03-31T00:08:29.677187-04:00
+    - token: P_ru_Ffr7PkQGQgTqC5L07EFOj5DfaEFk0F56Pup5w8
+      csrf_token: SNgWFWXkMpHHuiLSWgHPQryao8fEQ8ZgMyk84a-0doQ
+      username: editor
+      name: Editor User
+      email: editor@example.com
+      role: editor
+      capabilities:
+        - dashboard.read
+        - documents.read
+        - documents.create
+        - documents.write
+        - documents.review
+        - documents.history
+        - documents.lifecycle
+        - documents.diff
+        - media.read
+        - media.write
+        - media.lifecycle
+        - audit.read
+      mfa_complete: true
+      issued_at: 2026-03-30T23:41:25.369927-04:00
+      last_seen: 2026-03-30T23:41:25.371733-04:00
+      expires_at: 2026-03-31T00:11:25.371733-04:00
+    - token: SaN2dJNs170C3kjOokCxVWpwQQGLs9B-n0BnTcGkPSs
+      csrf_token: 0p9y_Hd56kD77PCfqckX9BUmnoTIK5MhyY0u8gexNyk
+      username: admin
+      name: Admin User
+      email: admin@example.com
+      role: admin
+      capabilities:
+        - '*'
+      mfa_complete: true
+      issued_at: 2026-03-30T23:36:58.512847-04:00
+      last_seen: 2026-03-30T23:36:58.512847-04:00
+      expires_at: 2026-03-31T00:06:58.512847-04:00
+    - token: YqO8CVSkLh9pAmwf1aDcotWdcemzFm-9kXusUyY4qjg
+      csrf_token: skspoCXiKSKdbog8omf4nWEKv4nyGZSExC_H6XCZdzo
+      username: admin
+      name: Admin User
+      email: admin@example.com
+      role: admin
+      capabilities:
+        - '*'
+      mfa_complete: true
+      issued_at: 2026-03-30T23:41:24.924402-04:00
+      last_seen: 2026-03-30T23:41:24.924402-04:00
+      expires_at: 2026-03-31T00:11:24.924402-04:00
+    - token: 19mPkyfs6L3sfGpO9WogkdMK1pZC2Ryh9AsN8mcpods
+      csrf_token: d89wq5xwMel5LSewZB1NO6Ww8HvFjApO2vFOZF64-3c
+      username: editor
+      name: Editor User
+      email: editor@example.com
+      role: editor
+      capabilities:
+        - dashboard.read
+        - documents.read
+        - documents.create
+        - documents.write
+        - documents.review
+        - documents.history
+        - documents.lifecycle
+        - documents.diff
+        - media.read
+        - media.write
+        - media.lifecycle
+        - audit.read
+      mfa_complete: true
+      issued_at: 2026-03-30T23:36:58.970568-04:00
+      last_seen: 2026-03-30T23:36:58.970966-04:00
+      expires_at: 2026-03-31T00:06:58.970966-04:00
