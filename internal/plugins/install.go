@@ -85,6 +85,10 @@ func Install(opts InstallOptions) (Metadata, error) {
 			return Metadata{}, fmt.Errorf("git clone failed and zip fallback failed: %w", err)
 		}
 	}
+	if err := stripVCSMetadata(targetDir); err != nil {
+		_ = os.RemoveAll(targetDir)
+		return Metadata{}, err
+	}
 
 	meta, err := LoadMetadata(pluginsDir, name)
 	if err != nil {
@@ -251,6 +255,16 @@ func downloadAndExtract(repoURL, targetDir string) error {
 	}
 
 	return os.Rename(root, targetDir)
+}
+
+func stripVCSMetadata(targetDir string) error {
+	for _, rel := range []string{".git", ".gitmodules"} {
+		path := filepath.Join(targetDir, rel)
+		if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove VCS metadata %q: %w", rel, err)
+		}
+	}
+	return nil
 }
 
 // safeArchivePath confines archive extraction paths to the provided root.
