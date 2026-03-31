@@ -386,7 +386,6 @@ On Linux, user services may need lingering enabled to survive logout and reboot:
 ```bash
 loginctl enable-linger "$USER"
 ```
-
 Embedded media uses normal Markdown image syntax:
 
 ```md

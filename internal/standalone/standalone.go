@@ -284,7 +284,6 @@ func ensureManagedBinary(projectDir string) (string, error) {
 	}
 	return target, nil
 }
-
 func shouldUseGoRun(executablePath, projectDir string) bool {
 	exe := filepath.Clean(executablePath)
 	tmp := filepath.Clean(os.TempDir())
