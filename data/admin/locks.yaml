@@ -1,0 +1,8 @@
+locks:
+    - source_path: /Users/JuanSanchez/WebstormProjects/cms/content/pages/about.md
+      username: admin
+      name: Admin
+      role: admin
+      token: xrWmxiQBnlm5kdKNLTOSu65cwXZnCTmr
+      last_beat_at: 2026-04-01T05:38:29.138425Z
+      expires_at: 2026-04-01T05:40:29.138425Z

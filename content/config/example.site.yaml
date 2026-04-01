@@ -72,11 +72,6 @@ taxonomies:
 plugins:
   enabled: []
 
-fields:
-  enabled: false
-  allow_anything: false
-  schemas: {}
-
 seo:
   enabled: false
   default_title_sep: ""

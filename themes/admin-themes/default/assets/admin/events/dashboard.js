@@ -18,6 +18,7 @@ export const bindDashboardEvents = (ctx) => {
     syncRawFromStructuredEditor,
     slugify,
     updateDocumentFieldValue,
+    updateSharedFieldValue,
     getValueAtPath,
     defaultValueForSchema,
     removeNestedFieldValue,
@@ -199,6 +200,61 @@ export const bindDashboardEvents = (ctx) => {
         fields: state.documentFieldValues,
         meta: state.documentMeta,
       });
+      render();
+    });
+  });
+
+  root.querySelectorAll('[data-shared-custom-field]').forEach((field) => {
+    const eventName = field.type === 'checkbox' ? 'change' : 'input';
+    field.addEventListener(eventName, () => {
+      const path = String(field.dataset.sharedCustomField || '')
+        .split('.')
+        .filter(Boolean)
+        .map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment));
+      let nextValue;
+      switch (field.dataset.customType) {
+        case 'bool':
+          nextValue = !!field.checked;
+          break;
+        case 'number':
+          nextValue = field.value === '' ? '' : Number(field.value);
+          break;
+        default:
+          nextValue = field.value;
+          break;
+      }
+      updateSharedFieldValue(path, nextValue);
+    });
+  });
+
+  root.querySelectorAll('[data-shared-repeater-add]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const path = String(button.dataset.sharedRepeaterAdd || '')
+        .split('.')
+        .filter(Boolean)
+        .map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment));
+      const contractKey = path[0];
+      const contract = (state.sharedFieldContracts || []).find((entry) => entry.key === contractKey);
+      const schema = (contract?.fields || []).find((entry) => entry.name === path[1]);
+      if (!schema) return;
+      const current = getValueAtPath(state.customFields?.values || {}, path);
+      const nextItems = Array.isArray(current) ? [...current] : [];
+      nextItems.push(defaultValueForSchema(schema.item));
+      updateSharedFieldValue(path, nextItems);
+    });
+  });
+
+  root.querySelectorAll('[data-shared-repeater-remove]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const path = String(button.dataset.sharedRepeaterRemove || '')
+        .split('.')
+        .filter(Boolean)
+        .map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment));
+      const wrapper = { documentFieldValues: state.customFields?.values || {} };
+      removeNestedFieldValue(wrapper, path);
+      state.customFields = state.customFields || { path: 'content/custom-fields.yaml', raw: '', values: {} };
+      state.customFields.values = wrapper.documentFieldValues;
+      compareSnapshot('customFields', state.customFields.values || {});
       render();
     });
   });

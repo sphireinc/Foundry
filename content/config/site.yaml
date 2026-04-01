@@ -1,7 +1,7 @@
 name: "foundry"
 title: "Foundry CMS"
 base_url: "http://localhost:8080"
-theme: "default"
+theme: "Foundry-Cloud-Landing"
 environment: "default"
 default_lang: "en"
 content_dir: "content"
@@ -79,10 +79,6 @@ plugins:
     - readingtime
     - toc
     - relatedposts
-fields:
-  enabled: true
-  allow_anything: true
-  schemas: {}
 seo:
   enabled: true
   default_title_sep: "-"

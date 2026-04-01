@@ -16,6 +16,7 @@ import (
 	"github.com/sphireinc/foundry/internal/backup"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/consts"
+	"github.com/sphireinc/foundry/internal/customfields"
 	"github.com/sphireinc/foundry/internal/hostservice"
 	"github.com/sphireinc/foundry/internal/logx"
 	"github.com/sphireinc/foundry/internal/plugins"
@@ -316,7 +317,6 @@ func (s *Service) ListSettingsSections(ctx context.Context) ([]types.SettingsSec
 		{Key: "content", Title: "Content", Capability: "config.manage", Writable: true, Source: "core"},
 		{Key: "taxonomies", Title: "Taxonomies", Capability: "config.manage", Writable: true, Source: "core"},
 		{Key: "plugins", Title: "Plugins", Capability: "plugins.manage", Writable: true, Source: "core"},
-		{Key: "fields", Title: "Fields", Capability: "config.manage", Writable: true, Source: "core", Schema: toFieldSchema(flattenFieldSchemaDefinitions(s.cfg.Fields.Schemas))},
 		{Key: "seo", Title: "SEO", Capability: "config.manage", Writable: true, Source: "core"},
 		{Key: "feed", Title: "Feed", Capability: "config.manage", Writable: true, Source: "core"},
 		{Key: "deploy", Title: "Deploy", Capability: "config.manage", Writable: true, Source: "core"},
@@ -516,14 +516,6 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 	}, nil
 }
 
-func flattenFieldSchemaDefinitions(sets map[string]config.FieldSchemaSet) []config.FieldDefinition {
-	out := make([]config.FieldDefinition, 0)
-	for _, set := range sets {
-		out = append(out, set.Fields...)
-	}
-	return out
-}
-
 func firstNonEmptyString(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -614,6 +606,59 @@ func (s *Service) SaveCustomCSSDocument(ctx context.Context, raw string) (*types
 		return nil, err
 	}
 	return &types.CustomCSSDocumentResponse{Path: path, Raw: normalized}, nil
+}
+
+func (s *Service) LoadCustomFieldsDocument(ctx context.Context) (*types.CustomFieldsDocumentResponse, error) {
+	_ = ctx
+	store, err := customfields.Load(s.cfg)
+	if err != nil {
+		return nil, err
+	}
+	path := customfields.Path(s.cfg)
+	raw, err := s.fs.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return &types.CustomFieldsDocumentResponse{
+		Path:      displayCustomFieldsPath(path),
+		Raw:       string(raw),
+		Values:    customfields.NormalizeValues(store.Values),
+		Contracts: sharedFieldContractsForManifest(s.activeThemeManifest()),
+	}, nil
+}
+
+func (s *Service) SaveCustomFieldsDocument(ctx context.Context, raw string, values map[string]any) (*types.CustomFieldsDocumentResponse, error) {
+	_ = ctx
+	path := customfields.Path(s.cfg)
+	var store customfields.Store
+	if strings.TrimSpace(raw) != "" {
+		if err := yaml.Unmarshal([]byte(raw), &store); err != nil {
+			return nil, err
+		}
+	} else {
+		store.Values = customfields.NormalizeValues(values)
+	}
+	store.Values = customfields.NormalizeValues(store.Values)
+	if err := customfields.ValidateRoot(store.Values); err != nil {
+		return nil, err
+	}
+	body, err := yaml.Marshal(&store)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.fs.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+	if err := s.fs.WriteFile(path, body, 0o644); err != nil {
+		return nil, err
+	}
+	s.invalidateGraphCache()
+	return &types.CustomFieldsDocumentResponse{
+		Path:      displayCustomFieldsPath(path),
+		Raw:       string(body),
+		Values:    customfields.NormalizeValues(store.Values),
+		Contracts: sharedFieldContractsForManifest(s.activeThemeManifest()),
+	}, nil
 }
 
 func (s *Service) LoadSettingsForm(ctx context.Context) (*types.SettingsFormResponse, error) {

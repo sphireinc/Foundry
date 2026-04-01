@@ -45,6 +45,7 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
     };
     state.documentFieldSchema = [];
     state.documentFieldValues = {};
+    state.documentContractTitles = [];
     state.documentMeta = {
       status: 'draft',
       author: '',
@@ -94,7 +95,7 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
   const dirtyMessage = () =>
     Object.entries(state.dirty)
       .filter(([, value]) => value)
-      .map(([key]) => ({ customCss: 'custom css', settings: 'settings form' }[key] || key))
+      .map(([key]) => ({ customCss: 'custom css', customFields: 'shared custom fields', settings: 'settings form' }[key] || key))
       .join(', ');
 
   const hasUnsavedChanges = () => Object.values(state.dirty).some(Boolean);

@@ -3,6 +3,7 @@ package themecmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sphireinc/foundry/internal/config"
@@ -39,6 +40,24 @@ func TestThemeCommandRun(t *testing.T) {
 	}
 	if err := cmd.Run(cfg, []string{"foundry", "theme", "switch", "default"}); err != nil {
 		t.Fatalf("theme switch: %v", err)
+	}
+	writeConfigFile(t, root, "theme: default\nfields:\n  enabled: true\n  allow_anything: false\n  schemas:\n    post:\n      fields:\n        - name: hero_title\n          type: text\n")
+	if err := cmd.Run(cfg, []string{"foundry", "theme", "migrate", "field-contracts"}); err != nil {
+		t.Fatalf("theme migrate field-contracts: %v", err)
+	}
+	manifestBody, err := os.ReadFile(filepath.Join(cfg.ThemesDir, "default", "theme.yaml"))
+	if err != nil {
+		t.Fatalf("read migrated theme manifest: %v", err)
+	}
+	if !strings.Contains(string(manifestBody), "field_contracts:") || !strings.Contains(string(manifestBody), "hero_title") {
+		t.Fatalf("expected migrated field contracts in theme manifest, got %q", string(manifestBody))
+	}
+	configBody, err := os.ReadFile(filepath.Join(root, "content", "config", "site.yaml"))
+	if err != nil {
+		t.Fatalf("read migrated config: %v", err)
+	}
+	if strings.Contains(string(configBody), "\nfields:") {
+		t.Fatalf("expected legacy fields block removed from config, got %q", string(configBody))
 	}
 	if err := cmd.Run(cfg, []string{"foundry", "theme"}); err == nil {
 		t.Fatal("expected usage error")

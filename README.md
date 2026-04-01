@@ -12,7 +12,7 @@
 
 Foundry is a Markdown-first CMS written in Go. It keeps content in files, renders through themes, extends through plugins, and supports both static output and local preview serving.
 
-The project is aimed at teams that want a file-based workflow without giving up CMS-style features such as taxonomies, fields, feeds, plugin hooks, and an admin surface.
+The project is aimed at teams that want a file-based workflow without giving up CMS-style features such as taxonomies, theme-owned custom fields, feeds, plugin hooks, and an admin surface.
 
 See more of Foundry here: [Foundry Screenshots](README_SCREENSHOTS.md)
 
@@ -325,6 +325,7 @@ foundry update check
 foundry update apply
 foundry plugin list --enabled
 foundry theme list
+foundry theme migrate field-contracts
 foundry routes check
 foundry admin hash-password your-password
 ```
@@ -665,6 +666,74 @@ Important config groups:
 - `security`: security-sensitive rendering settings
 - `feed`: RSS and sitemap output paths
 
+### Advanced custom fields
+
+Foundry handles advanced custom fields through theme-owned contracts, not through `content/config/site.yaml`.
+
+- Themes declare supported fields in `theme.yaml` under `field_contracts`
+- Page-specific field values stay in page frontmatter under `fields:`
+- Shared/global field values live in `content/custom-fields.yaml`
+- The admin editor resolves the current page's available fields from the active theme
+- The admin `Custom Fields` section edits shared/global field groups declared by the active theme
+
+Example `theme.yaml`:
+
+```yaml
+field_contracts:
+  - key: marketing-page
+    title: Marketing Page
+    description: Fields for standard marketing pages.
+    target:
+      scope: document
+      types: [page]
+      layouts: [page]
+      slugs: [pricing, about, contact]
+    fields:
+      - name: hero_title
+        type: text
+        label: Hero Title
+        required: true
+      - name: hero_body
+        type: textarea
+        label: Hero Body
+  - key: site_marketing
+    title: Site Marketing
+    target:
+      scope: shared
+      key: site_marketing
+    fields:
+      - name: primary_cta_label
+        type: text
+        label: Primary CTA Label
+```
+
+Example page frontmatter:
+
+```yaml
+---
+title: Pricing
+slug: pricing
+layout: page
+fields:
+  hero_title: Clear pricing for modern teams
+  hero_body: Foundry keeps publishing infrastructure calm and predictable.
+---
+```
+
+Example shared values:
+
+```yaml
+values:
+  site_marketing:
+    primary_cta_label: Start with Foundry
+```
+
+If you still have legacy config-owned field schemas, migrate them with:
+
+```bash
+foundry theme migrate field-contracts
+```
+
 ### Admin
 
 `admin.path` controls where the themeable admin shell is mounted. By default it is `/__admin`. The shell itself is public so the browser can load HTML, CSS, and JavaScript. Authenticated API access is session-based by default.
@@ -846,6 +915,7 @@ Theme manifests now support richer metadata:
 
 - `supported_layouts`
 - `config_schema`
+- `field_contracts`
 - `screenshots`
 - `compatibility_version`
 

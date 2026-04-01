@@ -72,7 +72,7 @@ foundry theme switch &lt;theme-name&gt;</code></pre>
           <h2>Manifest fields</h2>
           <p>
             <code>theme.yaml</code> describes the theme, the layouts it supports, the configuration
-            it expects, and the slot surface it guarantees.
+            it expects, the field contracts it exposes, and the slot surface it guarantees.
           </p>
           <pre><code>name: editorial
 title: Editorial
@@ -100,6 +100,30 @@ config_schema:
     label: Accent Color
     type: text
     default: "#0c7c59"
+field_contracts:
+  - key: marketing-page
+    title: Marketing Page
+    target:
+      scope: document
+      types: [page]
+      layouts: [page]
+      slugs: [pricing, about]
+    fields:
+      - name: hero_title
+        type: text
+        label: Hero Title
+      - name: hero_body
+        type: textarea
+        label: Hero Body
+  - key: site_marketing
+    title: Site Marketing
+    target:
+      scope: shared
+      key: site_marketing
+    fields:
+      - name: primary_cta_label
+        type: text
+        label: Primary CTA Label
 slots:
   - head.end
   - body.start
@@ -170,6 +194,11 @@ slots:
             <li>
               <code>config_schema</code> describes theme-level configuration fields using the same
               schema field shapes used elsewhere in Foundry.
+            </li>
+            <li>
+              <code>field_contracts</code> is the advanced custom-field contract. Themes declare
+              which fields apply to which pages by type, layout, and slug, plus which shared/global
+              field groups are editable in <code>content/custom-fields.yaml</code>.
             </li>
             <li>
               <code>screenshots</code> is metadata for admin/docs/reporting and should point at

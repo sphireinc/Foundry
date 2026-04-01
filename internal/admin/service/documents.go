@@ -17,6 +17,7 @@ import (
 	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
 	"github.com/sphireinc/foundry/internal/safepath"
+	"github.com/sphireinc/foundry/internal/theme"
 	"gopkg.in/yaml.v3"
 )
 
@@ -112,12 +113,13 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	if fm.Params == nil {
 		fm.Params = make(map[string]any)
 	}
-	defs := fields.DefinitionsFor(s.cfg, documentKindFromSourcePath(sourcePath, s.cfg))
+	manifest := s.activeThemeManifest()
+	defs := documentFieldDefinitionsForManifest(manifest, sourcePath, s.cfg, fm.Layout, fm.Slug)
 	if req.Fields != nil {
 		fm.Fields = fields.Normalize(req.Fields)
 	}
 	fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
-	if errs := fields.Validate(fm.Fields, defs, s.cfg.Fields.AllowAnything); len(errs) > 0 {
+	if errs := fields.Validate(fm.Fields, defs, false); len(errs) > 0 {
 		return nil, errs[0]
 	}
 	actorUsername := strings.TrimSpace(req.Username)
@@ -261,7 +263,7 @@ func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRe
 			}
 			fm.UpdatedAt = &now
 			content.ApplyWorkflowToFrontMatter(fm, "draft", nil, nil, "")
-			defs := fields.DefinitionsFor(s.cfg, kind)
+			defs := theme.ApplicableDocumentFieldDefinitions(s.activeThemeManifest(), kind, fm.Layout, fm.Slug)
 			fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
 			if rendered, err := marshalDocument(fm, contentBody); err == nil {
 				body = string(rendered)
@@ -419,10 +421,10 @@ func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreview
 	if req.Fields != nil {
 		fm.Fields = fields.Normalize(req.Fields)
 	}
-	defs := fields.DefinitionsFor(s.cfg, documentKindFromSourcePath(strings.TrimSpace(req.SourcePath), s.cfg))
+	defs := documentFieldDefinitionsForManifest(s.activeThemeManifest(), strings.TrimSpace(req.SourcePath), s.cfg, fm.Layout, fm.Slug)
 	fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
 	fieldErrors := make([]string, 0)
-	for _, err := range fields.Validate(fm.Fields, defs, s.cfg.Fields.AllowAnything) {
+	for _, err := range fields.Validate(fm.Fields, defs, false) {
 		fieldErrors = append(fieldErrors, err.Error())
 	}
 
@@ -532,14 +534,18 @@ func (s *Service) toDetail(ctx context.Context, doc *content.Document) (types.Do
 	if err != nil {
 		lock = nil
 	}
+	contracts := documentContractsForManifest(s.activeThemeManifest(), doc.SourcePath, s.cfg, doc.Layout, doc.Slug)
+	contractKeys, contractTitles := documentContractMetadata(contracts)
 	return types.DocumentDetail{
-		DocumentSummary: toSummary(doc),
-		RawBody:         string(raw),
-		HTMLBody:        string(doc.HTMLBody),
-		Params:          doc.Params,
-		Fields:          doc.Fields,
-		FieldSchema:     toFieldSchema(fields.DefinitionsFor(s.cfg, doc.Type)),
-		Lock:            lock,
+		DocumentSummary:     toSummary(doc),
+		RawBody:             string(raw),
+		HTMLBody:            string(doc.HTMLBody),
+		Params:              doc.Params,
+		Fields:              doc.Fields,
+		FieldSchema:         toFieldSchema(theme.ApplicableDocumentFieldDefinitions(s.activeThemeManifest(), doc.Type, doc.Layout, doc.Slug)),
+		FieldContractKeys:   contractKeys,
+		FieldContractTitles: contractTitles,
+		Lock:                lock,
 	}, nil
 }
 

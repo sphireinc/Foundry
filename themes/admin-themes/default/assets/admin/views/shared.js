@@ -133,6 +133,7 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['audit', 'Audit'],
     ['users', 'Users'],
     ['settings', 'Settings'],
+    ['custom-fields', 'Custom Fields'],
     ['extensions', 'Extensions'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
