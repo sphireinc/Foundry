@@ -201,6 +201,10 @@ slots:
               field groups are editable in <code>content/custom-fields.yaml</code>.
             </li>
             <li>
+              Theme-declared fields are persisted content. Plugin-derived runtime metadata should
+              not be written into document fields; it should stay in render-time context data.
+            </li>
+            <li>
               <code>screenshots</code> is metadata for admin/docs/reporting and should point at
               paths inside the theme package.
             </li>

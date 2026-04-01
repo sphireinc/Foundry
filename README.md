@@ -675,6 +675,10 @@ Foundry handles advanced custom fields through theme-owned contracts, not throug
 - Shared/global field values live in `content/custom-fields.yaml`
 - The admin editor resolves the current page's available fields from the active theme
 - The admin `Custom Fields` section edits shared/global field groups declared by the active theme
+- `fields:` is for persisted schema-backed content only; plugins must not write derived render
+  metadata into document fields
+- Plugin-derived values such as TOC data should be exposed at render time through runtime context
+  data instead
 
 Example `theme.yaml`:
 
@@ -733,6 +737,14 @@ If you still have legacy config-owned field schemas, migrate them with:
 ```bash
 foundry theme migrate field-contracts
 ```
+
+Plugin-author note:
+
+- Do not use `doc.Fields` for derived values like `toc`, `has_toc`, `reading_time`, or similar
+  render-time metadata
+- `doc.Fields` now belongs to the active theme contract and is validated as persisted content
+- Runtime-only plugin data should be recomputed or attached through render-time context data
+  (`ctx.Data`)
 
 ### Admin
 
