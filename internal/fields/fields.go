@@ -61,6 +61,50 @@ func ApplyDefaults(values map[string]any, defs []Definition) map[string]any {
 	return out
 }
 
+// PruneToDefinitions removes values that are not declared by defs while
+// preserving recursively-declared object/repeater structure.
+func PruneToDefinitions(values map[string]any, defs []Definition) map[string]any {
+	values = Normalize(values)
+	if len(defs) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(defs))
+	for _, def := range defs {
+		value, ok := values[def.Name]
+		if !ok {
+			continue
+		}
+		switch normalizeType(def.Type) {
+		case "object":
+			if obj, ok := value.(map[string]any); ok {
+				out[def.Name] = PruneToDefinitions(obj, def.Fields)
+			}
+		case "repeater":
+			if items, ok := value.([]any); ok {
+				if def.Item == nil {
+					out[def.Name] = cloneValue(items)
+					continue
+				}
+				pruned := make([]any, 0, len(items))
+				for _, item := range items {
+					switch normalizeType(def.Item.Type) {
+					case "object":
+						if obj, ok := item.(map[string]any); ok {
+							pruned = append(pruned, PruneToDefinitions(obj, def.Item.Fields))
+						}
+					default:
+						pruned = append(pruned, cloneValue(item))
+					}
+				}
+				out[def.Name] = pruned
+			}
+		default:
+			out[def.Name] = cloneValue(value)
+		}
+	}
+	return out
+}
+
 // Validate checks a field-value map against schema definitions.
 //
 // When allowAnything is false, values not declared in defs are rejected.

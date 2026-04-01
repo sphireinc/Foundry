@@ -77,8 +77,8 @@ taxonomies:
 plugins:
   enabled:
     - readingtime
-    - toc
     - relatedposts
+    - toc
 seo:
   enabled: true
   default_title_sep: "-"

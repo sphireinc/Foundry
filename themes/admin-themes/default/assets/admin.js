@@ -474,7 +474,6 @@ import {
       fields: state.documentFieldValues,
       meta: state.documentMeta,
     });
-    render();
   };
 
   let documentLockHeartbeatId = null;
@@ -805,7 +804,6 @@ import {
     state.customFields = state.customFields || { path: 'content/custom-fields.yaml', raw: '', values: {} };
     state.customFields.values = wrapper.documentFieldValues;
     compareSnapshot('customFields', state.customFields.values || {});
-    render();
   };
 
   const renderSharedFieldSchemaControl = (schema, contractKey, path = []) => {
