@@ -92,12 +92,14 @@ pre {
 
 .brand-copy strong {
   display: block;
-  font-size: 1rem;
+  font-size: 1.4rem;
 }
 
 .brand-copy span {
   color: var(--muted);
   font-size: 0.9rem;
+  display: none;
+  /*word-wrap: break-word;*/
 }
 
 .nav {
