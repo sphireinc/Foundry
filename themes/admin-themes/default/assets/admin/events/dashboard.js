@@ -1424,7 +1424,10 @@ export const bindDashboardEvents = (ctx) => {
       next.Backup.GitRemoteURL = document.getElementById('operations-git-remote-url')?.value || '';
       next.Backup.GitBranch = document.getElementById('operations-git-branch')?.value || 'main';
       next.Backup.GitPushOnChange = !!document.getElementById('operations-git-push-on-change')?.checked;
-      const saved = await admin.settings.saveForm({ value: next });
+      const saved =
+        typeof admin.settings?.saveForm === 'function'
+          ? await admin.settings.saveForm({ value: next })
+          : await admin.raw.post('/api/settings/form/save', { value: next });
       state.settingsForm = saved?.value || next;
       setFlash('Git backup settings saved.');
       await fetchAll(false);

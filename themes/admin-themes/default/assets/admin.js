@@ -57,6 +57,83 @@ import {
     section: initialSection === 'config' ? 'settings' : initialSection,
   });
   const admin = createAdminClient({ baseURL: adminBase, getSession: () => state.session });
+  admin.status = admin.status || {};
+  if (typeof admin.status.get !== 'function') {
+    admin.status.get = () => admin.raw.get('/api/status');
+  }
+  admin.documents = admin.documents || {};
+  if (typeof admin.documents.list !== 'function') {
+    admin.documents.list = (params = {}) => admin.raw.get('/api/documents', { query: params });
+  }
+  if (typeof admin.documents.trash !== 'function') {
+    admin.documents.trash = () => admin.raw.get('/api/documents/trash');
+  }
+  admin.media = admin.media || {};
+  if (typeof admin.media.list !== 'function') {
+    admin.media.list = (params = {}) => admin.raw.get('/api/media', { query: params });
+  }
+  if (typeof admin.media.trash !== 'function') {
+    admin.media.trash = () => admin.raw.get('/api/media/trash');
+  }
+  admin.users = admin.users || {};
+  if (typeof admin.users.list !== 'function') {
+    admin.users.list = () => admin.raw.get('/api/users');
+  }
+  admin.plugins = admin.plugins || {};
+  if (typeof admin.plugins.list !== 'function') {
+    admin.plugins.list = () => admin.raw.get('/api/plugins');
+  }
+  admin.themes = admin.themes || {};
+  if (typeof admin.themes.list !== 'function') {
+    admin.themes.list = () => admin.raw.get('/api/themes');
+  }
+  admin.backups = admin.backups || {};
+  if (typeof admin.backups.list !== 'function') {
+    admin.backups.list = () => admin.raw.get('/api/backups');
+  }
+  if (typeof admin.backups.listGit !== 'function') {
+    admin.backups.listGit = () => admin.raw.get('/api/backups/git');
+  }
+  admin.operations = admin.operations || {};
+  if (typeof admin.operations.get !== 'function') {
+    admin.operations.get = () => admin.raw.get('/api/operations');
+  }
+  if (typeof admin.operations.logs !== 'function') {
+    admin.operations.logs = () => admin.raw.get('/api/operations/logs');
+  }
+  admin.updates = admin.updates || {};
+  if (typeof admin.updates.get !== 'function') {
+    admin.updates.get = () => admin.raw.get('/api/update');
+  }
+  if (typeof admin.updates.apply !== 'function') {
+    admin.updates.apply = () => admin.raw.post('/api/update/apply', {});
+  }
+  admin.audit = admin.audit || {};
+  if (typeof admin.audit.list !== 'function') {
+    admin.audit.list = (params = {}) => admin.raw.get('/api/audit', { query: params });
+  }
+  const settingsAPI = {
+    getForm: () =>
+      typeof admin.settings?.getForm === 'function'
+        ? admin.settings.getForm()
+        : admin.raw.get('/api/settings/form'),
+    saveForm: (input) =>
+      typeof admin.settings?.saveForm === 'function'
+        ? admin.settings.saveForm(input)
+        : admin.raw.post('/api/settings/form/save', input),
+    getCustomCSS: () =>
+      typeof admin.settings?.getCustomCSS === 'function'
+        ? admin.settings.getCustomCSS()
+        : admin.raw.get('/api/settings/custom-css'),
+    getConfig: () =>
+      typeof admin.settings?.getConfig === 'function'
+        ? admin.settings.getConfig()
+        : admin.raw.get('/api/config'),
+    getSections: () =>
+      typeof admin.settings?.getSections === 'function'
+        ? admin.settings.getSections()
+        : admin.raw.get('/api/settings/sections'),
+  };
   let navigate = () => {};
   const extensionModuleCache = new Map();
   const extensionStyleCache = new Set();
@@ -2383,7 +2460,7 @@ import {
       try {
         state.settingsForm = collectSettingsFormPayload();
         state.settingsDraftError = '';
-        await admin.settings.saveForm({ value: state.settingsForm });
+        await settingsAPI.saveForm({ value: state.settingsForm });
         setFlash('Settings saved.');
         snapshotValue('settings', state.settingsForm);
         await fetchAll(false);
@@ -2467,10 +2544,10 @@ import {
         admin.media.list({ q: state.mediaQuery || undefined }),
         admin.media.trash(),
         admin.users.list(),
-        admin.settings.getForm(),
-        admin.settings.getConfig(),
-        admin.settings.getCustomCSS(),
-        admin.settings.getSections(),
+        settingsAPI.getForm(),
+        settingsAPI.getConfig(),
+        settingsAPI.getCustomCSS(),
+        settingsAPI.getSections(),
         admin.plugins.list(),
         admin.extensions.getAdminExtensions(),
         admin.themes.list(),

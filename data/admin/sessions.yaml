@@ -1,1 +1,13 @@
-
+sessions:
+    - token: lpGxl4L_iwBSHQYWQCyAQemYLp4GMb_9yu47Gv-oW4o
+      csrf_token: V48kzb89RKPsCTX0ja3TMzfkEulXiEpk6cLdBfwRE8k
+      username: admin
+      name: Admin
+      email: admin@example.com
+      role: admin
+      capabilities:
+        - '*'
+      mfa_complete: true
+      issued_at: 2026-03-31T19:58:42.679109-04:00
+      last_seen: 2026-03-31T19:58:48.547873-04:00
+      expires_at: 2026-03-31T20:28:48.547873-04:00
