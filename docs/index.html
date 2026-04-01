@@ -14,7 +14,7 @@
     <div class="shell">
       <header class="topbar">
         <a class="brand" href="./">
-          <span class="brand-mark">F</span>
+          <span class="brand-mark"><img src="./logo.png" alt="Foundry logo" /></span>
           <span class="brand-copy">
             <strong>Foundry</strong>
           </span>
@@ -34,32 +34,43 @@
       </header>
 
       <main>
-        <section class="hero">
-          <div class="eyebrow">Project Documentation</div>
-          <h1>Foundry.</h1>
-          <p>
-            Foundry is a Markdown-first CMS written in Go. Here you can find the project docs, the
-            CLI contract, and the latest HTML coverage report generated from <code>main</code>.
-          </p>
-          <div class="hero-actions">
-            <a class="button" href="./getting-started/">Read the Overview</a>
-            <a class="button-ghost" href="./coverage/">Open Coverage</a>
-            <a class="button-ghost" href="./contract/">Read the Contract</a>
+        <section class="hero hero-split">
+          <div class="hero-copy">
+            <div class="eyebrow">Project Documentation</div>
+            <h1>Foundry.</h1>
+            <p>
+              Foundry is a Markdown-first CMS written in Go. Here you can find the project docs, the
+              CLI contract, and the latest HTML coverage report generated from <code>main</code>.
+            </p>
+            <div class="hero-actions">
+              <a class="button" href="./getting-started/">Read the Overview</a>
+              <a class="button-ghost" href="./coverage/">Open Coverage</a>
+              <a class="button-ghost" href="./contract/">Read the Contract</a>
+            </div>
+            <div class="hero-stats">
+              <div class="stat">
+                <strong>Documentation</strong>
+                <span>Overview, setup guidance, and the main reference links.</span>
+              </div>
+              <div class="stat">
+                <strong>Coverage</strong>
+                <span>Current raw Go coverage numbers.</span>
+              </div>
+              <div class="stat">
+                <strong>Contract</strong>
+                <span>The CLI contract.</span>
+              </div>
+            </div>
           </div>
-          <div class="hero-stats">
-            <div class="stat">
-              <strong>Documentation</strong>
-              <span>Overview, setup guidance, and the main reference links.</span>
+          <aside class="hero-media" aria-label="Foundry project logo">
+            <div class="hero-logo-card">
+              <img src="./logo.png" alt="Foundry logo" class="hero-logo" />
+<!--              <div class="hero-logo-meta">-->
+<!--                <strong>Foundry</strong>-->
+<!--                <span>Project Documentation</span>-->
+<!--              </div>-->
             </div>
-            <div class="stat">
-              <strong>Coverage</strong>
-              <span>Current raw Go coverage numbers.</span>
-            </div>
-            <div class="stat">
-              <strong>Contract</strong>
-              <span>The CLI contract.</span>
-            </div>
-          </div>
+          </aside>
         </section>
 
         <section class="section">
