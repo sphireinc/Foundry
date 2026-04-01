@@ -65,6 +65,13 @@
 /public       generated output
 /docs         GitHub Pages content and generated coverage output</code></pre>
 
+          <p>
+            In the Docker Compose setup, Foundry keeps <code>data/</code> and
+            <code>public/</code> on named Docker volumes even though the project root is bind-mounted
+            into the container. That avoids runtime permission failures for admin sessions,
+            audit/state files, and generated output.
+          </p>
+
           <h2>Common commands</h2>
           <pre><code>foundry
 foundry version

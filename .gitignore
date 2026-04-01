@@ -1,6 +1,6 @@
 tmp/
-public/
 bin/
+public/*
 node_modules
 
 ### Foundry planning files
