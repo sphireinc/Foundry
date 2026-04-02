@@ -20,6 +20,7 @@ import (
 	"time"
 
 	versioncmd "github.com/sphireinc/foundry/internal/commands/version"
+	"github.com/sphireinc/foundry/internal/installmode"
 	"github.com/sphireinc/foundry/internal/logx"
 	"github.com/sphireinc/foundry/internal/standalone"
 )
@@ -29,14 +30,14 @@ const (
 	defaultAPIBase = "https://api.github.com"
 )
 
-type InstallMode string
+type InstallMode = installmode.Mode
 
 const (
-	ModeStandalone InstallMode = "standalone"
-	ModeDocker     InstallMode = "docker"
-	ModeSource     InstallMode = "source"
-	ModeBinary     InstallMode = "binary"
-	ModeUnknown    InstallMode = "unknown"
+	ModeStandalone InstallMode = installmode.Standalone
+	ModeDocker     InstallMode = installmode.Docker
+	ModeSource     InstallMode = installmode.Source
+	ModeBinary     InstallMode = installmode.Binary
+	ModeUnknown    InstallMode = installmode.Unknown
 )
 
 type ReleaseInfo struct {
@@ -80,7 +81,8 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 		apiBase = defaultAPIBase
 	}
 	mode := DetectInstallMode(projectDir)
-	current := normalizeVersion(versioncmd.Version)
+	currentMeta := versioncmd.Current(projectDir)
+	current := normalizeVersion(currentMeta.Version)
 	logx.Info("updater release check started", "project_dir", projectDir, "repo", repo, "install_mode", mode, "current_version", current)
 	info := &ReleaseInfo{
 		Repo:           repo,
@@ -130,23 +132,7 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 }
 
 func DetectInstallMode(projectDir string) InstallMode {
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return ModeDocker
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		return ModeUnknown
-	}
-	cleanExe := filepath.Clean(exe)
-	tmp := filepath.Clean(os.TempDir())
-	if strings.Contains(cleanExe, string(filepath.Separator)+"go-build"+string(filepath.Separator)) ||
-		strings.HasPrefix(cleanExe, tmp+string(filepath.Separator)) {
-		return ModeSource
-	}
-	if state, running, err := standalone.RunningState(projectDir); err == nil && state != nil && running {
-		return ModeStandalone
-	}
-	return ModeBinary
+	return InstallMode(installmode.Detect(projectDir))
 }
 
 func ScheduleApply(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
