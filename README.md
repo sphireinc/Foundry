@@ -673,6 +673,10 @@ Important config groups:
 
 Foundry handles advanced custom fields through theme-owned contracts, not through `content/config/site.yaml`.
 
+Canonical guide:
+
+- GitHub Pages: [Advanced Custom Fields](https://sphireinc.github.io/foundry/custom-fields/)
+
 - Themes declare supported fields in `theme.yaml` under `field_contracts`
 - Page-specific field values stay in page frontmatter under `fields:`
 - Shared/global field values live in `content/custom-fields.yaml`

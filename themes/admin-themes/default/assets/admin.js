@@ -200,6 +200,48 @@ import {
       normalized.charAt(0).toUpperCase() + normalized.slice(1)
     );
   };
+  const sectionCapability = (section) => {
+    switch (normalizeAdminSection(section)) {
+      case 'overview':
+      case 'documents':
+      case 'editor':
+      case 'history':
+      case 'trash':
+      case 'media':
+      case 'extensions':
+      case 'operations':
+        return 'dashboard.read';
+      case 'audit':
+        return 'audit.read';
+      case 'users':
+        return 'users.manage';
+      case 'settings':
+        return 'config.manage';
+      case 'custom-fields':
+        return 'documents.read';
+      case 'plugins':
+        return 'plugins.manage';
+      case 'themes':
+        return 'themes.manage';
+      case 'debug':
+        return 'debug.read';
+      default:
+        return '';
+    }
+  };
+  const canAccessSection = (section) => {
+    const normalized = normalizeAdminSection(section);
+    const extensionPage = extensionPageBySection(normalized);
+    if (extensionPage) {
+      return hasCapability(extensionPage.capability);
+    }
+    return hasCapability(sectionCapability(normalized));
+  };
+  const defaultAccessibleSection = () => {
+    const candidates = ['overview', 'documents', 'editor', 'media', 'audit', 'custom-fields'];
+    return candidates.find((section) => canAccessSection(section)) || 'overview';
+  };
+  const canManageSharedFields = () => capabilityInfoHas('config.manage');
   const isSettingsSection = (section) => {
     const normalized = normalizeAdminSection(section);
     return normalized === 'settings' || normalized === 'config';
@@ -824,15 +866,16 @@ import {
     const value = getValueAtPath(state.customFields?.values || {}, fullPath) ?? defaultValueForSchema(schema);
     const label = schema.label || schema.name;
     const help = schema.help ? `<div class="muted">${escapeHTML(schema.help)}</div>` : '';
+    const disabledAttr = canManageSharedFields() ? '' : ' disabled aria-disabled="true"';
     switch (schema.type) {
       case 'bool':
-        return `<label class="checkbox"><input type="checkbox" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="bool" ${value ? 'checked' : ''}> ${escapeHTML(label)}</label>${help}`;
+        return `<label class="checkbox"><input type="checkbox" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="bool" ${value ? 'checked' : ''}${disabledAttr}> ${escapeHTML(label)}</label>${help}`;
       case 'select':
-        return `<label>${escapeHTML(label)}<select data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="select">
+        return `<label>${escapeHTML(label)}<select data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="select"${disabledAttr}>
           ${(schema.enum || []).map((entry) => `<option value="${escapeHTML(entry)}" ${entry === value ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}
         </select></label>${help}`;
       case 'number':
-        return `<label>${escapeHTML(label)}<input type="number" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="number" value="${escapeHTML(value)}" placeholder="${escapeHTML(schema.placeholder || '')}"></label>${help}`;
+        return `<label>${escapeHTML(label)}<input type="number" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="number" value="${escapeHTML(value)}" placeholder="${escapeHTML(schema.placeholder || '')}"${disabledAttr}></label>${help}`;
       case 'object':
         return `<fieldset class="custom-field-group"><legend>${escapeHTML(label)}</legend>${help}${(schema.fields || []).map((field) => renderSharedFieldSchemaControl(field, contractKey, [...path, schema.name])).join('')}</fieldset>`;
       case 'repeater': {
@@ -855,17 +898,17 @@ import {
                         contractKey,
                         [...path, schema.name]
                       );
-                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-shared-repeater-remove="${escapeHTML(itemPath.join('.'))}">Remove</button></div>`;
+                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-shared-repeater-remove="${escapeHTML(itemPath.join('.'))}"${disabledAttr}>Remove</button></div>`;
               })
               .join('')}
           </div>
-          <button type="button" class="ghost small" data-shared-repeater-add="${escapeHTML(pathValue)}">Add Item</button>
+          <button type="button" class="ghost small" data-shared-repeater-add="${escapeHTML(pathValue)}"${disabledAttr}>Add Item</button>
         </fieldset>`;
       }
       case 'textarea':
-        return `<label>${escapeHTML(label)}<textarea data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="textarea" rows="4" placeholder="${escapeHTML(schema.placeholder || '')}">${escapeHTML(value || '')}</textarea></label>${help}`;
+        return `<label>${escapeHTML(label)}<textarea data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="textarea" rows="4" placeholder="${escapeHTML(schema.placeholder || '')}"${disabledAttr}>${escapeHTML(value || '')}</textarea></label>${help}`;
       default:
-        return `<label>${escapeHTML(label)}<input type="text" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="text" value="${escapeHTML(value || '')}" placeholder="${escapeHTML(schema.placeholder || '')}"></label>${help}`;
+        return `<label>${escapeHTML(label)}<input type="text" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="text" value="${escapeHTML(value || '')}" placeholder="${escapeHTML(schema.placeholder || '')}"${disabledAttr}></label>${help}`;
     }
   };
 
@@ -1075,12 +1118,18 @@ import {
   const renderCustomFields = () => {
     const contracts = Array.isArray(state.sharedFieldContracts) ? state.sharedFieldContracts : [];
     const raw = state.customFields?.raw || '';
+    const saveEnabled = canManageSharedFields();
     return panel(
       'Custom Fields',
       `<div class="panel-pad stack">
         <div class="note">
           Shared custom fields live in <span class="mono">${escapeHTML(state.customFields?.path || 'content/custom-fields.yaml')}</span>. Themes declare the field contracts; this screen edits the shared values they expose.
         </div>
+        ${
+          saveEnabled
+            ? ''
+            : '<div class="note">You can view shared custom fields, but saving them requires the <code>config.manage</code> capability.</div>'
+        }
         ${
           contracts.length
             ? contracts
@@ -1102,8 +1151,8 @@ import {
             : '<div class="empty-state">The active theme does not declare any shared field contracts.</div>'
         }
         <form id="custom-fields-save-form" class="stack">
-          <label>Raw YAML<textarea id="custom-fields-raw" rows="18" spellcheck="false">${escapeHTML(raw)}</textarea></label>
-          <div class="toolbar"><button type="submit">Save Shared Custom Fields</button></div>
+          <label>Raw YAML<textarea id="custom-fields-raw" rows="18" spellcheck="false" ${saveEnabled ? '' : 'readonly aria-readonly="true"'}>${escapeHTML(raw)}</textarea></label>
+          <div class="toolbar"><button type="submit" ${saveEnabled ? '' : 'disabled aria-disabled="true" title="Saving shared custom fields requires config.manage"'}>Save Shared Custom Fields</button></div>
         </form>
       </div>`,
       contracts.length ? `${contracts.length} shared contract${contracts.length === 1 ? '' : 's'} from the active theme` : 'No shared contracts declared'
@@ -1826,9 +1875,11 @@ import {
       { id: 'goto-users', label: 'Go to Users', action: () => navigate('users') },
       { id: 'goto-audit', label: 'Go to Audit', action: () => navigate('audit') },
       { id: 'goto-settings', label: 'Go to Settings', action: () => navigate('settings') },
+      { id: 'goto-custom-fields', label: 'Go to Custom Fields', action: () => navigate('custom-fields') },
       { id: 'goto-extensions', label: 'Go to Extensions', action: () => navigate('extensions') },
       { id: 'goto-plugins', label: 'Go to Plugins', action: () => navigate('plugins') },
       { id: 'goto-themes', label: 'Go to Themes', action: () => navigate('themes') },
+      { id: 'goto-operations', label: 'Go to Operations', action: () => navigate('operations') },
       {
         id: 'new-page',
         label: 'Create New Page Draft',
@@ -1863,7 +1914,18 @@ import {
         action: () => navigate('debug'),
       });
     }
-    return commands;
+    extensionPages().forEach((page) => {
+      commands.push({
+        id: `goto-extension-${page.key}`,
+        label: `Go to ${page.title}`,
+        action: () => navigate(page.section),
+      });
+    });
+    return commands.filter((command) => {
+      const match = command.id.match(/^goto-(.+)$/);
+      if (!match || match[1].startsWith('extension-')) return true;
+      return canAccessSection(match[1]);
+    });
   };
 
   const filteredCommandPaletteCommands = () => {
@@ -2486,6 +2548,10 @@ import {
     });
 
   const renderDashboard = () => {
+    if (!canAccessSection(state.section)) {
+      state.section = defaultAccessibleSection();
+      window.history.replaceState({}, '', adminPathForSection(adminBase, state.section));
+    }
     const topMessage =
       summarizeLoadErrors(state) ||
       'Manage content, media, users, settings, themes, and plugins.';
@@ -2499,6 +2565,7 @@ import {
           <nav class="foundry-nav">${shellNav(state, adminBase, {
             extensionPages: extensionPages(),
             debugEnabled: debugEnabled(),
+            canAccessSection,
           })}</nav>
           <div class="foundry-sidebar-footer">Admin theme: ${escapeHTML(root.dataset.theme || 'default')}</div>
         </aside>
@@ -2572,6 +2639,10 @@ import {
     });
     document.getElementById('custom-fields-save-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (!canManageSharedFields()) {
+        setFlash('Viewing only. Saving shared custom fields requires config.manage.');
+        return;
+      }
       try {
         const raw = document.getElementById('custom-fields-raw')?.value || '';
         const rawChanged = raw !== (state.customFields?.raw || '');

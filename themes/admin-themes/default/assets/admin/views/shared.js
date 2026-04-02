@@ -122,6 +122,8 @@ export const mediaThumb = (item) => {
 
 export const shellNav = (state, adminBase, options = {}) => {
   const currentSection = normalizeAdminSection(state.section);
+  const canAccessSection =
+    typeof options.canAccessSection === 'function' ? options.canAccessSection : () => true;
   const items = [
     ['overview', 'Overview'],
     ['documents', 'Documents'],
@@ -140,7 +142,9 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['operations', 'Operations'],
   ];
   const extensionPages = Array.isArray(options.extensionPages) ? options.extensionPages : [];
-  const builtins = items.map(
+  const builtins = items
+    .filter(([key]) => canAccessSection(key))
+    .map(
     ([key, label]) =>
       `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
   );
