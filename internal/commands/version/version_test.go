@@ -11,7 +11,10 @@ func TestCommandMetadataAndString(t *testing.T) {
 		t.Fatalf("unexpected command metadata")
 	}
 	out := String()
-	if !strings.Contains(out, "Foundry") || !strings.Contains(out, "commit:") {
+	if !strings.Contains(out, "Foundry") ||
+		!strings.Contains(out, "Commit:") ||
+		!strings.Contains(out, "Built:") ||
+		!strings.Contains(out, "Install mode:") {
 		t.Fatalf("unexpected version string: %q", out)
 	}
 	if err := cmd.Run(nil, nil); err != nil {

@@ -379,7 +379,7 @@ export const createPlatformViews = ({
       'Operations',
       `<div class="panel-pad stack">
         <div class="cards">
-          <article class="card"><span class="card-label">Current Release</span><strong>${escapeHTML(updateInfo?.current_version || 'unknown')}</strong><span class="card-copy">Running Foundry version.</span></article>
+          <article class="card"><span class="card-label">Current Release</span><strong>${escapeHTML(updateInfo?.current_version || 'unknown')}</strong><span class="card-copy">This is the Foundry version currently running on this site.</span></article>
           <article class="card"><span class="card-label">Latest Release</span><strong>${escapeHTML(updateInfo?.latest_version || 'unknown')}</strong><span class="card-copy">Latest GitHub release.</span></article>
           <article class="card"><span class="card-label">Install Mode</span><strong>${escapeHTML(updateInfo?.install_mode || 'unknown')}</strong><span class="card-copy">Update support depends on deployment mode.</span></article>
           <article class="card"><span class="card-label">Service</span><strong>${operations.service_running ? 'running' : operations.standalone_active ? 'standalone' : 'inactive'}</strong><span class="card-copy">${escapeHTML(operations.service_message || 'No managed service detected.')}</span></article>
