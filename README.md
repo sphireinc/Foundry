@@ -204,6 +204,9 @@ Verify the install:
 foundry version
 ```
 
+That prints runtime-aware version metadata, including the current version, commit, build date,
+install mode, target platform, and executable path.
+
 If you are working from a local checkout instead of a global install, you can run:
 
 ```bash

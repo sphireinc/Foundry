@@ -163,8 +163,20 @@ import {
   });
 
   const capabilitySet = () => new Set(state.session?.capabilities || []);
-  const hasCapability = (capability) => !capability || capabilitySet().has(capability);
-  const debugEnabled = () => !!state.capabilityInfo?.features?.pprof;
+  const hasCapability = (capability) => {
+    if (!capability) return true;
+    const set = capabilitySet();
+    return set.has('*') || set.has(capability);
+  };
+  const capabilityInfoHas = (capability) => {
+    if (!capability) return true;
+    if (typeof state.capabilityInfo?.has === 'function') {
+      return state.capabilityInfo.has(capability);
+    }
+    return hasCapability(capability);
+  };
+  const debugEnabled = () =>
+    !!state.capabilityInfo?.features?.pprof && capabilityInfoHas('debug.read');
   const extensionPages = () =>
     (state.adminExtensions.pages || [])
       .filter((page) => page && page.key && hasCapability(page.capability))
@@ -2651,21 +2663,23 @@ import {
         admin.documents.trash(),
         admin.media.list({ q: state.mediaQuery || undefined }),
         admin.media.trash(),
-        admin.users.list(),
-        settingsAPI.getForm(),
-        settingsAPI.getConfig(),
-        settingsAPI.getCustomCSS(),
-        admin.customFields.get(),
-        settingsAPI.getSections(),
-        admin.plugins.list(),
-        admin.extensions.getAdminExtensions(),
-        admin.themes.list(),
-        admin.backups.list(),
-        admin.backups.listGit(),
-        admin.operations.get(),
-        admin.operations.logs(),
-        admin.updates.get(),
-        admin.audit.list(),
+        capabilityInfoHas('users.manage') ? admin.users.list() : Promise.resolve([]),
+        capabilityInfoHas('config.manage') ? settingsAPI.getForm() : Promise.resolve(null),
+        capabilityInfoHas('config.manage') ? settingsAPI.getConfig() : Promise.resolve(null),
+        capabilityInfoHas('config.manage') ? settingsAPI.getCustomCSS() : Promise.resolve(null),
+        capabilityInfoHas('dashboard.read') ? admin.customFields.get() : Promise.resolve(null),
+        capabilityInfoHas('dashboard.read') ? settingsAPI.getSections() : Promise.resolve([]),
+        capabilityInfoHas('plugins.manage') ? admin.plugins.list() : Promise.resolve([]),
+        capabilityInfoHas('dashboard.read')
+          ? admin.extensions.getAdminExtensions()
+          : Promise.resolve({ pages: [], widgets: [], slots: [], settings: [] }),
+        capabilityInfoHas('themes.manage') ? admin.themes.list() : Promise.resolve([]),
+        capabilityInfoHas('config.manage') ? admin.backups.list() : Promise.resolve([]),
+        capabilityInfoHas('config.manage') ? admin.backups.listGit() : Promise.resolve([]),
+        capabilityInfoHas('dashboard.read') ? admin.operations.get() : Promise.resolve(null),
+        capabilityInfoHas('dashboard.read') ? admin.operations.logs() : Promise.resolve(null),
+        capabilityInfoHas('dashboard.read') ? admin.updates.get() : Promise.resolve(null),
+        capabilityInfoHas('audit.read') ? admin.audit.list() : Promise.resolve([]),
       ]);
 
       const assignResult = (index, label, onSuccess, fallback) => {
