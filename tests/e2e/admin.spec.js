@@ -325,7 +325,7 @@ test.describe('default admin theme', () => {
       await page.reload();
 
       await openDocumentInEditor(page, slug, sourcePath);
-      await expect(page.getByText(/^Custom Fields$/i)).toBeVisible();
+      await expect(page.locator('#document-save-form').getByText(/^Custom Fields$/i)).toBeVisible();
       await page.locator('[data-custom-field="hero_title"]').fill(heroTitle);
       await page.locator('#document-version-comment').fill('e2e custom field update');
       await page.getByRole('button', { name: /^Save Document$/i }).click();
