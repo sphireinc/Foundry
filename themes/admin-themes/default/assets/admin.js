@@ -210,8 +210,10 @@ import {
   };
   const canAccessBuiltinSection = (section) => {
     const normalized = normalizeAdminSection(section);
+    const capability = builtinSectionCapability(normalized);
+    if (!capability) return false;
     if (normalized === 'debug' && !debugEnabled()) return false;
-    return capabilityInfoHas(builtinSectionCapability(normalized));
+    return capabilityInfoHas(capability);
   };
   const extensionPages = () =>
     (state.adminExtensions.pages || [])
@@ -228,17 +230,6 @@ import {
     `${kind}-${plugin}-${key}-${slot}`.replace(/[^a-zA-Z0-9_-]+/g, '-');
   const extensionPageBySection = (section) =>
     extensionPages().find((page) => page.section === normalizeAdminSection(section)) || null;
-  let canAccessSection = (section) => {
-    const normalized = normalizeAdminSection(section);
-    if (extensionPageBySection(normalized)) return true;
-    return canAccessBuiltinSection(normalized);
-  };
-  const firstAccessibleSection = () => {
-    const preferred = ['overview', 'documents', 'editor', 'media', 'audit'];
-    const firstBuiltin = preferred.find((section) => canAccessBuiltinSection(section));
-    if (firstBuiltin) return firstBuiltin;
-    return extensionPages()[0]?.section || 'overview';
-  };
   const titleForSection = (section) => {
     const normalized = normalizeAdminSection(section);
     return (
@@ -247,46 +238,17 @@ import {
       normalized.charAt(0).toUpperCase() + normalized.slice(1)
     );
   };
-  const sectionCapability = (section) => {
-    switch (normalizeAdminSection(section)) {
-      case 'overview':
-      case 'documents':
-      case 'editor':
-      case 'history':
-      case 'trash':
-      case 'media':
-      case 'extensions':
-      case 'operations':
-        return 'dashboard.read';
-      case 'audit':
-        return 'audit.read';
-      case 'users':
-        return 'users.manage';
-      case 'settings':
-        return 'config.manage';
-      case 'custom-fields':
-        return 'documents.read';
-      case 'plugins':
-        return 'plugins.manage';
-      case 'themes':
-        return 'themes.manage';
-      case 'debug':
-        return 'debug.read';
-      default:
-        return '';
-    }
-  };
   const canAccessSection = (section) => {
     const normalized = normalizeAdminSection(section);
     const extensionPage = extensionPageBySection(normalized);
     if (extensionPage) {
       return hasCapability(extensionPage.capability);
     }
-    return hasCapability(sectionCapability(normalized));
+    return canAccessBuiltinSection(normalized);
   };
-  const defaultAccessibleSection = () => {
+  const firstAccessibleSection = () => {
     const candidates = ['overview', 'documents', 'editor', 'media', 'audit', 'custom-fields'];
-    return candidates.find((section) => canAccessSection(section)) || 'overview';
+    return candidates.find((section) => canAccessSection(section)) || extensionPages()[0]?.section || 'overview';
   };
   const canManageSharedFields = () => capabilityInfoHas('config.manage');
   const isSettingsSection = (section) => {
@@ -2600,7 +2562,7 @@ import {
 
   const renderDashboard = () => {
     if (!canAccessSection(state.section)) {
-      state.section = defaultAccessibleSection();
+      state.section = firstAccessibleSection();
       window.history.replaceState({}, '', adminPathForSection(adminBase, state.section));
     }
     const topMessage =

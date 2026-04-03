@@ -17,7 +17,8 @@ async function login(page, username = ADMIN_USERNAME, password = ADMIN_PASSWORD)
     await page.getByLabel(/Password/i).fill(password);
     await page.getByRole('button', { name: /Log In/i }).click();
   }
-  await expect(page.getByRole('heading', { name: /Overview|Documents|Editor/i })).toBeVisible();
+  await expect(page.locator('.foundry-shell')).toBeVisible();
+  await expect(page.locator('.foundry-nav')).toBeVisible();
   await expect(page.getByText(/insufficient admin capabilities/i)).toHaveCount(0);
 }
 
