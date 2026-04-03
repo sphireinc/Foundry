@@ -50,6 +50,7 @@ type AdminExtensionPage struct {
 	Key         string   `json:"key"`
 	Title       string   `json:"title"`
 	Route       string   `json:"route"`
+	NavGroup    string   `json:"nav_group,omitempty"`
 	Capability  string   `json:"capability,omitempty"`
 	Description string   `json:"description,omitempty"`
 	ModuleURL   string   `json:"module_url,omitempty"`

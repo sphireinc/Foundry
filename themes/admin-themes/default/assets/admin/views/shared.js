@@ -124,6 +124,14 @@ export const shellNav = (state, adminBase, options = {}) => {
   const currentSection = normalizeAdminSection(state.section);
   const canAccessSection =
     typeof options.canAccessSection === 'function' ? options.canAccessSection : () => true;
+  const builtinSectionGroup =
+    typeof options.builtinSectionGroup === 'function' ? options.builtinSectionGroup : () => 'admin';
+  const navGroups = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'content', label: 'Content' },
+    { key: 'manage', label: 'Manage' },
+    { key: 'admin', label: 'Admin' },
+  ];
   const items = [
     ['overview', 'Overview'],
     ['documents', 'Documents'],
@@ -131,28 +139,41 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['history', 'History'],
     ['trash', 'Trash'],
     ['media', 'Media'],
-    ...(options.debugEnabled ? [['debug', 'Debug']] : []),
-    ['audit', 'Audit'],
     ['users', 'Users'],
-    ['settings', 'Settings'],
     ['custom-fields', 'Custom Fields'],
+    ['audit', 'Audit'],
+    ['settings', 'Settings'],
     ['extensions', 'Extensions'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
     ['operations', 'Operations'],
+    ...(options.debugEnabled ? [['diagnostics', 'Diagnostics'], ['debug', 'Debug']] : []),
   ];
   const extensionPages = Array.isArray(options.extensionPages) ? options.extensionPages : [];
-  const builtins = items
+  const grouped = new Map(navGroups.map((group) => [group.key, []]));
+  items
     .filter(([key]) => canAccessSection(key))
-    .map(
-    ([key, label]) =>
-      `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
-    );
-  const extensions = extensionPages.map(
-    (page) =>
+    .forEach(([key, label]) => {
+      const groupKey = builtinSectionGroup(key);
+      if (!grouped.has(groupKey)) grouped.set(groupKey, []);
+      grouped.get(groupKey).push(
+        `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
+      );
+    });
+  extensionPages.forEach((page) => {
+    const groupKey = String(page.navGroup || 'admin').trim().toLowerCase();
+    if (!grouped.has(groupKey)) grouped.set(groupKey, []);
+    grouped.get(groupKey).push(
       `<a class="foundry-nav-item foundry-nav-item-extension${currentSection === normalizeAdminSection(page.section) ? ' active' : ''}" href="${adminPathForSection(adminBase, page.section)}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
-  );
-  return builtins.concat(extensions).join('');
+    );
+  });
+  return navGroups
+    .map((group) => {
+      const links = grouped.get(group.key) || [];
+      if (!links.length) return '';
+      return `<section class="foundry-nav-group"><div class="foundry-nav-group-label">${escapeHTML(group.label)}</div>${links.join('')}</section>`;
+    })
+    .join('');
 };
 
 export const panel = (title, body, subtitle = '', actions = '') => `

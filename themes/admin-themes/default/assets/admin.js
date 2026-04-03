@@ -56,6 +56,8 @@ import {
   const state = createInitialState({
     section: initialSection === 'config' ? 'settings' : initialSection,
   });
+  const DEBUG_FLAGS_STORAGE_KEY = 'foundry.admin.debug.flags';
+  const DEBUG_HISTORY_STORAGE_KEY = 'foundry.admin.debug.history';
   const admin = createAdminClient({ baseURL: adminBase, getSession: () => state.session });
   admin.status = admin.status || {};
   if (typeof admin.status.get !== 'function') {
@@ -142,8 +144,152 @@ import {
         : admin.raw.get('/api/settings/sections'),
   };
   let navigate = () => {};
+  let debugAutoRefreshTimer = null;
   const extensionModuleCache = new Map();
   const extensionStyleCache = new Set();
+
+  const safeJSON = (value) => {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (_error) {
+      return String(value);
+    }
+  };
+  const readLocalJSON = (key, fallback) => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw);
+    } catch (_error) {
+      return fallback;
+    }
+  };
+  state.debugTools.flags = {
+    ...state.debugTools.flags,
+    ...readLocalJSON(DEBUG_FLAGS_STORAGE_KEY, {}),
+  };
+  if (state.debugTools.flags.persistConsoleHistory) {
+    state.debugTools.command.history = readLocalJSON(DEBUG_HISTORY_STORAGE_KEY, []);
+  }
+  const persistDebugFlags = () => {
+    try {
+      window.localStorage.setItem(DEBUG_FLAGS_STORAGE_KEY, JSON.stringify(state.debugTools.flags));
+    } catch (_error) {}
+  };
+  const persistDebugHistory = () => {
+    try {
+      if (state.debugTools.flags.persistConsoleHistory) {
+        window.localStorage.setItem(
+          DEBUG_HISTORY_STORAGE_KEY,
+          JSON.stringify(state.debugTools.command.history.slice(0, 12))
+        );
+      } else {
+        window.localStorage.removeItem(DEBUG_HISTORY_STORAGE_KEY);
+      }
+    } catch (_error) {}
+  };
+  const recordDebugEvent = (kind, message, meta = null) => {
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: String(kind || 'info'),
+      message: String(message || '').trim() || 'event',
+      at: new Date().toISOString(),
+      meta,
+    };
+    state.debugTools.events = [entry, ...(state.debugTools.events || [])].slice(0, 60);
+  };
+  const recordRenderTrace = (label, meta = {}) => {
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      at: new Date().toISOString(),
+      section: normalizeAdminSection(state.section),
+      label,
+      path: window.location.pathname,
+      adminTheme: root.dataset.theme || 'default',
+      frontendTheme: state.status?.theme?.current || 'unknown',
+      ...meta,
+    };
+    state.debugTools.renderTrace = [entry, ...(state.debugTools.renderTrace || [])].slice(0, 24);
+  };
+  const setDebugFlag = (key, value) => {
+    state.debugTools.flags[key] = !!value;
+    if (key === 'persistConsoleHistory' && !value) {
+      state.debugTools.command.history = [];
+    }
+    persistDebugFlags();
+    persistDebugHistory();
+  };
+  const scheduleDebugAutoRefresh = () => {
+    if (debugAutoRefreshTimer) {
+      window.clearTimeout(debugAutoRefreshTimer);
+      debugAutoRefreshTimer = null;
+    }
+    if (
+      !state.session?.authenticated ||
+      !state.debugTools.flags.autoRefreshRuntime ||
+      !debugEnabled() ||
+      !['debug', 'diagnostics'].includes(normalizeAdminSection(state.section))
+    ) {
+      return;
+    }
+    debugAutoRefreshTimer = window.setTimeout(async () => {
+      try {
+        state.runtimeStatus = await admin.raw.get('/api/debug/runtime');
+        recordDebugEvent('runtime', 'Auto-refreshed runtime snapshot');
+        render();
+      } catch (error) {
+        recordDebugEvent('runtime-error', 'Auto-refresh failed', {
+          error: error?.message || String(error),
+        });
+      }
+    }, 15000);
+  };
+  const executeDebugRequest = async ({ method, path, body }) => {
+    const normalizedMethod = String(method || 'GET').toUpperCase();
+    const normalizedPath = String(path || '').trim() || '/api/status';
+    let payload = undefined;
+    if (!['GET', 'HEAD'].includes(normalizedMethod)) {
+      const trimmed = String(body || '').trim();
+      payload = trimmed ? JSON.parse(trimmed) : {};
+    }
+    recordDebugEvent('request', `${normalizedMethod} ${normalizedPath}`, payload || null);
+    const value = await admin.raw.request(normalizedPath, {
+      method: normalizedMethod,
+      body: payload,
+    });
+    state.debugTools.command = {
+      ...state.debugTools.command,
+      method: normalizedMethod,
+      path: normalizedPath,
+      body: String(body || ''),
+      result: safeJSON(value),
+      error: '',
+      history: [
+        {
+          at: new Date().toISOString(),
+          method: normalizedMethod,
+          path: normalizedPath,
+          ok: true,
+        },
+        ...(state.debugTools.command.history || []),
+      ].slice(0, 12),
+    };
+    persistDebugHistory();
+    return value;
+  };
+
+  window.addEventListener('error', (event) => {
+    recordDebugEvent('window-error', event.message || 'Unhandled window error', {
+      source: event.filename || '',
+      line: event.lineno || 0,
+      column: event.colno || 0,
+    });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    recordDebugEvent('promise-error', 'Unhandled promise rejection', {
+      reason: event.reason?.message || String(event.reason || ''),
+    });
+  });
 
   const {
     editorElements,
@@ -177,6 +323,17 @@ import {
   };
   const debugEnabled = () =>
     !!state.capabilityInfo?.features?.pprof && capabilityInfoHas('debug.read');
+  const normalizeNavGroup = (group) => {
+    switch (String(group || '').trim().toLowerCase()) {
+      case 'dashboard':
+      case 'content':
+      case 'manage':
+      case 'admin':
+        return String(group).trim().toLowerCase();
+      default:
+        return 'admin';
+    }
+  };
   const builtinSectionCapability = (section) => {
     const normalized = normalizeAdminSection(section);
     switch (normalized) {
@@ -191,6 +348,9 @@ import {
         return 'config.manage';
       case 'media':
         return 'media.read';
+      case 'custom-fields':
+        return 'documents.read';
+      case 'diagnostics':
       case 'debug':
         return debugEnabled() ? 'debug.read' : null;
       case 'audit':
@@ -208,11 +368,37 @@ import {
         return null;
     }
   };
+  const builtinSectionGroup = (section) => {
+    switch (normalizeAdminSection(section)) {
+      case 'overview':
+        return 'dashboard';
+      case 'documents':
+      case 'editor':
+      case 'history':
+      case 'trash':
+      case 'media':
+        return 'content';
+      case 'users':
+      case 'custom-fields':
+      case 'audit':
+      case 'settings':
+      case 'config':
+        return 'manage';
+      case 'extensions':
+      case 'plugins':
+      case 'themes':
+      case 'operations':
+      case 'diagnostics':
+      case 'debug':
+      default:
+        return 'admin';
+    }
+  };
   const canAccessBuiltinSection = (section) => {
     const normalized = normalizeAdminSection(section);
     const capability = builtinSectionCapability(normalized);
     if (!capability) return false;
-    if (normalized === 'debug' && !debugEnabled()) return false;
+    if ((normalized === 'debug' || normalized === 'diagnostics') && !debugEnabled()) return false;
     return capabilityInfoHas(capability);
   };
   const extensionPages = () =>
@@ -221,6 +407,7 @@ import {
       .map((page) => ({
         ...page,
         section: normalizeAdminSection(page.route || `plugins/${page.plugin}/${page.key}`),
+        navGroup: normalizeNavGroup(page.nav_group),
       }));
   const extensionWidgetsForSlot = (slot) =>
     (state.adminExtensions.widgets || []).filter(
@@ -247,7 +434,7 @@ import {
     return canAccessBuiltinSection(normalized);
   };
   const firstAccessibleSection = () => {
-    const candidates = ['overview', 'documents', 'editor', 'media', 'audit', 'custom-fields'];
+    const candidates = ['overview', 'documents', 'editor', 'media', 'custom-fields', 'audit'];
     return candidates.find((section) => canAccessSection(section)) || extensionPages()[0]?.section || 'overview';
   };
   const canManageSharedFields = () => capabilityInfoHas('config.manage');
@@ -368,6 +555,12 @@ import {
     };
     const page = extensionPageBySection(state.section);
     if (page) {
+      if (state.debugTools.flags.captureExtensionEvents) {
+        recordDebugEvent('extension-page', `Dispatching extension page event for ${page.plugin}/${page.key}`, {
+          section: page.section,
+          route: page.route || '',
+        });
+      }
       document.dispatchEvent(
         new CustomEvent('foundry:admin-extension-page', {
           detail: {
@@ -433,6 +626,11 @@ import {
           extensions: clone(state.adminExtensions),
         });
         mount.dataset.extensionStatus = 'mounted';
+        if (state.debugTools.flags.captureExtensionEvents) {
+          recordDebugEvent('extension-page', `Mounted extension page ${page.plugin}/${page.key}`, {
+            module: page.module_url || '',
+          });
+        }
       } else {
         mount.dataset.extensionStatus = 'ready';
       }
@@ -449,6 +647,11 @@ import {
           message: error?.message || String(error),
         },
       ];
+      if (state.debugTools.flags.captureExtensionEvents) {
+        recordDebugEvent('extension-error', `Failed to load extension page ${page.plugin}/${page.key}`, {
+          error: error?.message || String(error),
+        });
+      }
       mount.innerHTML = `<div class="error">Failed to load plugin admin page bundle: ${escapeHTML(error?.message || String(error))}</div>`;
     }
   };
@@ -490,6 +693,11 @@ import {
               },
             })
           );
+          if (state.debugTools.flags.captureExtensionEvents) {
+            recordDebugEvent('extension-widget', `Dispatching widget event for ${widget.plugin}/${widget.key}`, {
+              slot: widget.slot,
+            });
+          }
           if (typeof mountFn === 'function') {
             await mountFn({
               mount,
@@ -501,6 +709,11 @@ import {
               extensions: clone(state.adminExtensions),
             });
             mount.dataset.extensionStatus = 'mounted';
+            if (state.debugTools.flags.captureExtensionEvents) {
+              recordDebugEvent('extension-widget', `Mounted widget ${widget.plugin}/${widget.key}`, {
+                slot: widget.slot,
+              });
+            }
           } else {
             mount.dataset.extensionStatus = 'ready';
           }
@@ -524,6 +737,12 @@ import {
               message: error?.message || String(error),
             },
           ];
+          if (state.debugTools.flags.captureExtensionEvents) {
+            recordDebugEvent('extension-error', `Failed to load widget ${widget.plugin}/${widget.key}`, {
+              slot: widget.slot,
+              error: error?.message || String(error),
+            });
+          }
           mount.innerHTML = `<div class="error">Failed to load plugin admin widget bundle: ${escapeHTML(error?.message || String(error))}</div>`;
         }
       })
@@ -633,8 +852,8 @@ import {
     resetUserSecurity,
     selectedUserRecord,
     resetDocumentEditor,
-    setFlash,
-    setError,
+    setFlash: uiSetFlash,
+    setError: uiSetError,
     pushToast,
     markDirty,
     snapshotValue,
@@ -653,6 +872,18 @@ import {
     render: () => render(),
     buildDefaultMarkdown,
   });
+  const setFlash = (message) => {
+    if (message) {
+      recordDebugEvent('flash', message);
+    }
+    uiSetFlash(message);
+  };
+  const setError = (message) => {
+    if (message) {
+      recordDebugEvent('error', message);
+    }
+    uiSetError(message);
+  };
 
   const parseJSONInput = (id, fallback) => {
     const node = document.getElementById(id);
@@ -1665,10 +1896,10 @@ import {
       .join('')}</div>`;
   };
 
-  const renderDebug = () => {
+  const renderDiagnostics = () => {
     if (!debugEnabled()) {
       return panel(
-        'Runtime Profiling',
+        'Diagnostics',
         '<div class="panel-pad empty-state">pprof is disabled. Set <code>admin.debug.pprof: true</code> in site.yaml to enable runtime profiling in the admin.</div>'
       );
     }
@@ -1889,6 +2120,7 @@ import {
       { id: 'goto-plugins', label: 'Go to Plugins', section: 'plugins', action: () => navigate('plugins') },
       { id: 'goto-themes', label: 'Go to Themes', section: 'themes', action: () => navigate('themes') },
       { id: 'goto-operations', label: 'Go to Operations', section: 'operations', action: () => navigate('operations') },
+      { id: 'goto-diagnostics', label: 'Go to Diagnostics', section: 'diagnostics', action: () => navigate('diagnostics') },
       {
         id: 'new-page',
         label: 'Create New Page Draft',
@@ -2098,6 +2330,196 @@ import {
                   }
               </div>`
               : '<div class="panel-pad empty-state">Select a user from the list to manage password reset, sessions, and TOTP.</div>'
+          )}
+        </div>
+      </div>`;
+  };
+
+  const renderDebug = () => {
+    const debug = state.debugTools || {};
+    const flags = debug.flags || {};
+    const history = debug.command?.history || [];
+    const sdkSnapshot = {
+      session: state.session
+        ? {
+            username: state.session.username,
+            role: state.session.role,
+            capabilities: state.session.capabilities || [],
+          }
+        : null,
+      capabilityInfo: state.capabilityInfo
+        ? {
+            modules: state.capabilityInfo.modules || {},
+            features: state.capabilityInfo.features || {},
+          }
+        : null,
+      extensions: {
+        pages: (state.adminExtensions?.pages || []).length,
+        widgets: (state.adminExtensions?.widgets || []).length,
+        slots: (state.adminExtensions?.slots || []).length,
+        settings: (state.adminExtensions?.settings || []).length,
+      },
+      foundryAdmin: {
+        available: !!window.FoundryAdmin,
+        api: window.FoundryAdmin
+          ? ['client', 'adminBase', 'getSession', 'getCapabilities', 'getExtensions', 'getSettingsSections']
+          : [],
+      },
+    };
+    const renderTrace = debug.renderTrace || [];
+    const eventRows = (debug.events || [])
+      .map(
+        (entry) => `<div class="debug-event-row">
+          <div class="debug-event-meta">
+            <span class="contract-badge ok">${escapeHTML(entry.kind || 'info')}</span>
+            <span>${escapeHTML(formatDateTime(entry.at) || entry.at || '')}</span>
+          </div>
+          <strong>${escapeHTML(entry.message || '')}</strong>
+          ${
+            flags.verboseEventPayloads && entry.meta
+              ? `<pre class="debug-code-block">${escapeHTML(safeJSON(entry.meta))}</pre>`
+              : ''
+          }
+        </div>`
+      )
+      .join('');
+    const traceRows = renderTrace
+      .map(
+        (entry) => `<div class="debug-trace-row">
+          <div><strong>${escapeHTML(entry.label || entry.section || 'render')}</strong><div class="muted mono">${escapeHTML(entry.path || '')}</div></div>
+          <div class="muted">${escapeHTML(formatDateTime(entry.at) || '')}</div>
+          <div class="muted">${escapeHTML(entry.frontendTheme || 'unknown')} / ${escapeHTML(entry.adminTheme || 'default')}</div>
+        </div>`
+      )
+      .join('');
+    const graphSnapshot = {
+      site: {
+        name: state.status?.name || '',
+        title: state.status?.title || '',
+        base_url: state.status?.base_url || '',
+        default_lang: state.status?.default_lang || '',
+      },
+      content: state.status?.content || {},
+      theme: state.status?.theme || {},
+      plugins: state.status?.plugins || [],
+      taxonomies: state.status?.taxonomies || [],
+      runtime: {
+        content: state.runtimeStatus?.content || {},
+        integrity: state.runtimeStatus?.integrity || {},
+        storage: state.runtimeStatus?.storage || {},
+      },
+    };
+    const currentRenderContext = {
+      section: state.section,
+      title: titleForSection(state.section),
+      extensionPage: extensionPageBySection(state.section),
+      widgetSlots: ['overview.after', 'documents.sidebar', 'media.sidebar', 'plugins.sidebar'].map((slot) => ({
+        slot,
+        widgets: extensionWidgetsForSlot(slot).map((widget) => `${widget.plugin}/${widget.key}`),
+      })),
+      documentEditor: state.documentEditor?.source_path
+        ? {
+            source_path: state.documentEditor.source_path,
+            preview_loaded: !!state.documentPreview,
+            contract_titles: state.documentContractTitles || [],
+          }
+        : null,
+    };
+    return `
+      <div class="layout-grid">
+        <div class="stack">
+          ${panel(
+            'Runtime Event Stream',
+            `<div class="panel-pad stack">
+              <div class="toolbar">
+                <button type="button" class="ghost" id="debug-events-clear">Clear Events</button>
+              </div>
+              ${eventRows || '<div class="empty-state">No debug events captured yet.</div>'}
+            </div>`,
+            'Client-side admin events, extension lifecycle hooks, request activity, and runtime errors'
+          )}
+          ${panel(
+            'Admin SDK Inspector',
+            `<div class="panel-pad stack">
+              <div class="cards">
+                <article class="card"><span class="card-label">Role</span><strong>${escapeHTML(state.session?.role || 'unknown')}</strong><span class="card-copy">Current admin identity role.</span></article>
+                <article class="card"><span class="card-label">Capabilities</span><strong>${escapeHTML(String((state.session?.capabilities || []).length))}</strong><span class="card-copy">Resolved capability set size.</span></article>
+                <article class="card"><span class="card-label">Extension Pages</span><strong>${escapeHTML(String((state.adminExtensions?.pages || []).length))}</strong><span class="card-copy">Pages registered through plugin metadata.</span></article>
+                <article class="card"><span class="card-label">Settings Sections</span><strong>${escapeHTML(String((state.settingsSections || []).length))}</strong><span class="card-copy">Core and plugin-owned sections available in admin.</span></article>
+              </div>
+              <pre class="debug-code-block">${escapeHTML(safeJSON(sdkSnapshot))}</pre>
+            </div>`,
+            'What the authenticated admin SDK and extension registry currently expose'
+          )}
+          ${panel(
+            'Template / Render Trace',
+            `<div class="panel-pad stack">
+              <div class="note">This is an inferred shell/render trace for the current admin surface, not a full server-side template profiler.</div>
+              <pre class="debug-code-block">${escapeHTML(safeJSON(currentRenderContext))}</pre>
+              <div class="debug-trace-list">${traceRows || '<div class="empty-state">No render trace entries yet.</div>'}</div>
+            </div>`,
+            'Current section renderer, active themes, extension mounts, and recent admin render passes'
+          )}
+        </div>
+        <div class="stack">
+          ${panel(
+            'Graph / Content Introspection',
+            `<div class="panel-pad stack">
+              <div class="cards">
+                <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(String(state.status?.content?.document_count || 0))}</strong><span class="card-copy">Documents currently known to the graph.</span></article>
+                <article class="card"><span class="card-label">Routes</span><strong>${escapeHTML(String(state.status?.content?.route_count || 0))}</strong><span class="card-copy">Resolved public routes.</span></article>
+                <article class="card"><span class="card-label">Plugins</span><strong>${escapeHTML(String((state.status?.plugins || []).length))}</strong><span class="card-copy">Loaded plugin status records.</span></article>
+                <article class="card"><span class="card-label">Taxonomies</span><strong>${escapeHTML(String((state.status?.taxonomies || []).length))}</strong><span class="card-copy">Configured taxonomy groups.</span></article>
+              </div>
+              <pre class="debug-code-block">${escapeHTML(safeJSON(graphSnapshot))}</pre>
+            </div>`,
+            'A raw, inspectable snapshot of site status, runtime graph, theme, plugin, and taxonomy state'
+          )}
+          ${panel(
+            'Request / Command Console',
+            `<div class="panel-pad stack">
+              <div class="toolbar">
+                <button type="button" class="ghost small" data-debug-preset="status">Status</button>
+                <button type="button" class="ghost small" data-debug-preset="runtime">Runtime</button>
+                <button type="button" class="ghost small" data-debug-preset="validate">Validate</button>
+                <button type="button" class="ghost small" data-debug-preset="rebuild">Rebuild</button>
+                <button type="button" class="ghost small" data-debug-preset="cache">Clear Cache</button>
+              </div>
+              <form id="debug-command-form" class="stack">
+                <div class="frontmatter-grid">
+                  <label>Method<select id="debug-command-method">
+                    ${['GET', 'POST', 'PUT', 'DELETE'].map((method) => `<option value="${method}" ${debug.command?.method === method ? 'selected' : ''}>${method}</option>`).join('')}
+                  </select></label>
+                  <label>Path<input id="debug-command-path" type="text" value="${escapeHTML(debug.command?.path || '/api/status')}" placeholder="/api/status"></label>
+                </div>
+                <label>Body<textarea id="debug-command-body" rows="8" spellcheck="false" placeholder='{"key":"value"}'>${escapeHTML(debug.command?.body || '')}</textarea></label>
+                <div class="toolbar"><button type="submit">Execute</button></div>
+              </form>
+              ${debug.command?.error ? `<div class="note error">${escapeHTML(debug.command.error)}</div>` : ''}
+              <pre class="debug-code-block">${escapeHTML(debug.command?.result || 'Run a request to inspect the raw response here.')}</pre>
+              <div class="debug-history-list">
+                ${(history || [])
+                  .map(
+                    (entry) => `<div class="mini-list-row">
+                      <span>${escapeHTML(entry.method)} ${escapeHTML(entry.path)}</span>
+                      <strong>${escapeHTML(entry.ok ? formatDateTime(entry.at) || entry.at : 'failed')}</strong>
+                    </div>`
+                  )
+                  .join('') || '<div class="empty-state">No command history yet.</div>'}
+              </div>
+            </div>`,
+            'Run raw admin API requests and keep a short local command history'
+          )}
+          ${panel(
+            'Feature Flags / Experiments',
+            `<div class="panel-pad stack">
+              <label class="checkbox"><input type="checkbox" id="debug-flag-auto-refresh-runtime" ${flags.autoRefreshRuntime ? 'checked' : ''}> Auto-refresh runtime snapshot while Diagnostics or Debug is open</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-capture-extension-events" ${flags.captureExtensionEvents ? 'checked' : ''}> Capture extension page and widget lifecycle events</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-persist-console-history" ${flags.persistConsoleHistory ? 'checked' : ''}> Persist request console history in local storage</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-show-state-overlay" ${flags.showStateOverlay ? 'checked' : ''}> Show compact admin state overlay</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-verbose-event-payloads" ${flags.verboseEventPayloads ? 'checked' : ''}> Show event payload JSON in the runtime event stream</label>
+            </div>`,
+            'Debug-only client-side flags for experiments and deeper tooling'
           )}
         </div>
       </div>`;
@@ -2414,6 +2836,8 @@ import {
         return renderTrash();
       case 'media':
         return renderMedia();
+      case 'diagnostics':
+        return renderDiagnostics();
       case 'debug':
         return renderDebug();
       case 'audit':
@@ -2560,11 +2984,28 @@ import {
       clone,
     });
 
+  const renderDebugOverlay = () => {
+    if (!state.debugTools.flags.showStateOverlay) return '';
+    return `<div class="debug-overlay">
+      <strong>${escapeHTML(titleForSection(state.section))}</strong>
+      <span>section: ${escapeHTML(state.section)}</span>
+      <span>docs: ${escapeHTML(String(state.documents?.length || 0))}</span>
+      <span>routes: ${escapeHTML(String(state.status?.content?.route_count || 0))}</span>
+      <span>load errors: ${escapeHTML(String(state.loadErrors?.length || 0))}</span>
+      <span>dirty: ${escapeHTML(hasUnsavedChanges() ? dirtyMessage() : 'none')}</span>
+    </div>`;
+  };
+
   const renderDashboard = () => {
     if (!canAccessSection(state.section)) {
       state.section = firstAccessibleSection();
       window.history.replaceState({}, '', adminPathForSection(adminBase, state.section));
     }
+    recordRenderTrace('dashboard render', {
+      extensionPage: extensionPageBySection(state.section)?.key || '',
+      previewLoaded: !!state.documentPreview,
+      runtimeLoaded: !!state.runtimeStatus,
+    });
     const topMessage =
       summarizeLoadErrors(state) ||
       'Manage content, media, users, settings, themes, and plugins.';
@@ -2577,6 +3018,7 @@ import {
           <div class="foundry-brand">Foundry</div>
           <nav class="foundry-nav">${shellNav(state, adminBase, {
             extensionPages: extensionPages(),
+            builtinSectionGroup,
             debugEnabled: debugEnabled(),
             canAccessSection,
           })}</nav>
@@ -2603,6 +3045,7 @@ import {
             ${renderSection()}
           </main>
         </div>
+        ${renderDebugOverlay()}
       </div>`;
     document.getElementById('shortcut-help-toggle')?.addEventListener('click', () => {
       state.keyboardHelp = !state.keyboardHelp;
@@ -2631,6 +3074,65 @@ import {
       window.setTimeout(() => document.getElementById('command-palette-query')?.focus(), 0);
     }
     bindDashboardEventsLocal();
+    document.getElementById('debug-events-clear')?.addEventListener('click', () => {
+      state.debugTools.events = [];
+      render();
+    });
+    root.querySelectorAll('[data-debug-preset]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const preset = button.dataset.debugPreset;
+        const presets = {
+          status: { method: 'GET', path: '/api/status', body: '' },
+          runtime: { method: 'GET', path: '/api/debug/runtime', body: '' },
+          validate: { method: 'POST', path: '/api/debug/validate', body: '{}' },
+          rebuild: { method: 'POST', path: '/api/operations/rebuild', body: '{}' },
+          cache: { method: 'POST', path: '/api/operations/cache/clear', body: '{}' },
+        };
+        const next = presets[preset];
+        if (!next) return;
+        state.debugTools.command = { ...state.debugTools.command, ...next, error: '' };
+        render();
+      });
+    });
+    document.getElementById('debug-command-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const method = document.getElementById('debug-command-method')?.value || 'GET';
+      const path = document.getElementById('debug-command-path')?.value || '/api/status';
+      const body = document.getElementById('debug-command-body')?.value || '';
+      state.debugTools.command = { ...state.debugTools.command, method, path, body, error: '' };
+      try {
+        await executeDebugRequest({ method, path, body });
+      } catch (error) {
+        state.debugTools.command = {
+          ...state.debugTools.command,
+          result: '',
+          error: error?.message || String(error),
+          history: [
+            {
+              at: new Date().toISOString(),
+              method,
+              path,
+              ok: false,
+            },
+            ...(state.debugTools.command.history || []),
+          ].slice(0, 12),
+        };
+        persistDebugHistory();
+        recordDebugEvent('request-error', `${method} ${path} failed`, {
+          error: error?.message || String(error),
+        });
+      }
+      render();
+    });
+    root.querySelectorAll('[id^="debug-flag-"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const key = input.id.replace('debug-flag-', '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        setDebugFlag(key, !!input.checked);
+        recordDebugEvent('flag', `Toggled ${key}`, { enabled: !!input.checked });
+        scheduleDebugAutoRefresh();
+        render();
+      });
+    });
     document.getElementById('settings-structured-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
@@ -2695,6 +3197,7 @@ import {
     publishAdminRuntime();
     void mountActiveExtensionPage();
     void mountVisibleExtensionWidgets();
+    scheduleDebugAutoRefresh();
   };
 
   const render = () => {
@@ -2709,12 +3212,19 @@ import {
     renderDashboard();
   };
 
-  navigate = createAdminRouter({
+  const router = createAdminRouter({
     adminBase,
     getState: () => state,
     confirmNavigation,
     render,
-  }).navigate;
+  });
+  navigate = (section, options) => {
+    recordDebugEvent('navigate', `Navigate to ${normalizeAdminSection(section)}`, {
+      from: state.section,
+      to: normalizeAdminSection(section),
+    });
+    return router.navigate(section, options);
+  };
 
   const loadMediaDetail = async (reference, rerender = true) => {
     try {
@@ -2740,6 +3250,7 @@ import {
     state.loading = true;
     state.error = '';
     clearLoadErrors();
+    recordDebugEvent('fetch', 'Admin bootstrap fetch started');
     try {
       state.session = await admin.session.get();
       state.capabilityInfo = await admin.capabilities.get();
@@ -3043,6 +3554,9 @@ import {
         editor: state.documentEditor,
         fields: state.documentFieldValues,
         meta: state.documentMeta,
+      });
+      recordDebugEvent('fetch', 'Admin bootstrap fetch completed', {
+        loadErrors: state.loadErrors.length,
       });
     } catch (error) {
       state.session = null;

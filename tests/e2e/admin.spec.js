@@ -23,7 +23,9 @@ async function login(page, username = ADMIN_USERNAME, password = ADMIN_PASSWORD)
 }
 
 async function logout(page) {
-  await page.getByRole('button', { name: /Log Out/i }).click();
+  const logoutButton = page.locator('#logout').first();
+  await expect(logoutButton).toBeVisible();
+  await logoutButton.click();
   await expect(page.getByRole('heading', { name: /Foundry Admin/i })).toBeVisible();
 }
 
@@ -323,7 +325,7 @@ test.describe('default admin theme', () => {
       await page.reload();
 
       await openDocumentInEditor(page, slug, sourcePath);
-      await expect(page.getByText(/^Custom Fields$/i)).toBeVisible();
+      await expect(page.locator('#document-save-form').getByText(/^Custom Fields$/i)).toBeVisible();
       await page.locator('[data-custom-field="hero_title"]').fill(heroTitle);
       await page.locator('#document-version-comment').fill('e2e custom field update');
       await page.getByRole('button', { name: /^Save Document$/i }).click();
@@ -546,6 +548,18 @@ Created at ${Date.now()}
     await page.reload();
     await expect(page.locator('[data-restore-backup]')).toHaveCount(beforeCount + 1);
     await expect(zipBackupsPanel.locator('.table')).toContainText(record.json.name);
+  });
+
+  test('debug page exposes developer tooling panels', async ({ page }) => {
+    await login(page);
+    await ensureFrontendTheme(page, 'default');
+
+    await page.getByRole('link', { name: /^Debug$/i }).click();
+    await expect(page.getByRole('heading', { level: 1, name: /^Debug$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /^Runtime Event Stream$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /^Admin SDK Inspector$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /^Request \/ Command Console$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: /^Feature Flags \/ Experiments$/i })).toBeVisible();
   });
 
   test('editor, reviewer, and author roles see the expected shell', async ({ page }) => {
