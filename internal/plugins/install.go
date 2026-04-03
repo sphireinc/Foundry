@@ -153,6 +153,10 @@ func removeInstalledPluginDir(pluginsDir, name string) error {
 	if err != nil {
 		return err
 	}
+	// This delete path is constrained to a single validated directory name under
+	// the configured plugins root. ResolveRelativeUnderRoot rejects absolute
+	// paths, separators, and traversal, and RemoveRelativeUnderRoot performs the
+	// final root-bounded removal.
 	return safepath.RemoveRelativeUnderRoot(strings.TrimSpace(pluginsDir), validatedName)
 }
 
