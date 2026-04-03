@@ -2,6 +2,7 @@ package safepath
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -69,4 +70,12 @@ func IsWithinRoot(root, target string) (bool, error) {
 
 	rootWithSep := rootAbs + string(filepath.Separator)
 	return targetAbs == rootAbs || strings.HasPrefix(targetAbs, rootWithSep), nil
+}
+
+func RemoveRelativeUnderRoot(root, rel string) error {
+	target, err := ResolveRelativeUnderRoot(root, rel)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(target)
 }

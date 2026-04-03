@@ -90,23 +90,23 @@ func Install(opts InstallOptions) (Metadata, error) {
 		}
 	}
 	if err := stripVCSMetadata(targetDir); err != nil {
-		_ = removeInstalledPluginPath(pluginsDir, targetDir)
+		_ = removeInstalledPluginDir(pluginsDir, name)
 		return Metadata{}, err
 	}
 
 	meta, err := LoadMetadata(pluginsDir, name)
 	if err != nil {
-		_ = removeInstalledPluginPath(pluginsDir, targetDir)
+		_ = removeInstalledPluginDir(pluginsDir, name)
 		return Metadata{}, err
 	}
 
 	if strings.TrimSpace(meta.Name) != "" && meta.Name != name {
-		_ = removeInstalledPluginPath(pluginsDir, targetDir)
+		_ = removeInstalledPluginDir(pluginsDir, name)
 		return Metadata{}, fmt.Errorf("plugin metadata name %q does not match install directory %q", meta.Name, name)
 	}
 	report := AnalyzeInstalled(meta)
 	if SecurityApprovalRequired(meta, report) && !opts.ApproveRisk {
-		_ = removeInstalledPluginPath(pluginsDir, targetDir)
+		_ = removeInstalledPluginDir(pluginsDir, name)
 		return Metadata{}, fmt.Errorf("plugin %q requires explicit approval due to declared or detected risky capabilities; rerun with approval", meta.Name)
 	}
 
@@ -141,30 +141,19 @@ func Uninstall(pluginsDir, name string) error {
 		return fmt.Errorf("plugin path %q is not a directory", targetDir)
 	}
 
-	if err := removeInstalledPluginPath(pluginsDir, targetDir); err != nil {
+	if err := removeInstalledPluginDir(pluginsDir, name); err != nil {
 		return fmt.Errorf("remove plugin directory: %w", err)
 	}
 
 	return nil
 }
 
-func removeInstalledPluginPath(pluginsDir, targetDir string) error {
-	root := strings.TrimSpace(pluginsDir)
-	if root == "" {
-		return fmt.Errorf("plugins directory cannot be empty")
-	}
-	target := strings.TrimSpace(targetDir)
-	if target == "" {
-		return fmt.Errorf("plugin path cannot be empty")
-	}
-	ok, err := safepath.IsWithinRoot(root, target)
+func removeInstalledPluginDir(pluginsDir, name string) error {
+	validatedName, err := validatePluginName(name)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return fmt.Errorf("plugin path must stay inside %s", root)
-	}
-	return os.RemoveAll(target)
+	return safepath.RemoveRelativeUnderRoot(strings.TrimSpace(pluginsDir), validatedName)
 }
 
 // repoZipURL returns the GitHub archive URL used by the zip fallback path.
