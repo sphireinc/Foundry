@@ -254,6 +254,7 @@ See the full authoring guides for details:
 
 - `docs/themes/` for `theme.yaml -> security`
 - `docs/plugins/` for `plugin.yaml -> permissions`
+- `docs/plugins/` also includes the full structured permission reference for plugin authors
 
 Plugin runtime metadata now supports a real `runtime` block. The current RPC
 host supports the `context` hook family over a JSON RPC transport, with a
