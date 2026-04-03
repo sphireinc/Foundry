@@ -202,7 +202,7 @@ func TestProjectWrappersAndManagerHelpers(t *testing.T) {
 	if err := p.Sync(); err != nil {
 		t.Fatalf("sync project: %v", err)
 	}
-	if err := p.Enable("alpha"); err != nil {
+	if err := p.Enable("alpha", false); err != nil {
 		t.Fatalf("enable project: %v", err)
 	}
 	if err := p.Disable("alpha"); err != nil {
@@ -214,10 +214,10 @@ func TestProjectWrappersAndManagerHelpers(t *testing.T) {
 	if err := p.Uninstall("alpha"); err != nil {
 		t.Fatalf("uninstall project: %v", err)
 	}
-	if _, err := p.Update("alpha"); err == nil {
+	if _, err := p.Update("alpha", false); err == nil {
 		t.Fatal("expected update failure after uninstall")
 	}
-	if _, err := p.Install("", ""); err == nil {
+	if _, err := p.Install("", "", false); err == nil {
 		t.Fatal("expected install wrapper failure")
 	}
 }
@@ -251,6 +251,102 @@ func TestRegisterAndNewManager(t *testing.T) {
 	writePluginCode(t, root, "dup")
 	if _, err := NewManager(root, []string{name, "dup"}); err == nil {
 		t.Fatal("expected duplicate repo validation failure")
+	}
+}
+
+func TestNewManagerSupportsRPCContextPlugin(t *testing.T) {
+	root := t.TempDir()
+	name := "rpc-demo"
+	dir := filepath.Join(root, name)
+	serverPath := filepath.Join(dir, "cmd", "server", "main.go")
+	if err := os.MkdirAll(filepath.Join(dir, "cmd", "server"), 0o755); err != nil {
+		t.Fatalf("mkdir rpc plugin: %v", err)
+	}
+	body := `name: rpc-demo
+foundry_api: v1
+min_foundry_version: 0.1.0
+permissions:
+  render:
+    context:
+      write: true
+  capabilities:
+    requires_admin_approval: true
+runtime:
+  mode: rpc
+  protocol_version: v1alpha1
+  command: ["go", "run", "` + filepath.ToSlash(serverPath) + `"]
+  sandbox:
+    profile: default
+    allow_network: false
+    allow_filesystem_write: false
+    allow_process_exec: false
+`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write plugin metadata: %v", err)
+	}
+	serverSrc := `package main
+import (
+  "bufio"
+  "encoding/json"
+  "os"
+)
+type request struct {
+  ID int ` + "`json:\"id\"`" + `
+  Method string ` + "`json:\"method\"`" + `
+  Params json.RawMessage ` + "`json:\"params\"`" + `
+}
+type response struct {
+  ID int ` + "`json:\"id\"`" + `
+  Result any ` + "`json:\"result,omitempty\"`" + `
+  Error string ` + "`json:\"error,omitempty\"`" + `
+}
+func main() {
+  dec := json.NewDecoder(bufio.NewReader(os.Stdin))
+  enc := json.NewEncoder(os.Stdout)
+  for {
+    var req request
+    if err := dec.Decode(&req); err != nil {
+      return
+    }
+    switch req.Method {
+    case "handshake":
+      _ = enc.Encode(response{ID: req.ID, Result: map[string]any{
+        "plugin_name": "rpc-demo",
+        "protocol_version": "v1alpha1",
+        "supported_hooks": []string{"context"},
+      }})
+    case "context":
+      _ = enc.Encode(response{ID: req.ID, Result: map[string]any{
+        "data": map[string]any{"rpc_demo": "ok"},
+      }})
+    case "shutdown":
+      _ = enc.Encode(response{ID: req.ID, Result: map[string]any{}})
+      return
+    }
+  }
+}`
+	if err := os.WriteFile(serverPath, []byte(serverSrc), 0o644); err != nil {
+		t.Fatalf("write rpc plugin server: %v", err)
+	}
+
+	m, err := NewManager(root, []string{name})
+	if err != nil {
+		t.Fatalf("new manager with rpc plugin: %v", err)
+	}
+	view := &renderer.ViewData{
+		Title: "RPC Page",
+		Page: &content.Document{
+			ID:      "rpc",
+			Title:   "RPC Page",
+			RawBody: "# Hello",
+		},
+		Data: map[string]any{},
+	}
+	if err := m.OnContext(view); err != nil {
+		t.Fatalf("rpc context hook: %v", err)
+	}
+	if view.Data["rpc_demo"] != "ok" {
+		t.Fatalf("expected rpc plugin context data, got %#v", view.Data)
 	}
 }
 

@@ -47,16 +47,16 @@ func TestListInstalledAndConfigToggles(t *testing.T) {
 
 func TestUpdateInstalledRejectsInvalidCases(t *testing.T) {
 	root := t.TempDir()
-	if _, err := UpdateInstalled(root, ""); err == nil {
+	if _, err := UpdateInstalled(root, "", false); err == nil {
 		t.Fatal("expected empty name error")
 	}
-	if _, err := UpdateInstalled(root, "missing"); err == nil {
+	if _, err := UpdateInstalled(root, "missing", false); err == nil {
 		t.Fatal("expected missing plugin error")
 	}
 
 	writePluginMetaFile(t, root, "alpha", "name: alpha\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n")
 	writePluginCodeFile(t, root, "alpha")
-	if _, err := UpdateInstalled(root, "alpha"); err == nil {
+	if _, err := UpdateInstalled(root, "alpha", false); err == nil {
 		t.Fatal("expected fallback update error without repo metadata")
 	}
 }

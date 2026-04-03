@@ -3,6 +3,7 @@ package theme
 import (
 	"fmt"
 	"html/template"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,6 +29,7 @@ type ValidationResult struct {
 }
 
 var templateReferencePattern = regexp.MustCompile(`{{\s*(?:template|block)\s+"([^"]+)"`)
+var remoteURLPattern = regexp.MustCompile(`(?i)(https?|wss?)://[^\s"'()<>]+`)
 
 // ValidateInstalledDetailed performs Foundry's full frontend-theme validation
 // pass and returns all diagnostics.
@@ -109,6 +111,7 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 
 	validateRequiredLaunchSlotsDetailed(root, manifest, add)
 	validateFieldContractsDetailed(root, manifest, add)
+	validateThemeSecurityDetailed(root, manifest, add)
 	validateTemplateReferences(root, manifest, add)
 	validateTemplateParsing(root, add)
 
@@ -123,6 +126,79 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	})
 
 	return result, nil
+}
+
+func validateThemeSecurityDetailed(root string, manifest *Manifest, add func(severity, path, message string)) {
+	keyPath := filepath.Join(root, "theme.yaml")
+	normalizeThemeSecurity(&manifest.Security)
+
+	if !manifest.Security.ExternalAssets.Allowed {
+		for _, list := range [][]string{
+			manifest.Security.ExternalAssets.Scripts,
+			manifest.Security.ExternalAssets.Styles,
+			manifest.Security.ExternalAssets.Fonts,
+			manifest.Security.ExternalAssets.Images,
+			manifest.Security.ExternalAssets.Media,
+		} {
+			if len(list) > 0 {
+				add("error", keyPath, "security.external_assets.allowed must be true when remote asset allowlists are declared")
+				break
+			}
+		}
+	}
+	if !manifest.Security.FrontendRequests.Allowed && len(manifest.Security.FrontendRequests.Origins) > 0 {
+		add("error", keyPath, "security.frontend_requests.allowed must be true when remote request origins are declared")
+	}
+	if themeBoolValue(manifest.Security.TemplateContext.AllowRawConfig) {
+		add("error", keyPath, "security.template_context.allow_raw_config is not supported; templates only receive a curated public-safe site config")
+	}
+	if themeBoolValue(manifest.Security.TemplateContext.AllowAdminState) {
+		add("error", keyPath, "security.template_context.allow_admin_state is not supported; admin state is never exposed to themes")
+	}
+	if themeBoolValue(manifest.Security.TemplateContext.AllowRuntimeState) {
+		add("warning", keyPath, "security.template_context.allow_runtime_state is advisory only; undeclared runtime/admin keys are still filtered from template data")
+	}
+
+	assetAllowlist := themeExternalAssetAllowlist(manifest.Security)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if name == ".git" || name == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		switch ext {
+		case ".html", ".css", ".js":
+		default:
+			return nil
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		urls := remoteURLPattern.FindAllString(string(body), -1)
+		for _, raw := range urls {
+			switch ext {
+			case ".js":
+				if !manifest.Security.FrontendRequests.Allowed || !URLAllowedByPatterns(raw, manifest.Security.FrontendRequests.Origins) {
+					add("error", path, fmt.Sprintf("remote frontend request %q is not declared in security.frontend_requests.origins", raw))
+				}
+			default:
+				if !manifest.Security.ExternalAssets.Allowed || !URLAllowedByPatterns(raw, assetAllowlist) {
+					add("error", path, fmt.Sprintf("remote asset %q is not declared in security.external_assets allowlists", raw))
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		add("error", root, err.Error())
+	}
 }
 
 func validateFieldContracts(manifestPath string, manifest *Manifest, add func(severity, path, message string)) {

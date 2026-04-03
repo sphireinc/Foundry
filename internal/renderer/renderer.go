@@ -1100,6 +1100,7 @@ func parseNavigationData(v any) []NavItem {
 
 func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) ([]byte, error) {
 	r.syncActiveTheme()
+	manifest, _ := theme.LoadManifest(r.cfg.ThemesDir, r.cfg.Theme)
 	if err := r.hooks.OnContext(&data); err != nil {
 		return nil, err
 	}
@@ -1119,6 +1120,7 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	if err := r.hooks.OnBeforeRender(&data); err != nil {
 		return nil, err
 	}
+	data = sanitizeViewDataForTheme(data, manifest)
 
 	basePath := r.themes.LayoutPath("base")
 	pagePath := r.layoutPathWithFallback(name)
@@ -1177,6 +1179,132 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	}
 
 	return html, nil
+}
+
+func (r *Renderer) ContentSecurityPolicy() string {
+	manifest, err := theme.LoadManifest(r.cfg.ThemesDir, r.cfg.Theme)
+	if err != nil {
+		return theme.ContentSecurityPolicy(nil)
+	}
+	return theme.ContentSecurityPolicy(manifest)
+}
+
+func sanitizeViewDataForTheme(data ViewData, manifest *theme.Manifest) ViewData {
+	security := theme.ThemeSecurity{}
+	if manifest != nil {
+		security = manifest.Security
+	}
+	out := data
+	out.Site = sanitizePublicSiteConfig(data.Site, security.TemplateContext)
+	out.Page = sanitizeDocumentForTheme(data.Page, security.TemplateContext)
+	out.Documents = sanitizeDocumentsForTheme(data.Documents, security.TemplateContext)
+	out.Data = sanitizeThemeDataMap(data.Data, security.TemplateContext)
+	return out
+}
+
+func sanitizePublicSiteConfig(site *config.Config, ctx theme.ThemeTemplateContext) *config.Config {
+	if site == nil {
+		return nil
+	}
+	copySite := *site
+	copySite.Admin = config.AdminConfig{
+		Enabled:   site.Admin.Enabled,
+		Addr:      site.Admin.Addr,
+		Path:      site.Admin.Path,
+		LocalOnly: site.Admin.LocalOnly,
+		Theme:     site.Admin.Theme,
+		Debug:     config.AdminDebugConfig{Pprof: false},
+	}
+	copySite.Backup = config.BackupConfig{}
+	copySite.ContentDir = ""
+	copySite.PublicDir = ""
+	copySite.ThemesDir = ""
+	copySite.DataDir = ""
+	copySite.PluginsDir = ""
+	copySite.Build = config.BuildConfig{}
+	copySite.Content = config.ContentConfig{}
+	copySite.Plugins = config.PluginConfig{}
+	copySite.Fields = config.FieldsConfig{}
+	copySite.Cache = config.CacheConfig{}
+	copySite.Security = config.SecurityConfig{}
+	copySite.Deploy = config.DeployConfig{}
+	copySite.Params = nil
+	if themeTemplateBool(ctx.AllowSiteParams) {
+		copySite.Params = cloneMap(site.Params)
+	}
+	copySite.Menus = cloneMenus(site.Menus)
+	return &copySite
+}
+
+func sanitizeDocumentForTheme(doc *content.Document, ctx theme.ThemeTemplateContext) *content.Document {
+	if doc == nil {
+		return nil
+	}
+	cloned := *doc
+	cloned.Params = cloneMap(doc.Params)
+	cloned.Fields = nil
+	if themeTemplateBool(ctx.AllowContentFields) {
+		cloned.Fields = cloneMap(doc.Fields)
+	}
+	return &cloned
+}
+
+func sanitizeDocumentsForTheme(items []*content.Document, ctx theme.ThemeTemplateContext) []*content.Document {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]*content.Document, 0, len(items))
+	for _, item := range items {
+		out = append(out, sanitizeDocumentForTheme(item, ctx))
+	}
+	return out
+}
+
+func sanitizeThemeDataMap(in map[string]any, ctx theme.ThemeTemplateContext) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		normalized := strings.ToLower(strings.TrimSpace(key))
+		if normalized == "custom_fields" && !themeTemplateBool(ctx.AllowSharedFields) {
+			continue
+		}
+		if !themeTemplateBool(ctx.AllowAdminState) && (normalized == "admin" || normalized == "auth" || normalized == "sessions") {
+			continue
+		}
+		if !themeTemplateBool(ctx.AllowRuntimeState) && (normalized == "runtime" || normalized == "debug" || normalized == "diagnostics") {
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func cloneMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneMenus(in map[string][]config.MenuItem) map[string][]config.MenuItem {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]config.MenuItem, len(in))
+	for key, items := range in {
+		out[key] = append([]config.MenuItem(nil), items...)
+	}
+	return out
+}
+
+func themeTemplateBool(v *bool) bool {
+	return v != nil && *v
 }
 
 func (r *Renderer) syncActiveTheme() {

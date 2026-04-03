@@ -30,7 +30,8 @@ func (command) Details() []string {
 	return []string{
 		"foundry theme list",
 		"foundry theme current",
-		"foundry theme validate <name>",
+		"foundry theme validate <name> [--security] [--csp]",
+		"foundry theme security <name>",
 		"foundry theme install <git-url|owner/repo> [name] [--admin]",
 		"foundry theme migrate field-contracts",
 		"foundry theme scaffold <name>",
@@ -45,7 +46,7 @@ func (command) RequiresConfig() bool {
 
 func (command) Run(cfg *config.Config, args []string) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: foundry theme [list|current|validate|install|migrate|scaffold|switch]")
+		return fmt.Errorf("usage: foundry theme [list|current|validate|security|install|migrate|scaffold|switch]")
 	}
 
 	switch args[2] {
@@ -55,6 +56,8 @@ func (command) Run(cfg *config.Config, args []string) error {
 		return runCurrent(cfg)
 	case "validate":
 		return runValidate(cfg, args)
+	case "security":
+		return runSecurity(cfg, args)
 	case "install":
 		return runInstall(cfg, args)
 	case "migrate":
@@ -134,23 +137,51 @@ func runCurrent(cfg *config.Config) error {
 
 func runValidate(cfg *config.Config, args []string) error {
 	if len(args) < 4 {
-		return fmt.Errorf("usage: foundry theme validate <name>")
+		return fmt.Errorf("usage: foundry theme validate <name> [--security] [--csp]")
 	}
 
 	name := strings.TrimSpace(args[3])
-	if err := theme.ValidateInstalled(cfg.ThemesDir, name); err != nil {
+	securityMode := hasThemeFlag(args[4:], "--security")
+	cspMode := hasThemeFlag(args[4:], "--csp")
+	result, err := theme.ValidateInstalledDetailed(cfg.ThemesDir, name)
+	if err != nil {
 		return err
 	}
-
 	manifest, err := theme.LoadManifest(cfg.ThemesDir, name)
 	if err != nil {
 		return err
 	}
 
+	if !result.Valid {
+		for _, diag := range result.Diagnostics {
+			fmt.Printf("[%s] %s: %s\n", diag.Severity, diag.Path, diag.Message)
+		}
+		return fmt.Errorf("theme %q is invalid", name)
+	}
 	cliout.Successf("Theme %q is valid", name)
 	fmt.Printf("%s %s\n", cliout.Label("Title:"), manifest.Title)
 	fmt.Printf("%s %s\n", cliout.Label("Version:"), manifest.Version)
 	fmt.Printf("%s %s\n", cliout.Label("Min Foundry Version:"), manifest.MinFoundryVersion)
+	if securityMode || cspMode {
+		report, err := theme.AnalyzeInstalledSecurity(cfg.ThemesDir, name)
+		if err != nil {
+			return err
+		}
+		printThemeSecurityReport(report, cspMode)
+	}
+	return nil
+}
+
+func runSecurity(cfg *config.Config, args []string) error {
+	if len(args) < 4 {
+		return fmt.Errorf("usage: foundry theme security <name>")
+	}
+	name := strings.TrimSpace(args[3])
+	report, err := theme.AnalyzeInstalledSecurity(cfg.ThemesDir, name)
+	if err != nil {
+		return err
+	}
+	printThemeSecurityReport(report, true)
 	return nil
 }
 
@@ -281,6 +312,52 @@ func runSwitch(cfg *config.Config, args []string) error {
 
 func filepathJoin(parts ...string) string {
 	return strings.ReplaceAll(strings.Join(parts, "/"), "//", "/")
+}
+
+func hasThemeFlag(args []string, want string) bool {
+	for _, arg := range args {
+		if strings.TrimSpace(arg) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func printThemeSecurityReport(report *theme.SecurityReport, includeCSP bool) {
+	if report == nil {
+		return
+	}
+	fmt.Println("")
+	cliout.Println(cliout.Heading("Theme security"))
+	for _, item := range report.DeclaredSummary {
+		fmt.Printf("  - %s\n", item)
+	}
+	if len(report.DetectedAssets) > 0 {
+		fmt.Println("Detected remote assets:")
+		for _, item := range report.DetectedAssets {
+			fmt.Printf("  - %s [%s] (%s)\n", item.URL, item.Status, item.Path)
+		}
+	}
+	if len(report.DetectedRequests) > 0 {
+		fmt.Println("Detected frontend requests:")
+		for _, item := range report.DetectedRequests {
+			fmt.Printf("  - %s [%s] (%s)\n", item.URL, item.Status, item.Path)
+		}
+	}
+	if len(report.Mismatches) > 0 {
+		fmt.Println("Security mismatches:")
+		for _, diag := range report.Mismatches {
+			fmt.Printf("  - %s\n", diag.Message)
+		}
+	}
+	if includeCSP {
+		fmt.Println("CSP summary:")
+		for _, item := range report.CSPSummary {
+			fmt.Printf("  - %s\n", item)
+		}
+		fmt.Println("Generated CSP:")
+		fmt.Println(report.GeneratedCSP)
+	}
 }
 
 func init() {

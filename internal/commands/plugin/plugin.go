@@ -10,6 +10,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/consts"
 	"github.com/sphireinc/foundry/internal/plugins"
+	"gopkg.in/yaml.v3"
 )
 
 type command struct{}
@@ -31,15 +32,15 @@ func (command) Details() []string {
 		"foundry plugin list --installed",
 		"foundry plugin list --enabled",
 		"foundry plugin info <name>",
-		"foundry plugin install <git-url|owner/repo> [name]",
+		"foundry plugin install <git-url|owner/repo> [name] [--approve-risk]",
 		"foundry plugin uninstall <name>",
-		"foundry plugin enable <name>",
+		"foundry plugin enable <name> [--approve-risk]",
 		"foundry plugin disable <name>",
-		"foundry plugin validate",
-		"foundry plugin validate <name>",
+		"foundry plugin validate [<name>] [--security] [--strict-security]",
 		"foundry plugin deps <name>",
-		"foundry plugin update <name>",
+		"foundry plugin update <name> [--approve-risk]",
 		"foundry plugin sync",
+		"foundry plugin security <name>",
 	}
 }
 
@@ -49,7 +50,7 @@ func (command) RequiresConfig() bool {
 
 func (command) Run(cfg *config.Config, args []string) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: foundry plugin [list|info|install|uninstall|enable|disable|validate|deps|update|sync]")
+		return fmt.Errorf("usage: foundry plugin [list|info|install|uninstall|enable|disable|validate|deps|update|sync|security]")
 	}
 
 	project := plugins.NewProject(
@@ -84,6 +85,8 @@ func (command) Run(cfg *config.Config, args []string) error {
 		}
 		cliout.Successf("plugin imports synced")
 		return nil
+	case "security":
+		return runSecurity(project, args)
 	}
 
 	return fmt.Errorf("unknown plugin subcommand: %s", args[2])
@@ -136,7 +139,58 @@ func runInfo(project plugins.Project, args []string) error {
 			fmt.Printf("  - %s\n", dep)
 		}
 	}
+	fmt.Printf("Risk tier:   %s\n", meta.Permissions.RiskTier())
+	fmt.Printf("Approval:    %t\n", meta.Permissions.Capabilities.RequiresAdminApproval)
 
+	return nil
+}
+
+func runSecurity(project plugins.Project, args []string) error {
+	if len(args) < 4 {
+		return fmt.Errorf("usage: foundry plugin security <name>")
+	}
+	name := strings.TrimSpace(args[3])
+	meta, err := project.Metadata(name)
+	if err != nil {
+		return err
+	}
+	report, err := project.SecurityReport(name)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Name:        %s\n", meta.Name)
+	fmt.Printf("Title:       %s\n", meta.Title)
+	fmt.Printf("Risk tier:   %s\n", report.RiskTier)
+	fmt.Printf("Approval:    %t\n", report.RequiresApproval)
+	fmt.Printf("Runtime:     %s\n", plugins.RuntimeModeLabel(report.Runtime.Mode))
+	fmt.Println("Summary:")
+	for _, item := range report.Summary {
+		fmt.Printf("  - %s\n", item)
+	}
+	if len(report.Findings) > 0 {
+		fmt.Println("Detected capabilities:")
+		for _, finding := range report.Findings {
+			fmt.Printf("  - %s: %s (%s, %s)\n", finding.Category, finding.Evidence, finding.Path, finding.EvidenceType)
+		}
+	}
+	if len(report.Mismatches) > 0 {
+		fmt.Println("Security mismatches:")
+		for _, diag := range report.Mismatches {
+			fmt.Printf("  - %s\n", diag.Message)
+		}
+	}
+	fmt.Println("Permissions:")
+	body, err := yaml.Marshal(report.DeclaredPermissions)
+	if err != nil {
+		return err
+	}
+	fmt.Print(string(body))
+	if len(report.Effective.DeniedReasons) > 0 {
+		fmt.Println("Enforcement:")
+		for _, reason := range report.Effective.DeniedReasons {
+			fmt.Printf("  - %s\n", reason)
+		}
+	}
 	return nil
 }
 
@@ -151,7 +205,7 @@ func runInstall(cfg *config.Config, project plugins.Project, args []string) erro
 		name = strings.TrimSpace(args[4])
 	}
 
-	meta, err := project.Install(repoURL, name)
+	meta, err := project.Install(repoURL, name, hasApproveRiskFlag(args[3:]))
 	if err != nil {
 		return err
 	}
@@ -229,7 +283,7 @@ func runEnable(project plugins.Project, args []string) error {
 	}
 
 	name := strings.TrimSpace(args[3])
-	if err := project.Enable(name); err != nil {
+	if err := project.Enable(name, hasApproveRiskFlag(args[3:])); err != nil {
 		return err
 	}
 
@@ -258,10 +312,24 @@ func runDisable(project plugins.Project, args []string) error {
 }
 
 func runValidate(cfg *config.Config, project plugins.Project, args []string) error {
-	if len(args) >= 4 {
-		name := strings.TrimSpace(args[3])
+	securityMode := hasFlag(args[3:], "--security")
+	strictSecurity := hasFlag(args[3:], "--strict-security")
+	names := positionalArgs(args[3:])
+	if len(names) >= 1 {
+		name := strings.TrimSpace(names[0])
 		if err := project.Validate(name); err != nil {
 			return err
+		}
+		if securityMode || strictSecurity {
+			meta, err := project.Metadata(name)
+			if err != nil {
+				return err
+			}
+			report := plugins.AnalyzeInstalled(meta)
+			printSecurityValidation(name, report)
+			if strictSecurity && (!report.Effective.Allowed || len(report.Mismatches) > 0) {
+				return fmt.Errorf("plugin security validation failed for %s", name)
+			}
 		}
 		cliout.Println(cliout.Heading("Plugin validation"))
 		fmt.Println("")
@@ -287,6 +355,22 @@ func runValidate(cfg *config.Config, project plugins.Project, args []string) err
 	}
 	for _, issue := range report.Issues {
 		fmt.Printf("[%s] %s\n", cliout.Fail("FAIL"), issue.String())
+	}
+	if securityMode || strictSecurity {
+		fmt.Println("")
+		cliout.Println(cliout.Heading("Security validation"))
+		for _, name := range cfg.Plugins.Enabled {
+			meta, err := project.Metadata(name)
+			if err != nil {
+				fmt.Printf("[%s] %s: %v\n", cliout.Fail("FAIL"), name, err)
+				continue
+			}
+			security := plugins.AnalyzeInstalled(meta)
+			printSecurityValidation(name, security)
+			if strictSecurity && (!security.Effective.Allowed || len(security.Mismatches) > 0) {
+				report.Issues = append(report.Issues, plugins.ValidationIssue{Name: name, Status: "security invalid", Err: fmt.Errorf("security mismatches detected")})
+			}
+		}
 	}
 
 	if len(report.Issues) == 0 {
@@ -334,7 +418,7 @@ func runUpdate(project plugins.Project, args []string) error {
 	}
 
 	name := strings.TrimSpace(args[3])
-	meta, err := project.Update(name)
+	meta, err := project.Update(name, hasApproveRiskFlag(args[3:]))
 	if err != nil {
 		return err
 	}
@@ -445,6 +529,45 @@ func printInstalledPluginTable(metas []plugins.Metadata) error {
 	}
 
 	return nil
+}
+
+func hasApproveRiskFlag(args []string) bool {
+	return hasFlag(args, "--approve-risk")
+}
+
+func hasFlag(args []string, want string) bool {
+	for _, arg := range args {
+		if strings.TrimSpace(arg) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func positionalArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		if arg == "" || strings.HasPrefix(arg, "--") {
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
+}
+
+func printSecurityValidation(name string, report plugins.SecurityReport) {
+	status := cliout.OK("OK")
+	if !report.Effective.Allowed || len(report.Mismatches) > 0 {
+		status = cliout.Fail("FAIL")
+	}
+	fmt.Printf("[%s] %s (%s)\n", status, name, report.RiskTier)
+	for _, mismatch := range report.Mismatches {
+		fmt.Printf("       - %s\n", mismatch.Message)
+	}
+	for _, reason := range report.Effective.DeniedReasons {
+		fmt.Printf("       - %s\n", reason)
+	}
 }
 
 func init() {

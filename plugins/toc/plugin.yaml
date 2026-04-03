@@ -7,3 +7,15 @@ homepage: https://github.com/sphireinc/foundry/plugins/toc
 license: MIT
 foundry_api: v1
 min_foundry_version: 0.1.0
+permissions:
+  content:
+    documents:
+      read: true
+  render:
+    context:
+      read: true
+      write: true
+    html_slots:
+      inject: true
+    assets:
+      inject_css: true

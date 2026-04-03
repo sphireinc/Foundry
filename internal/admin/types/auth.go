@@ -1,6 +1,10 @@
 package types
 
-import "github.com/sphireinc/foundry/internal/config"
+import (
+	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/plugins"
+	"github.com/sphireinc/foundry/internal/theme"
+)
 
 type LoginRequest struct {
 	Username string `json:"username"`
@@ -171,6 +175,9 @@ type ThemeRecord struct {
 	WidgetSlots          []string               `json:"widget_slots,omitempty"`
 	Screenshots          []string               `json:"screenshots,omitempty"`
 	ConfigSchema         []FieldSchema          `json:"config_schema,omitempty"`
+	Security             theme.ThemeSecurity    `json:"security,omitempty"`
+	SecuritySummary      []string               `json:"security_summary,omitempty"`
+	SecurityReport       *theme.SecurityReport  `json:"security_report,omitempty"`
 	Diagnostics          []ValidationDiagnostic `json:"diagnostics,omitempty"`
 }
 
@@ -251,23 +258,32 @@ type UpdateStatusResponse struct {
 }
 
 type PluginRecord struct {
-	Name                 string                 `json:"name"`
-	Title                string                 `json:"title"`
-	Version              string                 `json:"version"`
-	Description          string                 `json:"description,omitempty"`
-	Author               string                 `json:"author,omitempty"`
-	Repo                 string                 `json:"repo,omitempty"`
-	Enabled              bool                   `json:"enabled"`
-	Status               string                 `json:"status"`
-	Health               string                 `json:"health,omitempty"`
-	CanRollback          bool                   `json:"can_rollback,omitempty"`
-	CompatibilityVersion string                 `json:"compatibility_version,omitempty"`
-	MinFoundryVersion    string                 `json:"min_foundry_version,omitempty"`
-	FoundryAPI           string                 `json:"foundry_api,omitempty"`
-	Requires             []string               `json:"requires,omitempty"`
-	Dependencies         []PluginDependency     `json:"dependencies,omitempty"`
-	ConfigSchema         []FieldSchema          `json:"config_schema,omitempty"`
-	Diagnostics          []ValidationDiagnostic `json:"diagnostics,omitempty"`
+	Name                 string                    `json:"name"`
+	Title                string                    `json:"title"`
+	Version              string                    `json:"version"`
+	Description          string                    `json:"description,omitempty"`
+	Author               string                    `json:"author,omitempty"`
+	Repo                 string                    `json:"repo,omitempty"`
+	Enabled              bool                      `json:"enabled"`
+	Status               string                    `json:"status"`
+	Health               string                    `json:"health,omitempty"`
+	CanRollback          bool                      `json:"can_rollback,omitempty"`
+	CompatibilityVersion string                    `json:"compatibility_version,omitempty"`
+	MinFoundryVersion    string                    `json:"min_foundry_version,omitempty"`
+	FoundryAPI           string                    `json:"foundry_api,omitempty"`
+	Requires             []string                  `json:"requires,omitempty"`
+	Dependencies         []PluginDependency        `json:"dependencies,omitempty"`
+	ConfigSchema         []FieldSchema             `json:"config_schema,omitempty"`
+	Permissions          plugins.PermissionSet     `json:"permissions,omitempty"`
+	RiskTier             string                    `json:"risk_tier,omitempty"`
+	RequiresApproval     bool                      `json:"requires_approval,omitempty"`
+	PermissionSummary    []string                  `json:"permission_summary,omitempty"`
+	Runtime              plugins.RuntimeConfig     `json:"runtime,omitempty"`
+	RuntimeSummary       []string                  `json:"runtime_summary,omitempty"`
+	Security             *plugins.SecurityReport   `json:"security,omitempty"`
+	SecurityFindings     []plugins.SecurityFinding `json:"security_findings,omitempty"`
+	SecurityMismatches   []ValidationDiagnostic    `json:"security_mismatches,omitempty"`
+	Diagnostics          []ValidationDiagnostic    `json:"diagnostics,omitempty"`
 }
 
 type ValidationDiagnostic struct {
@@ -283,12 +299,16 @@ type PluginDependency struct {
 }
 
 type PluginToggleRequest struct {
-	Name string `json:"name"`
+	Name                  string `json:"name"`
+	ApproveRisk           bool   `json:"approve_risk,omitempty"`
+	AcknowledgeMismatches bool   `json:"acknowledge_mismatches,omitempty"`
 }
 
 type PluginInstallRequest struct {
-	URL  string `json:"url"`
-	Name string `json:"name,omitempty"`
+	URL                   string `json:"url"`
+	Name                  string `json:"name,omitempty"`
+	ApproveRisk           bool   `json:"approve_risk,omitempty"`
+	AcknowledgeMismatches bool   `json:"acknowledge_mismatches,omitempty"`
 }
 
 type SessionRevokeRequest struct {

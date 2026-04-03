@@ -10,6 +10,13 @@ export const createPlatformViews = ({
   sortItems,
   paginateItems,
 }) => {
+  const riskBadge = (risk) => {
+    const value = (risk || 'low').toLowerCase();
+    if (value === 'high') return '<span class="contract-badge missing">high risk</span>';
+    if (value === 'medium') return '<span class="contract-badge warn">medium risk</span>';
+    return '<span class="contract-badge ok">low risk</span>';
+  };
+
   const renderExtensions = () =>
     panel(
       'Extensions',
@@ -119,7 +126,7 @@ export const createPlatformViews = ({
     const rows = pagedPlugins.items.map(
       (plugin) => `
       <div class="table-row table-row-actions">
-        <span><strong>${escapeHTML(plugin.title || plugin.name)}</strong><div class="muted mono">${escapeHTML(plugin.repo || plugin.name)}</div>${plugin.diagnostics?.length ? `<div class="muted">${escapeHTML(plugin.diagnostics[0].message)}</div>` : ''}</span>
+        <span><strong>${escapeHTML(plugin.title || plugin.name)}</strong><div class="muted mono">${escapeHTML(plugin.repo || plugin.name)}</div><div class="plugin-contract-meta">${riskBadge(plugin.risk_tier)}${plugin.requires_approval ? '<span class="contract-badge warn">approval required</span>' : ''}</div>${plugin.permission_summary?.length ? `<div class="muted">${escapeHTML(plugin.permission_summary.join(' • '))}</div>` : ''}${plugin.diagnostics?.length ? `<div class="muted">${escapeHTML(plugin.diagnostics[0].message)}</div>` : ''}</span>
         <span>${escapeHTML(plugin.version || '-')}</span>
         <span>${escapeHTML(plugin.health || plugin.status)}</span>
         <span class="row-actions">
@@ -157,6 +164,33 @@ export const createPlatformViews = ({
     </div>`
         : ''
     }${renderTableControls(state, 'plugins', state.plugins.length, pagedPlugins.totalPages)}<div class="table table-four"><div class="table-head"><span>Plugin</span><span>Version</span><span>Health</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No plugins found.</div>'}</div>${
+      state.plugins.length
+        ? `<div class="panel-pad stack"><h3>Plugin Security</h3><div class="plugin-contract-list">${state.plugins
+            .map(
+              (plugin) => `
+              <article class="plugin-contract-card">
+                <div class="plugin-contract-header">
+                  <div>
+                    <strong>${escapeHTML(plugin.title || plugin.name)}</strong>
+                    <div class="muted mono">${escapeHTML(plugin.name)}</div>
+                  </div>
+                  <div class="plugin-contract-stats">
+                    ${riskBadge(plugin.risk_tier)}
+                    ${plugin.requires_approval ? '<span class="contract-stat bad">approval required</span>' : '<span class="contract-stat ok">declared</span>'}
+                    ${plugin.security?.effective?.allowed === false ? '<span class="contract-stat bad">blocked by policy</span>' : '<span class="contract-stat ok">policy aligned</span>'}
+                  </div>
+                </div>
+                <div class="plugin-contract-meta">${(plugin.permission_summary || []).map((item) => `<span>${escapeHTML(item)}</span>`).join('')}${(plugin.runtime_summary || []).map((item) => `<span>${escapeHTML(item)}</span>`).join('')}</div>
+                ${plugin.security?.effective?.denied_reasons?.length ? `<section class="plugin-contract-section"><strong>Enforcement</strong><div class="contract-diagnostic-list">${plugin.security.effective.denied_reasons.map((reason) => `<div class="contract-diagnostic error"><span class="contract-diagnostic-severity">error</span><span>${escapeHTML(reason)}</span></div>`).join('')}</div></section>` : ''}
+                ${plugin.security_mismatches?.length ? `<section class="plugin-contract-section"><strong>Security mismatches</strong><div class="contract-diagnostic-list">${plugin.security_mismatches.map((diag) => `<div class="contract-diagnostic error"><span class="contract-diagnostic-severity">error</span><span>${escapeHTML(diag.message || '')}</span></div>`).join('')}</div></section>` : ''}
+                ${plugin.security_findings?.length ? `<section class="plugin-contract-section"><strong>Detected capabilities</strong><div class="plugin-contract-rows">${plugin.security_findings.map((finding) => `<div class="plugin-contract-row"><span><strong>${escapeHTML(finding.category)}</strong><div class="muted mono">${escapeHTML(finding.evidence || '')}</div></span><span>${escapeHTML(finding.path || '')}</span></div>`).join('')}</div></section>` : ''}
+                <pre class="diff-viewer">${escapeHTML(JSON.stringify(plugin.permissions || {}, null, 2))}</pre>
+                <pre class="diff-viewer">${escapeHTML(JSON.stringify(plugin.runtime || {}, null, 2))}</pre>
+              </article>`
+            )
+            .join('')}</div></div>`
+        : ''
+    }${
       pluginExtensionCoverage.length
         ? `<div class="panel-pad stack"><h3>Extension Coverage</h3><div class="plugin-contract-list">${pluginExtensionCoverage
             .map(
@@ -257,7 +291,7 @@ export const createPlatformViews = ({
     const rows = pagedThemes.items.map(
       (theme) => `
       <div class="table-row table-row-actions">
-        <span><strong>${escapeHTML(theme.title || theme.name)}</strong><div class="muted">${escapeHTML(theme.kind || 'frontend')} theme</div>${theme.diagnostics?.length ? `<div class="muted">${escapeHTML(theme.diagnostics[0].message)}</div>` : ''}</span>
+        <span><strong>${escapeHTML(theme.title || theme.name)}</strong><div class="muted">${escapeHTML(theme.kind || 'frontend')} theme</div>${theme.security_summary?.length ? `<div class="muted">${escapeHTML(theme.security_summary.join(' • '))}</div>` : ''}${theme.diagnostics?.length ? `<div class="muted">${escapeHTML(theme.diagnostics[0].message)}</div>` : ''}</span>
         <span>${escapeHTML(theme.version || '-')}</span>
         <span>${theme.valid ? 'valid' : 'invalid'}</span>
         <span class="row-actions">
@@ -318,7 +352,30 @@ export const createPlatformViews = ({
         <label>Directory Name<input id="theme-install-name" type="text" placeholder="aurora"></label>
         <label class="frontmatter-span-2">Kind<select id="theme-install-kind"><option value="frontend">Frontend</option><option value="admin">Admin</option></select></label>
         <button type="submit">Install</button>
-      </form>${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
+      </form>${renderTableControls(state, 'themes', state.themes.length, pagedThemes.totalPages)}<div class="table table-four"><div class="table-head"><span>Theme</span><span>Version</span><span>Validation</span><span>Action</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No themes found.</div>'}</div>${state.themes.filter((theme) => theme.kind === 'frontend').length ? `<div class="panel-pad stack"><h3>Theme Security</h3><div class="plugin-contract-list">${state.themes
+        .filter((theme) => theme.kind === 'frontend')
+        .map(
+          (theme) => `
+          <article class="plugin-contract-card">
+            <div class="plugin-contract-header">
+              <div>
+                <strong>${escapeHTML(theme.title || theme.name)}</strong>
+                <div class="muted mono">${escapeHTML(theme.name)}</div>
+              </div>
+              <div class="plugin-contract-stats">
+                ${theme.valid ? '<span class="contract-stat ok">validated</span>' : '<span class="contract-stat bad">validation issues</span>'}
+              </div>
+            </div>
+            <div class="plugin-contract-meta">${(theme.security_summary || []).map((item) => `<span>${escapeHTML(item)}</span>`).join('')}</div>
+            ${theme.security_report?.detected_assets?.length ? `<section class="plugin-contract-section"><strong>Detected remote assets</strong><div class="plugin-contract-rows">${theme.security_report.detected_assets.map((item) => `<div class="plugin-contract-row"><span><strong>${escapeHTML(item.kind || 'asset')}</strong><div class="muted mono">${escapeHTML(item.path || '')}</div></span><span>${escapeHTML(item.url || '')}</span><span><span class="contract-badge ${item.status === 'declared' ? 'ok' : 'missing'}">${escapeHTML(item.status || 'unknown')}</span></span></div>`).join('')}</div></section>` : ''}
+            ${theme.security_report?.detected_requests?.length ? `<section class="plugin-contract-section"><strong>Detected frontend requests</strong><div class="plugin-contract-rows">${theme.security_report.detected_requests.map((item) => `<div class="plugin-contract-row"><span><strong>${escapeHTML(item.kind || 'request')}</strong><div class="muted mono">${escapeHTML(item.path || '')}</div></span><span>${escapeHTML(item.url || '')}</span><span><span class="contract-badge ${item.status === 'declared' ? 'ok' : 'missing'}">${escapeHTML(item.status || 'unknown')}</span></span></div>`).join('')}</div></section>` : ''}
+            ${theme.security_report?.mismatches?.length ? `<section class="plugin-contract-section"><strong>Security mismatches</strong><div class="contract-diagnostic-list">${theme.security_report.mismatches.map((diag) => `<div class="contract-diagnostic error"><span class="contract-diagnostic-severity">error</span><span>${escapeHTML(diag.message || '')}</span></div>`).join('')}</div></section>` : ''}
+            ${theme.security_report?.csp_summary?.length ? `<section class="plugin-contract-section"><strong>Generated CSP summary</strong><div class="plugin-contract-meta">${theme.security_report.csp_summary.map((item) => `<span>${escapeHTML(item)}</span>`).join('')}</div></section>` : ''}
+            ${theme.security_report?.generated_csp ? `<pre class="diff-viewer">${escapeHTML(theme.security_report.generated_csp)}</pre>` : ''}
+            <pre class="diff-viewer">${escapeHTML(JSON.stringify(theme.security || {}, null, 2))}</pre>
+          </article>`
+        )
+        .join('')}</div></div>` : ''}${adminThemeDetails ? `<div class="panel-pad stack"><h3>Admin Theme Contract</h3><div class="theme-contract-list">${adminThemeDetails}</div></div>` : ''}`,
       `${state.themes.length} frontend and admin themes`
     );
   };

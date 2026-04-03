@@ -8,7 +8,7 @@ import (
 
 func TestMetadataAndValidationHelpers(t *testing.T) {
 	root := t.TempDir()
-	writePluginMetaFile(t, root, "good", "name: good\nrepo: https://github.com/acme/good.git\nrequires:\n  - github.com/acme/dep\n  - github.com/acme/dep\nfoundry_api: v1\nmin_foundry_version: 0.1.0\nadmin:\n  pages:\n    - key: search-console\n      title: Search Console\n      route: /plugins/search\n      nav_group: manage\n")
+	writePluginMetaFile(t, root, "good", "name: good\nrepo: https://github.com/acme/good.git\nrequires:\n  - github.com/acme/dep\n  - github.com/acme/dep\nfoundry_api: v1\nmin_foundry_version: 0.1.0\npermissions:\n  admin:\n    extensions:\n      pages: true\nadmin:\n  pages:\n    - key: search-console\n      title: Search Console\n      route: /plugins/search\n      nav_group: manage\n")
 	writePluginCodeFile(t, root, "good")
 	writePluginMetaFile(t, root, "dep", "name: dep\nrepo: github.com/acme/dep\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n")
 	writePluginCodeFile(t, root, "dep")
@@ -60,6 +60,83 @@ func TestValidationFailures(t *testing.T) {
 	writePluginMetaFile(t, root, "bad-nav", "name: bad-nav\nfoundry_api: v1\nmin_foundry_version: 0.1.0\nadmin:\n  pages:\n    - key: console\n      title: Console\n      route: /plugins/console\n      nav_group: misc\n")
 	if _, err := LoadMetadata(root, "bad-nav"); err == nil {
 		t.Fatal("expected invalid nav_group to fail metadata load")
+	}
+
+	writePluginMetaFile(t, root, "bad-risk", "name: bad-risk\nfoundry_api: v1\nmin_foundry_version: 0.1.0\npermissions:\n  process:\n    exec:\n      allowed: true\n      commands: [git]\n")
+	if _, err := LoadMetadata(root, "bad-risk"); err == nil {
+		t.Fatal("expected dangerous permissions without approval to fail metadata load")
+	}
+}
+
+func TestPermissionNormalizationAndSummary(t *testing.T) {
+	root := t.TempDir()
+	writePluginMetaFile(t, root, "secure", "name: secure\nfoundry_api: v1\nmin_foundry_version: 0.1.0\npermissions:\n  content:\n    documents:\n      read: true\n  render:\n    context:\n      read: true\n      write: true\n  capabilities:\n    requires_admin_approval: false\n  network:\n    outbound:\n      http: true\n      methods: [post, get, get]\n      domains: [api.example.com, api.example.com]\n")
+	meta, err := LoadMetadata(root, "secure")
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	if got := meta.Permissions.RiskTier(); got != "medium" {
+		t.Fatalf("expected medium risk tier, got %q", got)
+	}
+	if got := meta.Permissions.Network.Outbound.Methods; len(got) != 2 || got[0] != "GET" || got[1] != "POST" {
+		t.Fatalf("expected normalized methods, got %#v", got)
+	}
+	if got := meta.Permissions.Summary(); len(got) == 0 {
+		t.Fatal("expected permission summary")
+	}
+}
+
+func TestAnalyzeInstalledDetectsUndeclaredCapabilitiesAndRuntime(t *testing.T) {
+	root := t.TempDir()
+	writePluginMetaFile(t, root, "risky", "name: risky\nfoundry_api: v1\nmin_foundry_version: 0.1.0\nruntime:\n  mode: rpc\n  command: [./bin/risky]\n")
+	dir := filepath.Join(root, "risky")
+	if err := os.WriteFile(filepath.Join(dir, "plugin.go"), []byte(`package risky
+import (
+  "os"
+  "os/exec"
+)
+func (p *Plugin) Name() string { return "risky" }
+func (p *Plugin) OnDocumentParsed(doc any) error {
+  _, _ = os.ReadFile("content/page.md")
+  _, _ = exec.Command("sh", "-lc", "echo hi").Output()
+  return nil
+}`), 0o644); err != nil {
+		t.Fatalf("write plugin code: %v", err)
+	}
+	meta, err := LoadMetadata(root, "risky")
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	report := AnalyzeInstalled(meta)
+	if !report.RequiresApproval || report.Runtime.Mode != "rpc" {
+		t.Fatalf("expected approval-required rpc report, got %#v", report)
+	}
+
+	writePluginMetaFile(t, root, "risky-approved", "name: risky-approved\nfoundry_api: v1\nmin_foundry_version: 0.1.0\npermissions:\n  capabilities:\n    requires_admin_approval: true\nruntime:\n  mode: rpc\n  command: [./bin/risky]\n")
+	dir = filepath.Join(root, "risky-approved")
+	if err := os.WriteFile(filepath.Join(dir, "plugin.go"), []byte(`package riskyapproved
+import (
+  "os"
+  "os/exec"
+)
+func (p *Plugin) Name() string { return "risky-approved" }
+func (p *Plugin) OnDocumentParsed(doc any) error {
+  _, _ = os.ReadFile("content/page.md")
+  _, _ = exec.Command("sh", "-lc", "echo hi").Output()
+  return nil
+}`), 0o644); err != nil {
+		t.Fatalf("write plugin code: %v", err)
+	}
+	meta, err = LoadMetadata(root, "risky-approved")
+	if err != nil {
+		t.Fatalf("load metadata: %v", err)
+	}
+	report = AnalyzeInstalled(meta)
+	if len(report.Findings) == 0 || len(report.Mismatches) == 0 {
+		t.Fatalf("expected findings and mismatches, got %#v", report)
+	}
+	if !report.RequiresApproval || report.Runtime.Mode != "rpc" {
+		t.Fatalf("expected approval-required rpc report, got %#v", report)
 	}
 }
 

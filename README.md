@@ -221,6 +221,47 @@ The shipped themes use these SDKs too:
 
 Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. Admin pages can also declare `nav_group` (`dashboard`, `content`, `manage`, or `admin`) so they land in the right sidebar group. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals. The built-in Extensions admin page itself uses a separate route, `<admin.path>/a-extensions`, so it does not collide with the plugin asset namespace.
 
+## Theme and plugin security
+
+Foundry now treats themes and plugins as different security surfaces.
+
+- Themes are restricted through `theme.yaml -> security`
+- Plugins declare intended power through `plugin.yaml -> permissions`
+
+Theme security currently covers:
+
+- a curated public-safe template context instead of raw config
+- CSP generation for public pages
+- validation of undeclared remote assets in theme HTML, CSS, and JS
+- explicit declaration of outbound frontend request origins
+
+Plugin permissions currently cover declaration and visibility, not true sandboxing.
+In-process plugins are still trusted Go code today, but Foundry now also has a
+working out-of-process RPC host for the first migrated hook family
+(`OnContext`). Foundry can now:
+
+- load and validate structured permission declarations
+- surface plugin risk and approval requirements in the admin UI
+- report declared permissions with `foundry plugin security <name>`
+- run `foundry plugin validate --security` for explicit security validation
+- statically analyze plugin source for risky imports, hooks, and calls
+- compare detected capabilities against declared permissions
+- require explicit approval for risky or mismatched plugins during CLI and admin install, enable, and update flows
+- record security-oriented plugin approval actions in the audit log
+- execute `runtime.mode: rpc` plugins out of process when they use the supported RPC protocol and hook family
+
+See the full authoring guides for details:
+
+- `docs/themes/` for `theme.yaml -> security`
+- `docs/plugins/` for `plugin.yaml -> permissions`
+- `docs/plugins/` also includes the full structured permission reference for plugin authors
+
+Plugin runtime metadata now supports a real `runtime` block. The current RPC
+host supports the `context` hook family over a JSON RPC transport, with a
+sanitized environment and no host-granted filesystem, network, or process
+capability channels. Broader hook migration and stronger OS-level sandboxing
+still build on that foundation.
+
 ## Getting Started
 
 ### Prerequisites

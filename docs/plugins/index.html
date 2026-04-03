@@ -84,7 +84,19 @@ admin:
   settings_sections:
     - key: search
       title: Search
-      description: Search tuning</code></pre>
+      description: Search tuning
+permissions:
+  content:
+    documents:
+      read: true
+  render:
+    context:
+      read: true
+      write: true
+    html_slots:
+      inject: true
+  capabilities:
+    requires_admin_approval: false</code></pre>
 
           <h2>Available metadata fields</h2>
           <ul>
@@ -102,12 +114,273 @@ admin:
             <li><code>min_foundry_version</code></li>
             <li><code>compatibility_version</code></li>
             <li><code>config_schema</code></li>
+            <li><code>permissions</code></li>
             <li><code>admin.pages</code></li>
             <li><code>admin.widgets</code></li>
             <li><code>admin.slots</code></li>
             <li><code>admin.settings_sections</code></li>
             <li><code>screenshots</code></li>
           </ul>
+
+          <h2>Plugin permissions</h2>
+          <p>
+            Foundry now supports a structured <code>permissions</code> block in
+            <code>plugin.yaml</code>. This does not sandbox in-process Go plugins, but it does make
+            plugin intent explicit in validation, CLI output, and the admin UI.
+          </p>
+          <pre><code>permissions:
+  filesystem:
+    read:
+      content: true
+      data: false
+    write:
+      public: true
+  network:
+    outbound:
+      https: true
+      domains:
+        - api.example.com
+      methods:
+        - GET
+        - POST
+    inbound:
+      register_routes: false
+      admin_routes: false
+      public_routes: false
+  render:
+    context:
+      read: true
+      write: true
+    html_slots:
+      inject: true
+  capabilities:
+    dangerous: false
+    requires_admin_approval: false</code></pre>
+          <ul>
+            <li>
+              Use the most specific declarations you can. For example, prefer
+              <code>content.documents.read</code> over broad filesystem access when a plugin only
+              reads content through normal hooks.
+            </li>
+            <li>
+              Dangerous plugins, secret access, or local process execution must also declare
+              <code>permissions.capabilities.requires_admin_approval: true</code>.
+            </li>
+            <li>
+              Report declared permissions with <code>foundry plugin security &lt;name&gt;</code>.
+            </li>
+            <li>
+              Run <code>foundry plugin validate --security</code> or
+              <code>foundry plugin validate &lt;name&gt; --security --strict-security</code> to make
+              security checks explicit in CI and local review.
+            </li>
+            <li>
+              Foundry now also scans plugin source for risky imports, hooks, and calls, then
+              compares that detected behavior against the declared permissions.
+            </li>
+            <li>
+              CLI and admin install, enable, and update flows require explicit approval for risky
+              or mismatched plugins. Use <code>--approve-risk</code> in the CLI when you intend to
+              trust that plugin.
+            </li>
+          </ul>
+
+          <h3>Permission reference</h3>
+          <p>
+            The available permission surface in <code>plugin.yaml</code> is listed below. Declare
+            only what your plugin actually needs.
+          </p>
+          <ul>
+            <li>
+              <code>permissions.filesystem.read</code>
+              Content, data, public, themes, plugins, config, and custom paths. Use this for raw
+              file reads when a normal content or config hook is not enough.
+            </li>
+            <li>
+              <code>permissions.filesystem.write</code>
+              Content, data, public, cache, backups, and custom paths. Use this for writing files
+              into Foundry-managed directories.
+            </li>
+            <li>
+              <code>permissions.filesystem.delete</code>
+              Content, data, public, cache, backups, and custom paths. Use this when the plugin
+              deletes files or directories.
+            </li>
+            <li>
+              <code>permissions.network.outbound</code>
+              <code>http</code>, <code>https</code>, <code>websocket</code>,
+              <code>grpc</code>, <code>custom_schemes</code>, <code>domains</code>, and
+              <code>methods</code>. Use this for any outbound request behavior.
+            </li>
+            <li>
+              <code>permissions.network.inbound</code>
+              <code>register_routes</code>, <code>admin_routes</code>,
+              <code>public_routes</code>, and <code>bind_external_services</code>. Use this when a
+              plugin exposes handlers or binds its own listeners.
+            </li>
+            <li>
+              <code>permissions.process.exec</code>
+              <code>allowed</code> plus optional <code>commands</code>. Use for spawning local
+              commands.
+            </li>
+            <li>
+              <code>permissions.process.shell</code>
+              <code>allowed</code>. Use when the plugin shells out through a shell interpreter.
+            </li>
+            <li>
+              <code>permissions.process.spawn_background</code>
+              <code>allowed</code>. Use when the plugin starts long-running background processes.
+            </li>
+            <li>
+              <code>permissions.environment.read</code>
+              <code>allowed</code> plus optional <code>variables</code>. Use when environment
+              variables are read.
+            </li>
+            <li>
+              <code>permissions.config.read</code>
+              <code>site</code>, <code>plugin_config</code>, <code>theme_manifest</code>, and
+              <code>raw_files</code>. Use when the plugin reads configuration beyond normal typed
+              config passed through hooks.
+            </li>
+            <li>
+              <code>permissions.config.write</code>
+              <code>site</code>, <code>plugin_config</code>, and
+              <code>theme_manifest</code>. Use when the plugin mutates configuration on disk.
+            </li>
+            <li>
+              <code>permissions.content.documents</code>
+              <code>read</code>, <code>write</code>, <code>delete</code>,
+              <code>workflow</code>, and <code>versions</code>. Use for document lifecycle access.
+            </li>
+            <li>
+              <code>permissions.content.media</code>
+              <code>read</code>, <code>write</code>, <code>delete</code>,
+              <code>metadata</code>, and <code>versions</code>. Use for media-library access.
+            </li>
+            <li>
+              <code>permissions.content.taxonomies</code>
+              <code>read</code> and <code>write</code>. Use when the plugin inspects or mutates
+              taxonomy structures.
+            </li>
+            <li>
+              <code>permissions.content.shared_fields</code>
+              <code>read</code> and <code>write</code>. Use for global shared-field access from
+              <code>content/custom-fields.yaml</code>.
+            </li>
+            <li>
+              <code>permissions.render.context</code>
+              <code>read</code> and <code>write</code>. Use when the plugin reads or enriches
+              template view data.
+            </li>
+            <li>
+              <code>permissions.render.html_slots.inject</code>. Use when the plugin injects raw
+              HTML into named theme slots.
+            </li>
+            <li>
+              <code>permissions.render.assets</code>
+              <code>inject_css</code>, <code>inject_js</code>, and
+              <code>inject_remote_assets</code>. Use when the plugin adds frontend assets to a
+              page.
+            </li>
+            <li>
+              <code>permissions.render.after_render.mutate_html</code>. Use when the plugin
+              rewrites final rendered HTML.
+            </li>
+            <li>
+              <code>permissions.graph</code>
+              <code>read</code>, <code>mutate</code>, <code>routes.inspect</code>,
+              <code>routes.mutate</code>, <code>taxonomies.inspect</code>, and
+              <code>taxonomies.mutate</code>. Use when the plugin works against the built site
+              graph.
+            </li>
+            <li>
+              <code>permissions.admin.extensions</code>
+              <code>pages</code>, <code>widgets</code>, <code>settings_sections</code>, and
+              <code>slots</code>. These must be declared when the plugin contributes admin UI
+              surfaces.
+            </li>
+            <li>
+              <code>permissions.admin.users</code>
+              <code>read</code>, <code>write</code>, <code>revoke_sessions</code>, and
+              <code>reset_passwords</code>. Use when the plugin touches admin account management.
+            </li>
+            <li>
+              <code>permissions.admin.audit.read</code>. Use when the plugin reads audit history.
+            </li>
+            <li>
+              <code>permissions.admin.diagnostics</code>
+              <code>read</code> and <code>validate</code>. Use when the plugin hooks into admin
+              diagnostics or validation surfaces.
+            </li>
+            <li>
+              <code>permissions.admin.operations</code>
+              <code>rebuild</code>, <code>clear_cache</code>, <code>backups</code>, and
+              <code>updates</code>. Use when the plugin interacts with operational controls.
+            </li>
+            <li>
+              <code>permissions.runtime.server</code>
+              <code>on_started</code> and <code>register_routes</code>. Use when the plugin reacts
+              to runtime startup or route registration.
+            </li>
+            <li>
+              <code>permissions.runtime.metrics.read</code> and
+              <code>permissions.runtime.logs.read</code>. Use when the plugin inspects runtime
+              telemetry or logs.
+            </li>
+            <li>
+              <code>permissions.secrets.access</code>
+              <code>admin_tokens</code>, <code>session_store</code>,
+              <code>password_hashes</code>, <code>totp_secrets</code>,
+              <code>env_secrets</code>, <code>deploy_keys</code>, and
+              <code>update_credentials</code>. These are high-risk declarations and should be used
+              sparingly.
+            </li>
+            <li>
+              <code>permissions.capabilities</code>
+              <code>dangerous</code> and <code>requires_admin_approval</code>. Use these when the
+              plugin has elevated risk and should never be enabled implicitly.
+            </li>
+          </ul>
+
+          <h2>Plugin runtime contract</h2>
+          <p>
+            Foundry now supports a first-class <code>runtime</code> block in
+            <code>plugin.yaml</code> for the out-of-process plugin host. The first supported RPC
+            hook family is <code>context</code>, which lets a plugin enrich render-time view data
+            without sharing the Foundry process.
+          </p>
+          <pre><code>runtime:
+  mode: rpc
+  protocol_version: v1alpha1
+  command:
+    - ./bin/my-plugin
+    - serve
+  socket: unix:///tmp/foundry-my-plugin.sock
+  sandbox:
+    profile: strict
+    allow_network: false
+    allow_filesystem_write: false
+    allow_process_exec: false</code></pre>
+          <p>
+            Foundry's current RPC host expects the declared command to speak the
+            <code>sdk/pluginrpc</code> protocol over stdin/stdout. The host sends a handshake, then
+            <code>context</code> requests with sanitized page/view data. The plugin responds with a
+            data map to merge back into the page context.
+          </p>
+          <p>
+            The current RPC host enforces a narrow boundary:
+          </p>
+          <ul>
+            <li>sanitized environment only</li>
+            <li>no host-granted filesystem write channel</li>
+            <li>no host-granted network channel</li>
+            <li>no host-granted local process execution channel</li>
+            <li>unsupported sandbox expansions are rejected at enable time</li>
+          </ul>
+          <p>
+            A working example ships with Foundry at
+            <code>plugins/rpc-context-demo/</code>.
+          </p>
 
           <h2>Plugin-defined admin pages</h2>
           <p>

@@ -24,9 +24,10 @@ const (
 )
 
 type InstallOptions struct {
-	PluginsDir string
-	URL        string
-	Name       string
+	PluginsDir  string
+	URL         string
+	Name        string
+	ApproveRisk bool
 }
 
 // Install clones or downloads a plugin repository into PluginsDir and returns
@@ -61,7 +62,10 @@ func Install(opts InstallOptions) (Metadata, error) {
 		return Metadata{}, err
 	}
 
-	targetDir := filepath.Join(pluginsDir, name)
+	targetDir, err := safepath.ResolveRelativeUnderRoot(pluginsDir, name)
+	if err != nil {
+		return Metadata{}, err
+	}
 	if _, err := os.Stat(targetDir); err == nil {
 		return Metadata{}, fmt.Errorf("plugin directory already exists: %s", targetDir)
 	} else if !os.IsNotExist(err) {
@@ -86,19 +90,24 @@ func Install(opts InstallOptions) (Metadata, error) {
 		}
 	}
 	if err := stripVCSMetadata(targetDir); err != nil {
-		_ = os.RemoveAll(targetDir)
+		_ = removeInstalledPluginDir(pluginsDir, name)
 		return Metadata{}, err
 	}
 
 	meta, err := LoadMetadata(pluginsDir, name)
 	if err != nil {
-		_ = os.RemoveAll(targetDir)
+		_ = removeInstalledPluginDir(pluginsDir, name)
 		return Metadata{}, err
 	}
 
 	if strings.TrimSpace(meta.Name) != "" && meta.Name != name {
-		_ = os.RemoveAll(targetDir)
+		_ = removeInstalledPluginDir(pluginsDir, name)
 		return Metadata{}, fmt.Errorf("plugin metadata name %q does not match install directory %q", meta.Name, name)
+	}
+	report := AnalyzeInstalled(meta)
+	if SecurityApprovalRequired(meta, report) && !opts.ApproveRisk {
+		_ = removeInstalledPluginDir(pluginsDir, name)
+		return Metadata{}, fmt.Errorf("plugin %q requires explicit approval due to declared or detected risky capabilities; rerun with approval", meta.Name)
 	}
 
 	return meta, nil
@@ -117,7 +126,10 @@ func Uninstall(pluginsDir, name string) error {
 		return err
 	}
 
-	targetDir := filepath.Join(pluginsDir, name)
+	targetDir, err := safepath.ResolveRelativeUnderRoot(pluginsDir, name)
+	if err != nil {
+		return err
+	}
 	info, err := os.Stat(targetDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -129,11 +141,19 @@ func Uninstall(pluginsDir, name string) error {
 		return fmt.Errorf("plugin path %q is not a directory", targetDir)
 	}
 
-	if err := os.RemoveAll(targetDir); err != nil {
+	if err := removeInstalledPluginDir(pluginsDir, name); err != nil {
 		return fmt.Errorf("remove plugin directory: %w", err)
 	}
 
 	return nil
+}
+
+func removeInstalledPluginDir(pluginsDir, name string) error {
+	validatedName, err := validatePluginName(name)
+	if err != nil {
+		return err
+	}
+	return safepath.RemoveRelativeUnderRoot(strings.TrimSpace(pluginsDir), validatedName)
 }
 
 // repoZipURL returns the GitHub archive URL used by the zip fallback path.

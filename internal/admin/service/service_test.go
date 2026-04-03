@@ -948,7 +948,7 @@ func TestManagementServices(t *testing.T) {
 	if err != nil || len(pluginsList) == 0 {
 		t.Fatalf("list plugins: %v %#v", err, pluginsList)
 	}
-	if err := svc.EnablePlugin(context.Background(), "beta"); err != nil {
+	if err := svc.EnablePlugin(context.Background(), "beta", true, true); err != nil {
 		t.Fatalf("enable plugin: %v", err)
 	}
 	if err := svc.DisablePlugin(context.Background(), "alpha"); err != nil {

@@ -42,7 +42,18 @@ func ListInstalled(pluginsDir string) ([]Metadata, error) {
 }
 
 func ValidateInstalledPlugin(pluginsDir, name string) error {
-	return validatePluginForSync(pluginsDir, name)
+	if _, err := validatePluginForSync(pluginsDir, name); err != nil {
+		return err
+	}
+	meta, err := LoadMetadata(pluginsDir, name)
+	if err != nil {
+		return err
+	}
+	report := AnalyzeInstalled(meta)
+	if len(report.Mismatches) > 0 {
+		return fmt.Errorf("plugin security validation failed with %d mismatch(es)", len(report.Mismatches))
+	}
+	return nil
 }
 
 func EnableInConfig(configPath, name string) error {
@@ -65,7 +76,7 @@ func DisableInConfig(configPath, name string) error {
 	return foundryconfig.RemoveStringListValue(configPath, []string{"plugins", "enabled"}, name)
 }
 
-func UpdateInstalled(pluginsDir, name string) (Metadata, error) {
+func UpdateInstalled(pluginsDir, name string, approveRisk bool) (Metadata, error) {
 	var err error
 	name, err = validatePluginName(name)
 	if err != nil {
@@ -104,9 +115,10 @@ func UpdateInstalled(pluginsDir, name string) (Metadata, error) {
 	_ = os.RemoveAll(tmpDir)
 
 	installMeta, err := Install(InstallOptions{
-		PluginsDir: pluginsDir,
-		URL:        meta.Repo,
-		Name:       tmpName,
+		PluginsDir:  pluginsDir,
+		URL:         meta.Repo,
+		Name:        tmpName,
+		ApproveRisk: approveRisk,
 	})
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)

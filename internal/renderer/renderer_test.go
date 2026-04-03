@@ -320,6 +320,70 @@ func TestRendererHelpersAndRenderTemplate(t *testing.T) {
 	}
 }
 
+func TestRendererSanitizesThemeTemplateContextAndBuildsCSP(t *testing.T) {
+	cfg := testRendererConfig(t)
+	cfg.Admin.AccessToken = "super-secret"
+	cfg.Params = map[string]any{"brand": "Foundry"}
+	writeRendererTheme(t, cfg)
+
+	manifest := `name: default
+title: Default
+version: 0.1.0
+min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
+layouts: [base, index, page, post, list]
+slots: [head.end, body.start, body.end, page.before_main, page.after_main, page.before_content, page.after_content, post.before_header, post.after_header, post.before_content, post.after_content, post.sidebar.top, post.sidebar.overview, post.sidebar.bottom]
+security:
+  external_assets:
+    allowed: true
+    scripts:
+      - https://cdn.example.com
+  frontend_requests:
+    allowed: true
+    origins:
+      - https://api.example.com
+  template_context:
+    allow_site_params: false
+    allow_content_fields: false
+    allow_shared_fields: false
+`
+	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "theme.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"), []byte(`{{ define "content" }}token={{ .Site.Admin.AccessToken }} params={{ .Site.Params }} field={{ field .Page "hero" }} shared={{ data "custom_fields" }}{{ end }}`), 0o644); err != nil {
+		t.Fatalf("write page template: %v", err)
+	}
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Data["custom_fields"] = map[string]any{"cta": "launch"}
+	graph.Add(&content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       cfg.DefaultLang,
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+		Fields:     map[string]any{"hero": "hello"},
+	})
+
+	r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil)
+	out, err := r.RenderURL(graph, "/about/", false)
+	if err != nil {
+		t.Fatalf("render page: %v", err)
+	}
+	body := string(out)
+	if strings.Contains(body, "super-secret") || strings.Contains(body, "hello") || strings.Contains(body, "launch") {
+		t.Fatalf("expected sanitized theme context, got %q", body)
+	}
+	csp := r.ContentSecurityPolicy()
+	if !strings.Contains(csp, "https://cdn.example.com") || !strings.Contains(csp, "https://api.example.com") {
+		t.Fatalf("expected CSP to include declared origins, got %q", csp)
+	}
+}
+
 func TestRendererHookFailuresAndBuild(t *testing.T) {
 	cfg := testRendererConfig(t)
 	cfg.Build.CleanPublicDir = true
