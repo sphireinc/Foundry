@@ -239,6 +239,7 @@ func testAuthConfig(t *testing.T) *config.Config {
 	}
 
 	cfg := &config.Config{
+		DataDir: filepath.Join(root, "data"),
 		Admin: config.AdminConfig{
 			Enabled:           true,
 			LocalOnly:         true,
