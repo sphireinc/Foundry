@@ -7,12 +7,12 @@ import (
 )
 
 func main() {
-	if err := run("go", "run", "./scripts/e2e-cleanup.go"); err != nil {
+	if err := run("go", "run", "./scripts/cmd/e2e-cleanup"); err != nil {
 		fatalf("pre-clean failed: %v", err)
 	}
 
 	testErr := run("npx", "playwright", "test")
-	cleanErr := run("go", "run", "./scripts/e2e-cleanup.go")
+	cleanErr := run("go", "run", "./scripts/cmd/e2e-cleanup")
 	if cleanErr != nil {
 		fatalf("post-clean failed: %v", cleanErr)
 	}

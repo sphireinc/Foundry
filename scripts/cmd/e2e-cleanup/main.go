@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	e2ePrefix = "e2e-"
+	e2ePrefix  = "e2e-"
 	configPath = "content/config/site.yaml"
 )
 

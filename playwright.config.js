@@ -29,7 +29,7 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: 'go run ./scripts/e2e-serve.go',
+    command: 'go run ./scripts/cmd/e2e-serve',
     url: PORT,
     reuseExistingServer: true,
     timeout: 120_000,
