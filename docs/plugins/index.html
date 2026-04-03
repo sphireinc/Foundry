@@ -120,6 +120,7 @@ admin:
     - key: search-console
       title: Search Console
       route: /plugins/search
+      nav_group: admin
       capability: plugins.manage
       description: Inspect search status and rebuild controls
       module: admin/search-console.js
@@ -130,6 +131,12 @@ admin:
             directory. Foundry serves them under
             <code>&lt;admin.path&gt;/extensions/&lt;plugin&gt;/...</code> after normalizing the
             paths and keeping them inside the plugin root.
+          </p>
+          <p>
+            Use <code>nav_group</code> to place a plugin-defined page in the default admin theme's
+            grouped sidebar. Supported values are <code>dashboard</code>, <code>content</code>,
+            <code>manage</code>, and <code>admin</code>. Omit it to fall back to
+            <code>admin</code>.
           </p>
           <p>
             The default admin shell's Extensions page itself lives at

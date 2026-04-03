@@ -7,6 +7,7 @@ export const sectionTitles = {
   history: 'History',
   trash: 'Trash',
   media: 'Media',
+  diagnostics: 'Diagnostics',
   debug: 'Debug',
   audit: 'Audit',
   users: 'Users',
@@ -115,6 +116,25 @@ export const createInitialState = ({ section }) => ({
   toasts: [],
   keyboardHelp: false,
   commandPalette: { open: false, query: '' },
+  debugTools: {
+    events: [],
+    renderTrace: [],
+    command: {
+      method: 'GET',
+      path: '/api/status',
+      body: '',
+      result: '',
+      error: '',
+      history: [],
+    },
+    flags: {
+      autoRefreshRuntime: false,
+      captureExtensionEvents: true,
+      persistConsoleHistory: false,
+      showStateOverlay: false,
+      verboseEventPayloads: false,
+    },
+  },
   tables: {
     documents: { page: 1, pageSize: 10, sort: 'title', dir: 'asc' },
     media: { page: 1, pageSize: 10, sort: 'name', dir: 'asc' },
