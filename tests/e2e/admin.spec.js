@@ -210,26 +210,9 @@ async function purgeDocumentViaAdminAPI(page, documentPath) {
   expectAdminOK(result, `purge document ${documentPath}`);
 }
 
-async function getMediaDetailViaAdminAPI(page, reference) {
-  const result = await adminGet(page, `/api/media/detail?reference=${encodeURIComponent(reference)}`);
-  expectAdminOK(result, `get media detail ${reference}`);
-  return result.json;
-}
-
 async function deleteMediaViaAdminAPI(page, reference) {
   const result = await adminPost(page, '/api/media/delete', { reference });
   expectAdminOK(result, `delete media ${reference}`);
-}
-
-function setConfirmBehavior(page, accept = true) {
-  page.removeAllListeners('dialog');
-  page.on('dialog', async (dialog) => {
-    if (accept) {
-      await dialog.accept();
-      return;
-    }
-    await dialog.dismiss();
-  });
 }
 
 test.describe('default admin theme', () => {
