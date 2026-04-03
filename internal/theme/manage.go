@@ -39,6 +39,23 @@ type Manifest struct {
 	Slots                []string                        `yaml:"slots"`
 	Screenshots          []string                        `yaml:"screenshots,omitempty"`
 	ConfigSchema         []foundryconfig.FieldDefinition `yaml:"config_schema,omitempty"`
+	FieldContracts       []FieldContract                 `yaml:"field_contracts,omitempty"`
+}
+
+type FieldContract struct {
+	Key         string                          `yaml:"key"`
+	Title       string                          `yaml:"title,omitempty"`
+	Description string                          `yaml:"description,omitempty"`
+	Target      FieldContractTarget             `yaml:"target"`
+	Fields      []foundryconfig.FieldDefinition `yaml:"fields,omitempty"`
+}
+
+type FieldContractTarget struct {
+	Scope   string   `yaml:"scope"`
+	Types   []string `yaml:"types,omitempty"`
+	Layouts []string `yaml:"layouts,omitempty"`
+	Slugs   []string `yaml:"slugs,omitempty"`
+	Key     string   `yaml:"key,omitempty"`
 }
 
 var requiredLaunchSlots = []string{

@@ -4,9 +4,10 @@ slug: about
 layout: page
 draft: false
 summary: ""
-date: 2026-03-19
+date: 2026-03-19T00:00:00Z
 created_at: 2026-03-22T07:12:27.853597Z
-updated_at: 2026-03-22T07:12:43.203107Z
+updated_at: 2026-04-02T19:34:08.40331Z
+author: admin
 last_editor: admin
 fields: {}
 tags: []

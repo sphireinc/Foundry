@@ -25,6 +25,7 @@ help:
 	@echo "make fmt             Format Go code"
 	@echo "make fmt-web         Format JS/CSS/HTML/Markdown with Prettier"
 	@echo "make fmt-all         Format Go and web/docs assets"
+	@echo "make test-e2e        Run local Playwright browser tests"
 	@echo ""
 
 .PHONY: plugins-sync
@@ -94,6 +95,10 @@ lint:
 .PHONY: test
 test: plugins-sync
 	$(GO) test ./...
+
+.PHONY: test-e2e
+test-e2e:
+	npm run test:e2e:full
 
 .PHONY: tidy
 tidy:

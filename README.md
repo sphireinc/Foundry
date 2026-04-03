@@ -119,6 +119,44 @@ make fmt-web
 make fmt-all
 ```
 
+## Local UI testing
+
+Foundry now includes local-only browser coverage using Playwright for:
+
+- the shipped default frontend theme
+- the shipped default admin theme
+
+Install the tooling once:
+
+```bash
+npm install
+npx playwright install
+```
+
+Then run:
+
+```bash
+make test-e2e
+```
+
+Useful variants:
+
+```bash
+npm run test:e2e
+npm run test:e2e:full
+npm run test:e2e:headed
+npm run test:e2e:ui
+```
+
+Notes:
+
+- these tests start a real local Foundry server against a disposable temp workspace, so `content/`, `data/`, `public/`, and backup output are isolated from the repo during the run
+- they are intended for local development only right now; there is no GitHub Action for them yet
+- `make test-e2e` and `npm run test:e2e:full` run pre/post cleanup so `e2e-*` documents, media, users, backups, and lifecycle artifacts do not accumulate
+- admin tests default to `admin/admin`, but you can override credentials with:
+  - `FOUNDRY_E2E_ADMIN_USER`
+  - `FOUNDRY_E2E_ADMIN_PASS`
+
 ## Official JavaScript SDKs
 
 Foundry now ships two official framework-agnostic JavaScript SDKs under `sdk/`:

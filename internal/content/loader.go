@@ -15,6 +15,7 @@ import (
 	"github.com/sphireinc/foundry/internal/i18n"
 	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
+	"github.com/sphireinc/foundry/internal/theme"
 )
 
 // Hooks exposes the content-loading lifecycle to plugins and other integrators.
@@ -223,7 +224,7 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 		Author:     strings.TrimSpace(fm.Author),
 		LastEditor: strings.TrimSpace(fm.LastEditor),
 		Params:     fm.Params,
-		Fields:     fields.ApplyDefaults(fields.Normalize(fm.Fields), fields.DefinitionsFor(l.cfg, docType)),
+		Fields:     fields.ApplyDefaults(fields.Normalize(fm.Fields), l.fieldDefinitionsForDocument(docType, layout, slug)),
 		Taxonomies: taxes,
 	}
 	workflow := WorkflowFromFrontMatter(fm, time.Now().UTC())
@@ -254,6 +255,14 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 	}
 
 	return doc, nil
+}
+
+func (l *Loader) fieldDefinitionsForDocument(docType, layout, slug string) []fields.Definition {
+	defs := theme.DocumentFieldDefinitions(l.cfg.ThemesDir, l.cfg.Theme, docType, layout, slug)
+	if len(defs) > 0 {
+		return defs
+	}
+	return fields.DefinitionsFor(l.cfg, docType)
 }
 
 func buildSummary(explicit, body string) string {

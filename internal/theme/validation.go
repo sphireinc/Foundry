@@ -77,6 +77,7 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	if manifest.CompatibilityVersion != consts.FrontendCompatibility {
 		add("error", filepath.Join(root, "theme.yaml"), fmt.Sprintf("unsupported compatibility_version %q", manifest.CompatibilityVersion))
 	}
+	validateFieldContracts(filepath.Join(root, "theme.yaml"), manifest, add)
 
 	requiredLayouts := manifest.RequiredLayouts()
 	for _, layout := range requiredLayouts {
@@ -120,6 +121,35 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	})
 
 	return result, nil
+}
+
+func validateFieldContracts(manifestPath string, manifest *Manifest, add func(severity, path, message string)) {
+	seen := map[string]struct{}{}
+	for _, contract := range manifest.FieldContracts {
+		key := strings.TrimSpace(contract.Key)
+		if key == "" {
+			add("error", manifestPath, "field_contracts entries must declare a key")
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			add("error", manifestPath, fmt.Sprintf("field_contracts key %q is duplicated", key))
+		}
+		seen[key] = struct{}{}
+
+		scope := strings.ToLower(strings.TrimSpace(contract.Target.Scope))
+		switch scope {
+		case "document":
+			if len(contract.Fields) == 0 {
+				add("error", manifestPath, fmt.Sprintf("document field_contract %q must declare fields", key))
+			}
+		case "shared":
+			if strings.TrimSpace(contract.Target.Key) == "" {
+				add("error", manifestPath, fmt.Sprintf("shared field_contract %q must declare target.key", key))
+			}
+		default:
+			add("error", manifestPath, fmt.Sprintf("field_contract %q has unsupported target.scope %q", key, contract.Target.Scope))
+		}
+	}
 }
 
 // validateRequiredLaunchSlotsDetailed enforces the slot contract Foundry expects

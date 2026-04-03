@@ -170,6 +170,42 @@ import {
   };
   const debugEnabled = () =>
     !!state.capabilityInfo?.features?.pprof && capabilityInfoHas('debug.read');
+  const builtinSectionCapability = (section) => {
+    const normalized = normalizeAdminSection(section);
+    switch (normalized) {
+      case 'overview':
+      case 'documents':
+      case 'editor':
+      case 'history':
+      case 'trash':
+      case 'extensions':
+        return 'dashboard.read';
+      case 'operations':
+        return 'config.manage';
+      case 'media':
+        return 'media.read';
+      case 'debug':
+        return debugEnabled() ? 'debug.read' : null;
+      case 'audit':
+        return 'audit.read';
+      case 'users':
+        return 'users.manage';
+      case 'settings':
+      case 'config':
+        return 'config.manage';
+      case 'plugins':
+        return 'plugins.manage';
+      case 'themes':
+        return 'themes.manage';
+      default:
+        return null;
+    }
+  };
+  const canAccessBuiltinSection = (section) => {
+    const normalized = normalizeAdminSection(section);
+    if (normalized === 'debug' && !debugEnabled()) return false;
+    return capabilityInfoHas(builtinSectionCapability(normalized));
+  };
   const extensionPages = () =>
     (state.adminExtensions.pages || [])
       .filter((page) => page && page.key && hasCapability(page.capability))
@@ -185,6 +221,17 @@ import {
     `${kind}-${plugin}-${key}-${slot}`.replace(/[^a-zA-Z0-9_-]+/g, '-');
   const extensionPageBySection = (section) =>
     extensionPages().find((page) => page.section === normalizeAdminSection(section)) || null;
+  const canAccessSection = (section) => {
+    const normalized = normalizeAdminSection(section);
+    if (extensionPageBySection(normalized)) return true;
+    return canAccessBuiltinSection(normalized);
+  };
+  const firstAccessibleSection = () => {
+    const preferred = ['overview', 'documents', 'editor', 'media', 'audit'];
+    const firstBuiltin = preferred.find((section) => canAccessBuiltinSection(section));
+    if (firstBuiltin) return firstBuiltin;
+    return extensionPages()[0]?.section || 'overview';
+  };
   const titleForSection = (section) => {
     const normalized = normalizeAdminSection(section);
     return (
@@ -1722,19 +1769,20 @@ import {
 
   const commandPaletteCommands = () => {
     const commands = [
-      { id: 'goto-overview', label: 'Go to Overview', action: () => navigate('overview') },
-      { id: 'goto-documents', label: 'Go to Documents', action: () => navigate('documents') },
-      { id: 'goto-editor', label: 'Go to Editor', action: () => navigate('editor') },
-      { id: 'goto-media', label: 'Go to Media', action: () => navigate('media') },
-      { id: 'goto-users', label: 'Go to Users', action: () => navigate('users') },
-      { id: 'goto-audit', label: 'Go to Audit', action: () => navigate('audit') },
-      { id: 'goto-settings', label: 'Go to Settings', action: () => navigate('settings') },
-      { id: 'goto-extensions', label: 'Go to Extensions', action: () => navigate('extensions') },
-      { id: 'goto-plugins', label: 'Go to Plugins', action: () => navigate('plugins') },
-      { id: 'goto-themes', label: 'Go to Themes', action: () => navigate('themes') },
+      { id: 'goto-overview', label: 'Go to Overview', section: 'overview', action: () => navigate('overview') },
+      { id: 'goto-documents', label: 'Go to Documents', section: 'documents', action: () => navigate('documents') },
+      { id: 'goto-editor', label: 'Go to Editor', section: 'editor', action: () => navigate('editor') },
+      { id: 'goto-media', label: 'Go to Media', section: 'media', action: () => navigate('media') },
+      { id: 'goto-users', label: 'Go to Users', section: 'users', action: () => navigate('users') },
+      { id: 'goto-audit', label: 'Go to Audit', section: 'audit', action: () => navigate('audit') },
+      { id: 'goto-settings', label: 'Go to Settings', section: 'settings', action: () => navigate('settings') },
+      { id: 'goto-extensions', label: 'Go to Extensions', section: 'extensions', action: () => navigate('extensions') },
+      { id: 'goto-plugins', label: 'Go to Plugins', section: 'plugins', action: () => navigate('plugins') },
+      { id: 'goto-themes', label: 'Go to Themes', section: 'themes', action: () => navigate('themes') },
       {
         id: 'new-page',
         label: 'Create New Page Draft',
+        section: 'editor',
         action: () => {
           navigate('editor');
           window.setTimeout(
@@ -1748,6 +1796,7 @@ import {
       {
         id: 'new-post',
         label: 'Create New Post Draft',
+        section: 'editor',
         action: () => {
           navigate('editor');
           window.setTimeout(
@@ -1763,10 +1812,11 @@ import {
       commands.push({
         id: 'goto-debug',
         label: 'Go to Debug Dashboard',
+        section: 'debug',
         action: () => navigate('debug'),
       });
     }
-    return commands;
+    return commands.filter((command) => !command.section || canAccessSection(command.section));
   };
 
   const filteredCommandPaletteCommands = () => {
@@ -2415,6 +2465,7 @@ import {
           <nav class="foundry-nav">${shellNav(state, adminBase, {
             extensionPages: extensionPages(),
             debugEnabled: debugEnabled(),
+            canAccessSection,
           })}</nav>
           <div class="foundry-sidebar-footer">Admin theme: ${escapeHTML(root.dataset.theme || 'default')}</div>
         </aside>
@@ -2509,6 +2560,10 @@ import {
     if (!state.session || !state.session.authenticated) {
       renderLogin();
       return;
+    }
+    if (!canAccessSection(state.section)) {
+      state.section = firstAccessibleSection();
+      window.history.replaceState({}, '', adminPathForSection(adminBase, state.section));
     }
     renderDashboard();
   };
@@ -2853,7 +2908,8 @@ import {
       return;
     }
     const nextSection = sectionForPath(window.location.pathname);
-    state.section = nextSection === 'config' ? 'settings' : nextSection;
+    const normalizedSection = nextSection === 'config' ? 'settings' : nextSection;
+    state.section = canAccessSection(normalizedSection) ? normalizedSection : firstAccessibleSection();
     render();
   });
 

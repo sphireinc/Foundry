@@ -17,6 +17,7 @@ import (
 	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
 	"github.com/sphireinc/foundry/internal/safepath"
+	"github.com/sphireinc/foundry/internal/theme"
 	"gopkg.in/yaml.v3"
 )
 
@@ -112,7 +113,7 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	if fm.Params == nil {
 		fm.Params = make(map[string]any)
 	}
-	defs := fields.DefinitionsFor(s.cfg, documentKindFromSourcePath(sourcePath, s.cfg))
+	defs := s.fieldDefinitionsForDocument(sourcePath, fm)
 	if req.Fields != nil {
 		fm.Fields = fields.Normalize(req.Fields)
 	}
@@ -261,7 +262,7 @@ func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRe
 			}
 			fm.UpdatedAt = &now
 			content.ApplyWorkflowToFrontMatter(fm, "draft", nil, nil, "")
-			defs := fields.DefinitionsFor(s.cfg, kind)
+			defs := s.fieldDefinitionsForDocument(sourcePath, fm)
 			fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
 			if rendered, err := marshalDocument(fm, contentBody); err == nil {
 				body = string(rendered)
@@ -419,7 +420,7 @@ func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreview
 	if req.Fields != nil {
 		fm.Fields = fields.Normalize(req.Fields)
 	}
-	defs := fields.DefinitionsFor(s.cfg, documentKindFromSourcePath(strings.TrimSpace(req.SourcePath), s.cfg))
+	defs := s.fieldDefinitionsForDocument(strings.TrimSpace(req.SourcePath), fm)
 	fm.Fields = fields.ApplyDefaults(fields.Normalize(fm.Fields), defs)
 	fieldErrors := make([]string, 0)
 	for _, err := range fields.Validate(fm.Fields, defs, s.cfg.Fields.AllowAnything) {
@@ -528,6 +529,11 @@ func (s *Service) toDetail(ctx context.Context, doc *content.Document) (types.Do
 	if err != nil {
 		return types.DocumentDetail{}, err
 	}
+	fm, _, err := content.ParseDocument(raw)
+	if err != nil {
+		return types.DocumentDetail{}, err
+	}
+	defs := s.fieldDefinitionsForDocument(doc.SourcePath, fm)
 	lock, err := s.DocumentLock(ctx, displayDocumentPath(doc.SourcePath, s.cfg.ContentDir))
 	if err != nil {
 		lock = nil
@@ -537,8 +543,8 @@ func (s *Service) toDetail(ctx context.Context, doc *content.Document) (types.Do
 		RawBody:         string(raw),
 		HTMLBody:        string(doc.HTMLBody),
 		Params:          doc.Params,
-		Fields:          doc.Fields,
-		FieldSchema:     toFieldSchema(fields.DefinitionsFor(s.cfg, doc.Type)),
+		Fields:          fields.ApplyDefaults(fields.Normalize(fm.Fields), defs),
+		FieldSchema:     toFieldSchema(defs),
 		Lock:            lock,
 	}, nil
 }
@@ -681,6 +687,35 @@ func (s *Service) newDocumentRelativePath(kind, lang, slug string) string {
 		return filepath.ToSlash(filepath.Join(root, lang, slug+".md"))
 	}
 	return filepath.ToSlash(filepath.Join(root, slug+".md"))
+}
+
+func (s *Service) fieldDefinitionsForDocument(sourcePath string, fm *content.FrontMatter) []fields.Definition {
+	kind := documentKindFromSourcePath(sourcePath, s.cfg)
+	layout := documentLayoutForKind(kind, fm, s.cfg)
+	slug := documentSlugForPath(sourcePath, fm)
+	defs := theme.DocumentFieldDefinitions(s.cfg.ThemesDir, s.cfg.Theme, kind, layout, slug)
+	if len(defs) > 0 {
+		return defs
+	}
+	return fields.DefinitionsFor(s.cfg, kind)
+}
+
+func documentLayoutForKind(kind string, fm *content.FrontMatter, cfg *config.Config) string {
+	if fm != nil && strings.TrimSpace(fm.Layout) != "" {
+		return strings.TrimSpace(fm.Layout)
+	}
+	if kind == "post" {
+		return strings.TrimSpace(cfg.Content.DefaultLayoutPost)
+	}
+	return strings.TrimSpace(cfg.Content.DefaultLayoutPage)
+}
+
+func documentSlugForPath(sourcePath string, fm *content.FrontMatter) string {
+	if fm != nil && strings.TrimSpace(fm.Slug) != "" {
+		return strings.TrimSpace(fm.Slug)
+	}
+	base := filepath.Base(strings.TrimSpace(sourcePath))
+	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
 func normalizeDocumentLang(lang, fallback string) string {
