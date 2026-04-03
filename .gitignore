@@ -23,6 +23,10 @@ Foundry-Cloud-Landing
 planning-docs
 .foundry/
 
+### Foundry runtime state
+data/admin/*
+!data/admin/.gitkeep
+
 
 # Created by https://www.toptal.com/developers/gitignore/api/go,windows,macos,dotenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=go,windows,macos,dotenv
