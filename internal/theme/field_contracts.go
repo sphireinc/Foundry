@@ -30,6 +30,12 @@ func cloneFieldDefinitions(in []foundryconfig.FieldDefinition) []foundryconfig.F
 			item := *def.Item
 			item.Enum = append([]string(nil), def.Item.Enum...)
 			item.Fields = cloneFieldDefinitions(def.Item.Fields)
+			if def.Item.Item != nil {
+				nested := *def.Item.Item
+				nested.Enum = append([]string(nil), def.Item.Item.Enum...)
+				nested.Fields = cloneFieldDefinitions(def.Item.Item.Fields)
+				item.Item = &nested
+			}
 			cloned.Item = &item
 		}
 		out = append(out, cloned)
@@ -59,9 +65,18 @@ func mergeFieldDefinitions(sets ...[]foundryconfig.FieldDefinition) []foundrycon
 	return out
 }
 
+func containsFold(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), target) {
+			return true
+		}
+	}
+	return false
+}
+
 func contractMatchesDocument(contract FieldContract, docType, layout, slug string) bool {
-	scope := normalizeFieldContractScope(contract.Target.Scope)
-	if scope != "document" {
+	if normalizeFieldContractScope(contract.Target.Scope) != "document" {
 		return false
 	}
 	if len(contract.Target.Types) > 0 && !containsFold(contract.Target.Types, docType) {
@@ -74,16 +89,6 @@ func contractMatchesDocument(contract FieldContract, docType, layout, slug strin
 		return false
 	}
 	return true
-}
-
-func containsFold(values []string, target string) bool {
-	target = strings.TrimSpace(target)
-	for _, value := range values {
-		if strings.EqualFold(strings.TrimSpace(value), target) {
-			return true
-		}
-	}
-	return false
 }
 
 func ApplicableDocumentFieldContracts(manifest *Manifest, docType, layout, slug string) []FieldContract {
@@ -119,4 +124,12 @@ func SharedFieldContracts(manifest *Manifest) []FieldContract {
 		}
 	}
 	return out
+}
+
+func DocumentFieldDefinitions(themesDir, themeName, docType, layout, slug string) []foundryconfig.FieldDefinition {
+	manifest, err := LoadManifest(themesDir, themeName)
+	if err != nil || manifest == nil {
+		return nil
+	}
+	return ApplicableDocumentFieldDefinitions(manifest, docType, layout, slug)
 }

@@ -1,4 +1,3 @@
-
 {"timestamp":"2026-03-31T23:58:42.679913Z","action":"login","actor":"Admin","target":"admin","outcome":"success"}
 {"timestamp":"2026-04-01T05:34:30.940071Z","action":"login","actor":"Admin","target":"admin","outcome":"success"}
 {"timestamp":"2026-04-01T05:35:02.79498Z","action":"theme.switch","actor":"Admin","actor_role":"admin","remote_addr":"[::1]:63365","target":"Foundry-Cloud-Landing","outcome":"success"}

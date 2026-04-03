@@ -184,3 +184,56 @@ func TestValidateInstalledDetailedRejectsUnsupportedSDKVersion(t *testing.T) {
 		t.Fatal("expected unsupported sdk version to invalidate theme")
 	}
 }
+
+func TestDocumentFieldDefinitionsMatchesThemeContracts(t *testing.T) {
+	root := t.TempDir()
+	themeRoot := filepath.Join(root, "contract-theme")
+	if err := os.MkdirAll(themeRoot, 0o755); err != nil {
+		t.Fatalf("mkdir theme root: %v", err)
+	}
+	manifest := `name: contract-theme
+title: Contract Theme
+version: 0.1.0
+min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
+layouts: [base, index, page, post, list]
+slots: [head.end, body.start, body.end, page.before_main, page.after_main, page.before_content, page.after_content, post.before_header, post.after_header, post.before_content, post.after_content, post.sidebar.top, post.sidebar.overview, post.sidebar.bottom]
+field_contracts:
+  - key: marketing-page
+    target:
+      scope: document
+      types: [page]
+      layouts: [page]
+      slugs: [about]
+    fields:
+      - name: hero_title
+        type: text
+  - key: blog-post
+    target:
+      scope: document
+      types: [post]
+      layouts: [post]
+    fields:
+      - name: hero_eyebrow
+        type: text
+`
+	if err := os.WriteFile(filepath.Join(themeRoot, "theme.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	pageDefs := DocumentFieldDefinitions(root, "contract-theme", "page", "page", "about")
+	if len(pageDefs) != 1 || pageDefs[0].Name != "hero_title" {
+		t.Fatalf("expected page contract fields, got %#v", pageDefs)
+	}
+
+	postDefs := DocumentFieldDefinitions(root, "contract-theme", "post", "post", "hello-world")
+	if len(postDefs) != 1 || postDefs[0].Name != "hero_eyebrow" {
+		t.Fatalf("expected post contract fields, got %#v", postDefs)
+	}
+
+	missingDefs := DocumentFieldDefinitions(root, "contract-theme", "page", "page", "pricing")
+	if len(missingDefs) != 0 {
+		t.Fatalf("expected unmatched slug to return no fields, got %#v", missingDefs)
+	}
+}

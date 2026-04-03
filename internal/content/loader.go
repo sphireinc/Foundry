@@ -239,7 +239,7 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 		Author:     strings.TrimSpace(fm.Author),
 		LastEditor: strings.TrimSpace(fm.LastEditor),
 		Params:     fm.Params,
-		Fields:     fields.ApplyDefaults(fields.Normalize(fm.Fields), theme.ApplicableDocumentFieldDefinitions(l.themeManifest, docType, layout, slug)),
+		Fields:     fields.ApplyDefaults(fields.Normalize(fm.Fields), l.fieldDefinitionsForDocument(docType, layout, slug)),
 		Taxonomies: taxes,
 	}
 	workflow := WorkflowFromFrontMatter(fm, time.Now().UTC())
@@ -270,6 +270,14 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 	}
 
 	return doc, nil
+}
+
+func (l *Loader) fieldDefinitionsForDocument(docType, layout, slug string) []fields.Definition {
+	defs := theme.DocumentFieldDefinitions(l.cfg.ThemesDir, l.cfg.Theme, docType, layout, slug)
+	if len(defs) > 0 {
+		return defs
+	}
+	return fields.DefinitionsFor(l.cfg, docType)
 }
 
 func buildSummary(explicit, body string) string {

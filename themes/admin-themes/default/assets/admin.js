@@ -177,6 +177,44 @@ import {
   };
   const debugEnabled = () =>
     !!state.capabilityInfo?.features?.pprof && capabilityInfoHas('debug.read');
+  const builtinSectionCapability = (section) => {
+    const normalized = normalizeAdminSection(section);
+    switch (normalized) {
+      case 'overview':
+      case 'documents':
+      case 'editor':
+      case 'history':
+      case 'trash':
+      case 'extensions':
+        return 'dashboard.read';
+      case 'operations':
+        return 'config.manage';
+      case 'media':
+        return 'media.read';
+      case 'debug':
+        return debugEnabled() ? 'debug.read' : null;
+      case 'audit':
+        return 'audit.read';
+      case 'users':
+        return 'users.manage';
+      case 'settings':
+      case 'config':
+        return 'config.manage';
+      case 'plugins':
+        return 'plugins.manage';
+      case 'themes':
+        return 'themes.manage';
+      default:
+        return null;
+    }
+  };
+  const canAccessBuiltinSection = (section) => {
+    const normalized = normalizeAdminSection(section);
+    const capability = builtinSectionCapability(normalized);
+    if (!capability) return false;
+    if (normalized === 'debug' && !debugEnabled()) return false;
+    return capabilityInfoHas(capability);
+  };
   const extensionPages = () =>
     (state.adminExtensions.pages || [])
       .filter((page) => page && page.key && hasCapability(page.capability))
@@ -200,46 +238,17 @@ import {
       normalized.charAt(0).toUpperCase() + normalized.slice(1)
     );
   };
-  const sectionCapability = (section) => {
-    switch (normalizeAdminSection(section)) {
-      case 'overview':
-      case 'documents':
-      case 'editor':
-      case 'history':
-      case 'trash':
-      case 'media':
-      case 'extensions':
-      case 'operations':
-        return 'dashboard.read';
-      case 'audit':
-        return 'audit.read';
-      case 'users':
-        return 'users.manage';
-      case 'settings':
-        return 'config.manage';
-      case 'custom-fields':
-        return 'documents.read';
-      case 'plugins':
-        return 'plugins.manage';
-      case 'themes':
-        return 'themes.manage';
-      case 'debug':
-        return 'debug.read';
-      default:
-        return '';
-    }
-  };
   const canAccessSection = (section) => {
     const normalized = normalizeAdminSection(section);
     const extensionPage = extensionPageBySection(normalized);
     if (extensionPage) {
       return hasCapability(extensionPage.capability);
     }
-    return hasCapability(sectionCapability(normalized));
+    return canAccessBuiltinSection(normalized);
   };
-  const defaultAccessibleSection = () => {
+  const firstAccessibleSection = () => {
     const candidates = ['overview', 'documents', 'editor', 'media', 'audit', 'custom-fields'];
-    return candidates.find((section) => canAccessSection(section)) || 'overview';
+    return candidates.find((section) => canAccessSection(section)) || extensionPages()[0]?.section || 'overview';
   };
   const canManageSharedFields = () => capabilityInfoHas('config.manage');
   const isSettingsSection = (section) => {
@@ -1868,21 +1877,22 @@ import {
 
   const commandPaletteCommands = () => {
     const commands = [
-      { id: 'goto-overview', label: 'Go to Overview', action: () => navigate('overview') },
-      { id: 'goto-documents', label: 'Go to Documents', action: () => navigate('documents') },
-      { id: 'goto-editor', label: 'Go to Editor', action: () => navigate('editor') },
-      { id: 'goto-media', label: 'Go to Media', action: () => navigate('media') },
-      { id: 'goto-users', label: 'Go to Users', action: () => navigate('users') },
-      { id: 'goto-audit', label: 'Go to Audit', action: () => navigate('audit') },
-      { id: 'goto-settings', label: 'Go to Settings', action: () => navigate('settings') },
-      { id: 'goto-custom-fields', label: 'Go to Custom Fields', action: () => navigate('custom-fields') },
-      { id: 'goto-extensions', label: 'Go to Extensions', action: () => navigate('extensions') },
-      { id: 'goto-plugins', label: 'Go to Plugins', action: () => navigate('plugins') },
-      { id: 'goto-themes', label: 'Go to Themes', action: () => navigate('themes') },
-      { id: 'goto-operations', label: 'Go to Operations', action: () => navigate('operations') },
+      { id: 'goto-overview', label: 'Go to Overview', section: 'overview', action: () => navigate('overview') },
+      { id: 'goto-documents', label: 'Go to Documents', section: 'documents', action: () => navigate('documents') },
+      { id: 'goto-editor', label: 'Go to Editor', section: 'editor', action: () => navigate('editor') },
+      { id: 'goto-media', label: 'Go to Media', section: 'media', action: () => navigate('media') },
+      { id: 'goto-users', label: 'Go to Users', section: 'users', action: () => navigate('users') },
+      { id: 'goto-audit', label: 'Go to Audit', section: 'audit', action: () => navigate('audit') },
+      { id: 'goto-settings', label: 'Go to Settings', section: 'settings', action: () => navigate('settings') },
+      { id: 'goto-custom-fields', label: 'Go to Custom Fields', section: 'custom-fields', action: () => navigate('custom-fields') },
+      { id: 'goto-extensions', label: 'Go to Extensions', section: 'extensions', action: () => navigate('extensions') },
+      { id: 'goto-plugins', label: 'Go to Plugins', section: 'plugins', action: () => navigate('plugins') },
+      { id: 'goto-themes', label: 'Go to Themes', section: 'themes', action: () => navigate('themes') },
+      { id: 'goto-operations', label: 'Go to Operations', section: 'operations', action: () => navigate('operations') },
       {
         id: 'new-page',
         label: 'Create New Page Draft',
+        section: 'editor',
         action: () => {
           navigate('editor');
           window.setTimeout(
@@ -1896,6 +1906,7 @@ import {
       {
         id: 'new-post',
         label: 'Create New Post Draft',
+        section: 'editor',
         action: () => {
           navigate('editor');
           window.setTimeout(
@@ -1911,6 +1922,7 @@ import {
       commands.push({
         id: 'goto-debug',
         label: 'Go to Debug Dashboard',
+        section: 'debug',
         action: () => navigate('debug'),
       });
     }
@@ -1922,6 +1934,7 @@ import {
       });
     });
     return commands.filter((command) => {
+      if (command.section) return canAccessSection(command.section);
       const match = command.id.match(/^goto-(.+)$/);
       if (!match || match[1].startsWith('extension-')) return true;
       return canAccessSection(match[1]);
@@ -2549,7 +2562,7 @@ import {
 
   const renderDashboard = () => {
     if (!canAccessSection(state.section)) {
-      state.section = defaultAccessibleSection();
+      state.section = firstAccessibleSection();
       window.history.replaceState({}, '', adminPathForSection(adminBase, state.section));
     }
     const topMessage =
@@ -2688,6 +2701,10 @@ import {
     if (!state.session || !state.session.authenticated) {
       renderLogin();
       return;
+    }
+    if (!canAccessSection(state.section)) {
+      state.section = firstAccessibleSection();
+      window.history.replaceState({}, '', adminPathForSection(adminBase, state.section));
     }
     renderDashboard();
   };
@@ -3046,7 +3063,8 @@ import {
       return;
     }
     const nextSection = sectionForPath(window.location.pathname);
-    state.section = nextSection === 'config' ? 'settings' : nextSection;
+    const normalizedSection = nextSection === 'config' ? 'settings' : nextSection;
+    state.section = canAccessSection(normalizedSection) ? normalizedSection : firstAccessibleSection();
     render();
   });
 

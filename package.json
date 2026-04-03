@@ -5,9 +5,15 @@
   "description": "Formatting tooling for Foundry CMS web assets and docs.",
   "scripts": {
     "fmt:web": "prettier --write \"{themes,sdk,docs}/**/*.{js,css,html}\" \"README.md\" \"FEATURES.md\"",
-    "fmt:web:check": "prettier --check \"{themes,sdk,docs}/**/*.{js,css,html}\" \"README.md\" \"FEATURES.md\""
+    "fmt:web:check": "prettier --check \"{themes,sdk,docs}/**/*.{js,css,html}\" \"README.md\" \"FEATURES.md\"",
+    "test:e2e:clean": "go run ./scripts/cmd/e2e-cleanup",
+    "test:e2e": "playwright test",
+    "test:e2e:full": "go run ./scripts/cmd/e2e-run",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "prettier": "^3.6.0"
   }
 }

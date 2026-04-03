@@ -78,6 +78,7 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	if manifest.CompatibilityVersion != consts.FrontendCompatibility {
 		add("error", filepath.Join(root, "theme.yaml"), fmt.Sprintf("unsupported compatibility_version %q", manifest.CompatibilityVersion))
 	}
+	validateFieldContracts(filepath.Join(root, "theme.yaml"), manifest, add)
 
 	requiredLayouts := manifest.RequiredLayouts()
 	for _, layout := range requiredLayouts {
@@ -122,6 +123,11 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	})
 
 	return result, nil
+}
+
+func validateFieldContracts(manifestPath string, manifest *Manifest, add func(severity, path, message string)) {
+	root := filepath.Dir(manifestPath)
+	validateFieldContractsDetailed(root, manifest, add)
 }
 
 func validateFieldContractsDetailed(root string, manifest *Manifest, add func(severity, path, message string)) {
