@@ -61,6 +61,7 @@ export const renderToasts = (state) => {
 
 export const renderUpdateNotice = (state) => {
   if (!state.updateInfo?.has_update) return '';
+  if (state.updateInfo?.install_mode === 'source' && state.updateInfo?.dirty) return '';
   return `<button type="button" class="panel warning-panel" data-section="operations" aria-label="Open Operations to review available Foundry update">
     <div class="panel-pad">
       <strong>Foundry ${escapeHTML(state.updateInfo.latest_version || 'update')} is available</strong>
@@ -312,7 +313,7 @@ export const renderOverview = (state) => {
       <article class="card"><span class="card-label">Active Sessions</span><strong>${escapeHTML(runtime.activity?.active_sessions || 0)}</strong><span class="card-copy">Persisted admin sessions.</span></article>
       <article class="card"><span class="card-label">Active Locks</span><strong>${escapeHTML(runtime.activity?.active_document_locks || 0)}</strong><span class="card-copy">Documents currently being edited.</span></article>
       <article class="card"><span class="card-label">Validate Site</span><strong>${escapeHTML(state.siteValidation?.message_count || 0)}</strong><span class="card-copy">Latest admin validation findings.</span></article>
-      <article class="card"><span class="card-label">Release</span><strong>${escapeHTML(state.updateInfo?.has_update ? state.updateInfo.latest_version || 'available' : state.updateInfo?.current_version || 'current')}</strong><span class="card-copy">${escapeHTML(state.updateInfo?.has_update ? 'New release available.' : 'Running the latest known release.')}</span></article>
+      <article class="card"><span class="card-label">Release</span><strong>${escapeHTML(state.updateInfo?.has_update ? state.updateInfo.latest_version || 'available' : state.updateInfo?.current_display_version || state.updateInfo?.current_version || 'current')}</strong><span class="card-copy">${escapeHTML(state.updateInfo?.has_update ? 'New release available.' : 'Running the current Foundry build.')}</span></article>
     </div>`;
   const queueSection = `<div class="layout-grid">
     <section class="panel">

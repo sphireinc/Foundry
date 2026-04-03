@@ -392,6 +392,9 @@ export const createPlatformViews = ({
         : updateInfo.has_update
           ? updateInfo.instructions || 'A new release is available, but this install mode cannot self-update in place.'
           : 'You are already on the latest release.';
+    const currentReleaseDetail = updateInfo?.install_mode === 'source'
+      ? `Source checkout based on ${updateInfo?.nearest_tag || updateInfo?.current_version || 'unknown'} at ${updateInfo?.current_commit || 'unknown'}${updateInfo?.dirty ? ' with local changes.' : '.'}`
+      : 'This is the Foundry version currently running on this site.';
     const zipRows = (state.backups || [])
       .map(
         (item) => `<div class="table-row table-row-actions">
@@ -436,7 +439,7 @@ export const createPlatformViews = ({
       'Operations',
       `<div class="panel-pad stack">
         <div class="cards">
-          <article class="card"><span class="card-label">Current Release</span><strong>${escapeHTML(updateInfo?.current_version || 'unknown')}</strong><span class="card-copy">This is the Foundry version currently running on this site.</span></article>
+          <article class="card"><span class="card-label">Current Release</span><strong>${escapeHTML(updateInfo?.current_display_version || updateInfo?.current_version || 'unknown')}</strong><span class="card-copy">${escapeHTML(currentReleaseDetail)}</span></article>
           <article class="card"><span class="card-label">Latest Release</span><strong>${escapeHTML(updateInfo?.latest_version || 'unknown')}</strong><span class="card-copy">Latest GitHub release.</span></article>
           <article class="card"><span class="card-label">Install Mode</span><strong>${escapeHTML(updateInfo?.install_mode || 'unknown')}</strong><span class="card-copy">Update support depends on deployment mode.</span></article>
           <article class="card"><span class="card-label">Service</span><strong>${operations.service_running ? 'running' : operations.standalone_active ? 'standalone' : 'inactive'}</strong><span class="card-copy">${escapeHTML(operations.service_message || 'No managed service detected.')}</span></article>
@@ -451,6 +454,7 @@ export const createPlatformViews = ({
           <button class="ghost small" type="button" id="operations-logs-refresh">Refresh Logs</button>
         </div>
         <div class="subtle-meta">
+          ${updateInfo?.install_mode === 'source' ? `<div><strong>Nearest tag:</strong> ${escapeHTML(updateInfo.nearest_tag || '-')}</div><div><strong>Current commit:</strong> ${escapeHTML(updateInfo.current_commit || '-')}</div><div><strong>Local changes:</strong> ${escapeHTML(updateInfo.dirty ? 'dirty' : 'clean')}</div>` : ''}
           <div><strong>Service:</strong> ${escapeHTML(operations.service_name || 'not installed')}</div>
           <div><strong>Service file:</strong> ${escapeHTML(operations.service_file || '-')}</div>
           <div><strong>Standalone PID:</strong> ${escapeHTML(String(operations.standalone_pid || 0))}</div>

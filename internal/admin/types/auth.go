@@ -244,17 +244,21 @@ type OperationsLogResponse struct {
 }
 
 type UpdateStatusResponse struct {
-	Repo           string `json:"repo"`
-	CurrentVersion string `json:"current_version"`
-	LatestVersion  string `json:"latest_version"`
-	HasUpdate      bool   `json:"has_update"`
-	InstallMode    string `json:"install_mode"`
-	ApplySupported bool   `json:"apply_supported"`
-	ReleaseURL     string `json:"release_url,omitempty"`
-	PublishedAt    string `json:"published_at,omitempty"`
-	Body           string `json:"body,omitempty"`
-	AssetName      string `json:"asset_name,omitempty"`
-	Instructions   string `json:"instructions,omitempty"`
+	Repo                  string `json:"repo"`
+	CurrentVersion        string `json:"current_version"`
+	CurrentDisplayVersion string `json:"current_display_version,omitempty"`
+	LatestVersion         string `json:"latest_version"`
+	HasUpdate             bool   `json:"has_update"`
+	InstallMode           string `json:"install_mode"`
+	ApplySupported        bool   `json:"apply_supported"`
+	ReleaseURL            string `json:"release_url,omitempty"`
+	PublishedAt           string `json:"published_at,omitempty"`
+	Body                  string `json:"body,omitempty"`
+	AssetName             string `json:"asset_name,omitempty"`
+	Instructions          string `json:"instructions,omitempty"`
+	NearestTag            string `json:"nearest_tag,omitempty"`
+	CurrentCommit         string `json:"current_commit,omitempty"`
+	Dirty                 bool   `json:"dirty,omitempty"`
 }
 
 type PluginRecord struct {

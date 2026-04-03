@@ -247,17 +247,21 @@ func (s *Service) CheckForUpdates(ctx context.Context) (*types.UpdateStatusRespo
 	}
 	logx.Info("admin update check completed", "current_version", info.CurrentVersion, "latest_version", info.LatestVersion, "has_update", info.HasUpdate, "install_mode", info.InstallMode, "apply_supported", info.ApplySupported)
 	return &types.UpdateStatusResponse{
-		Repo:           info.Repo,
-		CurrentVersion: info.CurrentVersion,
-		LatestVersion:  info.LatestVersion,
-		HasUpdate:      info.HasUpdate,
-		InstallMode:    string(info.InstallMode),
-		ApplySupported: info.ApplySupported,
-		ReleaseURL:     info.ReleaseURL,
-		PublishedAt:    info.PublishedAt.UTC().Format(time.RFC3339),
-		Body:           info.Body,
-		AssetName:      info.AssetName,
-		Instructions:   info.Instructions,
+		Repo:                  info.Repo,
+		CurrentVersion:        info.CurrentVersion,
+		CurrentDisplayVersion: info.CurrentDisplayVersion,
+		LatestVersion:         info.LatestVersion,
+		HasUpdate:             info.HasUpdate,
+		InstallMode:           string(info.InstallMode),
+		ApplySupported:        info.ApplySupported,
+		ReleaseURL:            info.ReleaseURL,
+		PublishedAt:           info.PublishedAt.UTC().Format(time.RFC3339),
+		Body:                  info.Body,
+		AssetName:             info.AssetName,
+		Instructions:          info.Instructions,
+		NearestTag:            info.NearestTag,
+		CurrentCommit:         info.CurrentCommit,
+		Dirty:                 info.Dirty,
 	}, nil
 }
 
@@ -273,17 +277,21 @@ func (s *Service) ApplyUpdate(ctx context.Context) (*types.UpdateStatusResponse,
 	}
 	logx.Info("admin update apply scheduled", "current_version", info.CurrentVersion, "latest_version", info.LatestVersion, "install_mode", info.InstallMode, "asset_name", info.AssetName)
 	return &types.UpdateStatusResponse{
-		Repo:           info.Repo,
-		CurrentVersion: info.CurrentVersion,
-		LatestVersion:  info.LatestVersion,
-		HasUpdate:      info.HasUpdate,
-		InstallMode:    string(info.InstallMode),
-		ApplySupported: info.ApplySupported,
-		ReleaseURL:     info.ReleaseURL,
-		PublishedAt:    info.PublishedAt.UTC().Format(time.RFC3339),
-		Body:           info.Body,
-		AssetName:      info.AssetName,
-		Instructions:   info.Instructions,
+		Repo:                  info.Repo,
+		CurrentVersion:        info.CurrentVersion,
+		CurrentDisplayVersion: info.CurrentDisplayVersion,
+		LatestVersion:         info.LatestVersion,
+		HasUpdate:             info.HasUpdate,
+		InstallMode:           string(info.InstallMode),
+		ApplySupported:        info.ApplySupported,
+		ReleaseURL:            info.ReleaseURL,
+		PublishedAt:           info.PublishedAt.UTC().Format(time.RFC3339),
+		Body:                  info.Body,
+		AssetName:             info.AssetName,
+		Instructions:          info.Instructions,
+		NearestTag:            info.NearestTag,
+		CurrentCommit:         info.CurrentCommit,
+		Dirty:                 info.Dirty,
 	}, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,18 +15,22 @@ import (
 )
 
 type Metadata struct {
-	Version       string `json:"version"`
-	Commit        string `json:"commit"`
-	BuiltAt       string `json:"built_at"`
-	GoVersion     string `json:"go_version"`
-	GOOS          string `json:"goos"`
-	GOARCH        string `json:"goarch"`
-	Executable    string `json:"executable"`
-	InstallMode   string `json:"install_mode"`
-	VCSRevision   string `json:"vcs_revision,omitempty"`
-	VCSTime       string `json:"vcs_time,omitempty"`
-	VCSModified   bool   `json:"vcs_modified"`
-	ModuleVersion string `json:"module_version,omitempty"`
+	Version        string `json:"version"`
+	DisplayVersion string `json:"display_version,omitempty"`
+	Commit         string `json:"commit"`
+	BuiltAt        string `json:"built_at"`
+	GoVersion      string `json:"go_version"`
+	GOOS           string `json:"goos"`
+	GOARCH         string `json:"goarch"`
+	Executable     string `json:"executable"`
+	InstallMode    string `json:"install_mode"`
+	VCSRevision    string `json:"vcs_revision,omitempty"`
+	VCSTime        string `json:"vcs_time,omitempty"`
+	VCSModified    bool   `json:"vcs_modified"`
+	ModuleVersion  string `json:"module_version,omitempty"`
+	NearestTag     string `json:"nearest_tag,omitempty"`
+	CommitCount    int    `json:"commit_count,omitempty"`
+	Dirty          bool   `json:"dirty,omitempty"`
 }
 
 func Current(projectDir string) Metadata {
@@ -70,14 +75,27 @@ func Current(projectDir string) Metadata {
 		}
 	}
 
-	if meta.Version == "" {
-		meta.Version = gitVersion(projectDir)
+	if meta.NearestTag == "" {
+		meta.NearestTag = gitNearestTag(projectDir)
 	}
 	if meta.Commit == "" {
 		meta.Commit = gitCommit(projectDir)
 	}
 	if meta.BuiltAt == "" {
 		meta.BuiltAt = gitCommitTime(projectDir)
+	}
+	if meta.CommitCount == 0 && meta.NearestTag != "" {
+		meta.CommitCount = gitCommitsSinceTag(projectDir, meta.NearestTag)
+	}
+	if !meta.VCSModified {
+		meta.Dirty = gitDirty(projectDir)
+		meta.VCSModified = meta.Dirty
+	} else {
+		meta.Dirty = true
+	}
+
+	if meta.Version == "" {
+		meta.Version = meta.NearestTag
 	}
 
 	if meta.Version == "" {
@@ -89,12 +107,16 @@ func Current(projectDir string) Metadata {
 	if meta.BuiltAt == "" {
 		meta.BuiltAt = "unknown"
 	}
+	meta.DisplayVersion = meta.Version
+	if meta.InstallMode == string(installmode.Source) {
+		meta.DisplayVersion = sourceDisplayVersion(meta)
+	}
 	return meta
 }
 
 func (m Metadata) String() string {
 	lines := []string{
-		fmt.Sprintf("Foundry %s", m.Version),
+		fmt.Sprintf("Foundry %s", firstNonEmpty(m.DisplayVersion, m.Version)),
 		fmt.Sprintf("Commit: %s", m.Commit),
 		fmt.Sprintf("Built: %s", m.BuiltAt),
 		fmt.Sprintf("Go: %s", m.GoVersion),
@@ -116,11 +138,16 @@ func (m Metadata) String() string {
 	if m.ModuleVersion != "" && m.ModuleVersion != m.Version {
 		lines = append(lines, fmt.Sprintf("Module version: %s", m.ModuleVersion))
 	}
+	if m.InstallMode == string(installmode.Source) {
+		lines = append(lines, fmt.Sprintf("Nearest tag: %s", firstNonEmpty(m.NearestTag, "unknown")))
+		lines = append(lines, fmt.Sprintf("Current commit: %s", firstNonEmpty(m.Commit, "unknown")))
+		lines = append(lines, fmt.Sprintf("Local changes: %s", boolLabel(m.Dirty, "dirty", "clean")))
+	}
 	return strings.Join(lines, "\n")
 }
 
 func (m Metadata) ShortString() string {
-	return fmt.Sprintf("Foundry %s (%s)", m.Version, m.Commit)
+	return fmt.Sprintf("Foundry %s (%s)", firstNonEmpty(m.DisplayVersion, m.Version), m.Commit)
 }
 
 func (m Metadata) JSON() string {
@@ -147,7 +174,7 @@ func shortRevision(v string) string {
 	return v
 }
 
-func gitVersion(projectDir string) string {
+func gitNearestTag(projectDir string) string {
 	return gitOutput(projectDir, "describe", "--tags", "--abbrev=0")
 }
 
@@ -164,6 +191,67 @@ func gitCommitTime(projectDir string) string {
 		return ""
 	}
 	return value
+}
+
+func gitCommitsSinceTag(projectDir, tag string) int {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return 0
+	}
+	value := gitOutput(projectDir, "rev-list", "--count", tag+"..HEAD")
+	if value == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func gitDirty(projectDir string) bool {
+	return gitCommandSuccess(projectDir, "diff-index", "--quiet", "HEAD", "--")
+}
+
+func gitCommandSuccess(projectDir string, args ...string) bool {
+	if strings.TrimSpace(projectDir) == "" {
+		return false
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = projectDir
+	return cmd.Run() != nil
+}
+
+func sourceDisplayVersion(meta Metadata) string {
+	base := firstNonEmpty(meta.NearestTag, meta.Version, "dev")
+	commit := firstNonEmpty(meta.Commit, shortRevision(meta.VCSRevision))
+	suffix := ""
+	if meta.CommitCount > 0 && commit != "" {
+		suffix = fmt.Sprintf("+%d.g%s", meta.CommitCount, commit)
+	} else if commit != "" && (base == "dev" || base == "") {
+		suffix = "+" + commit
+	}
+	if meta.Dirty {
+		suffix += "-dirty"
+	}
+	return base + suffix
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func boolLabel(v bool, yes, no string) string {
+	if v {
+		return yes
+	}
+	return no
 }
 
 func gitOutput(projectDir string, args ...string) string {

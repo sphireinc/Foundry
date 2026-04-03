@@ -21,3 +21,16 @@ func TestCommandMetadataAndString(t *testing.T) {
 		t.Fatalf("run version: %v", err)
 	}
 }
+
+func TestSourceDisplayVersion(t *testing.T) {
+	meta := Metadata{
+		Version:     "v1.3.5",
+		NearestTag:  "v1.3.5",
+		Commit:      "82d13ba",
+		CommitCount: 10,
+		Dirty:       true,
+	}
+	if got := sourceDisplayVersion(meta); got != "v1.3.5+10.g82d13ba-dirty" {
+		t.Fatalf("unexpected source display version: %q", got)
+	}
+}

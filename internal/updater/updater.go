@@ -41,19 +41,23 @@ const (
 )
 
 type ReleaseInfo struct {
-	Repo             string      `json:"repo"`
-	CurrentVersion   string      `json:"current_version"`
-	LatestVersion    string      `json:"latest_version"`
-	HasUpdate        bool        `json:"has_update"`
-	InstallMode      InstallMode `json:"install_mode"`
-	ApplySupported   bool        `json:"apply_supported"`
-	ReleaseURL       string      `json:"release_url"`
-	PublishedAt      time.Time   `json:"published_at"`
-	Body             string      `json:"body,omitempty"`
-	AssetName        string      `json:"asset_name,omitempty"`
-	AssetURL         string      `json:"asset_url,omitempty"`
-	ChecksumAssetURL string      `json:"checksum_asset_url,omitempty"`
-	Instructions     string      `json:"instructions,omitempty"`
+	Repo                  string      `json:"repo"`
+	CurrentVersion        string      `json:"current_version"`
+	CurrentDisplayVersion string      `json:"current_display_version,omitempty"`
+	LatestVersion         string      `json:"latest_version"`
+	HasUpdate             bool        `json:"has_update"`
+	InstallMode           InstallMode `json:"install_mode"`
+	ApplySupported        bool        `json:"apply_supported"`
+	ReleaseURL            string      `json:"release_url"`
+	PublishedAt           time.Time   `json:"published_at"`
+	Body                  string      `json:"body,omitempty"`
+	AssetName             string      `json:"asset_name,omitempty"`
+	AssetURL              string      `json:"asset_url,omitempty"`
+	ChecksumAssetURL      string      `json:"checksum_asset_url,omitempty"`
+	Instructions          string      `json:"instructions,omitempty"`
+	NearestTag            string      `json:"nearest_tag,omitempty"`
+	CurrentCommit         string      `json:"current_commit,omitempty"`
+	Dirty                 bool        `json:"dirty,omitempty"`
 }
 
 type githubRelease struct {
@@ -85,9 +89,13 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 	current := normalizeVersion(currentMeta.Version)
 	logx.Info("updater release check started", "project_dir", projectDir, "repo", repo, "install_mode", mode, "current_version", current)
 	info := &ReleaseInfo{
-		Repo:           repo,
-		CurrentVersion: current,
-		InstallMode:    mode,
+		Repo:                  repo,
+		CurrentVersion:        current,
+		CurrentDisplayVersion: firstNonEmpty(currentMeta.DisplayVersion, currentMeta.Version),
+		InstallMode:           mode,
+		NearestTag:            currentMeta.NearestTag,
+		CurrentCommit:         currentMeta.Commit,
+		Dirty:                 currentMeta.Dirty,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(apiBase, "/")+"/repos/"+repo+"/releases/latest", nil)
@@ -126,7 +134,7 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 		info.ChecksumAssetURL = checksum.BrowserDownloadURL
 	}
 	info.ApplySupported = info.HasUpdate && mode == ModeStandalone && info.AssetURL != ""
-	info.Instructions = instructionsForMode(mode)
+	info.Instructions = instructionsForMode(mode, currentMeta)
 	logx.Info("updater release check completed", "project_dir", projectDir, "latest_version", latest, "has_update", info.HasUpdate, "install_mode", mode, "apply_supported", info.ApplySupported, "asset_name", info.AssetName)
 	return info, nil
 }
@@ -217,11 +225,14 @@ func RunHelper(projectDir, targetExe, sourceBinary string, pid int) error {
 	return cmd.Start()
 }
 
-func instructionsForMode(mode InstallMode) string {
+func instructionsForMode(mode InstallMode, meta versioncmd.Metadata) string {
 	switch mode {
 	case ModeDocker:
 		return "Docker install detected. Pull the new image and recreate the container instead of in-place self-update."
 	case ModeSource:
+		if meta.Dirty {
+			return "Source install detected with local changes. Commit or stash your work before pulling, rebuilding Foundry, and restarting the process."
+		}
 		return "Source install detected. Pull the repo, rebuild Foundry, and restart the process."
 	case ModeBinary:
 		return "Binary install detected. Use a standalone managed runtime for in-place self-update support."
@@ -230,6 +241,16 @@ func instructionsForMode(mode InstallMode) string {
 	default:
 		return "Install mode could not be determined."
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func downloadReleaseBinary(ctx context.Context, projectDir string, info *ReleaseInfo) (string, error) {
