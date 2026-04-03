@@ -124,6 +124,25 @@ type CustomCSSSaveRequest struct {
 	Raw string `json:"raw"`
 }
 
+type SharedFieldContract struct {
+	Key         string        `json:"key"`
+	Title       string        `json:"title,omitempty"`
+	Description string        `json:"description,omitempty"`
+	Fields      []FieldSchema `json:"fields,omitempty"`
+}
+
+type CustomFieldsDocumentResponse struct {
+	Path      string                `json:"path"`
+	Raw       string                `json:"raw"`
+	Values    map[string]any        `json:"values"`
+	Contracts []SharedFieldContract `json:"contracts,omitempty"`
+}
+
+type CustomFieldsSaveRequest struct {
+	Raw    string         `json:"raw,omitempty"`
+	Values map[string]any `json:"values,omitempty"`
+}
+
 type SettingsFormResponse struct {
 	Path  string        `json:"path"`
 	Value config.Config `json:"value"`

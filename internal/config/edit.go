@@ -85,6 +85,30 @@ func UpsertTopLevelScalar(path, key, value string) error {
 	return SaveYAMLDocument(path, doc)
 }
 
+func RemoveTopLevelKey(path, key string) error {
+	doc, err := LoadYAMLDocument(path)
+	if err != nil {
+		return err
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return fmt.Errorf("config root must be a mapping")
+	}
+
+	out := make([]*yaml.Node, 0, len(root.Content))
+	for i := 0; i < len(root.Content); i += 2 {
+		k := root.Content[i]
+		v := root.Content[i+1]
+		if k.Value == key {
+			continue
+		}
+		out = append(out, k, v)
+	}
+	root.Content = out
+	return SaveYAMLDocument(path, doc)
+}
+
 func UpsertNestedScalar(path string, keyPath []string, value string) error {
 	doc, err := LoadYAMLDocument(path)
 	if err != nil {

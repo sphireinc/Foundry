@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry Advanced Custom Fields</title>
+    <meta
+      name="description"
+      content="Theme-owned advanced custom fields in Foundry: field contracts, shared values, template access, and admin behavior."
+    />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark"><img src="../logo.png" alt="Foundry logo" /></span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>Advanced custom fields</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../custom-fields/">Custom Fields</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
+
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Field Contracts</div>
+          <h1 class="page-title">Advanced Custom Fields</h1>
+          <p>
+            Foundry handles advanced custom fields as a theme-owned contract. Themes declare what
+            fields exist, which pages they apply to, and which shared/global groups are editable.
+            Documents keep their own page-specific values, while shared values live in
+            <code>content/custom-fields.yaml</code>.
+          </p>
+        </div>
+
+        <div class="page-body">
+          <h2>Core model</h2>
+          <ul>
+            <li>
+              <strong>The theme owns the schema.</strong> Contracts are declared in
+              <code>theme.yaml</code> under <code>field_contracts</code>.
+            </li>
+            <li>
+              <strong>The document owns page-specific values.</strong> Those stay in frontmatter
+              under <code>fields:</code>.
+            </li>
+            <li>
+              <strong>Shared/global values live in one file.</strong> Foundry stores them in
+              <code>content/custom-fields.yaml</code>.
+            </li>
+            <li>
+              <strong>The admin resolves fields from the active theme.</strong> The editor shows the
+              matching document contract for the current page. The
+              <code>Custom Fields</code> screen shows shared contracts.
+            </li>
+            <li>
+              <strong>Plugins must keep derived metadata out of persisted fields.</strong>
+              Runtime-only values like TOC or reading time belong in render-time context data such
+              as <code>ctx.Data</code>.
+            </li>
+          </ul>
+
+          <h2>Theme contract example</h2>
+          <pre><code>field_contracts:
+  - key: marketing-page
+    title: Marketing Page
+    description: Standard hero fields for marketing pages.
+    target:
+      scope: document
+      types: [page]
+      layouts: [page]
+      slugs: [pricing, about, contact]
+    fields:
+      - name: hero_eyebrow
+        type: text
+        label: Hero Eyebrow
+      - name: hero_title
+        type: text
+        label: Hero Title
+        required: true
+      - name: hero_body
+        type: textarea
+        label: Hero Body
+      - name: cta_label
+        type: text
+        label: CTA Label
+      - name: cta_url
+        type: text
+        label: CTA URL
+
+  - key: site_marketing
+    title: Shared Marketing Copy
+    description: Shared CTA defaults for the whole site.
+    target:
+      scope: shared
+      key: site_marketing
+    fields:
+      - name: primary_cta_label
+        type: text
+        label: Primary CTA Label
+      - name: primary_cta_url
+        type: text
+        label: Primary CTA URL</code></pre>
+
+          <h2>Document values</h2>
+          <pre><code>---
+title: Pricing
+slug: pricing
+layout: page
+fields:
+  hero_eyebrow: Clear pricing
+  hero_title: Pricing that keeps infrastructure calm
+  hero_body: Foundry keeps teams on a predictable operational surface.
+  cta_label: Start with Foundry
+  cta_url: /contact/
+---
+
+Page body content here.</code></pre>
+
+          <h2>Shared values</h2>
+          <pre><code>values:
+  site_marketing:
+    primary_cta_label: Launch with Foundry
+    primary_cta_url: /contact/</code></pre>
+
+          <h2>Template access</h2>
+          <p>
+            Document values are read with <code>field .Page "..."</code>. Shared values are exposed
+            through <code>.Site.CustomFields</code> by contract key.
+          </p>
+          <pre><code>&lt;section class="hero"&gt;
+  &lt;div class="eyebrow"&gt;{{ with field .Page "hero_eyebrow" }}{{ . }}{{ else }}Marketing{{ end }}&lt;/div&gt;
+  &lt;h1&gt;{{ with field .Page "hero_title" }}{{ . }}{{ else }}{{ .Page.Title }}{{ end }}&lt;/h1&gt;
+  &lt;p&gt;{{ with field .Page "hero_body" }}{{ . }}{{ else }}{{ .Page.Summary }}{{ end }}&lt;/p&gt;
+
+  {{ $shared := index .Site.CustomFields "site_marketing" }}
+  &lt;a class="button" href="{{ with field .Page "cta_url" }}{{ . }}{{ else }}{{ index $shared "primary_cta_url" }}{{ end }}"&gt;
+    {{ with field .Page "cta_label" }}{{ . }}{{ else }}{{ index $shared "primary_cta_label" }}{{ end }}
+  &lt;/a&gt;
+&lt;/section&gt;</code></pre>
+
+          <h2>How the admin behaves</h2>
+          <ul>
+            <li>
+              When a user opens a page in the editor, Foundry matches the active theme contracts by
+              document type, layout, and slug.
+            </li>
+            <li>
+              The editor shows the matching contract title so the user knows why those fields are
+              available on that page.
+            </li>
+            <li>
+              The <code>Custom Fields</code> admin section shows shared contracts declared by the
+              active theme.
+            </li>
+            <li>
+              Users with <code>config.manage</code> can edit and save shared/global field values.
+            </li>
+            <li>
+              Users without <code>config.manage</code> can still inspect shared field groups, but
+              the save controls remain disabled.
+            </li>
+          </ul>
+
+          <h2>Migration from the old model</h2>
+          <p>
+            Advanced field schemas no longer belong in <code>content/config/site.yaml</code>. If
+            you still have an older site using config-owned field schemas, migrate them with:
+          </p>
+          <pre><code>foundry theme migrate field-contracts</code></pre>
+
+          <h2>Related docs</h2>
+          <ul>
+            <li><a href="../themes/">Theme authoring</a> for manifest structure and layout contracts</li>
+            <li><a href="../plugins/">Plugins</a> for runtime-data guidance and field safety rules</li>
+            <li><a href="../config/">Configuration</a> for the remaining site config reference</li>
+          </ul>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

@@ -25,12 +25,14 @@ type DocumentSummary struct {
 
 type DocumentDetail struct {
 	DocumentSummary
-	RawBody     string         `json:"raw_body"`
-	HTMLBody    string         `json:"html_body"`
-	Params      map[string]any `json:"params,omitempty"`
-	Fields      map[string]any `json:"fields,omitempty"`
-	FieldSchema []FieldSchema  `json:"field_schema,omitempty"`
-	Lock        *DocumentLock  `json:"lock,omitempty"`
+	RawBody             string         `json:"raw_body"`
+	HTMLBody            string         `json:"html_body"`
+	Params              map[string]any `json:"params,omitempty"`
+	Fields              map[string]any `json:"fields,omitempty"`
+	FieldSchema         []FieldSchema  `json:"field_schema,omitempty"`
+	FieldContractKeys   []string       `json:"field_contract_keys,omitempty"`
+	FieldContractTitles []string       `json:"field_contract_titles,omitempty"`
+	Lock                *DocumentLock  `json:"lock,omitempty"`
 }
 
 type DocumentListOptions struct {

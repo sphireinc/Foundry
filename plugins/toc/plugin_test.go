@@ -19,7 +19,7 @@ func TestTOCPlugin(t *testing.T) {
 	if err := p.OnDocumentParsed(doc); err != nil {
 		t.Fatalf("on document parsed: %v", err)
 	}
-	items := doc.Fields["toc"].([]Item)
+	items := extractTOC(doc.RawBody)
 	if len(items) != 4 || items[1].Text != "Code" || items[3].ID != "hello-1" {
 		t.Fatalf("unexpected toc items: %#v", items)
 	}
@@ -27,6 +27,12 @@ func TestTOCPlugin(t *testing.T) {
 	ctx := &renderer.ViewData{Page: doc}
 	if err := p.OnContext(ctx); err != nil {
 		t.Fatalf("on context: %v", err)
+	}
+	if ctx.Data["has_toc"] != true {
+		t.Fatalf("expected has_toc in context data, got %#v", ctx.Data)
+	}
+	if got, ok := ctx.Data["toc"].([]Item); !ok || len(got) != 4 {
+		t.Fatalf("expected toc items in context data, got %#v", ctx.Data["toc"])
 	}
 	assets := renderer.NewAssetSet()
 	if err := p.OnAssets(ctx, assets); err != nil {

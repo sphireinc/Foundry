@@ -19,6 +19,7 @@ supported_layouts:
   - page
   - post
   - list
+field_contracts: []
 slots:
   - head.end
   - body.start

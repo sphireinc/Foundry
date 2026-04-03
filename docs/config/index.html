@@ -25,6 +25,7 @@
           <a href="../getting-started/">Getting Started</a>
           <a href="../architecture/">Architecture</a>
           <a href="../config/">Configuration</a>
+          <a href="../custom-fields/">Custom Fields</a>
           <a href="../sdk/">SDKs</a>
           <a href="../plugins/">Plugins</a>
           <a href="../themes/">Themes</a>
@@ -50,7 +51,7 @@
           <p>
             <code>content/config/site.yaml</code> is the main runtime config for a Foundry site. It
             controls site identity, serving, admin behavior, build output, content layout,
-            taxonomies, fields, plugin activation, deploy targets, feeds, and theme-facing values.
+            taxonomies, plugin activation, deploy targets, feeds, and theme-facing values.
           </p>
           <p>
             Foundry also supports environment overlays such as
@@ -566,64 +567,68 @@ content:
     - relatedposts
     - readingtime</code></pre>
 
-          <h2><code>fields</code></h2>
-          <p>This group enables schema-driven fields and validation for content types.</p>
+          <h2>Advanced Custom Fields</h2>
+          <p>
+            Foundry no longer stores advanced custom-field schemas in
+            <code>content/config/site.yaml</code>. Advanced fields are now a theme-owned contract.
+          </p>
           <ul>
             <li>
-              <strong><code>enabled</code></strong
-              >: enables schema-backed field support. <strong>Default: </strong><code>false</code>.
+              <strong>Theme schema:</strong> declare field contracts in
+              <code>theme.yaml</code> under <code>field_contracts</code>.
             </li>
             <li>
-              <strong><code>allow_anything</code></strong
-              >: accepts undeclared field data even when schemas exist. <strong>Default: </strong
-              ><code>false</code>.
+              <strong>Page values:</strong> keep page-specific values in page frontmatter under
+              <code>fields:</code>.
             </li>
             <li>
-              <strong><code>schemas</code></strong
-              >: map of schema definitions keyed by schema name or document kind.
-              <strong>Default: </strong><code>{}</code>.
+              <strong>Shared values:</strong> store shared/global field values in
+              <code>content/custom-fields.yaml</code>.
+            </li>
+            <li>
+              <strong>Admin discoverability:</strong> the editor resolves applicable fields from
+              the active theme based on document type, layout, and slug.
             </li>
           </ul>
+          <pre><code>field_contracts:
+  - key: marketing-page
+    title: Marketing Page
+    target:
+      scope: document
+      types: [page]
+      layouts: [page]
+      slugs: [pricing, about, contact]
+    fields:
+      - name: hero_title
+        type: text
+        label: Hero Title
+      - name: hero_body
+        type: textarea
+        label: Hero Body
+  - key: site_marketing
+    title: Site Marketing
+    target:
+      scope: shared
+      key: site_marketing
+    fields:
+      - name: primary_cta_label
+        type: text
+        label: Primary CTA Label</code></pre>
+          <pre><code>---
+title: Pricing
+slug: pricing
+layout: page
+fields:
+  hero_title: Clear pricing for modern teams
+  hero_body: Foundry keeps publishing infrastructure calm and predictable.
+---</code></pre>
+          <pre><code>values:
+  site_marketing:
+    primary_cta_label: Start with Foundry</code></pre>
           <p>
-            Each schema contains a <code>fields</code> list. Each field supports keys such as
-            <code>name</code>, <code>label</code>, <code>type</code>, <code>required</code>,
-            <code>default</code>, <code>enum</code>, <code>fields</code>, <code>item</code>,
-            <code>help</code>, and <code>placeholder</code>.
+            If you still have legacy field schemas in <code>site.yaml</code>, migrate them with
+            <code>foundry theme migrate field-contracts</code>.
           </p>
-          <pre><code>fields:
-  enabled: true
-  allow_anything: false
-  schemas:
-    post:
-      fields:
-        - name: hero_style
-          label: "Hero Style"
-          type: "select"
-          enum:
-            - "standard"
-            - "feature"
-          help: "Choose the post hero treatment."
-        - name: hero
-          label: "Hero"
-          type: "object"
-          fields:
-            - name: image
-              type: "text"
-              placeholder: "media:images/hero.jpg"
-            - name: eyebrow
-              type: "text"
-        - name: authors
-          label: "Authors"
-          type: "list"
-          item:
-            name: "author"
-            type: "object"
-            fields:
-              - name: name
-                type: "text"
-                required: true
-              - name: role
-                type: "text"</code></pre>
 
           <h2><code>seo</code></h2>
           <p>This group controls SEO-oriented output defaults.</p>
@@ -818,8 +823,10 @@ content:
             </li>
             <li>
               When a group contains nested structures like <code>taxonomies.definitions</code>,
-              <code>fields.schemas</code>, or <code>deploy.targets</code>, prefer full YAML snippets
-              over terse one-line docs so the expected shape stays obvious.
+              or <code>deploy.targets</code>, prefer full YAML snippets over terse one-line docs so
+              the expected shape stays obvious. For advanced custom fields, define the contract in
+              <code>theme.yaml</code> and keep shared values in
+              <code>content/custom-fields.yaml</code>.
             </li>
           </ul>
         </div>

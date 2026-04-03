@@ -94,6 +94,13 @@ import {
   if (typeof admin.backups.listGit !== 'function') {
     admin.backups.listGit = () => admin.raw.get('/api/backups/git');
   }
+  admin.customFields = admin.customFields || {};
+  if (typeof admin.customFields.get !== 'function') {
+    admin.customFields.get = () => admin.raw.get('/api/custom-fields');
+  }
+  if (typeof admin.customFields.save !== 'function') {
+    admin.customFields.save = (payload = {}) => admin.raw.post('/api/custom-fields/save', payload);
+  }
   admin.operations = admin.operations || {};
   if (typeof admin.operations.get !== 'function') {
     admin.operations.get = () => admin.raw.get('/api/operations');
@@ -193,6 +200,48 @@ import {
       normalized.charAt(0).toUpperCase() + normalized.slice(1)
     );
   };
+  const sectionCapability = (section) => {
+    switch (normalizeAdminSection(section)) {
+      case 'overview':
+      case 'documents':
+      case 'editor':
+      case 'history':
+      case 'trash':
+      case 'media':
+      case 'extensions':
+      case 'operations':
+        return 'dashboard.read';
+      case 'audit':
+        return 'audit.read';
+      case 'users':
+        return 'users.manage';
+      case 'settings':
+        return 'config.manage';
+      case 'custom-fields':
+        return 'documents.read';
+      case 'plugins':
+        return 'plugins.manage';
+      case 'themes':
+        return 'themes.manage';
+      case 'debug':
+        return 'debug.read';
+      default:
+        return '';
+    }
+  };
+  const canAccessSection = (section) => {
+    const normalized = normalizeAdminSection(section);
+    const extensionPage = extensionPageBySection(normalized);
+    if (extensionPage) {
+      return hasCapability(extensionPage.capability);
+    }
+    return hasCapability(sectionCapability(normalized));
+  };
+  const defaultAccessibleSection = () => {
+    const candidates = ['overview', 'documents', 'editor', 'media', 'audit', 'custom-fields'];
+    return candidates.find((section) => canAccessSection(section)) || 'overview';
+  };
+  const canManageSharedFields = () => capabilityInfoHas('config.manage');
   const isSettingsSection = (section) => {
     const normalized = normalizeAdminSection(section);
     return normalized === 'settings' || normalized === 'config';
@@ -479,7 +528,6 @@ import {
       fields: state.documentFieldValues,
       meta: state.documentMeta,
     });
-    render();
   };
 
   let documentLockHeartbeatId = null;
@@ -553,6 +601,7 @@ import {
     };
     state.documentFieldSchema = detail.field_schema || [];
     state.documentFieldValues = clone(detail.fields || {});
+    state.documentContractTitles = Array.isArray(detail.field_contract_titles) ? [...detail.field_contract_titles] : [];
     state.documentMeta = {
       status: detail.status || 'draft',
       author: detail.author || '',
@@ -616,7 +665,6 @@ import {
     next.Build = next.Build || {};
     next.Content = next.Content || {};
     next.Taxonomies = next.Taxonomies || {};
-    next.Fields = next.Fields || {};
     next.Plugins = next.Plugins || {};
     next.SEO = next.SEO || {};
     next.Cache = next.Cache || {};
@@ -711,12 +759,6 @@ import {
       );
     }
 
-    setBool('Fields.Enabled', 'settings-fields-enabled');
-    setBool('Fields.AllowAnything', 'settings-fields-allow-anything');
-    if (document.getElementById('settings-fields-schemas')) {
-      next.Fields.Schemas = parseJSONInput('settings-fields-schemas', next.Fields.Schemas || {});
-    }
-
     if (document.getElementById('settings-plugins-enabled')) {
       next.Plugins.Enabled = parseJSONInput('settings-plugins-enabled', next.Plugins.Enabled || []);
     }
@@ -807,6 +849,66 @@ import {
         return `<label>${escapeHTML(label)}<textarea data-custom-field="${escapeHTML(pathValue)}" data-custom-type="textarea" rows="4" placeholder="${escapeHTML(schema.placeholder || '')}">${escapeHTML(value || '')}</textarea></label>${help}`;
       default:
         return `<label>${escapeHTML(label)}<input type="text" data-custom-field="${escapeHTML(pathValue)}" data-custom-type="text" value="${escapeHTML(value || '')}" placeholder="${escapeHTML(schema.placeholder || '')}"></label>${help}`;
+    }
+  };
+
+  const updateSharedFieldValue = (path, nextValue) => {
+    const wrapper = { documentFieldValues: state.customFields?.values || {} };
+    updateNestedFieldValue(wrapper, path, nextValue);
+    state.customFields = state.customFields || { path: 'content/custom-fields.yaml', raw: '', values: {} };
+    state.customFields.values = wrapper.documentFieldValues;
+    compareSnapshot('customFields', state.customFields.values || {});
+  };
+
+  const renderSharedFieldSchemaControl = (schema, contractKey, path = []) => {
+    const fullPath = [contractKey, ...path, schema.name];
+    const pathValue = fullPath.join('.');
+    const value = getValueAtPath(state.customFields?.values || {}, fullPath) ?? defaultValueForSchema(schema);
+    const label = schema.label || schema.name;
+    const help = schema.help ? `<div class="muted">${escapeHTML(schema.help)}</div>` : '';
+    const disabledAttr = canManageSharedFields() ? '' : ' disabled aria-disabled="true"';
+    switch (schema.type) {
+      case 'bool':
+        return `<label class="checkbox"><input type="checkbox" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="bool" ${value ? 'checked' : ''}${disabledAttr}> ${escapeHTML(label)}</label>${help}`;
+      case 'select':
+        return `<label>${escapeHTML(label)}<select data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="select"${disabledAttr}>
+          ${(schema.enum || []).map((entry) => `<option value="${escapeHTML(entry)}" ${entry === value ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}
+        </select></label>${help}`;
+      case 'number':
+        return `<label>${escapeHTML(label)}<input type="number" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="number" value="${escapeHTML(value)}" placeholder="${escapeHTML(schema.placeholder || '')}"${disabledAttr}></label>${help}`;
+      case 'object':
+        return `<fieldset class="custom-field-group"><legend>${escapeHTML(label)}</legend>${help}${(schema.fields || []).map((field) => renderSharedFieldSchemaControl(field, contractKey, [...path, schema.name])).join('')}</fieldset>`;
+      case 'repeater': {
+        const items = Array.isArray(value) ? value : [];
+        return `<fieldset class="custom-field-group"><legend>${escapeHTML(label)}</legend>${help}
+          <div class="repeater-list">
+            ${items
+              .map((_item, index) => {
+                const itemPath = [...fullPath, index];
+                const itemSchema = schema.item || { name: 'item', type: 'text', label: 'Item' };
+                const body =
+                  itemSchema.type === 'object'
+                    ? `<div class="custom-object">${(itemSchema.fields || []).map((field) => renderSharedFieldSchemaControl(field, contractKey, [...path, schema.name, index])).join('')}</div>`
+                    : renderSharedFieldSchemaControl(
+                        {
+                          ...itemSchema,
+                          name: String(index),
+                          label: itemSchema.label || `Item ${index + 1}`,
+                        },
+                        contractKey,
+                        [...path, schema.name]
+                      );
+                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-shared-repeater-remove="${escapeHTML(itemPath.join('.'))}"${disabledAttr}>Remove</button></div>`;
+              })
+              .join('')}
+          </div>
+          <button type="button" class="ghost small" data-shared-repeater-add="${escapeHTML(pathValue)}"${disabledAttr}>Add Item</button>
+        </fieldset>`;
+      }
+      case 'textarea':
+        return `<label>${escapeHTML(label)}<textarea data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="textarea" rows="4" placeholder="${escapeHTML(schema.placeholder || '')}"${disabledAttr}>${escapeHTML(value || '')}</textarea></label>${help}`;
+      default:
+        return `<label>${escapeHTML(label)}<input type="text" data-shared-custom-field="${escapeHTML(pathValue)}" data-custom-type="text" value="${escapeHTML(value || '')}" placeholder="${escapeHTML(schema.placeholder || '')}"${disabledAttr}></label>${help}`;
     }
   };
 
@@ -960,7 +1062,7 @@ import {
                   <div class="frontmatter-card-header">
                     <div>
                       <strong>Custom Fields</strong>
-                      <div class="muted">Schema-driven fields for ${escapeHTML(editorDocument.fields.layout || 'document')} content.</div>
+                      <div class="muted">Theme-driven fields for ${escapeHTML(editorDocument.fields.layout || 'document')} content.${state.documentContractTitles?.length ? ` Active contracts: ${escapeHTML(state.documentContractTitles.join(', '))}.` : ''}</div>
                     </div>
                   </div>
                   <div class="frontmatter-grid custom-field-grid">
@@ -1011,6 +1113,50 @@ import {
           </div>
         </form>
       </div>`;
+  };
+
+  const renderCustomFields = () => {
+    const contracts = Array.isArray(state.sharedFieldContracts) ? state.sharedFieldContracts : [];
+    const raw = state.customFields?.raw || '';
+    const saveEnabled = canManageSharedFields();
+    return panel(
+      'Custom Fields',
+      `<div class="panel-pad stack">
+        <div class="note">
+          Shared custom fields live in <span class="mono">${escapeHTML(state.customFields?.path || 'content/custom-fields.yaml')}</span>. Themes declare the field contracts; this screen edits the shared values they expose.
+        </div>
+        ${
+          saveEnabled
+            ? ''
+            : '<div class="note">You can view shared custom fields, but saving them requires the <code>config.manage</code> capability.</div>'
+        }
+        ${
+          contracts.length
+            ? contracts
+                .map(
+                  (contract) => `
+              <div class="frontmatter-card">
+                <div class="frontmatter-card-header">
+                  <div>
+                    <strong>${escapeHTML(contract.title || contract.key)}</strong>
+                    <div class="muted">${escapeHTML(contract.description || `Shared field group: ${contract.key}`)}</div>
+                  </div>
+                </div>
+                <div class="frontmatter-grid custom-field-grid">
+                  ${(contract.fields || []).map((schema) => renderSharedFieldSchemaControl(schema, contract.key)).join('')}
+                </div>
+              </div>`
+                )
+                .join('')
+            : '<div class="empty-state">The active theme does not declare any shared field contracts.</div>'
+        }
+        <form id="custom-fields-save-form" class="stack">
+          <label>Raw YAML<textarea id="custom-fields-raw" rows="18" spellcheck="false" ${saveEnabled ? '' : 'readonly aria-readonly="true"'}>${escapeHTML(raw)}</textarea></label>
+          <div class="toolbar"><button type="submit" ${saveEnabled ? '' : 'disabled aria-disabled="true" title="Saving shared custom fields requires config.manage"'}>Save Shared Custom Fields</button></div>
+        </form>
+      </div>`,
+      contracts.length ? `${contracts.length} shared contract${contracts.length === 1 ? '' : 's'} from the active theme` : 'No shared contracts declared'
+    );
   };
 
   const renderDocuments = () => {
@@ -1729,9 +1875,11 @@ import {
       { id: 'goto-users', label: 'Go to Users', action: () => navigate('users') },
       { id: 'goto-audit', label: 'Go to Audit', action: () => navigate('audit') },
       { id: 'goto-settings', label: 'Go to Settings', action: () => navigate('settings') },
+      { id: 'goto-custom-fields', label: 'Go to Custom Fields', action: () => navigate('custom-fields') },
       { id: 'goto-extensions', label: 'Go to Extensions', action: () => navigate('extensions') },
       { id: 'goto-plugins', label: 'Go to Plugins', action: () => navigate('plugins') },
       { id: 'goto-themes', label: 'Go to Themes', action: () => navigate('themes') },
+      { id: 'goto-operations', label: 'Go to Operations', action: () => navigate('operations') },
       {
         id: 'new-page',
         label: 'Create New Page Draft',
@@ -1766,7 +1914,18 @@ import {
         action: () => navigate('debug'),
       });
     }
-    return commands;
+    extensionPages().forEach((page) => {
+      commands.push({
+        id: `goto-extension-${page.key}`,
+        label: `Go to ${page.title}`,
+        action: () => navigate(page.section),
+      });
+    });
+    return commands.filter((command) => {
+      const match = command.id.match(/^goto-(.+)$/);
+      if (!match || match[1].startsWith('extension-')) return true;
+      return canAccessSection(match[1]);
+    });
   };
 
   const filteredCommandPaletteCommands = () => {
@@ -1961,7 +2120,6 @@ import {
     const build = cfg.Build || {};
     const contentCfg = cfg.Content || {};
     const taxonomies = cfg.Taxonomies || {};
-    const fields = cfg.Fields || {};
     const pluginsCfg = cfg.Plugins || {};
     const seo = cfg.SEO || {};
     const cache = cfg.Cache || {};
@@ -1975,7 +2133,6 @@ import {
       admin: 'Admin runtime, auth/session policy, and debug settings',
       build: 'Build output behavior and content copy settings',
       taxonomies: 'Taxonomy defaults and term/archive definitions',
-      fields: 'Schema-driven field modeling for structured content',
       plugins: 'Plugin enablement as stored in site.yaml',
       publish: 'SEO, feed, cache, security, and deploy targets',
       navigation: 'Permalinks, menus, and arbitrary params',
@@ -2087,19 +2244,6 @@ import {
             <div class="toolbar"><button type="submit">Save Settings</button></div>
           </form>`,
         };
-      case 'fields':
-        return {
-          subtitle: topLevelSubtitleMap[activeTab],
-          body: `<form id="settings-structured-form" class="panel-pad stack">
-            <div class="frontmatter-grid">
-              ${renderSettingsCheckbox('settings-fields-enabled', 'Enable Fields', !!fields.Enabled)}
-              ${renderSettingsCheckbox('settings-fields-allow-anything', 'Allow Anything', !!fields.AllowAnything)}
-            </div>
-            <div class="note">Schemas JSON example: {"post":[{"name":"summary","type":"text","required":true},{"name":"hero","type":"object","fields":[{"name":"caption","type":"text"}]}]}</div>
-            ${renderSettingsTextarea('settings-fields-schemas', 'Schemas JSON', settingsJSON(fields.Schemas, '{}'), 18)}
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
-          </form>`,
-        };
       case 'plugins':
         return {
           subtitle: topLevelSubtitleMap[activeTab],
@@ -2154,7 +2298,6 @@ import {
       ['admin', 'Admin'],
       ['build', 'Build'],
       ['taxonomies', 'Taxonomies'],
-      ['fields', 'Fields'],
       ['plugins', 'Plugins'],
       ['publish', 'Publish'],
       ['navigation', 'Navigation'],
@@ -2267,6 +2410,8 @@ import {
       case 'settings':
       case 'config':
         return renderSettings();
+      case 'custom-fields':
+        return renderCustomFields();
       case 'extensions':
         return renderExtensions();
       case 'plugins':
@@ -2376,6 +2521,7 @@ import {
       syncRawFromStructuredEditor,
       slugify,
       updateDocumentFieldValue,
+      updateSharedFieldValue,
       getValueAtPath,
       defaultValueForSchema,
       removeNestedFieldValue,
@@ -2402,6 +2548,10 @@ import {
     });
 
   const renderDashboard = () => {
+    if (!canAccessSection(state.section)) {
+      state.section = defaultAccessibleSection();
+      window.history.replaceState({}, '', adminPathForSection(adminBase, state.section));
+    }
     const topMessage =
       summarizeLoadErrors(state) ||
       'Manage content, media, users, settings, themes, and plugins.';
@@ -2415,6 +2565,7 @@ import {
           <nav class="foundry-nav">${shellNav(state, adminBase, {
             extensionPages: extensionPages(),
             debugEnabled: debugEnabled(),
+            canAccessSection,
           })}</nav>
           <div class="foundry-sidebar-footer">Admin theme: ${escapeHTML(root.dataset.theme || 'default')}</div>
         </aside>
@@ -2486,6 +2637,30 @@ import {
         render();
       }
     });
+    document.getElementById('custom-fields-save-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!canManageSharedFields()) {
+        setFlash('Viewing only. Saving shared custom fields requires config.manage.');
+        return;
+      }
+      try {
+        const raw = document.getElementById('custom-fields-raw')?.value || '';
+        const rawChanged = raw !== (state.customFields?.raw || '');
+        const response = await admin.customFields.save({
+          raw: rawChanged ? raw : '',
+          values: rawChanged ? undefined : state.customFields?.values || {},
+        });
+        state.customFields = response || state.customFields;
+        state.sharedFieldContracts = Array.isArray(response?.contracts) ? response.contracts : state.sharedFieldContracts;
+        snapshotValue('customFields', state.customFields?.values || {});
+        setFlash('Shared custom fields saved.');
+        await fetchAll(false);
+        navigate('custom-fields');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
     root
       .querySelectorAll('[data-settings-input], [data-settings-json]')
       .forEach((node) =>
@@ -2499,6 +2674,10 @@ import {
         state.settingsTab = button.dataset.settingsTab || 'general';
         render();
       });
+    });
+    document.getElementById('custom-fields-raw')?.addEventListener('input', () => {
+      const raw = document.getElementById('custom-fields-raw')?.value || '';
+      state.dirty.customFields = raw !== (state.customFields?.raw || '');
     });
     publishAdminRuntime();
     void mountActiveExtensionPage();
@@ -2559,6 +2738,7 @@ import {
         capabilityInfoHas('config.manage') ? settingsAPI.getForm() : Promise.resolve(null),
         capabilityInfoHas('config.manage') ? settingsAPI.getConfig() : Promise.resolve(null),
         capabilityInfoHas('config.manage') ? settingsAPI.getCustomCSS() : Promise.resolve(null),
+        capabilityInfoHas('dashboard.read') ? admin.customFields.get() : Promise.resolve(null),
         capabilityInfoHas('dashboard.read') ? settingsAPI.getSections() : Promise.resolve([]),
         capabilityInfoHas('plugins.manage') ? admin.plugins.list() : Promise.resolve([]),
         capabilityInfoHas('dashboard.read')
@@ -2675,6 +2855,18 @@ import {
       );
       assignResult(
         9,
+        'custom fields',
+        (value) => {
+          state.customFields = value || null;
+          state.sharedFieldContracts = Array.isArray(value?.contracts) ? value.contracts : [];
+        },
+        () => {
+          state.customFields = null;
+          state.sharedFieldContracts = [];
+        }
+      );
+      assignResult(
+        10,
         'settings sections',
         (value) => {
           state.settingsSections = Array.isArray(value) ? value : [];
@@ -2684,7 +2876,7 @@ import {
         }
       );
       assignResult(
-        10,
+        11,
         'plugins',
         (value) => {
           state.plugins = Array.isArray(value) ? value : [];
@@ -2694,7 +2886,7 @@ import {
         }
       );
       assignResult(
-        11,
+        12,
         'admin extensions',
         (value) => {
           state.adminExtensions = value || { pages: [], widgets: [], slots: [], settings: [] };
@@ -2704,7 +2896,7 @@ import {
         }
       );
       assignResult(
-        12,
+        13,
         'themes',
         (value) => {
           state.themes = Array.isArray(value) ? value : [];
@@ -2714,7 +2906,7 @@ import {
         }
       );
       assignResult(
-        13,
+        14,
         'backups',
         (value) => {
           state.backups = Array.isArray(value) ? value : [];
@@ -2724,7 +2916,7 @@ import {
         }
       );
       assignResult(
-        14,
+        15,
         'git backups',
         (value) => {
           state.gitBackups = Array.isArray(value) ? value : [];
@@ -2734,7 +2926,7 @@ import {
         }
       );
       assignResult(
-        15,
+        16,
         'operations status',
         (value) => {
           state.operationsStatus = value || null;
@@ -2744,7 +2936,7 @@ import {
         }
       );
       assignResult(
-        16,
+        17,
         'operations logs',
         (value) => {
           state.operationsLog = value || null;
@@ -2754,7 +2946,7 @@ import {
         }
       );
       assignResult(
-        17,
+        18,
         'update status',
         (value) => {
           state.updateInfo = value || null;
@@ -2764,7 +2956,7 @@ import {
         }
       );
       assignResult(
-        18,
+        19,
         'audit log',
         (value) => {
           state.audit = Array.isArray(value) ? value : [];
@@ -2825,6 +3017,7 @@ import {
       snapshotValue('settings', state.settingsForm || {});
       snapshotValue('config', state.config?.raw || '');
       snapshotValue('customCss', state.customCSS?.raw || '');
+      snapshotValue('customFields', state.customFields?.values || {});
       snapshotValue('user', state.userForm);
       if (!state.documentEditor.raw) {
         state.documentEditor.raw = buildDefaultMarkdown('post');
@@ -2891,6 +3084,8 @@ import {
       if (state.section === 'users') document.getElementById('user-save-form')?.requestSubmit();
       if (state.section === 'media')
         document.getElementById('media-metadata-form')?.requestSubmit();
+      if (state.section === 'custom-fields')
+        document.getElementById('custom-fields-save-form')?.requestSubmit();
       return;
     }
     if (modifier && event.key === 'Enter' && state.section === 'editor') {

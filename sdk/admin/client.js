@@ -3,6 +3,7 @@ import { FoundryUnsupportedError } from '../core/errors.js';
 import { createAdminAuditAPI } from './audit.js';
 import { createAdminBackupsAPI } from './backups.js';
 import { createAdminCapabilitiesAPI } from './capabilities.js';
+import { createAdminCustomFieldsAPI } from './custom-fields.js';
 import { createAdminDocumentsAPI } from './documents.js';
 import { createAdminMediaAPI } from './media.js';
 import { createAdminOperationsAPI } from './operations.js';
@@ -59,6 +60,7 @@ export const createAdminClient = ({
       },
     },
     capabilities,
+    customFields: createAdminCustomFieldsAPI(http),
     status: createAdminStatusAPI(http),
     documents: createAdminDocumentsAPI(http),
     media: createAdminMediaAPI(http),

@@ -19,6 +19,8 @@ func registerManagementRoutes(r *Router) []routeDef {
 		{pattern: r.routePath("/api/settings/form/save"), handler: http.HandlerFunc(r.handleSaveSettingsForm), capability: "config.manage"},
 		{pattern: r.routePath("/api/settings/custom-css"), handler: http.HandlerFunc(r.handleCustomCSSDocument), capability: "config.manage"},
 		{pattern: r.routePath("/api/settings/custom-css/save"), handler: http.HandlerFunc(r.handleSaveCustomCSSDocument), capability: "config.manage"},
+		{pattern: r.routePath("/api/custom-fields"), handler: http.HandlerFunc(r.handleCustomFieldsDocument), capability: "documents.read"},
+		{pattern: r.routePath("/api/custom-fields/save"), handler: http.HandlerFunc(r.handleSaveCustomFieldsDocument), capability: "config.manage"},
 		{pattern: r.routePath("/api/users"), handler: http.HandlerFunc(r.handleUsers), capability: "users.manage"},
 		{pattern: r.routePath("/api/users/save"), handler: http.HandlerFunc(r.handleSaveUser), capability: "users.manage"},
 		{pattern: r.routePath("/api/users/delete"), handler: http.HandlerFunc(r.handleDeleteUser), capability: "users.manage"},
@@ -50,6 +52,40 @@ func registerManagementRoutes(r *Router) []routeDef {
 		{pattern: r.routePath("/api/plugins/disable"), handler: http.HandlerFunc(r.handleDisablePlugin), capability: "plugins.manage"},
 		{pattern: r.routePath("/api/audit"), handler: http.HandlerFunc(r.handleAudit), capability: "audit.read"},
 	}
+}
+
+func (r *Router) handleCustomFieldsDocument(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resp, err := r.service.LoadCustomFieldsDocument(req.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (r *Router) handleSaveCustomFieldsDocument(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body admintypes.CustomFieldsSaveRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &body); err != nil {
+		if !writeRequestBodyError(w, err) {
+			writeJSONError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	resp, err := r.service.SaveCustomFieldsDocument(req.Context(), body.Raw, body.Values)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	r.logAuditRequest(req, "custom_fields.save", "success", resp.Path, nil)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
