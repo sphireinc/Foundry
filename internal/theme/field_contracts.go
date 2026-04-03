@@ -6,87 +6,130 @@ import (
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
 )
 
-func DocumentFieldDefinitions(themesDir, themeName, docType, layout, slug string) []foundryconfig.FieldDefinition {
-	manifest, err := LoadManifest(themesDir, themeName)
-	if err != nil || manifest == nil {
+func normalizeFieldContractScope(scope string) string {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "", "document", "page":
+		return "document"
+	case "shared", "global":
+		return "shared"
+	default:
+		return strings.ToLower(strings.TrimSpace(scope))
+	}
+}
+
+func cloneFieldDefinitions(in []foundryconfig.FieldDefinition) []foundryconfig.FieldDefinition {
+	if len(in) == 0 {
 		return nil
 	}
-
-	docType = strings.ToLower(strings.TrimSpace(docType))
-	layout = strings.ToLower(strings.TrimSpace(layout))
-	slug = strings.ToLower(strings.TrimSpace(slug))
-
-	var defs []foundryconfig.FieldDefinition
-	for _, contract := range manifest.FieldContracts {
-		if !matchesDocumentContract(contract.Target, docType, layout, slug) {
-			continue
+	out := make([]foundryconfig.FieldDefinition, 0, len(in))
+	for _, def := range in {
+		cloned := def
+		cloned.Enum = append([]string(nil), def.Enum...)
+		cloned.Fields = cloneFieldDefinitions(def.Fields)
+		if def.Item != nil {
+			item := *def.Item
+			item.Enum = append([]string(nil), def.Item.Enum...)
+			item.Fields = cloneFieldDefinitions(def.Item.Fields)
+			if def.Item.Item != nil {
+				nested := *def.Item.Item
+				nested.Enum = append([]string(nil), def.Item.Item.Enum...)
+				nested.Fields = cloneFieldDefinitions(def.Item.Item.Fields)
+				item.Item = &nested
+			}
+			cloned.Item = &item
 		}
-		defs = append(defs, cloneFieldDefinitions(contract.Fields)...)
+		out = append(out, cloned)
 	}
-	return defs
+	return out
 }
 
-func matchesDocumentContract(target FieldContractTarget, docType, layout, slug string) bool {
-	if strings.ToLower(strings.TrimSpace(target.Scope)) != "document" {
-		return false
+func mergeFieldDefinitions(sets ...[]foundryconfig.FieldDefinition) []foundryconfig.FieldDefinition {
+	order := make([]string, 0)
+	merged := make(map[string]foundryconfig.FieldDefinition)
+	for _, set := range sets {
+		for _, def := range set {
+			name := strings.TrimSpace(def.Name)
+			if name == "" {
+				continue
+			}
+			if _, ok := merged[name]; !ok {
+				order = append(order, name)
+			}
+			merged[name] = def
+		}
 	}
-	if !matchesOneOf(target.Types, docType) {
-		return false
+	out := make([]foundryconfig.FieldDefinition, 0, len(order))
+	for _, name := range order {
+		out = append(out, merged[name])
 	}
-	if !matchesOneOf(target.Layouts, layout) {
-		return false
-	}
-	if !matchesOneOf(target.Slugs, slug) {
-		return false
-	}
-	return true
+	return out
 }
 
-func matchesOneOf(values []string, target string) bool {
-	if len(values) == 0 {
-		return true
-	}
-	target = strings.ToLower(strings.TrimSpace(target))
+func containsFold(values []string, target string) bool {
+	target = strings.TrimSpace(target)
 	for _, value := range values {
-		if strings.ToLower(strings.TrimSpace(value)) == target {
+		if strings.EqualFold(strings.TrimSpace(value), target) {
 			return true
 		}
 	}
 	return false
 }
 
-func cloneFieldDefinitions(defs []foundryconfig.FieldDefinition) []foundryconfig.FieldDefinition {
-	if len(defs) == 0 {
+func contractMatchesDocument(contract FieldContract, docType, layout, slug string) bool {
+	if normalizeFieldContractScope(contract.Target.Scope) != "document" {
+		return false
+	}
+	if len(contract.Target.Types) > 0 && !containsFold(contract.Target.Types, docType) {
+		return false
+	}
+	if len(contract.Target.Layouts) > 0 && !containsFold(contract.Target.Layouts, layout) {
+		return false
+	}
+	if len(contract.Target.Slugs) > 0 && !containsFold(contract.Target.Slugs, slug) {
+		return false
+	}
+	return true
+}
+
+func ApplicableDocumentFieldContracts(manifest *Manifest, docType, layout, slug string) []FieldContract {
+	if manifest == nil {
 		return nil
 	}
-	out := make([]foundryconfig.FieldDefinition, 0, len(defs))
-	for _, def := range defs {
-		entry := def
-		entry.Enum = append([]string(nil), def.Enum...)
-		entry.Fields = cloneFieldDefinitions(def.Fields)
-		if def.Item != nil {
-			item := *def.Item
-			item.Enum = append([]string(nil), def.Item.Enum...)
-			item.Fields = cloneFieldDefinitions(def.Item.Fields)
-			if def.Item.Item != nil {
-				item.Item = cloneFieldDefinitionPtr(def.Item.Item)
-			}
-			entry.Item = &item
+	out := make([]FieldContract, 0)
+	for _, contract := range manifest.FieldContracts {
+		if contractMatchesDocument(contract, docType, layout, slug) {
+			out = append(out, contract)
 		}
-		out = append(out, entry)
 	}
 	return out
 }
 
-func cloneFieldDefinitionPtr(def *foundryconfig.FieldDefinition) *foundryconfig.FieldDefinition {
-	if def == nil {
+func ApplicableDocumentFieldDefinitions(manifest *Manifest, docType, layout, slug string) []foundryconfig.FieldDefinition {
+	contracts := ApplicableDocumentFieldContracts(manifest, docType, layout, slug)
+	sets := make([][]foundryconfig.FieldDefinition, 0, len(contracts))
+	for _, contract := range contracts {
+		sets = append(sets, cloneFieldDefinitions(contract.Fields))
+	}
+	return mergeFieldDefinitions(sets...)
+}
+
+func SharedFieldContracts(manifest *Manifest) []FieldContract {
+	if manifest == nil {
 		return nil
 	}
-	out := *def
-	out.Enum = append([]string(nil), def.Enum...)
-	out.Fields = cloneFieldDefinitions(def.Fields)
-	if def.Item != nil {
-		out.Item = cloneFieldDefinitionPtr(def.Item)
+	out := make([]FieldContract, 0)
+	for _, contract := range manifest.FieldContracts {
+		if normalizeFieldContractScope(contract.Target.Scope) == "shared" {
+			out = append(out, contract)
+		}
 	}
-	return &out
+	return out
+}
+
+func DocumentFieldDefinitions(themesDir, themeName, docType, layout, slug string) []foundryconfig.FieldDefinition {
+	manifest, err := LoadManifest(themesDir, themeName)
+	if err != nil || manifest == nil {
+		return nil
+	}
+	return ApplicableDocumentFieldDefinitions(manifest, docType, layout, slug)
 }

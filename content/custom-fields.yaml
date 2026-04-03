@@ -1,0 +1,4 @@
+values:
+    site_marketing:
+        primary_cta_label: Start a pilot
+        primary_cta_url: '#launch'

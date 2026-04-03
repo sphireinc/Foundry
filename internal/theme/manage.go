@@ -48,10 +48,11 @@ type FieldContract struct {
 	Description string                          `yaml:"description,omitempty"`
 	Target      FieldContractTarget             `yaml:"target"`
 	Fields      []foundryconfig.FieldDefinition `yaml:"fields,omitempty"`
+	Scope   string   `yaml:"scope,omitempty"`
 }
 
 type FieldContractTarget struct {
-	Scope   string   `yaml:"scope"`
+	Scope   string   `yaml:"scope,omitempty"`
 	Types   []string `yaml:"types,omitempty"`
 	Layouts []string `yaml:"layouts,omitempty"`
 	Slugs   []string `yaml:"slugs,omitempty"`

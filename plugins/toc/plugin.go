@@ -33,20 +33,12 @@ func (p *Plugin) Name() string {
 }
 
 func (p *Plugin) OnDocumentParsed(doc *content.Document) error {
-	items := extractTOC(doc.RawBody)
-
-	if doc.Fields == nil {
-		doc.Fields = map[string]any{}
-	}
-
-	doc.Fields["toc"] = items
-	doc.Fields["has_toc"] = len(items) > 0
-
+	_ = doc
 	return nil
 }
 
 func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
-	if ctx.Page == nil || ctx.Page.Fields == nil {
+	if ctx.Page == nil {
 		return nil
 	}
 
@@ -54,12 +46,9 @@ func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
 		ctx.Data = map[string]any{}
 	}
 
-	if toc, ok := ctx.Page.Fields["toc"]; ok {
-		ctx.Data["toc"] = toc
-	}
-	if hasTOC, ok := ctx.Page.Fields["has_toc"]; ok {
-		ctx.Data["has_toc"] = hasTOC
-	}
+	items := extractTOC(ctx.Page.RawBody)
+	ctx.Data["toc"] = items
+	ctx.Data["has_toc"] = len(items) > 0
 
 	return nil
 }
@@ -74,17 +63,12 @@ func (p *Plugin) OnAssets(ctx *renderer.ViewData, assetSet *renderer.AssetSet) e
 }
 
 func (p *Plugin) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) error {
-	if ctx.Page == nil || ctx.Page.Type != "post" || ctx.Page.Fields == nil {
+	if ctx.Page == nil || ctx.Page.Type != "post" {
 		return nil
 	}
 
-	raw, ok := ctx.Page.Fields["toc"]
-	if !ok {
-		return nil
-	}
-
-	items, ok := raw.([]Item)
-	if !ok || len(items) == 0 {
+	items := extractTOC(ctx.Page.RawBody)
+	if len(items) == 0 {
 		return nil
 	}
 

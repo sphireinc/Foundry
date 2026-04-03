@@ -25,6 +25,7 @@
           <a href="../getting-started/">Getting Started</a>
           <a href="../architecture/">Architecture</a>
           <a href="../config/">Configuration</a>
+          <a href="../custom-fields/">Custom Fields</a>
           <a href="../sdk/">SDKs</a>
           <a href="../plugins/">Plugins</a>
           <a href="../themes/">Themes</a>
@@ -50,12 +51,20 @@
             <li>Content lives in Markdown files with frontmatter.</li>
             <li>Routes are assigned from structured content and language-aware conventions.</li>
             <li>Themes own presentation through layouts and partials.</li>
+            <li>Themes also own advanced custom-field contracts through <code>theme.yaml</code>.</li>
             <li>Plugins extend behavior through explicit hook interfaces.</li>
             <li>
               A dependency graph supports incremental rebuilds for both documents and taxonomy
               archive outputs.
             </li>
           </ul>
+
+          <p>
+            Advanced custom fields are no longer declared in <code>content/config/site.yaml</code>.
+            Themes declare field contracts in <code>theme.yaml</code>, page-specific values stay in
+            frontmatter under <code>fields:</code>, and shared/global values live in
+            <code>content/custom-fields.yaml</code>.
+          </p>
 
           <h2>Key directories</h2>
           <pre><code>/content      pages, posts, images, assets, uploads, config
@@ -95,6 +104,7 @@ foundry update check
 foundry update apply
 foundry plugin list --enabled
 foundry theme list
+foundry theme migrate field-contracts
 foundry routes check
 foundry admin hash-password your-password</code></pre>
 

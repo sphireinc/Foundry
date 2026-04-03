@@ -32,6 +32,7 @@ func (command) Details() []string {
 		"foundry theme current",
 		"foundry theme validate <name>",
 		"foundry theme install <git-url|owner/repo> [name] [--admin]",
+		"foundry theme migrate field-contracts",
 		"foundry theme scaffold <name>",
 		"foundry theme switch <name>",
 		"foundry theme switch --admin <name>",
@@ -44,7 +45,7 @@ func (command) RequiresConfig() bool {
 
 func (command) Run(cfg *config.Config, args []string) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: foundry theme [list|current|validate|install|scaffold|switch]")
+		return fmt.Errorf("usage: foundry theme [list|current|validate|install|migrate|scaffold|switch]")
 	}
 
 	switch args[2] {
@@ -56,6 +57,8 @@ func (command) Run(cfg *config.Config, args []string) error {
 		return runValidate(cfg, args)
 	case "install":
 		return runInstall(cfg, args)
+	case "migrate":
+		return runMigrateFieldContracts(cfg, args)
 	case "scaffold":
 		return runScaffold(cfg, args)
 	case "switch":

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/customfields"
 	"github.com/sphireinc/foundry/internal/data"
 	"github.com/sphireinc/foundry/internal/fields"
 	"github.com/sphireinc/foundry/internal/i18n"
@@ -62,6 +63,7 @@ type Loader struct {
 	cfg           *config.Config
 	hooks         Hooks
 	includeDrafts bool
+	themeManifest *theme.Manifest
 }
 
 // NewLoader constructs a loader for the current configuration.
@@ -73,10 +75,18 @@ func NewLoader(cfg *config.Config, hooks Hooks, includeDrafts bool) *Loader {
 		hooks = noopHooks{}
 	}
 
+	var manifest *theme.Manifest
+	if cfg != nil {
+		if loaded, err := theme.LoadManifest(cfg.ThemesDir, cfg.Theme); err == nil {
+			manifest = loaded
+		}
+	}
+
 	return &Loader{
 		cfg:           cfg,
 		hooks:         hooks,
 		includeDrafts: includeDrafts,
+		themeManifest: manifest,
 	}
 }
 
@@ -91,6 +101,11 @@ func (l *Loader) Load(ctx context.Context) (*SiteGraph, error) {
 		return nil, fmt.Errorf("load data dir: %w", err)
 	}
 	graph.Data = store.All()
+	if customFieldStore, err := customfields.Load(l.cfg); err == nil {
+		graph.Data["custom_fields"] = customFieldStore.Values
+	} else {
+		return nil, fmt.Errorf("load custom fields: %w", err)
+	}
 
 	if err := l.hooks.OnDataLoaded(graph.Data); err != nil {
 		return nil, err

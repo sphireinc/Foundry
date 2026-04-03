@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	foundryconfig "github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/consts"
 	"github.com/sphireinc/foundry/internal/safepath"
 )
@@ -107,6 +108,7 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	}
 
 	validateRequiredLaunchSlotsDetailed(root, manifest, add)
+	validateFieldContractsDetailed(root, manifest, add)
 	validateTemplateReferences(root, manifest, add)
 	validateTemplateParsing(root, add)
 
@@ -124,30 +126,72 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 }
 
 func validateFieldContracts(manifestPath string, manifest *Manifest, add func(severity, path, message string)) {
-	seen := map[string]struct{}{}
-	for _, contract := range manifest.FieldContracts {
+	root := filepath.Dir(manifestPath)
+	validateFieldContractsDetailed(root, manifest, add)
+}
+
+func validateFieldContractsDetailed(root string, manifest *Manifest, add func(severity, path, message string)) {
+	seen := make(map[string]struct{})
+	for index, contract := range manifest.FieldContracts {
+		keyPath := filepath.Join(root, "theme.yaml")
 		key := strings.TrimSpace(contract.Key)
 		if key == "" {
-			add("error", manifestPath, "field_contracts entries must declare a key")
-			continue
+			add("error", keyPath, fmt.Sprintf("field_contracts[%d] must define key", index))
+		} else {
+			if _, ok := seen[key]; ok {
+				add("error", keyPath, fmt.Sprintf("field_contracts[%d] key %q must be unique", index, key))
+			}
+			seen[key] = struct{}{}
 		}
-		if _, ok := seen[key]; ok {
-			add("error", manifestPath, fmt.Sprintf("field_contracts key %q is duplicated", key))
-		}
-		seen[key] = struct{}{}
-
-		scope := strings.ToLower(strings.TrimSpace(contract.Target.Scope))
+		scope := normalizeFieldContractScope(contract.Target.Scope)
 		switch scope {
 		case "document":
-			if len(contract.Fields) == 0 {
-				add("error", manifestPath, fmt.Sprintf("document field_contract %q must declare fields", key))
+			if len(contract.Target.Types) == 0 && len(contract.Target.Layouts) == 0 && len(contract.Target.Slugs) == 0 {
+				add("error", keyPath, fmt.Sprintf("field_contracts[%d] document target must declare at least one of types, layouts, or slugs", index))
 			}
 		case "shared":
 			if strings.TrimSpace(contract.Target.Key) == "" {
-				add("error", manifestPath, fmt.Sprintf("shared field_contract %q must declare target.key", key))
+				add("error", keyPath, fmt.Sprintf("field_contracts[%d] shared target must define target.key", index))
 			}
 		default:
-			add("error", manifestPath, fmt.Sprintf("field_contract %q has unsupported target.scope %q", key, contract.Target.Scope))
+			add("error", keyPath, fmt.Sprintf("field_contracts[%d] has unsupported target.scope %q", index, contract.Target.Scope))
+		}
+		if len(contract.Fields) == 0 {
+			add("error", keyPath, fmt.Sprintf("field_contracts[%d] must define at least one field", index))
+			continue
+		}
+		validateFieldDefinitions(keyPath, contract.Fields, add)
+	}
+}
+
+func validateFieldDefinitions(path string, defs []foundryconfig.FieldDefinition, add func(severity, path, message string)) {
+	seen := make(map[string]struct{})
+	for _, def := range defs {
+		name := strings.TrimSpace(def.Name)
+		if name == "" {
+			add("error", path, "field definitions must have a name")
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			add("error", path, fmt.Sprintf("field definition %q must be unique within its contract", name))
+		}
+		seen[name] = struct{}{}
+		if strings.TrimSpace(def.Type) == "" {
+			add("error", path, fmt.Sprintf("field %q must define a type", name))
+		}
+		switch strings.ToLower(strings.TrimSpace(def.Type)) {
+		case "object":
+			if len(def.Fields) == 0 {
+				add("error", path, fmt.Sprintf("object field %q must define nested fields", name))
+			} else {
+				validateFieldDefinitions(path, def.Fields, add)
+			}
+		case "repeater", "list", "array":
+			if def.Item == nil {
+				add("error", path, fmt.Sprintf("repeater field %q must define item", name))
+			} else {
+				validateFieldDefinitions(path, []foundryconfig.FieldDefinition{*def.Item}, add)
+			}
 		}
 	}
 }

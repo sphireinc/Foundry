@@ -158,14 +158,18 @@ func TestDocumentQueriesPreviewAndStatus(t *testing.T) {
 
 func TestPreviewDocumentIncludesFieldValidationErrors(t *testing.T) {
 	cfg := testServiceConfig(t)
-	cfg.Fields.Enabled = true
-	cfg.Fields.Schemas = map[string]config.FieldSchemaSet{
-		"post": {
-			Fields: []config.FieldDefinition{
-				{Name: "stage", Type: "select", Enum: []string{"draft", "review"}},
-			},
-		},
-	}
+	writeServiceThemeContracts(t, cfg, `
+field_contracts:
+  - key: post-workflow
+    title: Post Workflow
+    target:
+      scope: document
+      types: [post]
+    fields:
+      - name: stage
+        type: select
+        enum: [draft, review]
+`)
 	svc := New(cfg)
 
 	preview, err := svc.PreviewDocument(context.Background(), types.DocumentPreviewRequest{
@@ -1026,12 +1030,23 @@ func TestDocumentLifecycleServices(t *testing.T) {
 
 func TestDocumentWorkflowAndSchemaFields(t *testing.T) {
 	cfg := testServiceConfig(t)
-	cfg.Fields.Schemas["post"] = config.FieldSchemaSet{
-		Fields: []config.FieldDefinition{
-			{Name: "hero", Type: "text", Required: true, Default: "launch"},
-			{Name: "stage", Type: "select", Enum: []string{"draft", "review"}, Default: "draft"},
-		},
-	}
+	writeServiceThemeContracts(t, cfg, `
+field_contracts:
+  - key: post-launch
+    title: Post Launch
+    target:
+      scope: document
+      types: [post]
+    fields:
+      - name: hero
+        type: text
+        required: true
+        default: launch
+      - name: stage
+        type: select
+        enum: [draft, review]
+        default: draft
+`)
 	svc := New(cfg)
 
 	saved, err := svc.SaveDocument(context.Background(), types.DocumentSaveRequest{
@@ -1314,6 +1329,22 @@ func writeServiceTheme(t *testing.T, cfg *config.Config, name string) {
 		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
+	}
+}
+
+func writeServiceThemeContracts(t *testing.T, cfg *config.Config, extra string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(cfg.ThemesDir, cfg.Theme, "theme.yaml")); err != nil {
+		writeServiceTheme(t, cfg, cfg.Theme)
+	}
+	path := filepath.Join(cfg.ThemesDir, cfg.Theme, "theme.yaml")
+	base, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read theme manifest: %v", err)
+	}
+	content := strings.TrimRight(string(base), "\n") + "\n" + strings.TrimSpace(extra) + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write theme manifest: %v", err)
 	}
 }
 

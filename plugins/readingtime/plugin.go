@@ -36,16 +36,7 @@ func estimateMinutes(words int) int {
 }
 
 func (p *Plugin) OnDocumentParsed(doc *content.Document) error {
-	words := countWords(doc.RawBody)
-	minutes := estimateMinutes(words)
-
-	if doc.Fields == nil {
-		doc.Fields = map[string]any{}
-	}
-
-	doc.Fields["reading_time"] = minutes
-	doc.Fields["word_count"] = words
-
+	_ = doc
 	return nil
 }
 
@@ -58,24 +49,20 @@ func (p *Plugin) OnContext(ctx *renderer.ViewData) error {
 		ctx.Data = map[string]any{}
 	}
 
-	if ctx.Page.Fields != nil {
-		ctx.Data["reading_time"] = ctx.Page.Fields["reading_time"]
-		ctx.Data["word_count"] = ctx.Page.Fields["word_count"]
-	}
+	words := countWords(ctx.Page.RawBody)
+	ctx.Data["reading_time"] = estimateMinutes(words)
+	ctx.Data["word_count"] = words
 
 	return nil
 }
 
 func (p *Plugin) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) error {
-	if ctx.Page == nil || ctx.Page.Type != "post" || ctx.Page.Fields == nil {
+	if ctx.Page == nil || ctx.Page.Type != "post" {
 		return nil
 	}
 
-	readingTime, ok := ctx.Page.Fields["reading_time"]
-	if !ok {
-		return nil
-	}
-	wordCount, _ := ctx.Page.Fields["word_count"]
+	wordCount := countWords(ctx.Page.RawBody)
+	readingTime := estimateMinutes(wordCount)
 
 	html := template.HTML(fmt.Sprintf(`
 <div class="meta-panel-block">

@@ -24,6 +24,7 @@ config_schema:
     label: Accent Color
     type: text
     default: "#f55d3e"
+field_contracts: []
 slots:
   - head.end
   - body.start

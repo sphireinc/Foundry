@@ -22,6 +22,7 @@
           <a href="../getting-started/">Getting Started</a>
           <a href="../architecture/">Architecture</a>
           <a href="../config/">Configuration</a>
+          <a href="../custom-fields/">Custom Fields</a>
           <a href="../sdk/">SDKs</a>
           <a href="../plugins/">Plugins</a>
           <a href="../themes/">Themes</a>
@@ -296,6 +297,29 @@ func init() {
                 >Related Posts</a
               >
               for post-render content injection into post slots.
+            </li>
+          </ul>
+          <h2>Field safety</h2>
+          <p>
+            Foundry now treats advanced custom fields as a theme-owned contract. That means plugin
+            code must not write derived render metadata into <code>doc.Fields</code>.
+          </p>
+          <ul>
+            <li>
+              Use <code>doc.Fields</code> only for persisted, schema-backed content that belongs to
+              the document itself.
+            </li>
+            <li>
+              Do not attach derived values like <code>toc</code>, <code>has_toc</code>,
+              <code>reading_time</code>, or similar render metadata to document fields.
+            </li>
+            <li>
+              Prefer render-time data surfaces such as <code>ctx.Data</code>, or recompute the
+              value during rendering when practical.
+            </li>
+            <li>
+              The built-in <code>toc</code> plugin is the reference example for runtime-only
+              derived metadata.
             </li>
           </ul>
         </div>

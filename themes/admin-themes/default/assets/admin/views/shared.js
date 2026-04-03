@@ -135,6 +135,7 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['audit', 'Audit'],
     ['users', 'Users'],
     ['settings', 'Settings'],
+    ['custom-fields', 'Custom Fields'],
     ['extensions', 'Extensions'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
@@ -143,10 +144,9 @@ export const shellNav = (state, adminBase, options = {}) => {
   const extensionPages = Array.isArray(options.extensionPages) ? options.extensionPages : [];
   const builtins = items
     .filter(([key]) => canAccessSection(key))
-    .map(
-      ([key, label]) =>
-        `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
-    );
+    ([key, label]) =>
+      `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
+  );
   const extensions = extensionPages.map(
     (page) =>
       `<a class="foundry-nav-item foundry-nav-item-extension${currentSection === normalizeAdminSection(page.section) ? ' active' : ''}" href="${adminPathForSection(adminBase, page.section)}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
