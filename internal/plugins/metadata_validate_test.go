@@ -8,7 +8,7 @@ import (
 
 func TestMetadataAndValidationHelpers(t *testing.T) {
 	root := t.TempDir()
-	writePluginMetaFile(t, root, "good", "name: good\nrepo: https://github.com/acme/good.git\nrequires:\n  - github.com/acme/dep\n  - github.com/acme/dep\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n")
+	writePluginMetaFile(t, root, "good", "name: good\nrepo: https://github.com/acme/good.git\nrequires:\n  - github.com/acme/dep\n  - github.com/acme/dep\nfoundry_api: v1\nmin_foundry_version: 0.1.0\nadmin:\n  pages:\n    - key: search-console\n      title: Search Console\n      route: /plugins/search\n      nav_group: manage\n")
 	writePluginCodeFile(t, root, "good")
 	writePluginMetaFile(t, root, "dep", "name: dep\nrepo: github.com/acme/dep\nfoundry_api: v1\nmin_foundry_version: 0.1.0\n")
 	writePluginCodeFile(t, root, "dep")
@@ -19,6 +19,9 @@ func TestMetadataAndValidationHelpers(t *testing.T) {
 	}
 	if meta.Repo != "github.com/acme/good" || len(meta.Requires) != 1 {
 		t.Fatalf("unexpected metadata normalization: %#v", meta)
+	}
+	if got := meta.AdminExtensions.Pages[0].NavGroup; got != "manage" {
+		t.Fatalf("expected normalized nav group, got %q", got)
 	}
 	all, err := LoadAllMetadata(root, []string{"good", "dep"})
 	if err != nil || len(all) != 2 {
@@ -52,6 +55,11 @@ func TestValidationFailures(t *testing.T) {
 	report := ValidateEnabledPlugins(root, []string{"bad"})
 	if len(report.Issues) == 0 {
 		t.Fatal("expected validation issues")
+	}
+
+	writePluginMetaFile(t, root, "bad-nav", "name: bad-nav\nfoundry_api: v1\nmin_foundry_version: 0.1.0\nadmin:\n  pages:\n    - key: console\n      title: Console\n      route: /plugins/console\n      nav_group: misc\n")
+	if _, err := LoadMetadata(root, "bad-nav"); err == nil {
+		t.Fatal("expected invalid nav_group to fail metadata load")
 	}
 }
 

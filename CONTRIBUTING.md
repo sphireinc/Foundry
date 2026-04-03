@@ -27,6 +27,13 @@ Important directories:
 - `data/`: structured data and admin runtime state
 - `docs/`: published docs and coverage output
 
+Repository rule:
+
+- `internal/` is Go-code-only
+- do not place YAML, JSON, fixtures, runtime state, `testdata/`, or other artifact directories under `internal/`
+- read-only fixtures belong under `tests/fixtures/`
+- mutable runtime state belongs in project-root runtime/configured directories like `data/`, `public/`, or `.foundry/`
+
 ## Development setup
 
 ### Native Go workflow
@@ -215,6 +222,7 @@ For Docker issues, include:
 - Do not commit secrets
 - Do not check in accidental runtime state unless the change is intentional
 - Be careful with generated files and verify whether they belong in the diff
+- Keep `internal/` code-only; if you need fixtures, use `tests/fixtures/` instead of package-local data directories
 - Preserve backwards compatibility where reasonable, especially for:
   - config
   - admin APIs

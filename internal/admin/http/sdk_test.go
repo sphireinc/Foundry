@@ -49,7 +49,7 @@ func TestSettingsSectionsAndExtensionsEndpoints(t *testing.T) {
 				"search": {
 					Name: "search",
 					AdminExtensions: plugins.AdminExtensions{
-						Pages:            []plugins.AdminPage{{Key: "search-console", Title: "Search Console", Route: "/plugins/search", Module: "admin/search-console.js", Styles: []string{"admin/search-console.css"}}},
+						Pages:            []plugins.AdminPage{{Key: "search-console", Title: "Search Console", Route: "/plugins/search", NavGroup: "admin", Module: "admin/search-console.js", Styles: []string{"admin/search-console.css"}}},
 						Widgets:          []plugins.AdminWidget{{Key: "search-status", Title: "Search Status", Slot: "overview.after", Module: "admin/search-widget.js", Styles: []string{"admin/search-widget.css"}}},
 						SettingsSections: []plugins.AdminSettingsSection{{Key: "search", Title: "Search", Description: "Search tuning"}},
 					},
@@ -93,6 +93,9 @@ func TestSettingsSectionsAndExtensionsEndpoints(t *testing.T) {
 	doReq(cfg.AdminPath()+"/api/extensions", &registry)
 	if len(registry.Pages) != 1 || registry.Pages[0].Plugin != "search" {
 		t.Fatalf("expected plugin extension page, got %#v", registry)
+	}
+	if registry.Pages[0].NavGroup != "admin" {
+		t.Fatalf("expected plugin nav group to round-trip, got %#v", registry.Pages[0])
 	}
 	if registry.Pages[0].ModuleURL != cfg.AdminPath()+"/extensions/search/admin/search-console.js" {
 		t.Fatalf("expected normalized module url, got %#v", registry.Pages[0])

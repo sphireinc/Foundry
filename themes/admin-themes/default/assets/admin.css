@@ -167,6 +167,20 @@ button.danger,
 
 .foundry-nav {
   display: grid;
+  gap: 12px;
+}
+
+.foundry-nav-group {
+  display: grid;
+}
+
+.foundry-nav-group-label {
+  padding: 0 20px 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ea7ad;
 }
 
 .foundry-nav-item {
@@ -883,6 +897,64 @@ button.panel:hover {
   border: 1px solid var(--foundry-line);
   border-radius: 8px;
   background: white;
+}
+
+.debug-code-block {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--foundry-line);
+  border-radius: 10px;
+  background: #11161b;
+  color: #d9e2ec;
+  font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.debug-event-row,
+.debug-trace-row {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--foundry-line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.debug-event-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--foundry-muted);
+  font-size: 0.82rem;
+}
+
+.debug-trace-list,
+.debug-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.debug-overlay {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: grid;
+  gap: 4px;
+  max-width: 280px;
+  padding: 12px 14px;
+  border: 1px solid rgba(29, 35, 39, 0.18);
+  border-radius: 12px;
+  background: rgba(17, 22, 27, 0.92);
+  color: #f6f7f7;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+  font-size: 0.8rem;
+}
+
+.debug-overlay strong {
+  font-size: 0.82rem;
 }
 
 .subtle-meta {

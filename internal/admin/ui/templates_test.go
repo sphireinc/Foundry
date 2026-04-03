@@ -104,8 +104,11 @@ func TestDefaultAdminThemeAssetsIncludeStructuredEditor(t *testing.T) {
 	if !strings.Contains(eventSource, "startPasswordReset") || !strings.Contains(eventSource, "enableTOTP") || !strings.Contains(eventSource, "revoke({ all: true })") {
 		t.Fatalf("expected modularized admin theme to use official admin sdk security APIs")
 	}
-	if !strings.Contains(source, "Runtime Profiling") || !strings.Contains(source, "Embedded pprof") || !strings.Contains(source, "Runtime Summary") || !strings.Contains(source, "/api/debug/runtime") {
-		t.Fatalf("expected default admin theme to expose the pprof debug surface")
+	if !strings.Contains(source, "Diagnostics") || !strings.Contains(source, "Embedded pprof") || !strings.Contains(source, "Runtime Summary") || !strings.Contains(source, "/api/debug/runtime") {
+		t.Fatalf("expected default admin theme to expose the diagnostics surface")
+	}
+	if !strings.Contains(source, "Runtime Event Stream") || !strings.Contains(source, "Admin SDK Inspector") || !strings.Contains(source, "Request / Command Console") {
+		t.Fatalf("expected default admin theme to expose the debug tooling surface")
 	}
 	viewBody, err := os.ReadFile(filepath.Join("..", "..", "..", "themes", "admin-themes", "default", "assets", "admin", "views", "shared.js"))
 	if err != nil {

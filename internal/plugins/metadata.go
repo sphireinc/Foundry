@@ -63,6 +63,7 @@ type AdminPage struct {
 	Key         string   `yaml:"key"`
 	Title       string   `yaml:"title"`
 	Route       string   `yaml:"route"`
+	NavGroup    string   `yaml:"nav_group,omitempty"`
 	Capability  string   `yaml:"capability,omitempty"`
 	Description string   `yaml:"description,omitempty"`
 	Module      string   `yaml:"module,omitempty"`
@@ -170,6 +171,18 @@ func LoadMetadata(pluginsDir, name string) (Metadata, error) {
 		meta.Dependencies[i].Name = normalizeRepoRef(meta.Dependencies[i].Name)
 		meta.Dependencies[i].Version = strings.TrimSpace(meta.Dependencies[i].Version)
 	}
+	for i := range meta.AdminExtensions.Pages {
+		meta.AdminExtensions.Pages[i].Key = strings.TrimSpace(meta.AdminExtensions.Pages[i].Key)
+		meta.AdminExtensions.Pages[i].Title = strings.TrimSpace(meta.AdminExtensions.Pages[i].Title)
+		meta.AdminExtensions.Pages[i].Route = strings.TrimSpace(meta.AdminExtensions.Pages[i].Route)
+		meta.AdminExtensions.Pages[i].NavGroup = normalizeAdminNavGroup(meta.AdminExtensions.Pages[i].NavGroup)
+		meta.AdminExtensions.Pages[i].Capability = strings.TrimSpace(meta.AdminExtensions.Pages[i].Capability)
+		meta.AdminExtensions.Pages[i].Description = strings.TrimSpace(meta.AdminExtensions.Pages[i].Description)
+		meta.AdminExtensions.Pages[i].Module = strings.TrimSpace(meta.AdminExtensions.Pages[i].Module)
+		for j := range meta.AdminExtensions.Pages[i].Styles {
+			meta.AdminExtensions.Pages[i].Styles[j] = strings.TrimSpace(meta.AdminExtensions.Pages[i].Styles[j])
+		}
+	}
 
 	if err := validateMetadataCompatibility(meta); err != nil {
 		return Metadata{}, fmt.Errorf("validate plugin metadata %s: %w", path, err)
@@ -237,4 +250,8 @@ func normalizeRepoRef(v string) string {
 	}
 
 	return v
+}
+
+func normalizeAdminNavGroup(v string) string {
+	return strings.ToLower(strings.TrimSpace(v))
 }

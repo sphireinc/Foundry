@@ -352,6 +352,7 @@ func (s *Service) ListAdminExtensions(ctx context.Context) (*types.AdminExtensio
 				Key:         page.Key,
 				Title:       page.Title,
 				Route:       page.Route,
+				NavGroup:    page.NavGroup,
 				Capability:  page.Capability,
 				Description: page.Description,
 				ModuleURL:   moduleURL,
