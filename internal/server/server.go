@@ -662,6 +662,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, os.ErrNotExist) {
 			notFound, nfErr := s.renderer.RenderNotFoundPage(graph, path, s.cfg.Server.LiveReload)
 			if nfErr == nil {
+				w.Header().Set("Content-Security-Policy", s.renderer.ContentSecurityPolicy())
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(http.StatusNotFound)
 				_, _ = w.Write(notFound)
@@ -676,6 +677,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Security-Policy", s.renderer.ContentSecurityPolicy())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(out)
 }

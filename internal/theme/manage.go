@@ -40,6 +40,37 @@ type Manifest struct {
 	Screenshots          []string                        `yaml:"screenshots,omitempty"`
 	ConfigSchema         []foundryconfig.FieldDefinition `yaml:"config_schema,omitempty"`
 	FieldContracts       []FieldContract                 `yaml:"field_contracts,omitempty"`
+	Security             ThemeSecurity                   `yaml:"security,omitempty"`
+}
+
+type ThemeSecurity struct {
+	ExternalAssets   ThemeExternalAssets   `yaml:"external_assets,omitempty" json:"external_assets,omitempty"`
+	FrontendRequests ThemeFrontendRequests `yaml:"frontend_requests,omitempty" json:"frontend_requests,omitempty"`
+	TemplateContext  ThemeTemplateContext  `yaml:"template_context,omitempty" json:"template_context,omitempty"`
+}
+
+type ThemeExternalAssets struct {
+	Allowed bool     `yaml:"allowed,omitempty" json:"allowed,omitempty"`
+	Scripts []string `yaml:"scripts,omitempty" json:"scripts,omitempty"`
+	Styles  []string `yaml:"styles,omitempty" json:"styles,omitempty"`
+	Fonts   []string `yaml:"fonts,omitempty" json:"fonts,omitempty"`
+	Images  []string `yaml:"images,omitempty" json:"images,omitempty"`
+	Media   []string `yaml:"media,omitempty" json:"media,omitempty"`
+}
+
+type ThemeFrontendRequests struct {
+	Allowed bool     `yaml:"allowed,omitempty" json:"allowed,omitempty"`
+	Origins []string `yaml:"origins,omitempty" json:"origins,omitempty"`
+	Methods []string `yaml:"methods,omitempty" json:"methods,omitempty"`
+}
+
+type ThemeTemplateContext struct {
+	AllowSiteParams    *bool `yaml:"allow_site_params,omitempty" json:"allow_site_params,omitempty"`
+	AllowContentFields *bool `yaml:"allow_content_fields,omitempty" json:"allow_content_fields,omitempty"`
+	AllowSharedFields  *bool `yaml:"allow_shared_fields,omitempty" json:"allow_shared_fields,omitempty"`
+	AllowRuntimeState  *bool `yaml:"allow_runtime_state,omitempty" json:"allow_runtime_state,omitempty"`
+	AllowAdminState    *bool `yaml:"allow_admin_state,omitempty" json:"allow_admin_state,omitempty"`
+	AllowRawConfig     *bool `yaml:"allow_raw_config,omitempty" json:"allow_raw_config,omitempty"`
 }
 
 type FieldContract struct {
@@ -163,6 +194,7 @@ func LoadManifest(themesDir, name string) (*Manifest, error) {
 	if strings.TrimSpace(m.CompatibilityVersion) == "" {
 		m.CompatibilityVersion = consts.FrontendCompatibility
 	}
+	normalizeThemeSecurity(&m.Security)
 
 	return &m, nil
 }
@@ -310,6 +342,15 @@ slots:
   - post.sidebar.top
   - post.sidebar.overview
   - post.sidebar.bottom
+security:
+  external_assets:
+    allowed: false
+  frontend_requests:
+    allowed: false
+  template_context:
+    allow_site_params: true
+    allow_content_fields: true
+    allow_shared_fields: true
 `, name, humanizeName(name))
 }
 

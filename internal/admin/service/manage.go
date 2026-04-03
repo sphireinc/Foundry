@@ -720,6 +720,11 @@ func (s *Service) ListThemes(ctx context.Context) ([]types.ThemeRecord, error) {
 			record.SupportedLayouts = manifest.RequiredLayouts()
 			record.Screenshots = append([]string(nil), manifest.Screenshots...)
 			record.ConfigSchema = toFieldSchema(manifest.ConfigSchema)
+			record.Security = manifest.Security
+			record.SecuritySummary = manifest.Security.Summary()
+			if securityReport, secErr := theme.AnalyzeInstalledSecurity(s.cfg.ThemesDir, item.Name); secErr == nil {
+				record.SecurityReport = securityReport
+			}
 		}
 		if validation, err := theme.ValidateInstalledDetailed(s.cfg.ThemesDir, item.Name); err == nil {
 			record.Valid = validation.Valid
@@ -785,6 +790,11 @@ func (s *Service) InstallTheme(ctx context.Context, url, name, kind string) (*ty
 			SupportedLayouts:     append([]string(nil), m.RequiredLayouts()...),
 			Screenshots:          append([]string(nil), m.Screenshots...),
 			ConfigSchema:         toFieldSchema(m.ConfigSchema),
+			Security:             m.Security,
+			SecuritySummary:      m.Security.Summary(),
+		}
+		if securityReport, secErr := theme.AnalyzeInstalledSecurity(s.cfg.ThemesDir, m.Name); secErr == nil {
+			record.SecurityReport = securityReport
 		}
 		if validation, err := theme.ValidateInstalledDetailed(s.cfg.ThemesDir, m.Name); err == nil {
 			record.Valid = validation.Valid
@@ -902,12 +912,24 @@ func (s *Service) ListPlugins(ctx context.Context) ([]types.PluginRecord, error)
 			record.Requires = append([]string(nil), meta.Requires...)
 			record.ConfigSchema = toFieldSchema(meta.ConfigSchema)
 			record.Dependencies = toPluginDependencies(meta.Dependencies)
+			record.Permissions = meta.Permissions
+			record.RiskTier = meta.Permissions.RiskTier()
+			record.RequiresApproval = meta.Permissions.Capabilities.RequiresAdminApproval
+			record.PermissionSummary = meta.Permissions.Summary()
+			record.Runtime = meta.Runtime
+			record.RuntimeSummary = meta.Runtime.Summary()
 			if hasRollback, _ := plugins.HasRollback(s.cfg.PluginsDir, meta.Name); hasRollback {
 				record.CanRollback = true
 			}
 			report := plugins.DiagnoseInstalled(s.cfg.PluginsDir, meta, pluginStatus.Enabled)
 			record.Health = report.Status
 			record.Diagnostics = toPluginDiagnostics(report.Diagnostics)
+			record.RiskTier = report.Security.RiskTier
+			record.RequiresApproval = report.Security.RequiresApproval
+			security := report.Security
+			record.Security = &security
+			record.SecurityFindings = append([]plugins.SecurityFinding(nil), report.Security.Findings...)
+			record.SecurityMismatches = toPluginDiagnostics(report.Security.Mismatches)
 		}
 		out = append(out, record)
 	}
@@ -933,8 +955,22 @@ func (s *Service) ValidatePlugin(ctx context.Context, name string) (*types.Plugi
 	return nil, fmt.Errorf("plugin not found: %s", name)
 }
 
-func (s *Service) EnablePlugin(ctx context.Context, name string) error {
+func (s *Service) EnablePlugin(ctx context.Context, name string, approveRisk, acknowledgeMismatches bool) error {
 	_ = ctx
+	meta, err := plugins.LoadMetadata(s.cfg.PluginsDir, name)
+	if err != nil {
+		return err
+	}
+	report := plugins.AnalyzeInstalled(meta)
+	if plugins.SecurityApprovalRequired(meta, report) && !approveRisk {
+		return fmt.Errorf("plugin %q requires explicit risk approval before enabling", name)
+	}
+	if len(report.Mismatches) > 0 && !acknowledgeMismatches {
+		return fmt.Errorf("plugin %q has %d security mismatch(es); acknowledge_mismatches is required", name, len(report.Mismatches))
+	}
+	if err := plugins.EnsureRuntimeSupported(meta); err != nil {
+		return err
+	}
 	if err := plugins.EnableInConfig(consts.ConfigFilePath, name); err != nil {
 		return err
 	}
@@ -959,16 +995,23 @@ func (s *Service) DisablePlugin(ctx context.Context, name string) error {
 	return nil
 }
 
-func (s *Service) InstallPlugin(ctx context.Context, url, name string) (*types.PluginRecord, error) {
+func (s *Service) InstallPlugin(ctx context.Context, url, name string, approveRisk, acknowledgeMismatches bool) (*types.PluginRecord, error) {
 	_ = ctx
 	meta, err := plugins.Install(plugins.InstallOptions{
-		PluginsDir: s.cfg.PluginsDir,
-		URL:        url,
-		Name:       name,
+		PluginsDir:  s.cfg.PluginsDir,
+		URL:         url,
+		Name:        name,
+		ApproveRisk: approveRisk,
 	})
 	if err != nil {
 		return nil, err
 	}
+	report := plugins.DiagnoseInstalled(s.cfg.PluginsDir, meta, false)
+	if len(report.Security.Mismatches) > 0 && !acknowledgeMismatches {
+		_ = plugins.Uninstall(s.cfg.PluginsDir, meta.Name)
+		return nil, fmt.Errorf("plugin %q has %d security mismatch(es); acknowledge_mismatches is required", meta.Name, len(report.Security.Mismatches))
+	}
+	security := report.Security
 	return &types.PluginRecord{
 		Name:                 meta.Name,
 		Title:                meta.Title,
@@ -977,23 +1020,36 @@ func (s *Service) InstallPlugin(ctx context.Context, url, name string) (*types.P
 		Author:               meta.Author,
 		Repo:                 meta.Repo,
 		Status:               "installed",
-		Health:               plugins.DiagnoseInstalled(s.cfg.PluginsDir, meta, false).Status,
+		Health:               report.Status,
 		FoundryAPI:           meta.FoundryAPI,
 		MinFoundryVersion:    meta.MinFoundryVersion,
 		CompatibilityVersion: meta.CompatibilityVersion,
 		Requires:             append([]string(nil), meta.Requires...),
 		Dependencies:         toPluginDependencies(meta.Dependencies),
 		ConfigSchema:         toFieldSchema(meta.ConfigSchema),
+		Permissions:          meta.Permissions,
+		RiskTier:             report.Security.RiskTier,
+		RequiresApproval:     report.Security.RequiresApproval,
+		PermissionSummary:    meta.Permissions.Summary(),
+		Runtime:              meta.Runtime,
+		RuntimeSummary:       meta.Runtime.Summary(),
+		Security:             &security,
+		SecurityFindings:     append([]plugins.SecurityFinding(nil), report.Security.Findings...),
+		SecurityMismatches:   toPluginDiagnostics(report.Security.Mismatches),
 	}, nil
 }
 
-func (s *Service) UpdatePlugin(ctx context.Context, name string) (*types.PluginRecord, error) {
+func (s *Service) UpdatePlugin(ctx context.Context, name string, approveRisk, acknowledgeMismatches bool) (*types.PluginRecord, error) {
 	_ = ctx
-	meta, err := plugins.UpdateInstalled(s.cfg.PluginsDir, name)
+	meta, err := plugins.UpdateInstalled(s.cfg.PluginsDir, name, approveRisk)
 	if err != nil {
 		return nil, err
 	}
 	report := plugins.DiagnoseInstalled(s.cfg.PluginsDir, meta, containsString(s.cfg.Plugins.Enabled, meta.Name))
+	if len(report.Security.Mismatches) > 0 && !acknowledgeMismatches {
+		return nil, fmt.Errorf("plugin %q has %d security mismatch(es); acknowledge_mismatches is required", meta.Name, len(report.Security.Mismatches))
+	}
+	security := report.Security
 	return &types.PluginRecord{
 		Name:                 meta.Name,
 		Title:                meta.Title,
@@ -1011,6 +1067,15 @@ func (s *Service) UpdatePlugin(ctx context.Context, name string) (*types.PluginR
 		Requires:             append([]string(nil), meta.Requires...),
 		Dependencies:         toPluginDependencies(meta.Dependencies),
 		ConfigSchema:         toFieldSchema(meta.ConfigSchema),
+		Permissions:          meta.Permissions,
+		RiskTier:             report.Security.RiskTier,
+		RequiresApproval:     report.Security.RequiresApproval,
+		PermissionSummary:    meta.Permissions.Summary(),
+		Runtime:              meta.Runtime,
+		RuntimeSummary:       meta.Runtime.Summary(),
+		Security:             &security,
+		SecurityFindings:     append([]plugins.SecurityFinding(nil), report.Security.Findings...),
+		SecurityMismatches:   toPluginDiagnostics(report.Security.Mismatches),
 		Diagnostics:          toPluginDiagnostics(report.Diagnostics),
 	}, nil
 }
@@ -1022,6 +1087,7 @@ func (s *Service) RollbackPlugin(ctx context.Context, name string) (*types.Plugi
 		return nil, err
 	}
 	report := plugins.DiagnoseInstalled(s.cfg.PluginsDir, meta, containsString(s.cfg.Plugins.Enabled, meta.Name))
+	security := report.Security
 	return &types.PluginRecord{
 		Name:                 meta.Name,
 		Title:                meta.Title,
@@ -1039,6 +1105,15 @@ func (s *Service) RollbackPlugin(ctx context.Context, name string) (*types.Plugi
 		Requires:             append([]string(nil), meta.Requires...),
 		Dependencies:         toPluginDependencies(meta.Dependencies),
 		ConfigSchema:         toFieldSchema(meta.ConfigSchema),
+		Permissions:          meta.Permissions,
+		RiskTier:             report.Security.RiskTier,
+		RequiresApproval:     report.Security.RequiresApproval,
+		PermissionSummary:    meta.Permissions.Summary(),
+		Runtime:              meta.Runtime,
+		RuntimeSummary:       meta.Runtime.Summary(),
+		Security:             &security,
+		SecurityFindings:     append([]plugins.SecurityFinding(nil), report.Security.Findings...),
+		SecurityMismatches:   toPluginDiagnostics(report.Security.Mismatches),
 		Diagnostics:          toPluginDiagnostics(report.Diagnostics),
 	}, nil
 }

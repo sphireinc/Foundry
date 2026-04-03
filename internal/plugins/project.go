@@ -1,6 +1,9 @@
 package plugins
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type Project struct {
 	ConfigPath string
@@ -39,11 +42,12 @@ func (p Project) Sync() error {
 	})
 }
 
-func (p Project) Install(url, name string) (Metadata, error) {
+func (p Project) Install(url, name string, approveRisk bool) (Metadata, error) {
 	return Install(InstallOptions{
-		PluginsDir: p.PluginsDir,
-		URL:        strings.TrimSpace(url),
-		Name:       strings.TrimSpace(name),
+		PluginsDir:  p.PluginsDir,
+		URL:         strings.TrimSpace(url),
+		Name:        strings.TrimSpace(name),
+		ApproveRisk: approveRisk,
 	})
 }
 
@@ -51,7 +55,17 @@ func (p Project) Uninstall(name string) error {
 	return Uninstall(p.PluginsDir, name)
 }
 
-func (p Project) Enable(name string) error {
+func (p Project) Enable(name string, approveRisk bool) error {
+	meta, err := LoadMetadata(p.PluginsDir, name)
+	if err != nil {
+		return err
+	}
+	if err := EnsureRuntimeSupported(meta); err != nil {
+		return err
+	}
+	if SecurityApprovalRequired(meta, AnalyzeInstalled(meta)) && !approveRisk {
+		return fmt.Errorf("plugin %q requires explicit approval due to declared or detected risky capabilities", name)
+	}
 	return EnableInConfig(p.ConfigPath, name)
 }
 
@@ -59,8 +73,8 @@ func (p Project) Disable(name string) error {
 	return DisableInConfig(p.ConfigPath, name)
 }
 
-func (p Project) Update(name string) (Metadata, error) {
-	return UpdateInstalled(p.PluginsDir, name)
+func (p Project) Update(name string, approveRisk bool) (Metadata, error) {
+	return UpdateInstalled(p.PluginsDir, name, approveRisk)
 }
 
 func (p Project) Validate(name string) error {
@@ -81,6 +95,14 @@ func (p Project) ListInstalled() ([]Metadata, error) {
 
 func (p Project) Metadata(name string) (Metadata, error) {
 	return LoadMetadata(p.PluginsDir, name)
+}
+
+func (p Project) SecurityReport(name string) (SecurityReport, error) {
+	meta, err := p.Metadata(name)
+	if err != nil {
+		return SecurityReport{}, err
+	}
+	return AnalyzeInstalled(meta), nil
 }
 
 func (p Project) MissingDependencies(installed Metadata, enabled []string) ([]MissingDependency, error) {

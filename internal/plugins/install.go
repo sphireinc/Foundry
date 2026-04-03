@@ -24,9 +24,10 @@ const (
 )
 
 type InstallOptions struct {
-	PluginsDir string
-	URL        string
-	Name       string
+	PluginsDir  string
+	URL         string
+	Name        string
+	ApproveRisk bool
 }
 
 // Install clones or downloads a plugin repository into PluginsDir and returns
@@ -99,6 +100,11 @@ func Install(opts InstallOptions) (Metadata, error) {
 	if strings.TrimSpace(meta.Name) != "" && meta.Name != name {
 		_ = os.RemoveAll(targetDir)
 		return Metadata{}, fmt.Errorf("plugin metadata name %q does not match install directory %q", meta.Name, name)
+	}
+	report := AnalyzeInstalled(meta)
+	if SecurityApprovalRequired(meta, report) && !opts.ApproveRisk {
+		_ = os.RemoveAll(targetDir)
+		return Metadata{}, fmt.Errorf("plugin %q requires explicit approval due to declared or detected risky capabilities; rerun with approval", meta.Name)
 	}
 
 	return meta, nil

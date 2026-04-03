@@ -18,6 +18,7 @@ type HealthReport struct {
 	Healthy     bool
 	Status      string
 	Diagnostics []ValidationDiagnostic
+	Security    SecurityReport
 }
 
 func rollbackRoot(pluginsDir, name string) string {
@@ -122,7 +123,7 @@ func DiagnoseInstalled(pluginsDir string, meta Metadata, enabled bool) HealthRep
 	if err := validateMetadataCompatibility(meta); err != nil {
 		add("error", filepath.Join(meta.Directory, "plugin.yaml"), err.Error())
 	}
-	if err := validatePluginForSync(pluginsDir, meta.Name); err != nil {
+	if _, err := validatePluginForSync(pluginsDir, meta.Name); err != nil {
 		add("error", meta.Directory, err.Error())
 	}
 	if meta.CompatibilityVersion == "" {
@@ -133,6 +134,10 @@ func DiagnoseInstalled(pluginsDir string, meta Metadata, enabled bool) HealthRep
 	}
 	if len(meta.Screenshots) == 0 {
 		add("warn", filepath.Join(meta.Directory, "plugin.yaml"), "screenshots are not declared")
+	}
+	report.Security = AnalyzeInstalled(meta)
+	for _, mismatch := range report.Security.Mismatches {
+		add("error", mismatch.Path, mismatch.Message)
 	}
 	if enabled && !report.Healthy {
 		report.Status = "degraded"

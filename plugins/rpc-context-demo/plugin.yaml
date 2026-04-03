@@ -1,0 +1,28 @@
+name: rpc-context-demo
+title: RPC Context Demo
+version: 0.1.0
+description: Example out-of-process plugin using the Foundry RPC plugin protocol.
+author: Foundry
+license: MIT
+repo: github.com/sphireinc/foundry/plugins/rpc-context-demo
+foundry_api: v1
+min_foundry_version: 1.3.3
+compatibility_version: v1
+permissions:
+  render:
+    context:
+      write: true
+  capabilities:
+    requires_admin_approval: true
+runtime:
+  mode: rpc
+  protocol_version: v1alpha1
+  command:
+    - go
+    - run
+    - ./cmd/server
+  sandbox:
+    profile: default
+    allow_network: false
+    allow_filesystem_write: false
+    allow_process_exec: false

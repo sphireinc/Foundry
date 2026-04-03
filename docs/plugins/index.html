@@ -84,7 +84,19 @@ admin:
   settings_sections:
     - key: search
       title: Search
-      description: Search tuning</code></pre>
+      description: Search tuning
+permissions:
+  content:
+    documents:
+      read: true
+  render:
+    context:
+      read: true
+      write: true
+    html_slots:
+      inject: true
+  capabilities:
+    requires_admin_approval: false</code></pre>
 
           <h2>Available metadata fields</h2>
           <ul>
@@ -102,12 +114,116 @@ admin:
             <li><code>min_foundry_version</code></li>
             <li><code>compatibility_version</code></li>
             <li><code>config_schema</code></li>
+            <li><code>permissions</code></li>
             <li><code>admin.pages</code></li>
             <li><code>admin.widgets</code></li>
             <li><code>admin.slots</code></li>
             <li><code>admin.settings_sections</code></li>
             <li><code>screenshots</code></li>
           </ul>
+
+          <h2>Plugin permissions</h2>
+          <p>
+            Foundry now supports a structured <code>permissions</code> block in
+            <code>plugin.yaml</code>. This does not sandbox in-process Go plugins, but it does make
+            plugin intent explicit in validation, CLI output, and the admin UI.
+          </p>
+          <pre><code>permissions:
+  filesystem:
+    read:
+      content: true
+      data: false
+    write:
+      public: true
+  network:
+    outbound:
+      https: true
+      domains:
+        - api.example.com
+      methods:
+        - GET
+        - POST
+    inbound:
+      register_routes: false
+      admin_routes: false
+      public_routes: false
+  render:
+    context:
+      read: true
+      write: true
+    html_slots:
+      inject: true
+  capabilities:
+    dangerous: false
+    requires_admin_approval: false</code></pre>
+          <ul>
+            <li>
+              Use the most specific declarations you can. For example, prefer
+              <code>content.documents.read</code> over broad filesystem access when a plugin only
+              reads content through normal hooks.
+            </li>
+            <li>
+              Dangerous plugins, secret access, or local process execution must also declare
+              <code>permissions.capabilities.requires_admin_approval: true</code>.
+            </li>
+            <li>
+              Report declared permissions with <code>foundry plugin security &lt;name&gt;</code>.
+            </li>
+            <li>
+              Run <code>foundry plugin validate --security</code> or
+              <code>foundry plugin validate &lt;name&gt; --security --strict-security</code> to make
+              security checks explicit in CI and local review.
+            </li>
+            <li>
+              Foundry now also scans plugin source for risky imports, hooks, and calls, then
+              compares that detected behavior against the declared permissions.
+            </li>
+            <li>
+              CLI and admin install, enable, and update flows require explicit approval for risky
+              or mismatched plugins. Use <code>--approve-risk</code> in the CLI when you intend to
+              trust that plugin.
+            </li>
+          </ul>
+
+          <h2>Plugin runtime contract</h2>
+          <p>
+            Foundry now supports a first-class <code>runtime</code> block in
+            <code>plugin.yaml</code> for the out-of-process plugin host. The first supported RPC
+            hook family is <code>context</code>, which lets a plugin enrich render-time view data
+            without sharing the Foundry process.
+          </p>
+          <pre><code>runtime:
+  mode: rpc
+  protocol_version: v1alpha1
+  command:
+    - ./bin/my-plugin
+    - serve
+  socket: unix:///tmp/foundry-my-plugin.sock
+  sandbox:
+    profile: strict
+    allow_network: false
+    allow_filesystem_write: false
+    allow_process_exec: false</code></pre>
+          <p>
+            Foundry's current RPC host expects the declared command to speak the
+            <code>sdk/pluginrpc</code> protocol over stdin/stdout. The host sends a handshake, then
+            <code>context</code> requests with sanitized page/view data. The plugin responds with a
+            data map to merge back into the page context.
+          </p>
+          <p>
+            The current RPC host enforces a narrow boundary:
+          </p>
+          <ul>
+            <li>sanitized environment only</li>
+            <li>no host-granted filesystem write channel</li>
+            <li>no host-granted network channel</li>
+            <li>no host-granted local process execution channel</li>
+            <li>unsupported sandbox expansions are rejected at enable time</li>
+          </ul>
+          <p>
+            A working example ships with Foundry at
+            <code>plugins/rpc-context-demo/</code>.
+          </p>
 
           <h2>Plugin-defined admin pages</h2>
           <p>

@@ -15,8 +15,8 @@ export const createAdminPluginsAPI = (http) => ({
   rollback(input) {
     return http.post('/api/plugins/rollback', input);
   },
-  enable(name) {
-    return http.post('/api/plugins/enable', { name });
+  enable(input) {
+    return http.post('/api/plugins/enable', typeof input === 'string' ? { name: input } : input);
   },
   disable(name) {
     return http.post('/api/plugins/disable', { name });

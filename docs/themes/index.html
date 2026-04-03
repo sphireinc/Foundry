@@ -45,7 +45,8 @@
         <div class="page-body">
           <h2>Start with the scaffold</h2>
           <pre><code>foundry theme scaffold &lt;theme-name&gt;
-foundry theme validate &lt;theme-name&gt;
+foundry theme validate &lt;theme-name&gt; --security --csp
+foundry theme security &lt;theme-name&gt;
 foundry theme switch &lt;theme-name&gt;</code></pre>
 
           <p>
@@ -125,6 +126,15 @@ field_contracts:
       - name: primary_cta_label
         type: text
         label: Primary CTA Label
+security:
+  external_assets:
+    allowed: false
+  frontend_requests:
+    allowed: false
+  template_context:
+    allow_site_params: true
+    allow_content_fields: true
+    allow_shared_fields: true
 slots:
   - head.end
   - body.start
@@ -202,6 +212,11 @@ slots:
               field groups are editable in <code>content/custom-fields.yaml</code>.
             </li>
             <li>
+              <code>security</code> is the theme security contract. It declares whether the theme
+              expects remote assets, whether browser-side requests may leave the current origin, and
+              which template context surfaces are available.
+            </li>
+            <li>
               Theme-declared fields are persisted content. Plugin-derived runtime metadata should
               not be written into document fields; it should stay in render-time context data.
             </li>
@@ -217,6 +232,49 @@ slots:
             <li>
               <code>compatibility_version</code> is the theme-platform contract version. Use it to
               signal compatibility with future theme-platform changes.
+            </li>
+          </ul>
+
+          <h2>Theme security</h2>
+          <p>
+            Foundry now validates frontend themes against a dedicated security contract. Themes do
+            not receive the raw site config anymore; they receive a curated public-safe view of site
+            settings plus the fields/data explicitly allowed by the theme contract.
+          </p>
+          <pre><code>security:
+  external_assets:
+    allowed: true
+    scripts:
+      - https://cdn.example.com
+    styles:
+      - https://fonts.example.com
+  frontend_requests:
+    allowed: true
+    origins:
+      - https://api.example.com
+    methods:
+      - GET
+      - POST
+  template_context:
+    allow_site_params: true
+    allow_content_fields: true
+    allow_shared_fields: true
+    allow_runtime_state: false
+    allow_admin_state: false
+    allow_raw_config: false</code></pre>
+          <ul>
+            <li>Remote assets are denied by default unless they are declared.</li>
+            <li>
+              Public-page CSP headers are generated from the theme's declared security policy.
+            </li>
+            <li>
+              <code>allow_raw_config</code> and <code>allow_admin_state</code> are intentionally not
+              supported; themes should never receive secrets, admin tokens, session stores, or raw
+              filesystem paths.
+            </li>
+            <li>
+              Shared custom fields remain available through <code>data "custom_fields"</code> only
+              when <code>allow_shared_fields</code> is enabled.
             </li>
           </ul>
 
@@ -360,7 +418,8 @@ Page body content here.</code></pre>
 
           <h2>Validation checklist</h2>
           <ol>
-            <li>Run <code>foundry theme validate &lt;name&gt;</code>.</li>
+            <li>Run <code>foundry theme validate &lt;name&gt; --security --csp</code>.</li>
+            <li>Inspect the generated CSP and remote asset summary with <code>foundry theme security &lt;name&gt;</code>.</li>
             <li>Preview with <code>foundry serve</code>, <code>foundry serve-preview</code>, or <code>foundry serve-standalone</code>.</li>
             <li>Confirm page, post, and taxonomy archive templates all render cleanly.</li>
             <li>Check that plugin slots still have sensible placement.</li>

@@ -588,11 +588,21 @@ func (r *Router) handleEnablePlugin(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	if err := r.service.EnablePlugin(req.Context(), body.Name); err != nil {
+	if err := r.service.EnablePlugin(req.Context(), body.Name, body.ApproveRisk, body.AcknowledgeMismatches); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
-	r.logAuditRequest(req, "plugin.enable", "success", body.Name, nil)
+	metadata := map[string]string{}
+	if body.ApproveRisk {
+		metadata["approve_risk"] = "true"
+	}
+	if body.AcknowledgeMismatches {
+		metadata["acknowledge_mismatches"] = "true"
+	}
+	r.logAuditRequest(req, "plugin.enable", "success", body.Name, metadata)
+	if body.ApproveRisk || body.AcknowledgeMismatches {
+		r.logPluginSecurityAudit(req, "plugin.enable.approved", body.Name)
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -608,12 +618,22 @@ func (r *Router) handleInstallPlugin(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	record, err := r.service.InstallPlugin(req.Context(), body.URL, body.Name)
+	record, err := r.service.InstallPlugin(req.Context(), body.URL, body.Name, body.ApproveRisk, body.AcknowledgeMismatches)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
-	r.logAuditRequest(req, "plugin.install", "success", record.Name, nil)
+	metadata := map[string]string{}
+	if body.ApproveRisk {
+		metadata["approve_risk"] = "true"
+	}
+	if body.AcknowledgeMismatches {
+		metadata["acknowledge_mismatches"] = "true"
+	}
+	r.logAuditRequest(req, "plugin.install", "success", record.Name, metadata)
+	if body.ApproveRisk || body.AcknowledgeMismatches {
+		r.logPluginSecurityAudit(req, "plugin.install.approved", record.Name)
+	}
 	writeJSON(w, http.StatusOK, record)
 }
 
@@ -650,12 +670,22 @@ func (r *Router) handleUpdatePlugin(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	record, err := r.service.UpdatePlugin(req.Context(), body.Name)
+	record, err := r.service.UpdatePlugin(req.Context(), body.Name, body.ApproveRisk, body.AcknowledgeMismatches)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
-	r.logAuditRequest(req, "plugin.update", "success", record.Name, nil)
+	metadata := map[string]string{}
+	if body.ApproveRisk {
+		metadata["approve_risk"] = "true"
+	}
+	if body.AcknowledgeMismatches {
+		metadata["acknowledge_mismatches"] = "true"
+	}
+	r.logAuditRequest(req, "plugin.update", "success", record.Name, metadata)
+	if body.ApproveRisk || body.AcknowledgeMismatches {
+		r.logPluginSecurityAudit(req, "plugin.update.approved", record.Name)
+	}
 	writeJSON(w, http.StatusOK, record)
 }
 

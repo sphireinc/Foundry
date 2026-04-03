@@ -43,6 +43,40 @@ export const bindDashboardEvents = (ctx) => {
     buildDocumentRaw,
   } = ctx;
 
+  const pluginRecordByName = (name) =>
+    (state.plugins || []).find((item) => item.name === name) || null;
+  const isRiskAckError = (error) => {
+    const message = String(error?.message || error || '').toLowerCase();
+    return (
+      message.includes('approve_risk') ||
+      message.includes('requires explicit risk approval') ||
+      message.includes('acknowledge_mismatches')
+    );
+  };
+  const confirmPluginRisk = (action, pluginName, pluginRecord = null) => {
+    const lines = [
+      `${action} plugin "${pluginName}"?`,
+      '',
+      pluginRecord?.risk_tier
+        ? `Declared risk tier: ${pluginRecord.risk_tier}`
+        : 'This plugin requires explicit approval before continuing.',
+    ];
+    if (pluginRecord?.runtime_summary?.length) {
+      lines.push(`Runtime: ${pluginRecord.runtime_summary.join(' • ')}`);
+    }
+    if (pluginRecord?.security_mismatches?.length) {
+      lines.push('');
+      lines.push(`Detected security mismatches: ${pluginRecord.security_mismatches.length}`);
+      lines.push(...pluginRecord.security_mismatches.slice(0, 3).map((diag) => `- ${diag.message}`));
+    } else {
+      lines.push('');
+      lines.push('Proceeding will explicitly approve the plugin risk profile.');
+    }
+    lines.push('');
+    lines.push('Continue?');
+    return window.confirm(lines.join('\n'));
+  };
+
   root.querySelectorAll('[data-section]').forEach((element) => {
     element.addEventListener('click', (event) => {
       event.preventDefault();
@@ -1278,7 +1312,23 @@ export const bindDashboardEvents = (ctx) => {
   root.querySelectorAll('[data-enable-plugin]').forEach((button) => {
     button.addEventListener('click', async () => {
       try {
-        await admin.plugins.enable(button.dataset.enablePlugin);
+        const name = button.dataset.enablePlugin;
+        try {
+          await admin.plugins.enable({ name });
+        } catch (error) {
+          if (!isRiskAckError(error)) {
+            throw error;
+          }
+          const plugin = pluginRecordByName(name);
+          if (!confirmPluginRisk('Enable', name, plugin)) {
+            return;
+          }
+          await admin.plugins.enable({
+            name,
+            approve_risk: true,
+            acknowledge_mismatches: true,
+          });
+        }
         setFlash('Plugin enabled.');
         await fetchAll(false);
         navigate('plugins');
@@ -1306,10 +1356,37 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('plugin-install-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
-      const record = await admin.plugins.install({
+      const input = {
         url: document.getElementById('plugin-install-url').value,
         name: document.getElementById('plugin-install-name').value,
-      });
+      };
+      let record;
+      try {
+        record = await admin.plugins.install(input);
+      } catch (error) {
+        if (!isRiskAckError(error)) {
+          throw error;
+        }
+        if (
+          !window.confirm(
+            [
+              `Install plugin from "${input.url}"?`,
+              '',
+              'Foundry detected a plugin that requires explicit risk approval or mismatch acknowledgment.',
+              'Continuing will download the plugin and accept the reported risk if validation finds one.',
+              '',
+              'Continue?',
+            ].join('\n')
+          )
+        ) {
+          return;
+        }
+        record = await admin.plugins.install({
+          ...input,
+          approve_risk: true,
+          acknowledge_mismatches: true,
+        });
+      }
       setFlash(`Plugin ${record.name || 'installed'} installed.`);
       await fetchAll(false);
       navigate('plugins');
@@ -1322,7 +1399,23 @@ export const bindDashboardEvents = (ctx) => {
   root.querySelectorAll('[data-update-plugin]').forEach((button) => {
     button.addEventListener('click', async () => {
       try {
-        await admin.plugins.update({ name: button.dataset.updatePlugin });
+        const name = button.dataset.updatePlugin;
+        try {
+          await admin.plugins.update({ name });
+        } catch (error) {
+          if (!isRiskAckError(error)) {
+            throw error;
+          }
+          const plugin = pluginRecordByName(name);
+          if (!confirmPluginRisk('Update', name, plugin)) {
+            return;
+          }
+          await admin.plugins.update({
+            name,
+            approve_risk: true,
+            acknowledge_mismatches: true,
+          });
+        }
         setFlash('Plugin updated.');
         await fetchAll(false);
         navigate('plugins');

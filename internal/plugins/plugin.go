@@ -219,6 +219,20 @@ func NewManager(pluginsDir string, enabled []string) (*Manager, error) {
 		if name == "" {
 			continue
 		}
+		meta, ok := metadata[name]
+		if ok {
+			if err := EnsureRuntimeSupported(meta); err != nil {
+				return nil, err
+			}
+			if strings.EqualFold(strings.TrimSpace(meta.Runtime.Mode), "rpc") {
+				proxy, err := newRPCPluginProxy(meta)
+				if err != nil {
+					return nil, err
+				}
+				m.plugins = append(m.plugins, proxy)
+				continue
+			}
+		}
 
 		if factory, ok := registry[name]; ok {
 			m.plugins = append(m.plugins, factory())

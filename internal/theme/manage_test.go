@@ -185,6 +185,49 @@ func TestValidateInstalledDetailedRejectsUnsupportedSDKVersion(t *testing.T) {
 	}
 }
 
+func TestValidateInstalledDetailedChecksThemeSecurity(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "security-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
+	headBody, err := os.ReadFile(headPath)
+	if err != nil {
+		t.Fatalf("read head: %v", err)
+	}
+	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<script src="https://cdn.example.com/theme.js"></script>`, 1)
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o644); err != nil {
+		t.Fatalf("write head: %v", err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "security-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected undeclared remote asset to invalidate theme")
+	}
+
+	manifestPath := filepath.Join(scaffolded, "theme.yaml")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	updated := strings.Replace(string(body), "  external_assets:\n    allowed: false\n", "  external_assets:\n    allowed: true\n    scripts:\n      - https://cdn.example.com\n", 1)
+	if err := os.WriteFile(manifestPath, []byte(updated), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	result, err = ValidateInstalledDetailed(root, "security-theme")
+	if err != nil {
+		t.Fatalf("validate detailed after allowlist: %v", err)
+	}
+	if !result.Valid {
+		t.Fatalf("expected security declaration to validate, got %#v", result.Diagnostics)
+	}
+}
+
 func TestDocumentFieldDefinitionsMatchesThemeContracts(t *testing.T) {
 	root := t.TempDir()
 	themeRoot := filepath.Join(root, "contract-theme")

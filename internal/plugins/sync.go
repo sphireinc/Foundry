@@ -48,10 +48,15 @@ func SyncEnabledPlugins(opts SyncOptions, enabled []string) error {
 	opts = normalizeSyncOptions(opts)
 
 	enabled = uniqueSorted(enabled)
+	inProcess := make([]string, 0, len(enabled))
 
 	for _, name := range enabled {
-		if err := validatePluginForSync(opts.PluginsDir, name); err != nil {
+		meta, err := validatePluginForSync(opts.PluginsDir, name)
+		if err != nil {
 			return fmt.Errorf("validate plugin %s: %w", name, err)
+		}
+		if !strings.EqualFold(strings.TrimSpace(meta.Runtime.Mode), "rpc") {
+			inProcess = append(inProcess, name)
 		}
 	}
 
@@ -59,7 +64,7 @@ func SyncEnabledPlugins(opts SyncOptions, enabled []string) error {
 		return fmt.Errorf("create output dir: %w", err)
 	}
 
-	content := generateImportsFile(opts.ModulePath, enabled)
+	content := generateImportsFile(opts.ModulePath, inProcess)
 
 	existing, err := os.ReadFile(opts.OutputPath)
 	if err == nil && bytes.Equal(existing, []byte(content)) {
@@ -106,23 +111,31 @@ func loadSyncConfig(path string) (*syncSiteConfig, error) {
 	return &cfg, nil
 }
 
-func validatePluginForSync(pluginsDir, name string) error {
+func validatePluginForSync(pluginsDir, name string) (*Metadata, error) {
 	var err error
 	name, err = validatePluginName(name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	root := filepath.Join(pluginsDir, name)
 	info, err := os.Stat(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("plugin %q is enabled but directory %q does not exist", name, root)
+			return nil, fmt.Errorf("plugin %q is enabled but directory %q does not exist", name, root)
 		}
-		return err
+		return nil, err
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("plugin path %q is not a directory", root)
+		return nil, fmt.Errorf("plugin path %q is not a directory", root)
+	}
+
+	meta, err := LoadMetadata(pluginsDir, name)
+	if err != nil {
+		return nil, err
+	}
+	if strings.EqualFold(strings.TrimSpace(meta.Runtime.Mode), "rpc") {
+		return &meta, EnsureRuntimeSupported(meta)
 	}
 
 	foundGo := false
@@ -139,18 +152,14 @@ func validatePluginForSync(pluginsDir, name string) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !foundGo {
-		return fmt.Errorf("plugin %q has no .go files under %q", name, root)
+		return nil, fmt.Errorf("plugin %q has no .go files under %q", name, root)
 	}
 
-	if _, err := LoadMetadata(pluginsDir, name); err != nil {
-		return err
-	}
-
-	return nil
+	return &meta, nil
 }
 
 func uniqueSorted(in []string) []string {

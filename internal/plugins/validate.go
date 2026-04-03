@@ -52,7 +52,7 @@ func ValidateEnabledPlugins(pluginsDir string, enabled []string) PluginValidatio
 	}
 
 	for _, name := range normalized {
-		if err := validatePluginForSync(pluginsDir, name); err != nil {
+		if err := ValidateInstalledPlugin(pluginsDir, name); err != nil {
 			report.Issues = append(report.Issues, ValidationIssue{
 				Name:   name,
 				Status: "invalid",
@@ -112,7 +112,7 @@ func enabledPluginStatus(pluginsDir, name string) string {
 		}
 	}
 
-	if err := validatePluginForSync(pluginsDir, name); err != nil {
+	if err := ValidateInstalledPlugin(pluginsDir, name); err != nil {
 		msg := err.Error()
 
 		switch {
@@ -126,6 +126,8 @@ func enabledPluginStatus(pluginsDir, name string) string {
 			return "metadata invalid"
 		case strings.Contains(msg, "has no .go files"):
 			return "code missing"
+		case strings.Contains(msg, "security validation failed"):
+			return "security mismatch"
 		default:
 			return "invalid"
 		}
