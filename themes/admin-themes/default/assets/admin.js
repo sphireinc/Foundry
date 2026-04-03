@@ -228,7 +228,7 @@ import {
     `${kind}-${plugin}-${key}-${slot}`.replace(/[^a-zA-Z0-9_-]+/g, '-');
   const extensionPageBySection = (section) =>
     extensionPages().find((page) => page.section === normalizeAdminSection(section)) || null;
-  const canAccessSection = (section) => {
+  let canAccessSection = (section) => {
     const normalized = normalizeAdminSection(section);
     if (extensionPageBySection(normalized)) return true;
     return canAccessBuiltinSection(normalized);
