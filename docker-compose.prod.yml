@@ -1,0 +1,40 @@
+services:
+  foundry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    ports:
+      - "${FOUNDRY_PUBLISH_ADDR:-8080}:8080"
+    environment:
+      FOUNDRY_ADMIN_SESSION_SECRET: "${FOUNDRY_ADMIN_SESSION_SECRET?required}"
+      FOUNDRY_ADMIN_TOTP_SECRET_KEY: "${FOUNDRY_ADMIN_TOTP_SECRET_KEY?required}"
+    volumes:
+      - foundry_content:/app/content
+      - foundry_data:/app/data
+      - foundry_themes:/app/themes
+      - foundry_plugins:/app/plugins
+      - foundry_public:/app/public
+    working_dir: /app
+    command: ["foundry", "--config-overlay", "content/config/site.docker.prod.yaml", "serve"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  foundry_content:
+  foundry_data:
+  foundry_themes:
+  foundry_plugins:
+  foundry_public:

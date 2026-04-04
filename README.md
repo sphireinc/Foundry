@@ -33,13 +33,37 @@ See more of Foundry here: [Foundry Screenshots](README_SCREENSHOTS.md)
 The fastest way to get the project running locally is via Docker:
 
 ```bash
+sh scripts/docker-init.sh
 docker compose up -d --build
 ```
 
-The compose setup bind-mounts the project into the container for source-driven
-development, but keeps `data/` and `public/` on named Docker volumes so the
-runtime can write sessions, admin state, and generated output without host-file
-permission issues.
+The default [docker-compose.yml](/Users/JuanSanchez/WebstormProjects/cms/docker-compose.yml) is local-development oriented:
+
+- it bind-mounts the project source into the container
+- it keeps `data/` and `public/` on named Docker volumes
+- it reads `.env` when present
+- `scripts/docker-init.sh` creates a `.env` file with random local secrets for local use
+
+For a harder production shape, use [docker-compose.prod.yml](/Users/JuanSanchez/WebstormProjects/cms/docker-compose.prod.yml):
+
+```bash
+export FOUNDRY_ADMIN_SESSION_SECRET="$(openssl rand -hex 32)"
+export FOUNDRY_ADMIN_TOTP_SECRET_KEY="$(openssl rand -base64 32)"
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The production compose setup:
+
+- uses explicit required secrets
+- runs with a read-only root filesystem
+- drops Linux capabilities
+- enables `no-new-privileges`
+- uses a tmpfs for `/tmp`
+- uses named volumes for `content/`, `themes/`, `plugins/`, `data/`, and `public/`
+
+Before using the production overlay in anything real, update
+`content/config/site.docker.prod.yaml` so `base_url` matches your deployed
+HTTPS origin.
 
 Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, run Foundry locally, or run it in portable standalone mode without Docker.
 
@@ -344,6 +368,53 @@ title: Home
 ```
 
 ### Run it
+
+#### Docker
+
+Local development with Docker:
+
+```bash
+sh scripts/docker-init.sh
+docker compose up -d --build
+```
+
+That uses:
+
+- [docker-compose.yml](/Users/JuanSanchez/WebstormProjects/cms/docker-compose.yml)
+- [content/config/site.docker.yaml](/Users/JuanSanchez/WebstormProjects/cms/content/config/site.docker.yaml)
+
+The default Docker setup is intentionally development-oriented:
+
+- the project root is bind-mounted into the container
+- `data/` and `public/` stay on named Docker volumes
+- local Docker secrets can live in `.env`
+
+Production-shaped Docker deployment:
+
+```bash
+export FOUNDRY_ADMIN_SESSION_SECRET="$(openssl rand -hex 32)"
+export FOUNDRY_ADMIN_TOTP_SECRET_KEY="$(openssl rand -base64 32)"
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+That uses:
+
+- [docker-compose.prod.yml](/Users/JuanSanchez/WebstormProjects/cms/docker-compose.prod.yml)
+- [content/config/site.docker.prod.yaml](/Users/JuanSanchez/WebstormProjects/cms/content/config/site.docker.prod.yaml)
+
+The production compose shape is stricter:
+
+- explicit required secrets
+- read-only root filesystem
+- `tmpfs` for `/tmp`
+- `cap_drop: ALL`
+- `no-new-privileges`
+- named volumes for `content/`, `themes/`, `plugins/`, `data/`, and `public/`
+
+Before using the production Docker overlay, set the real HTTPS origin in
+`content/config/site.docker.prod.yaml`.
+
+#### Source / local binary
 
 Start the local preview server from the project root:
 
