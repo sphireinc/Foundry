@@ -346,6 +346,27 @@ func TestLoginMigratesLegacyPlaintextTOTPSecret(t *testing.T) {
 	}
 }
 
+func TestLoginIgnoresUnavailableTOTPSecretWhenMFAIsDisabled(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.TOTPSecretKey = ""
+	m := New(cfg)
+
+	body, err := os.ReadFile(cfg.Admin.UsersFile)
+	if err != nil {
+		t.Fatalf("read users file: %v", err)
+	}
+	text := strings.Replace(string(body), "password_hash:", "totp_secret: enc:v1:invalidciphertext\n    password_hash:", 1)
+	if err := os.WriteFile(cfg.Admin.UsersFile, []byte(text), 0o644); err != nil {
+		t.Fatalf("write users file: %v", err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	loginReq.RemoteAddr = "127.0.0.1:12345"
+	if _, err := m.Login(httptest.NewRecorder(), loginReq, "admin", "secret-password", ""); err != nil {
+		t.Fatalf("expected login to ignore unused TOTP secret, got %v", err)
+	}
+}
+
 func TestSetupTOTPRequiresEncryptionKey(t *testing.T) {
 	cfg := testAuthConfig(t)
 	cfg.Admin.TOTPSecretKey = ""

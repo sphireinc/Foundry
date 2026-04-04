@@ -86,6 +86,7 @@ func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, pas
 		return nil, fmt.Errorf("invalid username or password")
 	}
 	plainTOTPSecret := ""
+	migratedTOTPSecret := ""
 	ok, upgradedHash, err := users.VerifyPasswordWithUpgrade(user.PasswordHash, password)
 	if err != nil || user.Disabled || !ok {
 		m.loginThrottler.Failure(r, username, time.Now())
@@ -96,18 +97,20 @@ func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, pas
 			user.PasswordHash = upgradedHash
 		}
 	}
-	plainTOTPSecret, migratedTOTPSecret, err := m.decodeTOTPSecret(user.TOTPSecret)
-	if err != nil {
-		m.loginThrottler.Failure(r, username, time.Now())
-		return nil, fmt.Errorf("two-factor authentication is not available")
-	}
-	if user.TOTPEnabled && !VerifyTOTP(plainTOTPSecret, totpCode, time.Now()) {
-		m.loginThrottler.Failure(r, username, time.Now())
-		return nil, fmt.Errorf("two-factor authentication code is required")
-	}
-	if migratedTOTPSecret != "" {
-		_ = users.UpdateTOTPSecret(m.cfg.Admin.UsersFile, user.Username, migratedTOTPSecret)
-		user.TOTPSecret = migratedTOTPSecret
+	if user.TOTPEnabled {
+		plainTOTPSecret, migratedTOTPSecret, err = m.decodeTOTPSecret(user.TOTPSecret)
+		if err != nil {
+			m.loginThrottler.Failure(r, username, time.Now())
+			return nil, fmt.Errorf("two-factor authentication is not available")
+		}
+		if !VerifyTOTP(plainTOTPSecret, totpCode, time.Now()) {
+			m.loginThrottler.Failure(r, username, time.Now())
+			return nil, fmt.Errorf("two-factor authentication code is required")
+		}
+		if migratedTOTPSecret != "" {
+			_ = users.UpdateTOTPSecret(m.cfg.Admin.UsersFile, user.Username, migratedTOTPSecret)
+			user.TOTPSecret = migratedTOTPSecret
+		}
 	}
 	m.loginThrottler.Success(r, username)
 
