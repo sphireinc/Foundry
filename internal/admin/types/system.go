@@ -84,6 +84,10 @@ type RuntimeIntegrityStatus struct {
 
 type RuntimeActivityStatus struct {
 	ActiveSessions      int            `json:"active_sessions"`
+	ConcurrentUsers     int            `json:"concurrent_users"`
+	AddressSpreadUsers  int            `json:"address_spread_users"`
+	LongLivedSessions   int            `json:"long_lived_sessions"`
+	IdleSessions        int            `json:"idle_sessions"`
 	ActiveDocumentLocks int            `json:"active_document_locks"`
 	RecentAuditEvents   int            `json:"recent_audit_events"`
 	RecentFailedLogins  int            `json:"recent_failed_logins"`

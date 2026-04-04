@@ -47,6 +47,10 @@ Foundry will run on `http://localhost:8080/` by default, and the admin panel
 is reachable at `http://localhost:8080/__admin`. The default login on a 
 new install is `admin:admin`.
 
+Production note: set `admin.session_secret` in `content/config/site.yaml` or
+`FOUNDRY_ADMIN_SESSION_SECRET` in the environment. Foundry stores only hashed
+session tokens at rest, and an explicit session secret strengthens that hashing.
+
 ## Project layout
 
 ```text
@@ -850,7 +854,7 @@ users:
     name: Admin User
     email: admin@example.com
     role: admin
-    password_hash: pbkdf2-sha256$...
+    password_hash: argon2id$...
 ```
 
 Generate a password hash with:
@@ -865,7 +869,27 @@ Or generate a starter YAML snippet with:
 foundry admin sample-user admin "Admin User" admin@example.com "your-password"
 ```
 
-Browser sessions are stored in a secure cookie scoped to `admin.path`, expire after 30 minutes of inactivity by default, and are renewed while the user remains active.
+Browser sessions are stored in a secure cookie scoped to `admin.path`, expire
+after 30 minutes of inactivity by default, and are renewed while the user
+remains active. Foundry persists only a token hash in
+`data/admin/sessions.yaml`, not the raw reusable bearer token.
+
+#### Admin security
+
+- set `admin.session_secret` or `FOUNDRY_ADMIN_SESSION_SECRET` in production
+- without it, session tokens are still hashed at rest, but with plain SHA-256 instead of keyed HMAC-SHA-256
+- set `admin.totp_secret_key` or `FOUNDRY_ADMIN_TOTP_SECRET_KEY` in production to encrypt stored TOTP secrets at rest
+- TOTP setup now requires that key; legacy plaintext TOTP secrets still verify and are migrated to encrypted form when used
+- admin password hashes now default to `argon2id$...`
+- legacy PBKDF2 password hashes still verify and are upgraded automatically on successful login
+- `admin.session_idle_timeout_minutes` controls inactivity expiry
+- `admin.session_max_age_minutes` caps total session lifetime even if the session remains active
+- `admin.single_session_per_user` optionally revokes older sessions when the same user signs in again
+- for non-local admin access, set `base_url` to an `https://...` origin and make sure your reverse proxy forwards HTTPS correctly so secure cookies behave as expected
+- rotating `admin.session_secret` invalidates all persisted browser sessions
+- rotating `admin.totp_secret_key` requires users with stored TOTP secrets to re-enroll if their secret has not already been migrated with the new key
+- if either secret is suspected compromised, rotate it, revoke sessions, and review the audit log before restoring access
+- compatibility note: legacy plaintext sessions, legacy plaintext TOTP secrets, and legacy PBKDF2 password hashes remain supported only as a migration bridge and are intended to be removed after the `1.4.x` line
 
 `admin.access_token` is now optional. If set, it still works for API automation with:
 
@@ -923,9 +947,14 @@ Set the active admin theme with:
 admin:
   enabled: true
   path: /__admin
+  session_secret: replace-this-in-production
+  totp_secret_key: replace-this-with-base64-32-byte-key
   theme: default
   users_file: content/config/admin-users.yaml
   session_ttl_minutes: 30
+  session_idle_timeout_minutes: 30
+  session_max_age_minutes: 480
+  single_session_per_user: false
 ```
 
 `admin.local_only` is a convenience restriction for local development. It should not be treated as the only security boundary in front of a reverse proxy.

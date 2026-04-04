@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -38,21 +39,26 @@ type Config struct {
 }
 
 type AdminConfig struct {
-	Enabled           bool             `yaml:"enabled"`
-	Addr              string           `yaml:"addr"`
-	Path              string           `yaml:"path"`
-	Debug             AdminDebugConfig `yaml:"debug"`
-	LocalOnly         bool             `yaml:"local_only"`
-	AccessToken       string           `yaml:"access_token"`
-	Theme             string           `yaml:"theme"`
-	UsersFile         string           `yaml:"users_file"`
-	SessionStoreFile  string           `yaml:"session_store_file"`
-	LockFile          string           `yaml:"lock_file"`
-	SessionTTLMinutes int              `yaml:"session_ttl_minutes"`
-	PasswordMinLength int              `yaml:"password_min_length"`
-	PasswordResetTTL  int              `yaml:"password_reset_ttl_minutes"`
-	TOTPIssuer        string           `yaml:"totp_issuer"`
-	localOnlySet      bool             `yaml:"-"`
+	Enabled                   bool             `yaml:"enabled"`
+	Addr                      string           `yaml:"addr"`
+	Path                      string           `yaml:"path"`
+	Debug                     AdminDebugConfig `yaml:"debug"`
+	LocalOnly                 bool             `yaml:"local_only"`
+	AccessToken               string           `yaml:"access_token"`
+	SessionSecret             string           `yaml:"session_secret,omitempty"`
+	TOTPSecretKey             string           `yaml:"totp_secret_key,omitempty"`
+	Theme                     string           `yaml:"theme"`
+	UsersFile                 string           `yaml:"users_file"`
+	SessionStoreFile          string           `yaml:"session_store_file"`
+	LockFile                  string           `yaml:"lock_file"`
+	SessionTTLMinutes         int              `yaml:"session_ttl_minutes"`
+	SessionIdleTimeoutMinutes int              `yaml:"session_idle_timeout_minutes,omitempty"`
+	SessionMaxAgeMinutes      int              `yaml:"session_max_age_minutes,omitempty"`
+	SingleSessionPerUser      bool             `yaml:"single_session_per_user,omitempty"`
+	PasswordMinLength         int              `yaml:"password_min_length"`
+	PasswordResetTTL          int              `yaml:"password_reset_ttl_minutes"`
+	TOTPIssuer                string           `yaml:"totp_issuer"`
+	localOnlySet              bool             `yaml:"-"`
 }
 
 type AdminDebugConfig struct {
@@ -205,6 +211,12 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.Admin.Addr == "" {
 		c.Admin.Addr = ""
+	}
+	if strings.TrimSpace(c.Admin.SessionSecret) == "" {
+		c.Admin.SessionSecret = strings.TrimSpace(os.Getenv("FOUNDRY_ADMIN_SESSION_SECRET"))
+	}
+	if strings.TrimSpace(c.Admin.TOTPSecretKey) == "" {
+		c.Admin.TOTPSecretKey = strings.TrimSpace(os.Getenv("FOUNDRY_ADMIN_TOTP_SECRET_KEY"))
 	}
 	c.Admin.Path = normalizeAdminPath(c.Admin.Path)
 	if strings.TrimSpace(c.Admin.Theme) == "" {

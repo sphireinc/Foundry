@@ -7,6 +7,7 @@ export const renderTableControls = (state, tableName, totalCount, totalPages) =>
   const choices = {
     documents: ['title', 'type', 'status', 'lang'],
     media: ['name', 'kind', 'reference'],
+    sessions: ['last_seen', 'issued_at', 'expires_at', 'username'],
     users: ['username', 'name', 'email'],
     audit: ['timestamp', 'action', 'actor', 'outcome'],
     plugins: ['name', 'status', 'version'],
@@ -140,6 +141,7 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['history', 'History'],
     ['trash', 'Trash'],
     ['media', 'Media'],
+    ['sessions', 'Sessions'],
     ['users', 'Users'],
     ['custom-fields', 'Custom Fields'],
     ['audit', 'Audit'],
@@ -297,6 +299,37 @@ export const renderTrashSelectionRows = (entries, selected, kind) =>
 export const renderOverview = (state) => {
   const content = state.status?.content || {};
   const runtime = state.runtimeStatus || {};
+  const failingChecks = (state.status?.checks || []).filter((check) => check?.status && check.status !== 'ok');
+  const sessionWarnings = [];
+  if ((runtime.activity?.concurrent_users || 0) > 0) {
+    sessionWarnings.push({
+      name: 'session-concurrency',
+      status: 'warn',
+      message: `${runtime.activity.concurrent_users} user(s) have multiple active sessions`,
+    });
+  }
+  if ((runtime.activity?.address_spread_users || 0) > 0) {
+    sessionWarnings.push({
+      name: 'session-address-spread',
+      status: 'warn',
+      message: `${runtime.activity.address_spread_users} user(s) have active sessions from multiple addresses`,
+    });
+  }
+  if ((runtime.activity?.long_lived_sessions || 0) > 0) {
+    sessionWarnings.push({
+      name: 'session-long-lived',
+      status: 'warn',
+      message: `${runtime.activity.long_lived_sessions} session(s) are older than 12 hours`,
+    });
+  }
+  if ((runtime.activity?.idle_sessions || 0) > 0) {
+    sessionWarnings.push({
+      name: 'session-idle',
+      status: 'warn',
+      message: `${runtime.activity.idle_sessions} session(s) have been idle for more than 30 minutes`,
+    });
+  }
+  const combinedWarnings = [...failingChecks, ...sessionWarnings];
   const inReview = (state.documents || []).filter((doc) => doc.status === 'in_review');
   const scheduled = (state.documents || []).filter((doc) => doc.status === 'scheduled');
   const cards = `
@@ -311,11 +344,26 @@ export const renderOverview = (state) => {
       <article class="card"><span class="card-label">Admin Extensions</span><strong>${escapeHTML((state.adminExtensions.pages?.length || 0) + (state.adminExtensions.widgets?.length || 0) + (state.adminExtensions.settings?.length || 0))}</strong><span class="card-copy">Plugin-defined pages, widgets, and settings entries.</span></article>
       <article class="card"><span class="card-label">Broken Refs</span><strong>${escapeHTML((runtime.integrity?.broken_media_refs || 0) + (runtime.integrity?.broken_internal_links || 0))}</strong><span class="card-copy">Media and internal-link validation findings.</span></article>
       <article class="card"><span class="card-label">Active Sessions</span><strong>${escapeHTML(runtime.activity?.active_sessions || 0)}</strong><span class="card-copy">Persisted admin sessions.</span></article>
+      <article class="card"><span class="card-label">Concurrent Users</span><strong>${escapeHTML(runtime.activity?.concurrent_users || 0)}</strong><span class="card-copy">Users with multiple active sessions.</span></article>
+      <article class="card"><span class="card-label">Address Spread</span><strong>${escapeHTML(runtime.activity?.address_spread_users || 0)}</strong><span class="card-copy">Users active from multiple addresses.</span></article>
       <article class="card"><span class="card-label">Active Locks</span><strong>${escapeHTML(runtime.activity?.active_document_locks || 0)}</strong><span class="card-copy">Documents currently being edited.</span></article>
       <article class="card"><span class="card-label">Validate Site</span><strong>${escapeHTML(state.siteValidation?.message_count || 0)}</strong><span class="card-copy">Latest admin validation findings.</span></article>
       <article class="card"><span class="card-label">Release</span><strong>${escapeHTML(state.updateInfo?.has_update ? state.updateInfo.latest_version || 'available' : state.updateInfo?.current_display_version || state.updateInfo?.current_version || 'current')}</strong><span class="card-copy">${escapeHTML(state.updateInfo?.has_update ? 'New release available.' : 'Running the current Foundry build.')}</span></article>
     </div>`;
+  const warningSection = combinedWarnings.length
+    ? `<section class="panel">
+        <div class="panel-header"><div><h2>Warnings</h2><div class="muted">${escapeHTML(String(combinedWarnings.length))} item(s) need attention</div></div><div class="toolbar"><button type="button" class="ghost small" data-section="operations">Open Operations</button><button type="button" class="ghost small" data-section="sessions">Open Sessions</button></div></div>
+        <div class="mini-list panel-pad">
+          ${combinedWarnings
+            .map(
+              (check) => `<div class="mini-list-row"><span>${escapeHTML(check.name || 'check')}</span><strong>${escapeHTML(check.message || check.status || 'attention required')}</strong></div>`
+            )
+            .join('')}
+        </div>
+      </section>`
+    : '';
   const queueSection = `<div class="layout-grid">
+    ${warningSection}
     <section class="panel">
       <div class="panel-header"><div><h2>Review Queue</h2><div class="muted">${escapeHTML(String(inReview.length))} documents in review</div></div><div class="toolbar"><button type="button" class="ghost small" data-section="documents">Open Documents</button></div></div>
       ${

@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"html/template"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	adminauth "github.com/sphireinc/foundry/internal/admin/auth"
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/admin/users"
 	"github.com/sphireinc/foundry/internal/config"
@@ -308,6 +311,39 @@ func TestStatusProvidersBranches(t *testing.T) {
 	}
 }
 
+func TestStatusIncludesAuthSecurityCheckFailures(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.Admin.Enabled = true
+	cfg.Admin.LocalOnly = false
+	cfg.Admin.SessionSecret = ""
+	if err := os.WriteFile(cfg.Admin.UsersFile, []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: argon2id$dummy\n    totp_enabled: true\n    totp_secret: PLAINTEXTSECRET\n"), 0o644); err != nil {
+		t.Fatalf("write users file: %v", err)
+	}
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return content.NewSiteGraph(cfg), nil
+	}))
+
+	status, err := svc.GetSystemStatus(context.Background())
+	if err != nil {
+		t.Fatalf("status failed: %v", err)
+	}
+	found := false
+	for _, check := range status.Checks {
+		if check.Name == "auth-security" {
+			found = true
+			if check.Status != "fail" {
+				t.Fatalf("expected auth-security to fail, got %#v", check)
+			}
+			if !strings.Contains(check.Message, "session_secret") || !strings.Contains(check.Message, "plaintext TOTP secrets") {
+				t.Fatalf("unexpected auth-security message: %#v", check)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected auth-security check to be present")
+	}
+}
+
 func TestGetRuntimeStatusIncludesInventoryStorageIntegrityAndActivity(t *testing.T) {
 	cfg := testServiceConfig(t)
 	writeServiceTheme(t, cfg, cfg.Theme)
@@ -424,6 +460,9 @@ func TestGetRuntimeStatusIncludesInventoryStorageIntegrityAndActivity(t *testing
 	if status.Content.MediaCounts["images"] != 1 {
 		t.Fatalf("expected one current image, got %#v", status.Content.MediaCounts)
 	}
+	if status.Activity.ActiveSessions != 1 {
+		t.Fatalf("expected one active session, got %#v", status.Activity)
+	}
 	if status.Storage.DerivedVersionCount != 1 || status.Storage.DerivedTrashCount != 1 {
 		t.Fatalf("unexpected derived file counts: %#v", status.Storage)
 	}
@@ -444,6 +483,62 @@ func TestGetRuntimeStatusIncludesInventoryStorageIntegrityAndActivity(t *testing
 	}
 	if len(status.Storage.LargestFiles) == 0 {
 		t.Fatalf("expected largest files, got %#v", status.Storage)
+	}
+}
+
+func TestRuntimeStatusCountsHashedSessions(t *testing.T) {
+	cfg := testServiceConfig(t)
+	now := time.Now().UTC()
+	if err := os.MkdirAll(filepath.Dir(cfg.Admin.SessionStoreFile), 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+	if err := os.WriteFile(cfg.Admin.SessionStoreFile, []byte("sessions:\n  - token_hash: abc123\n    expires_at: "+now.Add(10*time.Minute).Format(time.RFC3339)+"\n"), 0o600); err != nil {
+		t.Fatalf("write hashed session file: %v", err)
+	}
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return content.NewSiteGraph(cfg), nil
+	}))
+
+	status, err := svc.GetRuntimeStatus(context.Background())
+	if err != nil {
+		t.Fatalf("get runtime status: %v", err)
+	}
+	if status.Activity.ActiveSessions != 1 {
+		t.Fatalf("expected hashed session to be counted, got %#v", status.Activity)
+	}
+}
+
+func TestRuntimeStatusComputesSessionRiskSignals(t *testing.T) {
+	cfg := testServiceConfig(t)
+	now := time.Now().UTC()
+	if err := os.MkdirAll(filepath.Dir(cfg.Admin.SessionStoreFile), 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+	body := "sessions:\n" +
+		"  - token_hash: a1\n    username: admin\n    remote_addr: 127.0.0.1\n    issued_at: " + now.Add(-13*time.Hour).Format(time.RFC3339) + "\n    last_seen: " + now.Add(-45*time.Minute).Format(time.RFC3339) + "\n    expires_at: " + now.Add(10*time.Minute).Format(time.RFC3339) + "\n" +
+		"  - token_hash: a2\n    username: admin\n    remote_addr: 10.0.0.2\n    issued_at: " + now.Add(-2*time.Hour).Format(time.RFC3339) + "\n    last_seen: " + now.Add(-5*time.Minute).Format(time.RFC3339) + "\n    expires_at: " + now.Add(10*time.Minute).Format(time.RFC3339) + "\n"
+	if err := os.WriteFile(cfg.Admin.SessionStoreFile, []byte(body), 0o600); err != nil {
+		t.Fatalf("write session file: %v", err)
+	}
+	svc := New(cfg, WithGraphLoader(func(context.Context, *config.Config, bool) (*content.SiteGraph, error) {
+		return content.NewSiteGraph(cfg), nil
+	}))
+
+	status, err := svc.GetRuntimeStatus(context.Background())
+	if err != nil {
+		t.Fatalf("get runtime status: %v", err)
+	}
+	if status.Activity.ConcurrentUsers != 1 {
+		t.Fatalf("expected one concurrent user, got %#v", status.Activity)
+	}
+	if status.Activity.AddressSpreadUsers != 1 {
+		t.Fatalf("expected one address-spread user, got %#v", status.Activity)
+	}
+	if status.Activity.LongLivedSessions != 1 {
+		t.Fatalf("expected one long-lived session, got %#v", status.Activity)
+	}
+	if status.Activity.IdleSessions != 1 {
+		t.Fatalf("expected one idle session, got %#v", status.Activity)
 	}
 }
 
@@ -961,6 +1056,43 @@ func TestManagementServices(t *testing.T) {
 	}
 	if err := svc.DeleteMedia(context.Background(), upload.Reference); err != nil {
 		t.Fatalf("delete media: %v", err)
+	}
+}
+
+func TestSaveUserRevokesExistingSessionsOnSecurityChange(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.Admin.Enabled = true
+	cfg.Admin.AccessToken = ""
+	svc := New(cfg)
+
+	auth := adminauth.New(cfg)
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	loginReq.RemoteAddr = "127.0.0.1:12345"
+	loginRR := httptest.NewRecorder()
+	if _, err := auth.Login(loginRR, loginReq, "admin", "secret-password", ""); err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	cookies := loginRR.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected session cookie")
+	}
+
+	if _, err := svc.SaveUser(context.Background(), types.UserSaveRequest{
+		Username: "admin",
+		Name:     "Admin User",
+		Email:    "admin@example.com",
+		Role:     "admin",
+		Password: "New-secret-password1!",
+	}); err != nil {
+		t.Fatalf("save user with new password: %v", err)
+	}
+
+	authAfter := adminauth.New(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.AddCookie(cookies[0])
+	if err := authAfter.Authorize(req); err == nil {
+		t.Fatal("expected password change to revoke existing session")
 	}
 }
 

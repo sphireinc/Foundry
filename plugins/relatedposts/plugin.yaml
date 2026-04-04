@@ -1,12 +1,13 @@
 name: relatedposts
 title: Related Posts
-version: 1.0.0
+version: 1.1.0
 description: Finds and renders related posts based on shared taxonomies
 author: Juan Sanchez <jsanchez@sphire.co>
 homepage: https://github.com/sphireinc/foundry/plugins/relatedposts
 license: MIT
 foundry_api: v1
 min_foundry_version: 0.1.0
+compatibility_version: v1
 permissions:
   content:
     documents:
@@ -21,3 +22,4 @@ permissions:
       inject: true
   graph:
     read: true
+    mutate: true

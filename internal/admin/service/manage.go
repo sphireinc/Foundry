@@ -482,8 +482,21 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 	}
 
 	found := false
+	revokeSessions := false
 	for i := range all {
 		if strings.EqualFold(all[i].Username, username) {
+			if passwordHash != "" {
+				revokeSessions = true
+			}
+			if all[i].Disabled != req.Disabled {
+				revokeSessions = true
+			}
+			if strings.TrimSpace(all[i].Role) != role {
+				revokeSessions = true
+			}
+			if !stringSlicesEqual(all[i].Capabilities, req.Capabilities) {
+				revokeSessions = true
+			}
 			all[i].Username = username
 			all[i].Name = strings.TrimSpace(req.Name)
 			all[i].Email = strings.TrimSpace(req.Email)
@@ -515,6 +528,9 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 	if err := users.Save(s.cfg.Admin.UsersFile, all); err != nil {
 		return nil, err
 	}
+	if revokeSessions {
+		adminauth.New(s.cfg).RevokeUserSessions(username)
+	}
 	return &types.UserSummary{
 		Username:     username,
 		Name:         strings.TrimSpace(req.Name),
@@ -523,6 +539,18 @@ func (s *Service) SaveUser(ctx context.Context, req types.UserSaveRequest) (*typ
 		Capabilities: append([]string(nil), req.Capabilities...),
 		Disabled:     req.Disabled,
 	}, nil
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if strings.TrimSpace(a[i]) != strings.TrimSpace(b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -556,7 +584,11 @@ func (s *Service) DeleteUser(ctx context.Context, username string) error {
 	if !removed {
 		return fmt.Errorf("user not found: %s", username)
 	}
-	return users.Save(s.cfg.Admin.UsersFile, out)
+	if err := users.Save(s.cfg.Admin.UsersFile, out); err != nil {
+		return err
+	}
+	adminauth.New(s.cfg).RevokeUserSessions(username)
+	return nil
 }
 
 func (s *Service) LoadConfigDocument(ctx context.Context) (*types.ConfigDocumentResponse, error) {

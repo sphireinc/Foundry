@@ -81,7 +81,11 @@ func (m *Middleware) CompletePasswordReset(req types.PasswordResetCompleteReques
 		if all[i].ResetTokenHash == "" || now.After(all[i].ResetTokenExpires) || !users.VerifyPassword(all[i].ResetTokenHash, req.ResetToken) {
 			return fmt.Errorf("invalid or expired reset token")
 		}
-		if all[i].TOTPEnabled && !VerifyTOTP(all[i].TOTPSecret, req.TOTPCode, now) {
+		plainSecret, migratedSecret, err := m.decodeTOTPSecret(all[i].TOTPSecret)
+		if err != nil {
+			return fmt.Errorf("two-factor authentication is not available")
+		}
+		if all[i].TOTPEnabled && !VerifyTOTP(plainSecret, req.TOTPCode, now) {
 			return fmt.Errorf("valid two-factor code is required")
 		}
 		hash, err := users.HashPassword(req.NewPassword)
@@ -89,6 +93,9 @@ func (m *Middleware) CompletePasswordReset(req types.PasswordResetCompleteReques
 			return err
 		}
 		all[i].PasswordHash = hash
+		if migratedSecret != "" {
+			all[i].TOTPSecret = migratedSecret
+		}
 		all[i].ResetTokenHash = ""
 		all[i].ResetTokenExpires = time.Time{}
 		found = true
@@ -123,10 +130,14 @@ func (m *Middleware) SetupTOTP(identity *Identity, username string) (*types.TOTP
 	if err != nil {
 		return nil, err
 	}
+	encryptedSecret, err := m.encryptTOTPSecret(secret)
+	if err != nil {
+		return nil, err
+	}
 	found := false
 	for i := range all {
 		if strings.EqualFold(all[i].Username, username) {
-			all[i].TOTPSecret = secret
+			all[i].TOTPSecret = encryptedSecret
 			all[i].TOTPEnabled = false
 			found = true
 			break
@@ -165,8 +176,15 @@ func (m *Middleware) EnableTOTP(identity *Identity, username, code string) error
 		if all[i].TOTPSecret == "" {
 			return fmt.Errorf("two-factor authentication has not been set up")
 		}
-		if !VerifyTOTP(all[i].TOTPSecret, code, time.Now()) {
+		plainSecret, migratedSecret, err := m.decodeTOTPSecret(all[i].TOTPSecret)
+		if err != nil {
+			return fmt.Errorf("two-factor authentication is not available")
+		}
+		if !VerifyTOTP(plainSecret, code, time.Now()) {
 			return fmt.Errorf("invalid two-factor code")
+		}
+		if migratedSecret != "" {
+			all[i].TOTPSecret = migratedSecret
 		}
 		all[i].TOTPEnabled = true
 		found = true
@@ -175,7 +193,11 @@ func (m *Middleware) EnableTOTP(identity *Identity, username, code string) error
 	if !found {
 		return fmt.Errorf("user not found: %s", username)
 	}
-	return users.Save(m.cfg.Admin.UsersFile, all)
+	if err := users.Save(m.cfg.Admin.UsersFile, all); err != nil {
+		return err
+	}
+	m.RevokeUserSessions(username)
+	return nil
 }
 
 func (m *Middleware) DisableTOTP(identity *Identity, username string) error {

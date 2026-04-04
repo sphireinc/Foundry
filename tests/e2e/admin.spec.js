@@ -244,6 +244,21 @@ test.describe('default admin theme', () => {
     await expect(page.getByRole('heading', { name: /^Git Snapshots$/i })).toBeVisible();
   });
 
+  test('sessions view lists active sessions and supports filtering', async ({ page }) => {
+    await login(page);
+    await ensureFrontendTheme(page, 'default');
+
+    await page.getByRole('link', { name: /^Sessions$/i }).click();
+
+    await expect(page).toHaveURL(/\/__admin\/sessions$/);
+    await expect(page.getByRole('heading', { level: 2, name: /^Sessions$/i })).toBeVisible();
+    await expect(page.locator('#session-filter-username')).toBeVisible();
+
+    await page.locator('#session-filter-username').fill(ADMIN_USERNAME);
+    await page.getByRole('button', { name: /^Apply Filter$/i }).click();
+    await expect(page.locator('#session-filter-username')).toHaveValue(ADMIN_USERNAME);
+  });
+
   test('documents search can open the editor for a specific document', async ({ page }) => {
     await login(page);
     await ensureFrontendTheme(page, 'default');

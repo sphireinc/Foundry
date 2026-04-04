@@ -20,16 +20,28 @@ type Middleware struct {
 
 func New(cfg *config.Config) *Middleware {
 	ttl := 30 * time.Minute
+	idleTimeout := time.Duration(0)
+	maxAge := time.Duration(0)
 	sessionStorePath := ""
+	sessionSecret := ""
+	singleSessionPerUser := false
 	if cfg != nil && cfg.Admin.SessionTTLMinutes > 0 {
 		ttl = time.Duration(cfg.Admin.SessionTTLMinutes) * time.Minute
 	}
 	if cfg != nil {
+		if cfg.Admin.SessionIdleTimeoutMinutes > 0 {
+			idleTimeout = time.Duration(cfg.Admin.SessionIdleTimeoutMinutes) * time.Minute
+		}
+		if cfg.Admin.SessionMaxAgeMinutes > 0 {
+			maxAge = time.Duration(cfg.Admin.SessionMaxAgeMinutes) * time.Minute
+		}
 		sessionStorePath = cfg.Admin.SessionStoreFile
+		sessionSecret = cfg.Admin.SessionSecret
+		singleSessionPerUser = cfg.Admin.SingleSessionPerUser
 	}
 	return &Middleware{
 		cfg:            cfg,
-		sessions:       NewSessionManager(sessionStorePath, ttl),
+		sessions:       NewSessionManager(sessionStorePath, ttl, idleTimeout, maxAge, sessionSecret, singleSessionPerUser),
 		loginThrottler: newLoginThrottler(),
 	}
 }
@@ -73,13 +85,29 @@ func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, pas
 		m.loginThrottler.Failure(r, username, time.Now())
 		return nil, fmt.Errorf("invalid username or password")
 	}
-	if user.Disabled || !users.VerifyPassword(user.PasswordHash, password) {
+	plainTOTPSecret := ""
+	ok, upgradedHash, err := users.VerifyPasswordWithUpgrade(user.PasswordHash, password)
+	if err != nil || user.Disabled || !ok {
 		m.loginThrottler.Failure(r, username, time.Now())
 		return nil, fmt.Errorf("invalid username or password")
 	}
-	if user.TOTPEnabled && !VerifyTOTP(user.TOTPSecret, totpCode, time.Now()) {
+	if upgradedHash != "" {
+		if err := users.UpdatePasswordHash(m.cfg.Admin.UsersFile, user.Username, upgradedHash); err == nil {
+			user.PasswordHash = upgradedHash
+		}
+	}
+	plainTOTPSecret, migratedTOTPSecret, err := m.decodeTOTPSecret(user.TOTPSecret)
+	if err != nil {
+		m.loginThrottler.Failure(r, username, time.Now())
+		return nil, fmt.Errorf("two-factor authentication is not available")
+	}
+	if user.TOTPEnabled && !VerifyTOTP(plainTOTPSecret, totpCode, time.Now()) {
 		m.loginThrottler.Failure(r, username, time.Now())
 		return nil, fmt.Errorf("two-factor authentication code is required")
+	}
+	if migratedTOTPSecret != "" {
+		_ = users.UpdateTOTPSecret(m.cfg.Admin.UsersFile, user.Username, migratedTOTPSecret)
+		user.TOTPSecret = migratedTOTPSecret
 	}
 	m.loginThrottler.Success(r, username)
 
@@ -89,9 +117,12 @@ func (m *Middleware) Login(w http.ResponseWriter, r *http.Request, username, pas
 		Email:        user.Email,
 		Role:         normalizeRole(user.Role),
 		Capabilities: capabilitiesFor(user.Role, user.Capabilities),
-		MFAComplete:  !user.TOTPEnabled || VerifyTOTP(user.TOTPSecret, totpCode, time.Now()),
+		MFAComplete:  !user.TOTPEnabled || VerifyTOTP(plainTOTPSecret, totpCode, time.Now()),
 	}
-	session, err := m.sessions.Issue(identity, time.Now())
+	session, err := m.sessions.Issue(identity, SessionIssueMeta{
+		RemoteAddr: requestRemoteAddr(r),
+		UserAgent:  requestUserAgent(r),
+	}, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +163,20 @@ func (m *Middleware) RevokeAllSessions() int {
 	return m.sessions.RevokeAll()
 }
 
+func (m *Middleware) RevokeSessionID(id string) bool {
+	if m == nil || m.sessions == nil {
+		return false
+	}
+	return m.sessions.RevokeSessionID(id)
+}
+
+func (m *Middleware) ListSessions(username string, r *http.Request) []SessionSummary {
+	if m == nil || m.sessions == nil {
+		return nil
+	}
+	return m.sessions.List(username, extractSessionToken(r), time.Now())
+}
+
 func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error) {
 	if m == nil || m.cfg == nil {
 		return nil, "", nil
@@ -141,7 +186,7 @@ func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error
 	}
 
 	if sessionToken := extractSessionToken(r); sessionToken != "" {
-		session, ok := m.sessions.Authenticate(sessionToken, time.Now())
+		session, ok, reason := m.sessions.AuthenticateDetailed(sessionToken, time.Now())
 		if ok {
 			return &Identity{
 				Username:     session.Username,
@@ -153,7 +198,14 @@ func (m *Middleware) authorizeRequest(r *http.Request) (*Identity, string, error
 				CSRFToken:    session.CSRFToken,
 			}, session.Token, nil
 		}
-		return nil, "", fmt.Errorf("admin session expired")
+		switch strings.TrimSpace(reason) {
+		case "inactivity":
+			return nil, "", fmt.Errorf("admin session expired due to inactivity")
+		case "maximum lifetime":
+			return nil, "", fmt.Errorf("admin session expired after reaching maximum lifetime")
+		default:
+			return nil, "", fmt.Errorf("admin session expired")
+		}
 	}
 
 	token := strings.TrimSpace(m.cfg.Admin.AccessToken)
@@ -243,6 +295,20 @@ func extractSessionToken(r *http.Request) string {
 		return ""
 	}
 	return strings.TrimSpace(cookie.Value)
+}
+
+func requestRemoteAddr(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.RemoteAddr)
+}
+
+func requestUserAgent(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.UserAgent())
 }
 
 func tokensEqual(got, want string) bool {

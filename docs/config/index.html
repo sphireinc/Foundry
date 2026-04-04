@@ -297,13 +297,26 @@ content:
               <strong>Default: </strong><code>default</code>.
             </li>
             <li>
+              <strong><code>session_secret</code></strong
+              >: optional secret used when hashing persisted admin session tokens. Set this in
+              production or via <code>FOUNDRY_ADMIN_SESSION_SECRET</code> so session hashes are
+              keyed with an explicit server secret. <strong>Default: </strong>empty.
+            </li>
+            <li>
+              <strong><code>totp_secret_key</code></strong
+              >: base64-encoded 32-byte key used to encrypt stored TOTP secrets at rest. Set this
+              in production or via <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code>. New TOTP setup
+              requires it. <strong>Default: </strong>empty.
+            </li>
+            <li>
               <strong><code>users_file</code></strong
               >: filesystem-backed user database file. <strong>Default: </strong
               ><code>content/config/admin-users.yaml</code>.
             </li>
             <li>
               <strong><code>session_store_file</code></strong
-              >: persistent session store file. <strong>Default: </strong
+              >: persistent session store file. Foundry stores a session token hash there, not the
+              raw reusable bearer token. <strong>Default: </strong
               ><code>data/admin/sessions.yaml</code>.
             </li>
             <li>
@@ -314,6 +327,22 @@ content:
             <li>
               <strong><code>session_ttl_minutes</code></strong
               >: idle browser session timeout. <strong>Default: </strong><code>30</code>.
+            </li>
+            <li>
+              <strong><code>session_idle_timeout_minutes</code></strong
+              >: explicit inactivity timeout for admin sessions. Set to <code>0</code> to disable
+              the separate idle-policy check and rely only on the rolling session TTL.
+              <strong>Default: </strong><code>0</code>.
+            </li>
+            <li>
+              <strong><code>session_max_age_minutes</code></strong
+              >: absolute maximum admin session lifetime, even if the session remains active.
+              Set to <code>0</code> to disable the cap. <strong>Default: </strong><code>0</code>.
+            </li>
+            <li>
+              <strong><code>single_session_per_user</code></strong
+              >: when enabled, Foundry revokes older sessions for the same user at login time.
+              <strong>Default: </strong><code>false</code>.
             </li>
             <li>
               <strong><code>password_min_length</code></strong
@@ -346,16 +375,36 @@ content:
   path: "/__admin"
   local_only: true
   access_token: ""
+  session_secret: ""
+  totp_secret_key: ""
   theme: "default"
   users_file: "content/config/admin-users.yaml"
   session_store_file: "data/admin/sessions.yaml"
   lock_file: "data/admin/locks.yaml"
   session_ttl_minutes: 30
+  session_idle_timeout_minutes: 30
+  session_max_age_minutes: 480
+  single_session_per_user: false
   password_min_length: 12
   password_reset_ttl_minutes: 30
   totp_issuer: "Foundry"
   debug:
     pprof: true</code></pre>
+
+          <h3>Admin security</h3>
+          <ul>
+            <li>Set <code>admin.session_secret</code> or <code>FOUNDRY_ADMIN_SESSION_SECRET</code> in production.</li>
+            <li>Without it, Foundry still hashes session tokens at rest, but with plain SHA-256 instead of keyed HMAC-SHA-256.</li>
+            <li>Set <code>admin.totp_secret_key</code> or <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code> in production to encrypt TOTP secrets at rest.</li>
+            <li>New TOTP setup requires that encryption key. Legacy plaintext TOTP secrets still verify and are migrated to encrypted form when used.</li>
+            <li>Admin password hashes now default to <code>argon2id$...</code>.</li>
+            <li>Legacy PBKDF2 password hashes still verify and are upgraded automatically on successful login.</li>
+            <li>For non-local admin access, set <code>base_url</code> to an <code>https://</code> origin and make sure your reverse proxy forwards HTTPS correctly so <code>Secure</code> cookies work as intended.</li>
+            <li>Rotating <code>admin.session_secret</code> invalidates all browser sessions.</li>
+            <li>Rotating <code>admin.totp_secret_key</code> requires TOTP re-enrollment for any still-encrypted secrets that cannot be migrated under the new key.</li>
+            <li>If either secret is suspected compromised, rotate it, revoke active sessions, and review the audit log before restoring access.</li>
+            <li>Compatibility note: legacy plaintext sessions, legacy plaintext TOTP secrets, and legacy PBKDF2 hashes are kept only as a migration bridge and are intended to be removed after the <code>1.4.x</code> line.</li>
+          </ul>
 
           <h2><code>build</code></h2>
           <p>This group controls the shape of static build output.</p>

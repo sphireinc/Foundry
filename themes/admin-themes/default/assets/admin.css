@@ -129,7 +129,13 @@ button.active-toggle {
 
 button.danger,
 .button-link.danger {
-  color: var(--foundry-danger);
+  background: var(--foundry-danger);
+  color: white;
+}
+
+button.danger:hover,
+.button-link.danger:hover {
+  background: #9f1f1f;
 }
 
 .button-link {
@@ -384,9 +390,15 @@ button.panel:hover {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: baseline;
+  align-items: flex-start;
+  flex-wrap: wrap;
   padding: 16px 18px;
   border-bottom: 1px solid var(--foundry-line);
+}
+
+.panel-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 280px;
 }
 
 .panel-header h2 {
@@ -460,7 +472,17 @@ button.panel:hover {
 }
 
 .mini-list-row strong {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.warning-panel .mini-list-row {
+  align-items: flex-start;
+}
+
+.warning-panel .toolbar {
+  justify-content: flex-end;
 }
 
 .table {

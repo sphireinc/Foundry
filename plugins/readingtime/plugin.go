@@ -13,7 +13,7 @@ import (
 type Plugin struct{}
 
 func (p *Plugin) Name() string {
-	return "reading-time"
+	return "readingtime"
 }
 
 func countWords(s string) int {
@@ -80,7 +80,7 @@ func (p *Plugin) OnHTMLSlots(ctx *renderer.ViewData, slots *renderer.Slots) erro
 }
 
 func init() {
-	plugins.Register("reading-time", func() plugins.Plugin {
+	plugins.Register("readingtime", func() plugins.Plugin {
 		return &Plugin{}
 	})
 }

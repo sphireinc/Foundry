@@ -3,7 +3,7 @@ users:
       name: Admin
       email: admin@example.com
       role: admin
-      password_hash: pbkdf2-sha256$120000$fcilkfMAxDq58JbeG8xh2Q$tzph3LxOqY0BkYj1+TdnOWAdvFq3TMaqDOtP93Up7qY
+      password_hash: argon2id$65536$3$2$enipjk85SldefbiLo4AAOA$O1Ie6YSGZ4dCxDqnFD6J5tS7BUy244QPUVD0RTIbPJQ
       totp_secret: RZ2PGU2IJFJ2GGG2FBTHZEDCZZZF34LM
       reset_token_hash: pbkdf2-sha256$120000$DJ+JBgxAFXhHnQaYsr8o+Q$kbTFIXGi1HdXJ1AnD0v69z7UYoMi+ctZI5Hyj3tZAR4
       reset_token_expires: 2026-03-21T21:27:22.556821Z

@@ -9,16 +9,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/argon2"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	hashAlgorithm  = "pbkdf2-sha256"
-	hashIterations = 120000
-	hashKeyLength  = 32
+	pbkdf2HashAlgorithm  = "pbkdf2-sha256"
+	pbkdf2HashIterations = 120000
+	pbkdf2HashKeyLength  = 32
+
+	argon2idHashAlgorithm        = "argon2id"
+	argon2idMemoryKB      uint32 = 64 * 1024
+	argon2idIterations    uint32 = 3
+	argon2idParallelism   uint8  = 2
+	argon2idSaltLength           = 16
+	argon2idKeyLength     uint32 = 32
 )
 
 type File struct {
@@ -94,53 +103,149 @@ func Save(path string, entries []User) error {
 	return os.WriteFile(path, b, 0o644)
 }
 
+func UpdatePasswordHash(path, username, passwordHash string) error {
+	all, err := Load(path)
+	if err != nil {
+		return err
+	}
+	username = strings.TrimSpace(strings.ToLower(username))
+	for i := range all {
+		if strings.ToLower(strings.TrimSpace(all[i].Username)) != username {
+			continue
+		}
+		all[i].PasswordHash = strings.TrimSpace(passwordHash)
+		return Save(path, all)
+	}
+	return os.ErrNotExist
+}
+
+func UpdateTOTPSecret(path, username, totpSecret string) error {
+	all, err := Load(path)
+	if err != nil {
+		return err
+	}
+	username = strings.TrimSpace(strings.ToLower(username))
+	for i := range all {
+		if strings.ToLower(strings.TrimSpace(all[i].Username)) != username {
+			continue
+		}
+		all[i].TOTPSecret = strings.TrimSpace(totpSecret)
+		return Save(path, all)
+	}
+	return os.ErrNotExist
+}
+
 func HashPassword(password string) (string, error) {
-	// TODO: this is all from Flight Manager, I should revisit this for security
 	password = strings.TrimSpace(password)
 	if password == "" {
 		return "", fmt.Errorf("password cannot be empty")
 	}
-
-	salt := make([]byte, 16)
+	salt := make([]byte, argon2idSaltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := pbkdf2SHA256([]byte(password), salt, hashIterations, hashKeyLength)
-
+	key := argon2.IDKey([]byte(password), salt, argon2idIterations, argon2idMemoryKB, argon2idParallelism, argon2idKeyLength)
 	return fmt.Sprintf(
-		"%s$%d$%s$%s",
-		hashAlgorithm,
-		hashIterations,
+		"%s$%d$%d$%d$%s$%s",
+		argon2idHashAlgorithm,
+		argon2idMemoryKB,
+		argon2idIterations,
+		argon2idParallelism,
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(key),
 	), nil
 }
 
 func VerifyPassword(encodedHash, password string) bool {
-	// TODO: See HashPassword
+	ok, _, err := VerifyPasswordWithUpgrade(encodedHash, password)
+	return err == nil && ok
+}
+
+func VerifyPasswordWithUpgrade(encodedHash, password string) (bool, string, error) {
+	encodedHash = strings.TrimSpace(encodedHash)
+	if encodedHash == "" {
+		return false, "", nil
+	}
+	switch hashAlgorithm(encodedHash) {
+	case argon2idHashAlgorithm:
+		ok, err := verifyArgon2id(encodedHash, password)
+		return ok, "", err
+	case pbkdf2HashAlgorithm:
+		ok, err := verifyPBKDF2(encodedHash, password)
+		if err != nil || !ok {
+			return ok, "", err
+		}
+		upgraded, err := HashPassword(password)
+		return true, upgraded, err
+	default:
+		return false, "", nil
+	}
+}
+
+func hashAlgorithm(encodedHash string) string {
 	parts := strings.Split(strings.TrimSpace(encodedHash), "$")
-	if len(parts) != 4 || parts[0] != hashAlgorithm {
-		return false
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(parts[0])
+}
+
+func verifyArgon2id(encodedHash, password string) (bool, error) {
+	parts := strings.Split(strings.TrimSpace(encodedHash), "$")
+	if len(parts) != 6 || parts[0] != argon2idHashAlgorithm {
+		return false, nil
+	}
+	memory, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return false, err
+	}
+	iterations, err := strconv.ParseUint(parts[2], 10, 32)
+	if err != nil {
+		return false, err
+	}
+	parallelism, err := strconv.ParseUint(parts[3], 10, 8)
+	if err != nil {
+		return false, err
+	}
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return false, err
+	}
+	want, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil {
+		return false, err
+	}
+	got := argon2.IDKey([]byte(password), salt, uint32(iterations), uint32(memory), uint8(parallelism), uint32(len(want)))
+	if len(got) != len(want) {
+		return false, nil
+	}
+	return subtle.ConstantTimeCompare(got, want) == 1, nil
+}
+
+func verifyPBKDF2(encodedHash, password string) (bool, error) {
+	parts := strings.Split(strings.TrimSpace(encodedHash), "$")
+	if len(parts) != 4 || parts[0] != pbkdf2HashAlgorithm {
+		return false, nil
 	}
 
 	iterations, err := parsePositiveInt(parts[1])
 	if err != nil {
-		return false
+		return false, err
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[2])
 	if err != nil {
-		return false
+		return false, err
 	}
 	want, err := base64.RawStdEncoding.DecodeString(parts[3])
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	got := pbkdf2SHA256([]byte(password), salt, iterations, len(want))
 	if len(got) != len(want) {
-		return false
+		return false, nil
 	}
-	return subtle.ConstantTimeCompare(got, want) == 1
+	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
 
 func parsePositiveInt(raw string) (int, error) {
@@ -158,7 +263,6 @@ func parsePositiveInt(raw string) (int, error) {
 }
 
 func pbkdf2SHA256(password, salt []byte, iterations, keyLen int) []byte {
-	// TODO: See HashPassword
 	hLen := 32
 	blocks := (keyLen + hLen - 1) / hLen
 	out := make([]byte, 0, blocks*hLen)
@@ -181,7 +285,6 @@ func pbkdf2SHA256(password, salt []byte, iterations, keyLen int) []byte {
 }
 
 func hmacSHA256(key, data []byte) []byte {
-	// TODO: See HashPassword
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write(data)
 	return mac.Sum(nil)

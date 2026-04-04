@@ -25,9 +25,22 @@ const runtimeAuditWindow = 24 * time.Hour
 
 type runtimeSessionFile struct {
 	Sessions []struct {
-		Token     string    `yaml:"token"`
-		ExpiresAt time.Time `yaml:"expires_at"`
+		TokenHash  string    `yaml:"token_hash"`
+		Token      string    `yaml:"token"`
+		Username   string    `yaml:"username"`
+		RemoteAddr string    `yaml:"remote_addr"`
+		IssuedAt   time.Time `yaml:"issued_at"`
+		LastSeen   time.Time `yaml:"last_seen"`
+		ExpiresAt  time.Time `yaml:"expires_at"`
 	} `yaml:"sessions"`
+}
+
+type runtimeSessionAnalysis struct {
+	ActiveSessions     int
+	ConcurrentUsers    int
+	AddressSpreadUsers int
+	LongLivedSessions  int
+	IdleSessions       int
 }
 
 func (s *Service) GetRuntimeStatus(ctx context.Context) (*types.RuntimeStatus, error) {
@@ -212,7 +225,12 @@ func (s *Service) populateRuntimeActivityMetrics(status *types.RuntimeStatus, no
 		return
 	}
 
-	status.Activity.ActiveSessions = countActiveSessions(s.cfg.Admin.SessionStoreFile, now)
+	sessionAnalysis := analyzeActiveSessions(s.cfg.Admin.SessionStoreFile, now)
+	status.Activity.ActiveSessions = sessionAnalysis.ActiveSessions
+	status.Activity.ConcurrentUsers = sessionAnalysis.ConcurrentUsers
+	status.Activity.AddressSpreadUsers = sessionAnalysis.AddressSpreadUsers
+	status.Activity.LongLivedSessions = sessionAnalysis.LongLivedSessions
+	status.Activity.IdleSessions = sessionAnalysis.IdleSessions
 
 	s.lockMu.Lock()
 	locks, err := s.loadLocksLocked(now)
@@ -271,25 +289,67 @@ func (s *Service) populateRuntimeBuildStatus(status *types.RuntimeStatus) {
 }
 
 func countActiveSessions(path string, now time.Time) int {
+	return analyzeActiveSessions(path, now).ActiveSessions
+}
+
+func analyzeActiveSessions(path string, now time.Time) runtimeSessionAnalysis {
 	if strings.TrimSpace(path) == "" {
-		return 0
+		return runtimeSessionAnalysis{}
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
-		return 0
+		return runtimeSessionAnalysis{}
 	}
 	var file runtimeSessionFile
 	if err := yaml.Unmarshal(body, &file); err != nil {
-		return 0
+		return runtimeSessionAnalysis{}
 	}
-	count := 0
+	result := runtimeSessionAnalysis{}
+	usernameCounts := map[string]int{}
+	usernameAddresses := map[string]map[string]struct{}{}
 	for _, session := range file.Sessions {
-		if strings.TrimSpace(session.Token) == "" || now.After(session.ExpiresAt) {
+		if strings.TrimSpace(session.TokenHash) == "" && strings.TrimSpace(session.Token) == "" {
 			continue
 		}
-		count++
+		if now.After(session.ExpiresAt) {
+			continue
+		}
+		result.ActiveSessions++
+		if !session.IssuedAt.IsZero() && now.Sub(session.IssuedAt) >= 12*time.Hour {
+			result.LongLivedSessions++
+		}
+		lastSeen := session.LastSeen
+		if lastSeen.IsZero() {
+			lastSeen = session.IssuedAt
+		}
+		if !lastSeen.IsZero() && now.Sub(lastSeen) >= 30*time.Minute {
+			result.IdleSessions++
+		}
+		username := strings.ToLower(strings.TrimSpace(session.Username))
+		if username == "" {
+			continue
+		}
+		usernameCounts[username]++
+		address := strings.TrimSpace(session.RemoteAddr)
+		if address == "" {
+			continue
+		}
+		if _, ok := usernameAddresses[username]; !ok {
+			usernameAddresses[username] = map[string]struct{}{}
+		}
+		usernameAddresses[username][address] = struct{}{}
 	}
-	return count
+	for _, count := range usernameCounts {
+		if count > 1 {
+			result.ConcurrentUsers++
+		}
+	}
+	for _, addresses := range usernameAddresses {
+		if len(addresses) > 1 {
+			result.AddressSpreadUsers++
+		}
+	}
+	return result
 }
 
 func walkAndSummarizeDir(root string, largest *[]types.RuntimeFileStat, onFile func(rel string, size int64)) int64 {

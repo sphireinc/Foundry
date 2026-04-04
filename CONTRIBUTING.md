@@ -34,6 +34,18 @@ Repository rule:
 - read-only fixtures belong under `tests/fixtures/`
 - mutable runtime state belongs in project-root runtime/configured directories like `data/`, `public/`, or `.foundry/`
 
+Security rule:
+
+- treat `data/admin/` and `content/config/admin-users.yaml` as sensitive operational state
+- do not commit generated runtime auth files such as sessions or audit logs
+- production deployments should provide:
+  - `admin.session_secret` or `FOUNDRY_ADMIN_SESSION_SECRET`
+  - `admin.totp_secret_key` or `FOUNDRY_ADMIN_TOTP_SECRET_KEY`
+- production admin access should sit behind HTTPS or a correctly configured TLS-terminating reverse proxy so secure cookies remain effective
+- if either admin secret is rotated or lost, document the impact in the change:
+  - rotating `session_secret` invalidates browser sessions
+  - rotating `totp_secret_key` can require TOTP re-enrollment
+
 ## Development setup
 
 ### Native Go workflow

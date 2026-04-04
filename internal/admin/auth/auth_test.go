@@ -1,12 +1,18 @@
 package auth
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base32"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/admin/users"
 	"github.com/sphireinc/foundry/internal/config"
@@ -217,6 +223,135 @@ func TestWrapRoleRejectsInsufficientRole(t *testing.T) {
 	}
 }
 
+func TestLoginUpgradesLegacyPasswordHash(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.AccessToken = ""
+	legacySalt := base64.RawStdEncoding.EncodeToString([]byte("0123456789abcdef"))
+	legacyKey := base64.RawStdEncoding.EncodeToString(usersTestPBKDF2([]byte("secret-password"), []byte("0123456789abcdef"), 120000, 32))
+	legacyHash := "pbkdf2-sha256$120000$" + legacySalt + "$" + legacyKey
+	body := []byte("users:\n  - username: admin\n    name: Admin User\n    email: admin@example.com\n    role: admin\n    password_hash: " + legacyHash + "\n")
+	if err := os.WriteFile(cfg.Admin.UsersFile, body, 0o644); err != nil {
+		t.Fatalf("write legacy users file: %v", err)
+	}
+	m := New(cfg)
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	loginReq.RemoteAddr = "127.0.0.1:12345"
+	rr := httptest.NewRecorder()
+	if _, err := m.Login(rr, loginReq, "admin", "secret-password", ""); err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	updatedBody, err := os.ReadFile(cfg.Admin.UsersFile)
+	if err != nil {
+		t.Fatalf("read updated users file: %v", err)
+	}
+	if !strings.Contains(string(updatedBody), "argon2id$") {
+		t.Fatal("expected login to upgrade legacy password hash to argon2id")
+	}
+}
+
+func TestEnableTOTPRevokesExistingSessions(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.AccessToken = ""
+	m := New(cfg)
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	loginReq.RemoteAddr = "127.0.0.1:12345"
+	loginRR := httptest.NewRecorder()
+	identity, err := m.Login(loginRR, loginReq, "admin", "secret-password", "")
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	cookies := loginRR.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected session cookie")
+	}
+
+	setupResp, err := m.SetupTOTP(identity, "admin")
+	if err != nil {
+		t.Fatalf("setup totp: %v", err)
+	}
+	code := totpCodeForCounter(mustDecodeBase32(t, setupResp.Secret), counterForTime(time.Now()))
+	if err := m.EnableTOTP(identity, "admin", code); err != nil {
+		t.Fatalf("enable totp: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/__admin/api/status", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.AddCookie(cookies[0])
+	if err := m.Authorize(req); err == nil {
+		t.Fatal("expected TOTP enablement to revoke existing session")
+	}
+}
+
+func TestSetupTOTPStoresEncryptedSecret(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.AccessToken = ""
+	m := New(cfg)
+
+	resp, err := m.SetupTOTP(&Identity{Username: "admin", Capabilities: []string{"*"}}, "admin")
+	if err != nil {
+		t.Fatalf("setup totp: %v", err)
+	}
+	body, err := os.ReadFile(cfg.Admin.UsersFile)
+	if err != nil {
+		t.Fatalf("read users file: %v", err)
+	}
+	text := string(body)
+	if strings.Contains(text, resp.Secret) {
+		t.Fatal("expected users file to avoid storing raw TOTP secret")
+	}
+	if !strings.Contains(text, "totp_secret: enc:v1:") {
+		t.Fatal("expected encrypted TOTP secret to be persisted")
+	}
+}
+
+func TestLoginMigratesLegacyPlaintextTOTPSecret(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.AccessToken = ""
+	m := New(cfg)
+
+	secret, err := GenerateTOTPSecret()
+	if err != nil {
+		t.Fatalf("generate TOTP secret: %v", err)
+	}
+	body, err := os.ReadFile(cfg.Admin.UsersFile)
+	if err != nil {
+		t.Fatalf("read users file: %v", err)
+	}
+	text := strings.Replace(string(body), "password_hash:", "totp_enabled: true\n    totp_secret: "+secret+"\n    password_hash:", 1)
+	if err := os.WriteFile(cfg.Admin.UsersFile, []byte(text), 0o644); err != nil {
+		t.Fatalf("write users file: %v", err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", nil)
+	loginReq.RemoteAddr = "127.0.0.1:12345"
+	code := totpCodeForCounter(mustDecodeBase32(t, secret), counterForTime(time.Now()))
+	if _, err := m.Login(httptest.NewRecorder(), loginReq, "admin", "secret-password", code); err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	updatedBody, err := os.ReadFile(cfg.Admin.UsersFile)
+	if err != nil {
+		t.Fatalf("read updated users file: %v", err)
+	}
+	if strings.Contains(string(updatedBody), "totp_secret: "+secret) {
+		t.Fatal("expected plaintext TOTP secret to be migrated")
+	}
+	if !strings.Contains(string(updatedBody), "totp_secret: enc:v1:") {
+		t.Fatal("expected migrated encrypted TOTP secret")
+	}
+}
+
+func TestSetupTOTPRequiresEncryptionKey(t *testing.T) {
+	cfg := testAuthConfig(t)
+	cfg.Admin.TOTPSecretKey = ""
+	m := New(cfg)
+
+	if _, err := m.SetupTOTP(&Identity{Username: "admin", Capabilities: []string{"*"}}, "admin"); err == nil {
+		t.Fatal("expected TOTP setup to require an encryption key")
+	}
+}
+
 func testAuthConfig(t *testing.T) *config.Config {
 	t.Helper()
 	root := t.TempDir()
@@ -244,10 +379,48 @@ func testAuthConfig(t *testing.T) *config.Config {
 			Enabled:           true,
 			LocalOnly:         true,
 			AccessToken:       "secret-token",
+			TOTPSecretKey:     testTOTPKey(),
 			UsersFile:         usersPath,
 			SessionTTLMinutes: 30,
 		},
 	}
 	cfg.ApplyDefaults()
 	return cfg
+}
+
+func usersTestPBKDF2(password, salt []byte, iterations, keyLen int) []byte {
+	hLen := 32
+	blocks := (keyLen + hLen - 1) / hLen
+	out := make([]byte, 0, blocks*hLen)
+	for block := 1; block <= blocks; block++ {
+		u := usersTestHMACSHA256(password, append(salt, byte(block>>24), byte(block>>16), byte(block>>8), byte(block)))
+		t := append([]byte(nil), u...)
+		for i := 1; i < iterations; i++ {
+			u = usersTestHMACSHA256(password, u)
+			for j := range t {
+				t[j] ^= u[j]
+			}
+		}
+		out = append(out, t...)
+	}
+	return out[:keyLen]
+}
+
+func usersTestHMACSHA256(key, data []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write(data)
+	return mac.Sum(nil)
+}
+
+func mustDecodeBase32(t *testing.T, secret string) []byte {
+	t.Helper()
+	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(secret))
+	if err != nil {
+		t.Fatalf("decode base32: %v", err)
+	}
+	return key
+}
+
+func testTOTPKey() string {
+	return base64.RawStdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 }
