@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry Docker Guide</title>
+    <meta
+      name="description"
+      content="How to run Foundry with Docker in local development and in a stricter production-oriented container shape."
+    />
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark"><img src="../logo.png" alt="Foundry logo" /></span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>Docker guide</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../docker/">Docker</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../custom-fields/">Custom Fields</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
+
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Deployment Guide</div>
+          <h1 class="page-title">Running Foundry with Docker</h1>
+          <p>
+            Foundry ships two Docker Compose shapes: a local-development default and a stricter
+            production-oriented setup. This page explains when to use each one and what each
+            overlay expects.
+          </p>
+        </div>
+
+        <div class="page-body">
+          <h2>Default Docker workflow</h2>
+          <p>
+            The default <code>docker-compose.yml</code> is meant for local development. It keeps
+            the source tree bind-mounted into the container so code, themes, and content edits are
+            reflected immediately.
+          </p>
+          <pre><code>sh scripts/docker-init.sh
+docker compose up -d --build</code></pre>
+          <p>That setup:</p>
+          <ul>
+            <li>bind-mounts the project root into <code>/app</code></li>
+            <li>keeps <code>data/</code> and <code>public/</code> on named Docker volumes</li>
+            <li>uses <code>content/config/site.docker.yaml</code> as the config overlay</li>
+            <li>reads local Docker secrets from <code>.env</code> when present</li>
+            <li>can bootstrap a local <code>.env</code> with <code>scripts/docker-init.sh</code></li>
+          </ul>
+
+          <h2>Local secret bootstrap</h2>
+          <p>
+            <code>scripts/docker-init.sh</code> creates a local <code>.env</code> file if one does
+            not exist and fills in:
+          </p>
+          <ul>
+            <li><code>FOUNDRY_PUBLISH_ADDR</code></li>
+            <li><code>FOUNDRY_ADMIN_SESSION_SECRET</code></li>
+            <li><code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code></li>
+          </ul>
+          <p>
+            Those values are for local Docker convenience. They are not the production deployment
+            path.
+          </p>
+
+          <h2>Production-oriented Docker workflow</h2>
+          <p>
+            The stricter setup lives in <code>docker-compose.prod.yml</code>. Use it when you want
+            a safer immutable-style container shape instead of a source-mounted development
+            container.
+          </p>
+          <pre><code>export FOUNDRY_ADMIN_SESSION_SECRET="$(openssl rand -hex 32)"
+export FOUNDRY_ADMIN_TOTP_SECRET_KEY="$(openssl rand -base64 32)"
+docker compose -f docker-compose.prod.yml up -d --build</code></pre>
+          <p>That setup:</p>
+          <ul>
+            <li>requires explicit session and TOTP secrets</li>
+            <li>runs with a read-only root filesystem</li>
+            <li>uses <code>tmpfs</code> for <code>/tmp</code></li>
+            <li>drops Linux capabilities</li>
+            <li>enables <code>no-new-privileges</code></li>
+            <li>uses named volumes for <code>content/</code>, <code>themes/</code>, <code>plugins/</code>, <code>data/</code>, and <code>public/</code></li>
+            <li>uses <code>content/config/site.docker.prod.yaml</code> as the config overlay</li>
+          </ul>
+
+          <h2>Important config overlays</h2>
+          <ul>
+            <li>
+              <strong><code>content/config/site.docker.yaml</code></strong>: development-oriented
+              Docker defaults like local base URL and live reload enabled.
+            </li>
+            <li>
+              <strong><code>content/config/site.docker.prod.yaml</code></strong>: production-shaped
+              Docker defaults like disabled live reload, disabled debug surfaces, and explicit
+              production environment labeling.
+            </li>
+          </ul>
+          <p>
+            Before using the production overlay, set
+            <code>content/config/site.docker.prod.yaml</code> <code>base_url</code> to the real
+            HTTPS origin for the deployment.
+          </p>
+
+          <h2>Operational notes</h2>
+          <ul>
+            <li>
+              Set strong values for <code>FOUNDRY_ADMIN_SESSION_SECRET</code> and
+              <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code> in production.
+            </li>
+            <li>
+              Keep the production admin behind HTTPS so secure cookies behave correctly.
+            </li>
+            <li>
+              The default Docker setup is convenient for development, but the production compose
+              file is the right base for a real deployment.
+            </li>
+            <li>
+              The Dockerfile creates runtime directories inside the image; generated output belongs
+              on the writable <code>public/</code> volume, not in the image layer.
+            </li>
+          </ul>
+
+          <h2>Related docs</h2>
+          <ul>
+            <li><a href="../getting-started/">Getting Started</a></li>
+            <li><a href="../config/">Configuration</a></li>
+            <li><a href="https://github.com/sphireinc/foundry/blob/main/README.md">README</a></li>
+          </ul>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

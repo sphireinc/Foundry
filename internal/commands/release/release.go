@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -71,6 +72,17 @@ func runCut(args []string) error {
 	if err := requireCleanWorktree(); err != nil {
 		return err
 	}
+	if changed, err := updateEmbeddedReleaseVersion(version); err != nil {
+		return err
+	} else if changed {
+		if err := runGit("add", "internal/commands/version/release_version.go"); err != nil {
+			return err
+		}
+		if err := runGit("commit", "-m", "release: embed "+version); err != nil {
+			return err
+		}
+		cliout.Successf("Committed embedded release version %s", version)
+	}
 	if err := ensureTagAbsent(version); err != nil {
 		return err
 	}
@@ -81,16 +93,20 @@ func runCut(args []string) error {
 	cliout.Successf("Created release tag %s", version)
 	fmt.Printf("%s %s\n", cliout.Label("Message:"), message)
 	if push {
+		if err := runGit("push", "origin", "HEAD"); err != nil {
+			return err
+		}
 		if err := runGit("push", "origin", version); err != nil {
 			return err
 		}
 		cliout.Successf("Pushed release tag %s", version)
-		fmt.Println("GitHub Actions will now build and publish the release assets.")
+		fmt.Println("GitHub Actions will now build and publish the release assets from the tagged commit.")
 		return nil
 	}
 	fmt.Println("Next step:")
+	fmt.Println("  git push origin HEAD")
 	fmt.Printf("  git push origin %s\n", version)
-	fmt.Println("That push will trigger the GitHub Release workflow and upload the packaged artifacts.")
+	fmt.Println("Those pushes will trigger the GitHub Release workflow and upload the packaged artifacts.")
 	return nil
 }
 
@@ -164,4 +180,28 @@ func output(name string, args ...string) (string, error) {
 
 func filepathClean(value string) string {
 	return strings.TrimSpace(strings.ReplaceAll(value, "\\", "/"))
+}
+
+func updateEmbeddedReleaseVersion(version string) (bool, error) {
+	const target = "internal/commands/version/release_version.go"
+	body := "package version\n\n" +
+		"// ReleaseVersion is the repo-carried release fallback used when a build does\n" +
+		"// not have Git metadata available, such as container builds from a source\n" +
+		"// archive or a Docker context without .git.\n" +
+		fmt.Sprintf("const ReleaseVersion = %q\n", version)
+
+	current, err := os.ReadFile(target)
+	if err == nil && string(current) == body {
+		return false, nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }

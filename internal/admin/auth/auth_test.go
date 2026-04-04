@@ -30,7 +30,9 @@ func TestAuthorizeAllowsLocalRequest(t *testing.T) {
 }
 
 func TestAuthorizeRejectsNonLocalRequest(t *testing.T) {
-	m := New(testAuthConfig(t))
+	cfg := testAuthConfig(t)
+	cfg.Admin.LocalOnly = true
+	m := New(cfg)
 	req := httptest.NewRequest("GET", "/__admin/api/status", nil)
 	req.RemoteAddr = "8.8.8.8:12345"
 	req.Header.Set("X-Foundry-Admin-Token", "secret-token")
@@ -41,7 +43,9 @@ func TestAuthorizeRejectsNonLocalRequest(t *testing.T) {
 }
 
 func TestAuthorizeRejectsForwardedLoopbackRequest(t *testing.T) {
-	m := New(testAuthConfig(t))
+	cfg := testAuthConfig(t)
+	cfg.Admin.LocalOnly = true
+	m := New(cfg)
 	req := httptest.NewRequest("GET", "/__admin/api/status", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "8.8.8.8")

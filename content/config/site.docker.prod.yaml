@@ -1,16 +1,16 @@
-environment: "development"
-base_url: "http://localhost:8080"
+environment: "production"
+base_url: "https://example.com"
 
 server:
   addr: ":8080"
-  live_reload: true
+  live_reload: false
   auto_open_browser: false
   debug_routes: false
 
 admin:
   local_only: false
   debug:
-    pprof: true
+    pprof: false
 
 backup:
   dir: "data/backups"

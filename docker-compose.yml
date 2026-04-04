@@ -3,9 +3,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        FOUNDRY_BUILD_VERSION: "${FOUNDRY_BUILD_VERSION:-}"
+        FOUNDRY_BUILD_COMMIT: "${FOUNDRY_BUILD_COMMIT:-}"
+        FOUNDRY_BUILD_DATE: "${FOUNDRY_BUILD_DATE:-}"
     container_name: foundry
     ports:
-      - "8080:8080"
+      - "${FOUNDRY_PUBLISH_ADDR:-8080}:8080"
+    environment:
+      # Local-development defaults only. Use docker-compose.prod.yml for
+      # hardened deployments with explicit secrets.
+      FOUNDRY_ADMIN_SESSION_SECRET: "${FOUNDRY_ADMIN_SESSION_SECRET:-dev-session-secret-change-me}"
+      FOUNDRY_ADMIN_TOTP_SECRET_KEY: "${FOUNDRY_ADMIN_TOTP_SECRET_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}"
     volumes:
       - .:/app
       - foundry_data:/app/data

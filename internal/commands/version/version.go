@@ -10,10 +10,18 @@ import (
 )
 
 var (
-	Version = "dev"
+	Version = embeddedVersion()
 	Commit  = "none"
 	Date    = "unknown"
 )
+
+func embeddedVersion() string {
+	value := strings.TrimSpace(ReleaseVersion)
+	if value == "" {
+		return "dev"
+	}
+	return value
+}
 
 type command struct{}
 

@@ -23,6 +23,7 @@
         <nav class="nav">
           <a href="../">Home</a>
           <a href="../getting-started/">Getting Started</a>
+          <a href="../docker/">Docker</a>
           <a href="../architecture/">Architecture</a>
           <a href="../config/">Configuration</a>
           <a href="../custom-fields/">Custom Fields</a>
@@ -75,10 +76,31 @@
 /docs         GitHub Pages content and generated coverage output</code></pre>
 
           <p>
-            In the Docker Compose setup, Foundry keeps <code>data/</code> and
-            <code>public/</code> on named Docker volumes even though the project root is bind-mounted
-            into the container. That avoids runtime permission failures for admin sessions,
-            audit/state files, and generated output.
+            Foundry ships two Docker shapes. The default
+            <code>docker-compose.yml</code> is local-development oriented: it bind-mounts the
+            project root and keeps <code>data/</code> and <code>public/</code> on named Docker
+            volumes. The stricter <code>docker-compose.prod.yml</code> uses an immutable-style
+            runtime with required secrets, a read-only root filesystem, a tmpfs for
+            <code>/tmp</code>, and named volumes for content, themes, plugins, data, and public
+            output.
+          </p>
+
+          <h2>Docker start</h2>
+          <p>For local Docker development:</p>
+          <pre><code>sh scripts/docker-init.sh
+docker compose up -d --build</code></pre>
+          <p>
+            That bootstraps a local <code>.env</code> file with random Docker secrets if one does
+            not already exist.
+          </p>
+          <p>For the stricter production-oriented Docker shape:</p>
+          <pre><code>export FOUNDRY_ADMIN_SESSION_SECRET="$(openssl rand -hex 32)"
+export FOUNDRY_ADMIN_TOTP_SECRET_KEY="$(openssl rand -base64 32)"
+docker compose -f docker-compose.prod.yml up -d --build</code></pre>
+          <p>
+            Before using the production Docker overlay, update
+            <code>content/config/site.docker.prod.yaml</code> so <code>base_url</code> matches
+            the deployed HTTPS origin.
           </p>
 
           <h2>Common commands</h2>
