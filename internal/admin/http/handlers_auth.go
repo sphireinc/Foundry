@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	adminauth "github.com/sphireinc/foundry/internal/admin/auth"
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
@@ -26,6 +27,11 @@ func registerAuthRoutes(r *Router) []routeDef {
 		{
 			pattern: r.routePath("/api/session"),
 			handler: http.HandlerFunc(r.handleSession),
+		},
+		{
+			pattern:    r.routePath("/api/sessions"),
+			handler:    http.HandlerFunc(r.handleSessions),
+			capability: "users.manage",
 		},
 		{
 			pattern:    r.routePath("/api/sessions/revoke"),
@@ -151,11 +157,51 @@ func (r *Router) handleSessionRevoke(w http.ResponseWriter, req *http.Request) {
 	revoked := 0
 	if body.All {
 		revoked = r.auth.RevokeAllSessions()
+	} else if strings.TrimSpace(body.SessionID) != "" {
+		if r.auth.RevokeSessionID(strings.TrimSpace(body.SessionID)) {
+			revoked = 1
+		}
 	} else {
 		revoked = r.auth.RevokeUserSessions(strings.TrimSpace(body.Username))
 	}
-	r.logAuditRequest(req, "session.revoke", "success", strings.TrimSpace(body.Username), map[string]string{"revoked": strconv.Itoa(revoked)})
+	targetScope := "user"
+	if body.All {
+		targetScope = "all"
+	} else if strings.TrimSpace(body.SessionID) != "" {
+		targetScope = "session"
+	}
+	r.logAuditRequest(req, "session.revoke", "success", strings.TrimSpace(body.Username), map[string]string{
+		"revoked":      strconv.Itoa(revoked),
+		"session_id":   strings.TrimSpace(body.SessionID),
+		"target_scope": targetScope,
+	})
 	writeJSON(w, http.StatusOK, admintypes.SessionRevokeResponse{Revoked: revoked})
+}
+
+func (r *Router) handleSessions(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	records := r.auth.ListSessions(strings.TrimSpace(req.URL.Query().Get("username")), req)
+	out := make([]admintypes.SessionRecord, 0, len(records))
+	for _, session := range records {
+		out = append(out, admintypes.SessionRecord{
+			ID:          session.ID,
+			Username:    session.Username,
+			Name:        session.Name,
+			Email:       session.Email,
+			Role:        session.Role,
+			MFAComplete: session.MFAComplete,
+			RemoteAddr:  session.RemoteAddr,
+			UserAgent:   session.UserAgent,
+			IssuedAt:    session.IssuedAt.UTC().Format(time.RFC3339),
+			LastSeen:    session.LastSeen.UTC().Format(time.RFC3339),
+			ExpiresAt:   session.ExpiresAt.UTC().Format(time.RFC3339),
+			Current:     session.Current,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (r *Router) handlePasswordResetStart(w http.ResponseWriter, req *http.Request) {
@@ -197,7 +243,7 @@ func (r *Router) handlePasswordResetComplete(w http.ResponseWriter, req *http.Re
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
-	r.logAudit(strings.TrimSpace(body.Username), "password_reset.complete", "success", body.Username, nil)
+	r.logAudit(strings.TrimSpace(body.Username), "password_reset.complete", "success", body.Username, map[string]string{"sessions_revoked": "true"})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -240,7 +286,7 @@ func (r *Router) handleTOTPEnable(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
-	r.logAuditRequest(req, "totp.enable", "success", body.Username, nil)
+	r.logAuditRequest(req, "totp.enable", "success", body.Username, map[string]string{"sessions_revoked": "true"})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -261,6 +307,6 @@ func (r *Router) handleTOTPDisable(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err)
 		return
 	}
-	r.logAuditRequest(req, "totp.disable", "success", body.Username, nil)
+	r.logAuditRequest(req, "totp.disable", "success", body.Username, map[string]string{"sessions_revoked": "true"})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

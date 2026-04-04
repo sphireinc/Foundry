@@ -316,12 +316,28 @@ type PluginInstallRequest struct {
 }
 
 type SessionRevokeRequest struct {
-	Username string `json:"username,omitempty"`
-	All      bool   `json:"all,omitempty"`
+	Username  string `json:"username,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
+	All       bool   `json:"all,omitempty"`
 }
 
 type SessionRevokeResponse struct {
 	Revoked int `json:"revoked"`
+}
+
+type SessionRecord struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Role        string `json:"role,omitempty"`
+	MFAComplete bool   `json:"mfa_complete,omitempty"`
+	RemoteAddr  string `json:"remote_addr,omitempty"`
+	UserAgent   string `json:"user_agent,omitempty"`
+	IssuedAt    string `json:"issued_at,omitempty"`
+	LastSeen    string `json:"last_seen,omitempty"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
+	Current     bool   `json:"current,omitempty"`
 }
 
 type PasswordResetStartRequest struct {

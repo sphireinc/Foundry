@@ -10,7 +10,7 @@ import (
 
 func TestReadingTimePlugin(t *testing.T) {
 	p := &Plugin{}
-	if p.Name() != "reading-time" || countWords("one two") != 2 || estimateMinutes(1) != 1 || estimateMinutes(201) != 2 {
+	if p.Name() != "readingtime" || countWords("one two") != 2 || estimateMinutes(1) != 1 || estimateMinutes(201) != 2 {
 		t.Fatal("unexpected reading time helpers")
 	}
 

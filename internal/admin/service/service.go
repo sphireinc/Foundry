@@ -124,6 +124,7 @@ func New(cfg *config.Config, opts ...Option) *Service {
 	}
 
 	s.RegisterStatusProvider(configStatusProvider{})
+	s.RegisterStatusProvider(authSecurityStatusProvider{})
 	s.RegisterStatusProvider(contentStatusProvider{})
 	s.RegisterStatusProvider(themeStatusProvider{})
 	s.RegisterStatusProvider(pluginStatusProvider{})

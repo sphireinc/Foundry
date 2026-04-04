@@ -1,12 +1,13 @@
 name: toc
 title: Table of Contents
-version: 1.0.0
+version: 1.1.0
 description: Generates a table of contents for Markdown headings
 author: Juan Sanchez <jsanchez@sphire.co>
 homepage: https://github.com/sphireinc/foundry/plugins/toc
 license: MIT
 foundry_api: v1
 min_foundry_version: 0.1.0
+compatibility_version: v1
 permissions:
   content:
     documents:

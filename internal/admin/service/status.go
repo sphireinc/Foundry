@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sort"
+	"strings"
 
 	"github.com/sphireinc/foundry/internal/admin/types"
+	"github.com/sphireinc/foundry/internal/admin/users"
 	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/theme"
 )
@@ -65,6 +68,56 @@ func (configStatusProvider) Name() string { return "config" }
 
 func (configStatusProvider) Provide(_ context.Context, _ *Service, _ *types.SystemStatus) error {
 	return nil
+}
+
+type authSecurityStatusProvider struct{}
+
+func (authSecurityStatusProvider) Name() string { return "auth-security" }
+
+func (authSecurityStatusProvider) Provide(_ context.Context, s *Service, _ *types.SystemStatus) error {
+	if s == nil || s.cfg == nil || !s.cfg.Admin.Enabled {
+		return nil
+	}
+	issues := make([]string, 0, 3)
+	if !s.cfg.Admin.LocalOnly && strings.TrimSpace(s.cfg.Admin.SessionSecret) == "" {
+		issues = append(issues, "admin.session_secret is not set for a non-local admin deployment")
+	}
+	baseURL := strings.ToLower(strings.TrimSpace(s.cfg.BaseURL))
+	if !s.cfg.Admin.LocalOnly && (baseURL == "" || !strings.HasPrefix(baseURL, "https://")) {
+		issues = append(issues, "admin is exposed non-locally without an https base_url; secure cookies and proxy/TLS behavior should be reviewed")
+	}
+	all, err := users.Load(s.cfg.Admin.UsersFile)
+	if err == nil {
+		if hasPlaintextTOTPSecrets(all) {
+			issues = append(issues, "one or more admin users still store plaintext TOTP secrets")
+		}
+		if usersNeedTOTPKey(all) && strings.TrimSpace(s.cfg.Admin.TOTPSecretKey) == "" {
+			issues = append(issues, "admin.totp_secret_key is not set while TOTP secrets or TOTP-enabled users exist")
+		}
+	}
+	if len(issues) == 0 {
+		return nil
+	}
+	return errors.New(strings.Join(issues, "; "))
+}
+
+func hasPlaintextTOTPSecrets(entries []users.User) bool {
+	for _, user := range entries {
+		secret := strings.TrimSpace(user.TOTPSecret)
+		if secret != "" && !strings.HasPrefix(secret, "enc:v1:") {
+			return true
+		}
+	}
+	return false
+}
+
+func usersNeedTOTPKey(entries []users.User) bool {
+	for _, user := range entries {
+		if user.TOTPEnabled || strings.TrimSpace(user.TOTPSecret) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 type contentStatusProvider struct{}

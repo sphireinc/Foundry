@@ -840,6 +840,41 @@ export const bindDashboardEvents = (ctx) => {
     });
   });
 
+  root.querySelectorAll('[data-session-user]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const username = String(button.dataset.sessionUser || '').trim();
+      const user = state.users.find((item) => item.username === username);
+      if (!user) return;
+      resetUserSecurity();
+      setUserForm(
+        {
+          username: user.username,
+          name: user.name || '',
+          email: user.email || '',
+          role: user.role || '',
+          password: '',
+          disabled: !!user.disabled,
+        },
+        { snapshot: true }
+      );
+      setFlash(`Loaded ${user.username} from sessions.`);
+      navigate('users');
+    });
+  });
+
+  root.querySelectorAll('[data-select-session]').forEach((input) => {
+    input.addEventListener('change', (event) => {
+      const sessionID = String(input.dataset.selectSession || '').trim();
+      if (!sessionID) return;
+      state.selectedSessions = toggleSelection(
+        state.selectedSessions,
+        sessionID,
+        !!event.target.checked
+      );
+      render();
+    });
+  });
+
   root.querySelectorAll('[data-edit-document-path]').forEach((button) => {
     button.addEventListener('click', async () => {
       try {
@@ -1176,6 +1211,42 @@ export const bindDashboardEvents = (ctx) => {
     }
   });
 
+  document.getElementById('user-open-sessions')?.addEventListener('click', () => {
+    const selectedUser = selectedUserRecord();
+    if (!selectedUser) return;
+    state.sessionFilters.username = selectedUser.username;
+    navigate('sessions');
+  });
+
+  root.querySelectorAll('[data-revoke-session-id]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const sessionId = String(button.dataset.revokeSessionId || '').trim();
+      if (!sessionId) return;
+      const isCurrent = button.dataset.currentSession === 'true';
+      if (
+        !window.confirm(
+          isCurrent
+            ? 'Revoke the current session? You may be signed out immediately.'
+            : 'Revoke this session?'
+        )
+      )
+        return;
+      try {
+        const resp = await admin.session.revoke({ session_id: sessionId });
+        setFlash(
+          isCurrent
+            ? `Revoked ${resp.revoked || 0} current session.`
+            : `Revoked ${resp.revoked || 0} session.`
+        );
+        await fetchAll(false);
+        navigate('users');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+  });
+
   document.getElementById('user-revoke-all-sessions')?.addEventListener('click', async () => {
     if (!window.confirm('Revoke all active admin sessions?')) return;
     try {
@@ -1183,6 +1254,66 @@ export const bindDashboardEvents = (ctx) => {
       setFlash(`Revoked ${resp.revoked || 0} session(s).`);
       await fetchAll(false);
       navigate('users');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('session-filter-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    state.sessionFilters.username =
+      document.getElementById('session-filter-username')?.value || '';
+    render();
+  });
+
+  document.getElementById('session-filter-clear')?.addEventListener('click', () => {
+    state.sessionFilters.username = '';
+    render();
+  });
+
+  document.getElementById('session-select-all')?.addEventListener('click', () => {
+    const visibleSessionIDs = Array.from(
+      root.querySelectorAll('[data-select-session]')
+    ).map((input) => String(input.dataset.selectSession || '').trim()).filter(Boolean);
+    const allSelected =
+      visibleSessionIDs.length > 0 &&
+      visibleSessionIDs.every((sessionID) => state.selectedSessions.includes(sessionID));
+    state.selectedSessions = allSelected
+      ? state.selectedSessions.filter((sessionID) => !visibleSessionIDs.includes(sessionID))
+      : Array.from(new Set([...state.selectedSessions, ...visibleSessionIDs]));
+    render();
+  });
+
+  document.getElementById('session-revoke-selected')?.addEventListener('click', async () => {
+    if (!state.selectedSessions.length) return;
+    if (!window.confirm(`Revoke ${state.selectedSessions.length} selected session(s)?`)) return;
+    try {
+      let revoked = 0;
+      for (const sessionID of state.selectedSessions) {
+        const resp = await admin.session.revoke({ session_id: sessionID });
+        revoked += resp.revoked || 0;
+      }
+      state.selectedSessions = [];
+      state.userSessionsLoaded = false;
+      setFlash(`Revoked ${revoked} selected session(s).`);
+      await fetchAll(false);
+      navigate('sessions');
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
+  document.getElementById('session-revoke-all')?.addEventListener('click', async () => {
+    if (!window.confirm('Emergency revoke all active admin sessions?')) return;
+    try {
+      const resp = await admin.session.revoke({ all: true });
+      state.selectedSessions = [];
+      state.userSessionsLoaded = false;
+      setFlash(`Revoked ${resp.revoked || 0} session(s).`);
+      await fetchAll(false);
+      navigate('sessions');
     } catch (error) {
       state.error = error.message || String(error);
       render();

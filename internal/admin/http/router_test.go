@@ -842,6 +842,69 @@ func TestEditorRoleCannotAccessAdminOnlyEndpoints(t *testing.T) {
 	}
 }
 
+func TestAdminCanListAndRevokeIndividualSessions(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Admin.AccessToken = ""
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/__admin/api/login", strings.NewReader(`{"username":"admin","password":"secret-password"}`))
+	loginReq.RemoteAddr = "127.0.0.1:10000"
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginReq.Header.Set("User-Agent", "Foundry Router Test")
+	loginRR := httptest.NewRecorder()
+	mux.ServeHTTP(loginRR, loginReq)
+	if loginRR.Code != http.StatusOK {
+		t.Fatalf("expected admin login 200, got %d: %s", loginRR.Code, loginRR.Body.String())
+	}
+	var loginResp admintypes.SessionResponse
+	if err := json.Unmarshal(loginRR.Body.Bytes(), &loginResp); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	cookie := loginRR.Result().Cookies()[0]
+
+	listReq := httptest.NewRequest(http.MethodGet, "/__admin/api/sessions?username=admin", nil)
+	listReq.RemoteAddr = "127.0.0.1:10000"
+	listReq.AddCookie(cookie)
+	listRR := httptest.NewRecorder()
+	mux.ServeHTTP(listRR, listReq)
+	if listRR.Code != http.StatusOK {
+		t.Fatalf("expected sessions 200, got %d: %s", listRR.Code, listRR.Body.String())
+	}
+	var sessions []admintypes.SessionRecord
+	if err := json.Unmarshal(listRR.Body.Bytes(), &sessions); err != nil {
+		t.Fatalf("decode sessions response: %v", err)
+	}
+	if len(sessions) == 0 {
+		t.Fatal("expected at least one session record")
+	}
+	if !sessions[0].Current {
+		t.Fatalf("expected current session to be marked, got %#v", sessions[0])
+	}
+	if sessions[0].ID == "" {
+		t.Fatalf("expected session record id, got %#v", sessions[0])
+	}
+
+	revokeReq := httptest.NewRequest(http.MethodPost, "/__admin/api/sessions/revoke", strings.NewReader(`{"session_id":"`+sessions[0].ID+`"}`))
+	revokeReq.RemoteAddr = "127.0.0.1:10000"
+	revokeReq.Header.Set("Content-Type", "application/json")
+	revokeReq.Header.Set("X-Foundry-CSRF-Token", loginResp.CSRFToken)
+	revokeReq.AddCookie(cookie)
+	revokeRR := httptest.NewRecorder()
+	mux.ServeHTTP(revokeRR, revokeReq)
+	if revokeRR.Code != http.StatusOK {
+		t.Fatalf("expected revoke 200, got %d: %s", revokeRR.Code, revokeRR.Body.String())
+	}
+	var revokeResp admintypes.SessionRevokeResponse
+	if err := json.Unmarshal(revokeRR.Body.Bytes(), &revokeResp); err != nil {
+		t.Fatalf("decode revoke response: %v", err)
+	}
+	if revokeResp.Revoked != 1 {
+		t.Fatalf("expected one session revoked, got %#v", revokeResp)
+	}
+}
+
 func TestAdminIndexMethodAndErrorPaths(t *testing.T) {
 	cfg := testConfig(t)
 	r := newTestRouter(t, cfg)

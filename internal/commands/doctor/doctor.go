@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	adminusers "github.com/sphireinc/foundry/internal/admin/users"
 	"github.com/sphireinc/foundry/internal/cliout"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
@@ -159,6 +161,35 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 		}
 	} else {
 		add("plugin_sync", true, genPath)
+	}
+
+	if cfg.Admin.Enabled {
+		userEntries, userErr := adminusers.Load(cfg.Admin.UsersFile)
+		if userErr != nil {
+			add("auth.users_file", false, userErr.Error())
+		} else {
+			legacyPBKDF2 := 0
+			plaintextTOTP := 0
+			for _, user := range userEntries {
+				if strings.HasPrefix(strings.TrimSpace(user.PasswordHash), "pbkdf2_sha256$") {
+					legacyPBKDF2++
+				}
+				secret := strings.TrimSpace(user.TOTPSecret)
+				if secret != "" && !strings.HasPrefix(secret, "enc:v1:") {
+					plaintextTOTP++
+				}
+			}
+			add("auth.legacy_password_hashes", legacyPBKDF2 == 0, fmt.Sprintf("%d remaining", legacyPBKDF2))
+			add("auth.plaintext_totp", plaintextTOTP == 0, fmt.Sprintf("%d remaining", plaintextTOTP))
+		}
+
+		sessionFile, sessionErr := os.ReadFile(cfg.Admin.SessionStoreFile)
+		if sessionErr != nil && !os.IsNotExist(sessionErr) {
+			add("auth.session_store", false, sessionErr.Error())
+		} else {
+			legacySessions := strings.Count(string(sessionFile), "\n  - token:")
+			add("auth.legacy_sessions", legacySessions == 0, fmt.Sprintf("%d remaining", legacySessions))
+		}
 	}
 
 	for _, r := range results {
