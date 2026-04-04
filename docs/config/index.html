@@ -285,7 +285,7 @@ content:
             <li>
               <strong><code>local_only</code></strong
               >: rejects forwarded or non-local admin access when true. <strong>Default: </strong
-              ><code>true</code>.
+              ><code>false</code>.
             </li>
             <li>
               <strong><code>access_token</code></strong
@@ -374,7 +374,7 @@ content:
   enabled: true
   addr: ""
   path: "/__admin"
-  local_only: true
+  local_only: false
   access_token: ""
   session_secret: ""
   totp_secret_key: ""

@@ -1028,7 +1028,7 @@ admin:
   single_session_per_user: false
 ```
 
-`admin.local_only` is a convenience restriction for local development. It should not be treated as the only security boundary in front of a reverse proxy.
+`admin.local_only` is an optional convenience restriction for local development. It is not the default posture and should not be treated as the only security boundary in front of a reverse proxy.
 
 The dfault admin theme now includes:
 

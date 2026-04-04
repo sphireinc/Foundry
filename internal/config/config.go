@@ -225,8 +225,8 @@ func (c *Config) ApplyDefaults() {
 	if c.Admin.SessionTTLMinutes <= 0 {
 		c.Admin.SessionTTLMinutes = 30
 	}
-	if !c.Admin.localOnlySet && !c.Admin.LocalOnly {
-		c.Admin.LocalOnly = true
+	if !c.Admin.localOnlySet {
+		c.Admin.LocalOnly = false
 	}
 	if c.DefaultLang == "" {
 		c.DefaultLang = "en"

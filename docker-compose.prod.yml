@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        FOUNDRY_BUILD_VERSION: "${FOUNDRY_BUILD_VERSION:-}"
+        FOUNDRY_BUILD_COMMIT: "${FOUNDRY_BUILD_COMMIT:-}"
+        FOUNDRY_BUILD_DATE: "${FOUNDRY_BUILD_DATE:-}"
     init: true
     ports:
       - "${FOUNDRY_PUBLISH_ADDR:-8080}:8080"

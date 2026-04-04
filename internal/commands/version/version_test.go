@@ -34,3 +34,9 @@ func TestSourceDisplayVersion(t *testing.T) {
 		t.Fatalf("unexpected source display version: %q", got)
 	}
 }
+
+func TestEmbeddedVersionFallback(t *testing.T) {
+	if got := embeddedVersion(); strings.TrimSpace(got) == "" {
+		t.Fatal("expected embedded version fallback to be non-empty")
+	}
+}

@@ -8,9 +8,9 @@ server:
   debug_routes: false
 
 admin:
-  local_only: true
+  local_only: false
   debug:
-    pprof: false
+    pprof: true
 
 backup:
   dir: "data/backups"
