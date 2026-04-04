@@ -1,0 +1,46 @@
+<explanation>
+1. **Overall shape**
+Foundry is a Go-based CMS with two major faces: a command-line application and a long-running server/runtime. It works from a file-based project layout, with source content under `content/`, mutable operational state under `data/`, themes under `themes/`, plugins under `plugins/`, and generated output under `public/`.
+
+2. **Core build pipeline**
+The central architecture is a staged content pipeline: config loading feeds content and data loading, which builds an in-memory site graph, assigns routes, resolves dependencies, renders templates, and writes either static output or preview output. This pipeline is reused by both `foundry build` and the preview server.
+
+3. **Content and site model**
+`internal/content`, `internal/site`, `internal/router`, and `internal/taxonomy` form the content model layer. Markdown files with frontmatter become typed documents, language variants are grouped, taxonomies are indexed, and URLs are assigned. The resulting `SiteGraph` is the canonical in-memory representation of pages, posts, routes, config, and loaded data.
+
+4. **Incremental rebuild boundary**
+Foundry maintains a separate `DependencyGraph` in `internal/deps` to decide what must be regenerated after a change. This graph tracks dependencies from documents, templates, data keys, and taxonomy archives to rendered outputs, allowing the preview server to rebuild only affected pages instead of running a full site rebuild.
+
+5. **Renderer and output generation**
+`internal/renderer` is the rendering boundary between site state and emitted files. It combines the resolved site graph with theme templates, plugin hooks, markup rendering, and asset outputs. Static builds write into `public/`, while preview mode also emits live artifacts such as search and SDK data.
+
+6. **Themes as a presentation boundary**
+Themes are a first-class subsystem under `themes/`. Frontend themes provide layouts, partials, CSS, and JS for public pages, while admin themes provide the shell UI for the management surface. Theme manifests define compatibility, supported layouts, slot contracts, security declarations, and field contracts, making themes a validated extension surface rather than just templates.
+
+7. **Admin subsystem**
+`internal/admin` is a full subsystem with auth, session management, audit logging, HTTP handlers, service orchestration, user storage, and UI manifest support. The admin server exposes document, media, config, plugin, theme, status, and debug flows, and uses a session-based auth model backed by filesystem state. The admin UI is themeable and loads its own SDK/runtime contract.
+
+8. **Plugin subsystem**
+`internal/plugins` handles discovery, metadata, validation, lifecycle, installation, security assessment, and runtime integration for plugins in `plugins/`. Plugins can contribute hooks, assets, config schemas, admin pages/widgets, and renderer behavior. There is a strong boundary between declared permissions and actual execution, and some hooks can run in an out-of-process RPC host for reduced trust exposure.
+
+9. **Assets and media flow**
+`internal/assets`, `internal/media`, and the content/media roots together form the asset pipeline. Foundry copies content assets, theme assets, plugin assets, and user media into the build output, and also bundles CSS. Media references use a `media:` scheme that resolves to stable public paths, which keeps authored Markdown independent from filesystem layout.
+
+10. **Configuration and data persistence**
+`internal/config` loads and validates YAML-based configuration from `content/config/site.yaml` and environment overlays. `internal/data` reads additional structured data from `data/`, including admin state such as sessions, locks, and other runtime files. The system keeps user-editable content separate from operational state, but both feed the same site/runtime graph.
+
+11. **Server, preview, and live reload**
+`internal/server` orchestrates preview serving, request handling, live reload, debug endpoints, and rebuild coordination. It watches the filesystem through `internal/content/watcher`, triggers incremental updates, and serves the generated site plus runtime APIs. Live reload can be stream-based or polling-based, which affects the browser connection model during development.
+
+12. **CLI and operational commands**
+`cmd/foundry` is the main entrypoint and `internal/commands` contains the subcommands for build, serve, validate, doctor, backup, theme/plugin management, release, update, and content import/export. These commands are thin orchestration layers over the internal subsystems rather than separate business logic paths.
+
+13. **Backups, updates, and standalone runtime**
+`internal/backup`, `internal/standalone`, and `internal/updater` provide operational support beyond simple build/serve behavior. Backups snapshot the content tree, standalone mode turns Foundry into a portable persistent process with its own runtime directory, and the updater integrates with GitHub Releases for managed self-update flows.
+
+14. **SDK surface**
+The `sdk/` tree is a deliberate external contract boundary. It exposes stable JavaScript clients for admin and frontend consumers, plus generated browser entrypoints and JSON artifacts under `/__foundry` and `public/__foundry/`. This lets themes and admin extensions integrate with Foundry through supported APIs instead of internal endpoints.
+
+15. **Repo-level toolchain and distribution**
+The repository is structured for Go builds plus web asset tooling. Go handles the server, CLI, and runtime logic; Node/Playwright support formatting and local browser tests for shipped themes; GitHub Actions builds, tests, releases binaries, and publishes docs coverage. The docs under `docs/` and sample content under `content/` also act as part of the architecture, showing the expected runtime project layout.
+</explanation>
