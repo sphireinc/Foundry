@@ -2,13 +2,20 @@
 .github
 .idea
 .DS_Store
+.foundry
+.cache
+public
 
 docs/coverage
+playwright-report
+test-results
 node_modules
 
 *.log
 *.out
 coverage.*
+assessment-*.txt
+README_SCREENSHOTS.md
 
 bin
 dist

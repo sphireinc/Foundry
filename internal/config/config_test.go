@@ -16,8 +16,8 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Server.LiveReloadMode != "stream" {
 		t.Fatalf("expected live reload mode default to be stream, got %q", cfg.Server.LiveReloadMode)
 	}
-	if cfg.Admin.LocalOnly != true {
-		t.Fatalf("expected admin local only default to be true")
+	if cfg.Admin.LocalOnly != false {
+		t.Fatalf("expected admin local only default to be false")
 	}
 	if cfg.Admin.Theme != "default" {
 		t.Fatalf("expected admin theme default to be default, got %q", cfg.Admin.Theme)

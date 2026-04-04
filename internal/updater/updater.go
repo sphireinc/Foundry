@@ -87,11 +87,12 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 	mode := DetectInstallMode(projectDir)
 	currentMeta := versioncmd.Current(projectDir)
 	current := normalizeVersion(currentMeta.Version)
+	currentDisplay := formatVersion(firstNonEmpty(currentMeta.Version, currentMeta.NearestTag, current))
 	logx.Info("updater release check started", "project_dir", projectDir, "repo", repo, "install_mode", mode, "current_version", current)
 	info := &ReleaseInfo{
 		Repo:                  repo,
-		CurrentVersion:        current,
-		CurrentDisplayVersion: firstNonEmpty(currentMeta.DisplayVersion, currentMeta.Version),
+		CurrentVersion:        currentDisplay,
+		CurrentDisplayVersion: formatVersion(firstNonEmpty(currentMeta.DisplayVersion, currentDisplay)),
 		InstallMode:           mode,
 		NearestTag:            currentMeta.NearestTag,
 		CurrentCommit:         currentMeta.Commit,
@@ -118,7 +119,7 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 		return nil, err
 	}
 	latest := normalizeVersion(rel.TagName)
-	info.LatestVersion = latest
+	info.LatestVersion = formatVersion(firstNonEmpty(rel.TagName, latest))
 	info.ReleaseURL = rel.HTMLURL
 	info.Body = rel.Body
 	if ts, err := time.Parse(time.RFC3339, rel.PublishedAt); err == nil {
@@ -325,6 +326,17 @@ func selectAssets(assets []githubAsset) (*githubAsset, *githubAsset) {
 
 func normalizeVersion(v string) string {
 	return strings.TrimPrefix(strings.TrimSpace(v), "v")
+}
+
+func formatVersion(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" || v == "unknown" || v == "dev" {
+		return v
+	}
+	if strings.HasPrefix(v, "v") {
+		return v
+	}
+	return "v" + v
 }
 
 func compareVersions(a, b string) int {

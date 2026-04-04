@@ -21,7 +21,7 @@ admin:
   enabled: false
   addr: ""
   path: "/__admin"
-  local_only: true
+  local_only: false
   access_token: ""
   session_secret: ""
   totp_secret_key: ""
