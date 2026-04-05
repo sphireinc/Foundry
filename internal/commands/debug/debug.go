@@ -1,7 +1,6 @@
 package debug
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -9,9 +8,8 @@ import (
 
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
-	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/debugutil"
 	"github.com/sphireinc/foundry/internal/plugins"
-	"github.com/sphireinc/foundry/internal/site"
 	"gopkg.in/yaml.v3"
 )
 
@@ -59,7 +57,7 @@ func (command) Run(cfg *config.Config, args []string) error {
 }
 
 func runRoutes(cfg *config.Config) error {
-	graph, err := loadGraph(cfg)
+	graph, err := debugutil.LoadGraph(cfg)
 	if err != nil {
 		return err
 	}
@@ -166,7 +164,7 @@ func runPlugins(cfg *config.Config) error {
 	for _, p := range pluginInstances {
 		name := p.Name()
 		pluginTypes[name] = reflect.TypeOf(p).String()
-		pluginHooks[name] = detectHooks(p)
+		pluginHooks[name] = debugutil.DetectHooks(p)
 	}
 
 	for _, meta := range metas {
@@ -204,58 +202,6 @@ func runConfig(cfg *config.Config) error {
 
 	fmt.Print(string(b))
 	return nil
-}
-
-func detectHooks(p plugins.Plugin) []string {
-	type hookCheck struct {
-		name string
-		ok   bool
-	}
-
-	hooks := []hookCheck{
-		{"ConfigLoadedHook", implements[plugins.ConfigLoadedHook](p)},
-		{"ContentDiscoveredHook", implements[plugins.ContentDiscoveredHook](p)},
-		{"FrontmatterParsedHook", implements[plugins.FrontmatterParsedHook](p)},
-		{"MarkdownRenderedHook", implements[plugins.MarkdownRenderedHook](p)},
-		{"DocumentParsedHook", implements[plugins.DocumentParsedHook](p)},
-		{"DataLoadedHook", implements[plugins.DataLoadedHook](p)},
-		{"GraphBuildingHook", implements[plugins.GraphBuildingHook](p)},
-		{"GraphBuiltHook", implements[plugins.GraphBuiltHook](p)},
-		{"TaxonomyBuiltHook", implements[plugins.TaxonomyBuiltHook](p)},
-		{"RoutesAssignedHook", implements[plugins.RoutesAssignedHook](p)},
-		{"ContextHook", implements[plugins.ContextHook](p)},
-		{"AssetsHook", implements[plugins.AssetsHook](p)},
-		{"HTMLSlotsHook", implements[plugins.HTMLSlotsHook](p)},
-		{"BeforeRenderHook", implements[plugins.BeforeRenderHook](p)},
-		{"AfterRenderHook", implements[plugins.AfterRenderHook](p)},
-		{"AssetsBuildingHook", implements[plugins.AssetsBuildingHook](p)},
-		{"BuildStartedHook", implements[plugins.BuildStartedHook](p)},
-		{"BuildCompletedHook", implements[plugins.BuildCompletedHook](p)},
-		{"ServerStartedHook", implements[plugins.ServerStartedHook](p)},
-		{"RoutesRegisterHook", implements[plugins.RoutesRegisterHook](p)},
-		{"CLIHook", implements[plugins.CLIHook](p)},
-	}
-
-	out := make([]string, 0)
-	for _, h := range hooks {
-		if h.ok {
-			out = append(out, h.name)
-		}
-	}
-	return out
-}
-
-func implements[T any](v any) bool {
-	_, ok := v.(T)
-	return ok
-}
-
-func loadGraph(cfg *config.Config) (*content.SiteGraph, error) {
-	graph, _, err := site.LoadConfiguredGraph(context.Background(), cfg, true)
-	if err != nil {
-		return nil, err
-	}
-	return graph, nil
 }
 
 func init() {

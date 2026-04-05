@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/debugutil"
 	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/theme"
 )
@@ -46,11 +47,11 @@ func TestDebugCommandMetadataAndDetectHooks(t *testing.T) {
 		t.Fatal("expected populated command metadata")
 	}
 
-	hooks := detectHooks(&testDebugPlugin{})
+	hooks := debugutil.DetectHooks(&testDebugPlugin{})
 	if len(hooks) == 0 {
 		t.Fatal("expected detected hooks")
 	}
-	if implements[interface{ Missing() }](testDebugPlugin{}) {
+	if debugutil.Implements[interface{ Missing() }](testDebugPlugin{}) {
 		t.Fatal("expected unrelated interface check to be false")
 	}
 }
