@@ -82,7 +82,7 @@ func Install(opts InstallOptions) (Metadata, error) {
 	if err := cmd.Run(); err != nil {
 		fmt.Println("git clone failed because git not available, downloading repository archive instead")
 
-			if err := downloadAndExtract(repoURL, targetDir); err != nil {
+		if err := downloadAndExtract(repoURL, targetDir); err != nil {
 			return Metadata{}, fmt.Errorf("git clone failed and zip fallback failed: %w", err)
 		}
 	}
