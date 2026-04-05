@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sphireinc/foundry/internal/installutil"
 )
 
 func TestListInstalledAndConfigToggles(t *testing.T) {
@@ -138,10 +140,10 @@ func TestInstallHelpersAndUninstall(t *testing.T) {
 		t.Fatal("expected infer name failure")
 	}
 
-	if zipURL, err := repoZipURL("https://github.com/acme/demo.git"); err != nil || zipURL != "https://github.com/acme/demo/archive/refs/heads/main.zip" {
+	if zipURL, err := installutil.RepoZipURL("https://github.com/acme/demo.git"); err != nil || zipURL != "https://github.com/acme/demo/archive/refs/heads/main.zip" {
 		t.Fatalf("unexpected zip URL: %q %v", zipURL, err)
 	}
-	if _, err := repoZipURL("https://example.com/acme/demo.git"); err == nil {
+	if _, err := installutil.RepoZipURL("https://example.com/acme/demo.git"); err == nil {
 		t.Fatal("expected non-GitHub zip URL rejection")
 	}
 

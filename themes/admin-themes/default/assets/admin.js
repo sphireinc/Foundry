@@ -5,6 +5,10 @@ import {
   adminPathForSection,
   normalizeAdminSection,
 } from './admin/core/router.js';
+import { createAccessHelpers } from './admin/core/access.js';
+import { createDebugTools } from './admin/core/debug-tools.js';
+import { createExtensionsRuntime } from './admin/core/extensions-runtime.js';
+import { createSessionInventory } from './admin/core/session-inventory.js';
 import { createInitialState, sectionTitles } from './admin/core/state.js';
 import { createUIStateHelpers } from './admin/core/ui-state.js';
 import {
@@ -26,7 +30,10 @@ import {
 } from './admin/editor/frontmatter.js';
 import { createEditorSync } from './admin/editor/sync.js';
 import { bindDashboardEvents } from './admin/events/dashboard.js';
+import { createDebugViews } from './admin/views/debug.js';
+import { createExtensionViews } from './admin/views/extensions.js';
 import { createPlatformViews } from './admin/views/platform.js';
+import { createSessionViews } from './admin/views/sessions.js';
 import {
   documentStatusLabel,
   mediaPreview,
@@ -148,9 +155,7 @@ import {
         : admin.raw.get('/api/settings/sections'),
   };
   let navigate = () => {};
-  let debugAutoRefreshTimer = null;
-  const extensionModuleCache = new Map();
-  const extensionStyleCache = new Set();
+  let render = () => {};
 
   const safeJSON = (value) => {
     try {
@@ -192,108 +197,23 @@ import {
       }
     } catch (_error) {}
   };
-  const recordDebugEvent = (kind, message, meta = null) => {
-    const entry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: String(kind || 'info'),
-      message: String(message || '').trim() || 'event',
-      at: new Date().toISOString(),
-      meta,
-    };
-    state.debugTools.events = [entry, ...(state.debugTools.events || [])].slice(0, 60);
-  };
-  const recordRenderTrace = (label, meta = {}) => {
-    const entry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      at: new Date().toISOString(),
-      section: normalizeAdminSection(state.section),
-      label,
-      path: window.location.pathname,
-      adminTheme: root.dataset.theme || 'default',
-      frontendTheme: state.status?.theme?.current || 'unknown',
-      ...meta,
-    };
-    state.debugTools.renderTrace = [entry, ...(state.debugTools.renderTrace || [])].slice(0, 24);
-  };
-  const setDebugFlag = (key, value) => {
-    state.debugTools.flags[key] = !!value;
-    if (key === 'persistConsoleHistory' && !value) {
-      state.debugTools.command.history = [];
-    }
-    persistDebugFlags();
-    persistDebugHistory();
-  };
-  const scheduleDebugAutoRefresh = () => {
-    if (debugAutoRefreshTimer) {
-      window.clearTimeout(debugAutoRefreshTimer);
-      debugAutoRefreshTimer = null;
-    }
-    if (
-      !state.session?.authenticated ||
-      !state.debugTools.flags.autoRefreshRuntime ||
-      !debugEnabled() ||
-      !['debug', 'diagnostics'].includes(normalizeAdminSection(state.section))
-    ) {
-      return;
-    }
-    debugAutoRefreshTimer = window.setTimeout(async () => {
-      try {
-        state.runtimeStatus = await admin.raw.get('/api/debug/runtime');
-        recordDebugEvent('runtime', 'Auto-refreshed runtime snapshot');
-        render();
-      } catch (error) {
-        recordDebugEvent('runtime-error', 'Auto-refresh failed', {
-          error: error?.message || String(error),
-        });
-      }
-    }, 15000);
-  };
-  const executeDebugRequest = async ({ method, path, body }) => {
-    const normalizedMethod = String(method || 'GET').toUpperCase();
-    const normalizedPath = String(path || '').trim() || '/api/status';
-    let payload = undefined;
-    if (!['GET', 'HEAD'].includes(normalizedMethod)) {
-      const trimmed = String(body || '').trim();
-      payload = trimmed ? JSON.parse(trimmed) : {};
-    }
-    recordDebugEvent('request', `${normalizedMethod} ${normalizedPath}`, payload || null);
-    const value = await admin.raw.request(normalizedPath, {
-      method: normalizedMethod,
-      body: payload,
-    });
-    state.debugTools.command = {
-      ...state.debugTools.command,
-      method: normalizedMethod,
-      path: normalizedPath,
-      body: String(body || ''),
-      result: safeJSON(value),
-      error: '',
-      history: [
-        {
-          at: new Date().toISOString(),
-          method: normalizedMethod,
-          path: normalizedPath,
-          ok: true,
-        },
-        ...(state.debugTools.command.history || []),
-      ].slice(0, 12),
-    };
-    persistDebugHistory();
-    return value;
-  };
-
-  window.addEventListener('error', (event) => {
-    recordDebugEvent('window-error', event.message || 'Unhandled window error', {
-      source: event.filename || '',
-      line: event.lineno || 0,
-      column: event.colno || 0,
-    });
+  const {
+    bindDebugControls,
+    bindGlobalDebugEvents,
+    recordDebugEvent,
+    recordRenderTrace,
+    scheduleDebugAutoRefresh,
+  } = createDebugTools({
+    state,
+    root,
+    admin,
+    safeJSON,
+    debugEnabled: () => !!state.capabilityInfo?.features?.pprof && capabilityInfoHas('debug.read'),
+    persistDebugFlags,
+    persistDebugHistory,
+    getRender: () => render,
   });
-  window.addEventListener('unhandledrejection', (event) => {
-    recordDebugEvent('promise-error', 'Unhandled promise rejection', {
-      reason: event.reason?.message || String(event.reason || ''),
-    });
-  });
+  bindGlobalDebugEvents();
 
   const {
     editorElements,
@@ -327,434 +247,35 @@ import {
   };
   const debugEnabled = () =>
     !!state.capabilityInfo?.features?.pprof && capabilityInfoHas('debug.read');
-  const normalizeNavGroup = (group) => {
-    switch (String(group || '').trim().toLowerCase()) {
-      case 'dashboard':
-      case 'content':
-      case 'manage':
-      case 'admin':
-        return String(group).trim().toLowerCase();
-      default:
-        return 'admin';
-    }
-  };
-  const builtinSectionCapability = (section) => {
-    const normalized = normalizeAdminSection(section);
-    switch (normalized) {
-      case 'overview':
-      case 'documents':
-      case 'editor':
-      case 'history':
-      case 'trash':
-      case 'extensions':
-        return 'dashboard.read';
-      case 'operations':
-        return 'config.manage';
-      case 'media':
-        return 'media.read';
-      case 'sessions':
-        return 'users.manage';
-      case 'custom-fields':
-        return 'documents.read';
-      case 'diagnostics':
-      case 'debug':
-        return debugEnabled() ? 'debug.read' : null;
-      case 'audit':
-        return 'audit.read';
-      case 'users':
-        return 'users.manage';
-      case 'settings':
-      case 'config':
-        return 'config.manage';
-      case 'plugins':
-        return 'plugins.manage';
-      case 'themes':
-        return 'themes.manage';
-      default:
-        return null;
-    }
-  };
-  const builtinSectionGroup = (section) => {
-    switch (normalizeAdminSection(section)) {
-      case 'overview':
-        return 'dashboard';
-      case 'documents':
-      case 'editor':
-      case 'history':
-      case 'trash':
-      case 'media':
-        return 'content';
-      case 'sessions':
-      case 'users':
-      case 'custom-fields':
-      case 'audit':
-      case 'settings':
-      case 'config':
-        return 'manage';
-      case 'extensions':
-      case 'plugins':
-      case 'themes':
-      case 'operations':
-      case 'diagnostics':
-      case 'debug':
-      default:
-        return 'admin';
-    }
-  };
-  const canAccessBuiltinSection = (section) => {
-    const normalized = normalizeAdminSection(section);
-    const capability = builtinSectionCapability(normalized);
-    if (!capability) return false;
-    if ((normalized === 'debug' || normalized === 'diagnostics') && !debugEnabled()) return false;
-    return capabilityInfoHas(capability);
-  };
-  const extensionPages = () =>
-    (state.adminExtensions.pages || [])
-      .filter((page) => page && page.key && hasCapability(page.capability))
-      .map((page) => ({
-        ...page,
-        section: normalizeAdminSection(page.route || `plugins/${page.plugin}/${page.key}`),
-        navGroup: normalizeNavGroup(page.nav_group),
-      }));
-  const extensionWidgetsForSlot = (slot) =>
-    (state.adminExtensions.widgets || []).filter(
-      (widget) => widget && widget.key && widget.slot === slot && hasCapability(widget.capability)
-    );
-  const extensionMountID = (kind, plugin, key, slot = '') =>
-    `${kind}-${plugin}-${key}-${slot}`.replace(/[^a-zA-Z0-9_-]+/g, '-');
-  const extensionPageBySection = (section) =>
-    extensionPages().find((page) => page.section === normalizeAdminSection(section)) || null;
-  const titleForSection = (section) => {
-    const normalized = normalizeAdminSection(section);
-    return (
-      sectionTitles[normalized] ||
-      extensionPageBySection(normalized)?.title ||
-      normalized.charAt(0).toUpperCase() + normalized.slice(1)
-    );
-  };
-  const canAccessSection = (section) => {
-    const normalized = normalizeAdminSection(section);
-    const extensionPage = extensionPageBySection(normalized);
-    if (extensionPage) {
-      return hasCapability(extensionPage.capability);
-    }
-    return canAccessBuiltinSection(normalized);
-  };
-  const firstAccessibleSection = () => {
-    const candidates = ['overview', 'documents', 'editor', 'media', 'custom-fields', 'sessions', 'audit'];
-    return candidates.find((section) => canAccessSection(section)) || extensionPages()[0]?.section || 'overview';
-  };
+  const {
+    builtinSectionGroup,
+    extensionPages,
+    extensionWidgetsForSlot,
+    extensionPageBySection,
+    titleForSection,
+    canAccessSection,
+    firstAccessibleSection,
+  } = createAccessHelpers({
+    state,
+    sectionTitles,
+    hasCapability,
+    capabilityInfoHas,
+    debugEnabled,
+  });
   const canManageSharedFields = () => capabilityInfoHas('config.manage');
   const isSettingsSection = (section) => {
     const normalized = normalizeAdminSection(section);
     return normalized === 'settings' || normalized === 'config';
   };
-  const renderWidgetPanels = (slot) =>
-    extensionWidgetsForSlot(slot).map((widget) =>
-      panel(
-        widget.title,
-        `
-    <div class="panel-pad stack">
-      ${widget.description ? `<div class="muted">${escapeHTML(widget.description)}</div>` : ''}
-      <div id="${escapeHTML(extensionMountID('admin-widget', widget.plugin, widget.key, widget.slot))}"
-           class="admin-extension-mount admin-extension-widget-mount"
-           data-plugin="${escapeHTML(widget.plugin)}"
-           data-extension-key="${escapeHTML(widget.key)}"
-           data-extension-slot="${escapeHTML(widget.slot)}"
-           data-extension-kind="widget">
-        <div class="empty-state">This widget slot is ready for a plugin-provided admin widget mount.</div>
-      </div>
-    </div>`,
-        widget.slot || 'Plugin-defined widget'
-      )
-    );
-  const renderExtensionPage = () => {
-    const page = extensionPageBySection(state.section);
-    if (!page) {
-      return panel(
-        'Admin Extension',
-        '<div class="panel-pad empty-state">This admin extension page is not registered.</div>'
-      );
-    }
-    const relatedWidgets = (state.adminExtensions.widgets || []).filter(
-      (widget) => widget.plugin === page.plugin && hasCapability(widget.capability)
-    );
-    const relatedSettings = (state.adminExtensions.settings || []).filter(
-      (setting) => setting.plugin === page.plugin && hasCapability(setting.capability)
-    );
-    const relatedSlots = (state.adminExtensions.slots || []).filter(
-      (slot) => slot.plugin === page.plugin
-    );
-    return panel(
-      page.title,
-      `
-      <div class="panel-pad stack">
-        <div class="note">
-          <strong>${escapeHTML(page.plugin)}</strong>${page.description ? ` • ${escapeHTML(page.description)}` : ''}
-        </div>
-        <div class="cards">
-          <article class="card"><span class="card-label">Route</span><strong>${escapeHTML(page.route || `/${page.section}`)}</strong><span class="card-copy">Mounted from plugin metadata.</span></article>
-          <article class="card"><span class="card-label">Widgets</span><strong>${escapeHTML(relatedWidgets.length)}</strong><span class="card-copy">Plugin widgets registered for admin slots.</span></article>
-          <article class="card"><span class="card-label">Settings</span><strong>${escapeHTML(relatedSettings.length)}</strong><span class="card-copy">Plugin settings sections exposed to admin.</span></article>
-          <article class="card"><span class="card-label">Slots</span><strong>${escapeHTML(relatedSlots.length)}</strong><span class="card-copy">Declared admin shell slots.</span></article>
-        </div>
-        ${
-          relatedSettings.length
-            ? `<div class="stack">
-          <h3>Settings Sections</h3>
-          <div class="table table-three">
-            <div class="table-head"><span>Section</span><span>Capability</span><span>Description</span></div>
-            ${relatedSettings
-              .map(
-                (setting) => `
-              <div class="table-row">
-                <span><strong>${escapeHTML(setting.title)}</strong><div class="muted mono">${escapeHTML(setting.key)}</div></span>
-                <span>${escapeHTML(setting.capability || '-')}</span>
-                <span>${escapeHTML(setting.description || '-')}</span>
-              </div>`
-              )
-              .join('')}
-          </div>
-        </div>`
-            : ''
-        }
-        ${
-          relatedWidgets.length
-            ? `<div class="stack">
-          <h3>Widgets</h3>
-          <div class="table table-three">
-            <div class="table-head"><span>Widget</span><span>Slot</span><span>Description</span></div>
-            ${relatedWidgets
-              .map(
-                (widget) => `
-              <div class="table-row">
-                <span><strong>${escapeHTML(widget.title)}</strong><div class="muted mono">${escapeHTML(widget.key)}</div></span>
-                <span>${escapeHTML(widget.slot)}</span>
-                <span>${escapeHTML(widget.description || '-')}</span>
-              </div>`
-              )
-              .join('')}
-          </div>
-        </div>`
-            : ''
-        }
-        <div id="admin-extension-mount"
-             class="admin-extension-mount"
-             data-plugin="${escapeHTML(page.plugin)}"
-             data-extension-key="${escapeHTML(page.key)}"
-             data-extension-route="${escapeHTML(page.route || '')}"
-             data-extension-section="${escapeHTML(page.section)}">
-          <div class="empty-state">This page is ready for a plugin-provided admin UI mount. Listen for the <code>foundry:admin-extension-page</code> event or read <code>window.FoundryAdmin</code>.</div>
-        </div>
-      </div>`,
-      page.description || 'Plugin-defined admin page'
-    );
-  };
-
-  const publishAdminRuntime = () => {
-    window.FoundryAdmin = {
-      client: admin,
-      adminBase,
-      getSession: () => state.session,
-      getCapabilities: () => [...capabilitySet()],
-      getExtensions: () => clone(state.adminExtensions),
-      getSettingsSections: () => clone(state.settingsSections),
-    };
-    const page = extensionPageBySection(state.section);
-    if (page) {
-      if (state.debugTools.flags.captureExtensionEvents) {
-        recordDebugEvent('extension-page', `Dispatching extension page event for ${page.plugin}/${page.key}`, {
-          section: page.section,
-          route: page.route || '',
-        });
-      }
-      document.dispatchEvent(
-        new CustomEvent('foundry:admin-extension-page', {
-          detail: {
-            page,
-            adminBase,
-            session: state.session,
-            capabilities: [...capabilitySet()],
-            settingsSections: (state.settingsSections || []).filter(
-              (section) => section.source === page.plugin
-            ),
-            extensions: clone(state.adminExtensions),
-            mountId: 'admin-extension-mount',
-          },
-        })
-      );
-    }
-  };
-
-  const ensureExtensionStyles = (urls = []) => {
-    urls.filter(Boolean).forEach((url) => {
-      if (extensionStyleCache.has(url)) return;
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = url;
-      link.dataset.foundryAdminExtensionStyle = url;
-      document.head.appendChild(link);
-      extensionStyleCache.add(url);
-    });
-  };
-
-  const loadExtensionModule = async (page) => {
-    if (!page?.module_url) return null;
-    ensureExtensionStyles(page.style_urls || []);
-    if (!extensionModuleCache.has(page.module_url)) {
-      extensionModuleCache.set(page.module_url, import(page.module_url));
-    }
-    return extensionModuleCache.get(page.module_url);
-  };
-
-  const mountActiveExtensionPage = async () => {
-    const page = extensionPageBySection(state.section);
-    if (!page) return;
-    const mount = document.getElementById('admin-extension-mount');
-    if (!mount) return;
-    mount.dataset.extensionStatus = 'loading';
-    try {
-      const mod = await loadExtensionModule(page);
-      state.extensionRuntimeErrors = state.extensionRuntimeErrors.filter(
-        (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
-      );
-      const mountFn = mod?.mountAdminExtensionPage || mod?.default;
-      if (typeof mountFn === 'function') {
-        await mountFn({
-          mount,
-          page,
-          adminBase,
-          client: admin,
-          session: state.session,
-          capabilities: [...capabilitySet()],
-          settingsSections: (state.settingsSections || []).filter(
-            (section) => section.source === page.plugin
-          ),
-          extensions: clone(state.adminExtensions),
-        });
-        mount.dataset.extensionStatus = 'mounted';
-        if (state.debugTools.flags.captureExtensionEvents) {
-          recordDebugEvent('extension-page', `Mounted extension page ${page.plugin}/${page.key}`, {
-            module: page.module_url || '',
-          });
-        }
-      } else {
-        mount.dataset.extensionStatus = 'ready';
-      }
-    } catch (error) {
-      mount.dataset.extensionStatus = 'error';
-      state.extensionRuntimeErrors = [
-        ...state.extensionRuntimeErrors.filter(
-          (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
-        ),
-        {
-          kind: 'page',
-          plugin: page.plugin,
-          key: page.key,
-          message: error?.message || String(error),
-        },
-      ];
-      if (state.debugTools.flags.captureExtensionEvents) {
-        recordDebugEvent('extension-error', `Failed to load extension page ${page.plugin}/${page.key}`, {
-          error: error?.message || String(error),
-        });
-      }
-      mount.innerHTML = `<div class="error">Failed to load plugin admin page bundle: ${escapeHTML(error?.message || String(error))}</div>`;
-    }
-  };
-
-  const mountVisibleExtensionWidgets = async () => {
-    const widgets = [
-      ...extensionWidgetsForSlot('overview.after'),
-      ...extensionWidgetsForSlot('documents.sidebar'),
-      ...extensionWidgetsForSlot('media.sidebar'),
-      ...extensionWidgetsForSlot('plugins.sidebar'),
-    ];
-    await Promise.all(
-      widgets.map(async (widget) => {
-        const mountId = extensionMountID('admin-widget', widget.plugin, widget.key, widget.slot);
-        const mount = document.getElementById(mountId);
-        if (!mount) return;
-        mount.dataset.extensionStatus = 'loading';
-        try {
-          const mod = await loadExtensionModule(widget);
-          state.extensionRuntimeErrors = state.extensionRuntimeErrors.filter(
-            (entry) =>
-              !(
-                entry.kind === 'widget' &&
-                entry.plugin === widget.plugin &&
-                entry.key === widget.key &&
-                entry.slot === widget.slot
-              )
-          );
-          const mountFn = mod?.mountAdminExtensionWidget || mod?.default;
-          document.dispatchEvent(
-            new CustomEvent('foundry:admin-extension-widget', {
-              detail: {
-                widget,
-                adminBase,
-                session: state.session,
-                capabilities: [...capabilitySet()],
-                extensions: clone(state.adminExtensions),
-                mountId,
-              },
-            })
-          );
-          if (state.debugTools.flags.captureExtensionEvents) {
-            recordDebugEvent('extension-widget', `Dispatching widget event for ${widget.plugin}/${widget.key}`, {
-              slot: widget.slot,
-            });
-          }
-          if (typeof mountFn === 'function') {
-            await mountFn({
-              mount,
-              widget,
-              adminBase,
-              client: admin,
-              session: state.session,
-              capabilities: [...capabilitySet()],
-              extensions: clone(state.adminExtensions),
-            });
-            mount.dataset.extensionStatus = 'mounted';
-            if (state.debugTools.flags.captureExtensionEvents) {
-              recordDebugEvent('extension-widget', `Mounted widget ${widget.plugin}/${widget.key}`, {
-                slot: widget.slot,
-              });
-            }
-          } else {
-            mount.dataset.extensionStatus = 'ready';
-          }
-        } catch (error) {
-          mount.dataset.extensionStatus = 'error';
-          state.extensionRuntimeErrors = [
-            ...state.extensionRuntimeErrors.filter(
-              (entry) =>
-                !(
-                  entry.kind === 'widget' &&
-                  entry.plugin === widget.plugin &&
-                  entry.key === widget.key &&
-                  entry.slot === widget.slot
-                )
-            ),
-            {
-              kind: 'widget',
-              plugin: widget.plugin,
-              key: widget.key,
-              slot: widget.slot,
-              message: error?.message || String(error),
-            },
-          ];
-          if (state.debugTools.flags.captureExtensionEvents) {
-            recordDebugEvent('extension-error', `Failed to load widget ${widget.plugin}/${widget.key}`, {
-              slot: widget.slot,
-              error: error?.message || String(error),
-            });
-          }
-          mount.innerHTML = `<div class="error">Failed to load plugin admin widget bundle: ${escapeHTML(error?.message || String(error))}</div>`;
-        }
-      })
-    );
-  };
+  const { extensionMountID, renderExtensionPage, renderWidgetPanels } = createExtensionViews({
+    state,
+    panel,
+    escapeHTML,
+    hasCapability,
+    normalizeAdminSection,
+    extensionPageBySection,
+    extensionWidgetsForSlot,
+  });
 
   const updateDocumentFieldValue = (path, nextValue) => {
     updateNestedFieldValue(state, path, nextValue);
@@ -2371,365 +1892,15 @@ import {
       </div>`;
   };
 
-  const renderSessions = () => {
-    const normalizedFilter = String(state.sessionFilters?.username || '').trim().toLowerCase();
-    const visibleSessions = (state.userSessions || []).filter((session) => {
-      if (!normalizedFilter) return true;
-      return String(session.username || '').trim().toLowerCase().includes(normalizedFilter);
-    });
-    const sortedSessions = sortItems(visibleSessions, 'sessions', (session, field) => {
-      switch (field) {
-        case 'username':
-          return session.username;
-        case 'issued_at':
-          return session.issued_at;
-        case 'expires_at':
-          return session.expires_at;
-        case 'last_seen':
-        default:
-          return session.last_seen;
-      }
-    });
-    const pagedSessions = paginateItems(sortedSessions, 'sessions');
-    const now = Date.now();
-    const sessionAgeHours = (session) => {
-      const issued = Date.parse(String(session.issued_at || ''));
-      if (!Number.isFinite(issued)) return 0;
-      return Math.max(0, (now - issued) / (1000 * 60 * 60));
-    };
-    const sessionIdleMinutes = (session) => {
-      const lastSeen = Date.parse(String(session.last_seen || ''));
-      if (!Number.isFinite(lastSeen)) return 0;
-      return Math.max(0, (now - lastSeen) / (1000 * 60));
-    };
-    const usernameCounts = new Map();
-    const addressSets = new Map();
-    for (const session of visibleSessions) {
-      const username = String(session.username || '').trim().toLowerCase();
-      if (!username) continue;
-      usernameCounts.set(username, (usernameCounts.get(username) || 0) + 1);
-      if (!addressSets.has(username)) addressSets.set(username, new Set());
-      if (String(session.remote_addr || '').trim()) {
-        addressSets.get(username).add(String(session.remote_addr || '').trim());
-      }
-    }
-    const longLivedCount = visibleSessions.filter((session) => sessionAgeHours(session) >= 12).length;
-    const idleCount = visibleSessions.filter((session) => sessionIdleMinutes(session) >= 30).length;
-    const sharedUsers = Array.from(usernameCounts.values()).filter((count) => count > 1).length;
-    const spreadUsers = Array.from(addressSets.values()).filter((set) => set.size > 1).length;
-    const clientLabel = (session) => {
-      const agent = String(session.user_agent || '').trim();
-      if (!agent) return session.current ? 'Current Browser Session' : 'Unknown Client';
-      const lower = agent.toLowerCase();
-      if (lower.includes('iphone') || lower.includes('ios')) return `iPhone / iOS${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('ipad')) return `iPad / iPadOS${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('android')) return `Android Device${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('mac os') || lower.includes('macintosh')) return `Mac Browser${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('windows')) return `Windows Browser${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('linux')) return `Linux Browser${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('curl')) return `CLI Client${session.current ? ' (Current)' : ''}`;
-      return session.current ? `${agent} (Current)` : agent;
-    };
-    const addressFingerprint = (session) => {
-      const raw = String(session.remote_addr || '').trim();
-      if (!raw) return '-';
-      const hash = Array.from(raw).reduce((acc, char) => {
-        return (acc * 33 + char.charCodeAt(0)) >>> 0;
-      }, 5381);
-      if (raw.includes('.')) {
-        const parts = raw.split('.');
-        const suffix = parts.slice(-2).join('.');
-        return `x.x.${suffix} #${hash.toString(16).slice(-6)}`;
-      }
-      if (raw.includes(':')) {
-        const parts = raw.split(':').filter(Boolean);
-        const suffix = parts.slice(-2).join(':') || raw.slice(-8);
-        return `x:x:${suffix} #${hash.toString(16).slice(-6)}`;
-      }
-      const half = raw.slice(Math.max(0, Math.floor(raw.length / 2)));
-      return `...${half} #${hash.toString(16).slice(-6)}`;
-    };
-    const sessionFlags = (session) => {
-      const username = String(session.username || '').trim().toLowerCase();
-      const flags = [];
-      if (session.current) flags.push('Current');
-      if (sessionAgeHours(session) >= 12) flags.push('Long-Lived');
-      if (sessionIdleMinutes(session) >= 30) flags.push('Idle');
-      if ((usernameCounts.get(username) || 0) > 1) flags.push('Concurrent');
-      if ((addressSets.get(username)?.size || 0) > 1) flags.push('Address Spread');
-      return flags;
-    };
-    const rows = pagedSessions.items.map(
-      (session) => `
-      <div class="table-row table-row-actions">
-        <span>
-          <label class="checkbox inline-checkbox">
-            <input type="checkbox" data-select-session="${escapeHTML(session.id || '')}" ${state.selectedSessions.includes(session.id) ? 'checked' : ''}>
-            <strong>${escapeHTML(clientLabel(session))}</strong>
-          </label>
-          <div class="muted">${escapeHTML(session.user_agent || 'Unknown client')}</div>
-          <div class="muted mono">${escapeHTML(session.id || '')}</div>
-          <div class="toolbar">
-            ${sessionFlags(session)
-              .map((flag) => `<span class="contract-badge ${flag === 'Current' ? 'ok' : 'warn'}">${escapeHTML(flag)}</span>`)
-              .join('')}
-          </div>
-        </span>
-        <span>
-          <strong>${escapeHTML(session.username || '')}</strong>
-          <div class="muted">${escapeHTML(session.role || '')}</div>
-                                </span>
-                                <span>
-                                  <div>${escapeHTML(addressFingerprint(session))}</div>
-                                  <div class="muted">${session.mfa_complete ? 'MFA complete' : 'Password only'}</div>
-                                </span>
-        <span>
-          <div>${escapeHTML(formatDateTime(session.last_seen) || session.last_seen || '-')}</div>
-          <div class="muted">Issued ${escapeHTML(formatDateTime(session.issued_at) || session.issued_at || '-')}</div>
-          <div class="muted">Expires ${escapeHTML(formatDateTime(session.expires_at) || session.expires_at || '-')}</div>
-        </span>
-        <span class="row-actions">
-          <button type="button" class="ghost small" data-session-user="${escapeHTML(session.username || '')}">Open User</button>
-          <button type="button" class="ghost small danger" data-revoke-session-id="${escapeHTML(session.id || '')}" ${session.current ? 'data-current-session="true"' : ''}>Revoke</button>
-        </span>
-      </div>`
-    );
-    return `
-      <div class="layout-grid">
-        <div class="stack">
-          ${panel(
-            'Sessions',
-            `
-            <div class="panel-pad">
-              <div class="cards">
-                <article class="card"><span class="card-label">Concurrent Users</span><strong>${escapeHTML(String(sharedUsers))}</strong><span class="card-copy">Users with multiple active sessions.</span></article>
-                <article class="card"><span class="card-label">Address Spread</span><strong>${escapeHTML(String(spreadUsers))}</strong><span class="card-copy">Users with sessions from multiple addresses.</span></article>
-                <article class="card"><span class="card-label">Long-Lived</span><strong>${escapeHTML(String(longLivedCount))}</strong><span class="card-copy">Sessions older than 12 hours.</span></article>
-                <article class="card"><span class="card-label">Idle</span><strong>${escapeHTML(String(idleCount))}</strong><span class="card-copy">Sessions idle for 30+ minutes.</span></article>
-              </div>
-            </div>
-            <div class="panel-pad stack">
-              <form id="session-filter-form" class="toolbar">
-                <label>Username
-                  <input id="session-filter-username" type="text" value="${escapeHTML(state.sessionFilters?.username || '')}" placeholder="Filter by username">
-                </label>
-                <button type="submit" class="ghost small">Apply Filter</button>
-                <button type="button" class="ghost small" id="session-filter-clear">Clear</button>
-                <button type="button" class="ghost small" id="session-select-all">${pagedSessions.items.length && pagedSessions.items.every((session) => state.selectedSessions.includes(session.id)) ? 'Deselect All' : 'Select All'}</button>
-                <button type="button" class="ghost small danger" id="session-revoke-selected" ${state.selectedSessions.length ? '' : 'disabled'}>Revoke Selected</button>
-                <button type="button" class="small danger" id="session-revoke-all">Emergency Revoke All</button>
-              </form>
-            </div>
-            ${renderTableControls(state, 'sessions', visibleSessions.length, pagedSessions.totalPages)}
-            <div class="table table-five"><div class="table-head"><span>Client</span><span>User</span><span>Network</span><span>Activity</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No active sessions found.</div>'}</div>`,
-            `${visibleSessions.length} active sessions`
-          )}
-        </div>
-        <div class="stack">
-          ${panel(
-            'Session Notes',
-            `<div class="panel-pad stack">
-              <div class="note">Sessions are stored with a hashed bearer token, a non-secret session id, coarse remote address, and truncated user-agent for operational review.</div>
-              <div class="note">Revoking the current session will sign that browser out on its next authenticated action.</div>
-              <div class="note">Address display is intentionally masked and fingerprinted so operators can distinguish sessions without exposing the full stored address in the UI.</div>
-              <div class="note">Signals shown here are heuristic only: concurrent sessions, address spread, long-lived sessions, and idle sessions help operators spot suspicious patterns quickly.</div>
-              <div class="note">Per-user session controls remain available from the Users screen.</div>
-            </div>`,
-            'Operational visibility without storing raw session tokens'
-          )}
-        </div>
-      </div>`;
-  };
-
-  const renderDebug = () => {
-    const debug = state.debugTools || {};
-    const flags = debug.flags || {};
-    const history = debug.command?.history || [];
-    const sdkSnapshot = {
-      session: state.session
-        ? {
-            username: state.session.username,
-            role: state.session.role,
-            capabilities: state.session.capabilities || [],
-          }
-        : null,
-      capabilityInfo: state.capabilityInfo
-        ? {
-            modules: state.capabilityInfo.modules || {},
-            features: state.capabilityInfo.features || {},
-          }
-        : null,
-      extensions: {
-        pages: (state.adminExtensions?.pages || []).length,
-        widgets: (state.adminExtensions?.widgets || []).length,
-        slots: (state.adminExtensions?.slots || []).length,
-        settings: (state.adminExtensions?.settings || []).length,
-      },
-      foundryAdmin: {
-        available: !!window.FoundryAdmin,
-        api: window.FoundryAdmin
-          ? ['client', 'adminBase', 'getSession', 'getCapabilities', 'getExtensions', 'getSettingsSections']
-          : [],
-      },
-    };
-    const renderTrace = debug.renderTrace || [];
-    const eventRows = (debug.events || [])
-      .map(
-        (entry) => `<div class="debug-event-row">
-          <div class="debug-event-meta">
-            <span class="contract-badge ok">${escapeHTML(entry.kind || 'info')}</span>
-            <span>${escapeHTML(formatDateTime(entry.at) || entry.at || '')}</span>
-          </div>
-          <strong>${escapeHTML(entry.message || '')}</strong>
-          ${
-            flags.verboseEventPayloads && entry.meta
-              ? `<pre class="debug-code-block">${escapeHTML(safeJSON(entry.meta))}</pre>`
-              : ''
-          }
-        </div>`
-      )
-      .join('');
-    const traceRows = renderTrace
-      .map(
-        (entry) => `<div class="debug-trace-row">
-          <div><strong>${escapeHTML(entry.label || entry.section || 'render')}</strong><div class="muted mono">${escapeHTML(entry.path || '')}</div></div>
-          <div class="muted">${escapeHTML(formatDateTime(entry.at) || '')}</div>
-          <div class="muted">${escapeHTML(entry.frontendTheme || 'unknown')} / ${escapeHTML(entry.adminTheme || 'default')}</div>
-        </div>`
-      )
-      .join('');
-    const graphSnapshot = {
-      site: {
-        name: state.status?.name || '',
-        title: state.status?.title || '',
-        base_url: state.status?.base_url || '',
-        default_lang: state.status?.default_lang || '',
-      },
-      content: state.status?.content || {},
-      theme: state.status?.theme || {},
-      plugins: state.status?.plugins || [],
-      taxonomies: state.status?.taxonomies || [],
-      runtime: {
-        content: state.runtimeStatus?.content || {},
-        integrity: state.runtimeStatus?.integrity || {},
-        storage: state.runtimeStatus?.storage || {},
-      },
-    };
-    const currentRenderContext = {
-      section: state.section,
-      title: titleForSection(state.section),
-      extensionPage: extensionPageBySection(state.section),
-      widgetSlots: ['overview.after', 'documents.sidebar', 'media.sidebar', 'plugins.sidebar'].map((slot) => ({
-        slot,
-        widgets: extensionWidgetsForSlot(slot).map((widget) => `${widget.plugin}/${widget.key}`),
-      })),
-      documentEditor: state.documentEditor?.source_path
-        ? {
-            source_path: state.documentEditor.source_path,
-            preview_loaded: !!state.documentPreview,
-            contract_titles: state.documentContractTitles || [],
-          }
-        : null,
-    };
-    return `
-      <div class="layout-grid">
-        <div class="stack">
-          ${panel(
-            'Runtime Event Stream',
-            `<div class="panel-pad stack">
-              <div class="toolbar">
-                <button type="button" class="ghost" id="debug-events-clear">Clear Events</button>
-              </div>
-              ${eventRows || '<div class="empty-state">No debug events captured yet.</div>'}
-            </div>`,
-            'Client-side admin events, extension lifecycle hooks, request activity, and runtime errors'
-          )}
-          ${panel(
-            'Admin SDK Inspector',
-            `<div class="panel-pad stack">
-              <div class="cards">
-                <article class="card"><span class="card-label">Role</span><strong>${escapeHTML(state.session?.role || 'unknown')}</strong><span class="card-copy">Current admin identity role.</span></article>
-                <article class="card"><span class="card-label">Capabilities</span><strong>${escapeHTML(String((state.session?.capabilities || []).length))}</strong><span class="card-copy">Resolved capability set size.</span></article>
-                <article class="card"><span class="card-label">Extension Pages</span><strong>${escapeHTML(String((state.adminExtensions?.pages || []).length))}</strong><span class="card-copy">Pages registered through plugin metadata.</span></article>
-                <article class="card"><span class="card-label">Settings Sections</span><strong>${escapeHTML(String((state.settingsSections || []).length))}</strong><span class="card-copy">Core and plugin-owned sections available in admin.</span></article>
-              </div>
-              <pre class="debug-code-block">${escapeHTML(safeJSON(sdkSnapshot))}</pre>
-            </div>`,
-            'What the authenticated admin SDK and extension registry currently expose'
-          )}
-          ${panel(
-            'Template / Render Trace',
-            `<div class="panel-pad stack">
-              <div class="note">This is an inferred shell/render trace for the current admin surface, not a full server-side template profiler.</div>
-              <pre class="debug-code-block">${escapeHTML(safeJSON(currentRenderContext))}</pre>
-              <div class="debug-trace-list">${traceRows || '<div class="empty-state">No render trace entries yet.</div>'}</div>
-            </div>`,
-            'Current section renderer, active themes, extension mounts, and recent admin render passes'
-          )}
-        </div>
-        <div class="stack">
-          ${panel(
-            'Graph / Content Introspection',
-            `<div class="panel-pad stack">
-              <div class="cards">
-                <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(String(state.status?.content?.document_count || 0))}</strong><span class="card-copy">Documents currently known to the graph.</span></article>
-                <article class="card"><span class="card-label">Routes</span><strong>${escapeHTML(String(state.status?.content?.route_count || 0))}</strong><span class="card-copy">Resolved public routes.</span></article>
-                <article class="card"><span class="card-label">Plugins</span><strong>${escapeHTML(String((state.status?.plugins || []).length))}</strong><span class="card-copy">Loaded plugin status records.</span></article>
-                <article class="card"><span class="card-label">Taxonomies</span><strong>${escapeHTML(String((state.status?.taxonomies || []).length))}</strong><span class="card-copy">Configured taxonomy groups.</span></article>
-              </div>
-              <pre class="debug-code-block">${escapeHTML(safeJSON(graphSnapshot))}</pre>
-            </div>`,
-            'A raw, inspectable snapshot of site status, runtime graph, theme, plugin, and taxonomy state'
-          )}
-          ${panel(
-            'Request / Command Console',
-            `<div class="panel-pad stack">
-              <div class="toolbar">
-                <button type="button" class="ghost small" data-debug-preset="status">Status</button>
-                <button type="button" class="ghost small" data-debug-preset="runtime">Runtime</button>
-                <button type="button" class="ghost small" data-debug-preset="validate">Validate</button>
-                <button type="button" class="ghost small" data-debug-preset="rebuild">Rebuild</button>
-                <button type="button" class="ghost small" data-debug-preset="cache">Clear Cache</button>
-              </div>
-              <form id="debug-command-form" class="stack">
-                <div class="frontmatter-grid">
-                  <label>Method<select id="debug-command-method">
-                    ${['GET', 'POST', 'PUT', 'DELETE'].map((method) => `<option value="${method}" ${debug.command?.method === method ? 'selected' : ''}>${method}</option>`).join('')}
-                  </select></label>
-                  <label>Path<input id="debug-command-path" type="text" value="${escapeHTML(debug.command?.path || '/api/status')}" placeholder="/api/status"></label>
-                </div>
-                <label>Body<textarea id="debug-command-body" rows="8" spellcheck="false" placeholder='{"key":"value"}'>${escapeHTML(debug.command?.body || '')}</textarea></label>
-                <div class="toolbar"><button type="submit">Execute</button></div>
-              </form>
-              ${debug.command?.error ? `<div class="note error">${escapeHTML(debug.command.error)}</div>` : ''}
-              <pre class="debug-code-block">${escapeHTML(debug.command?.result || 'Run a request to inspect the raw response here.')}</pre>
-              <div class="debug-history-list">
-                ${(history || [])
-                  .map(
-                    (entry) => `<div class="mini-list-row">
-                      <span>${escapeHTML(entry.method)} ${escapeHTML(entry.path)}</span>
-                      <strong>${escapeHTML(entry.ok ? formatDateTime(entry.at) || entry.at : 'failed')}</strong>
-                    </div>`
-                  )
-                  .join('') || '<div class="empty-state">No command history yet.</div>'}
-              </div>
-            </div>`,
-            'Run raw admin API requests and keep a short local command history'
-          )}
-          ${panel(
-            'Feature Flags / Experiments',
-            `<div class="panel-pad stack">
-              <label class="checkbox"><input type="checkbox" id="debug-flag-auto-refresh-runtime" ${flags.autoRefreshRuntime ? 'checked' : ''}> Auto-refresh runtime snapshot while Diagnostics or Debug is open</label>
-              <label class="checkbox"><input type="checkbox" id="debug-flag-capture-extension-events" ${flags.captureExtensionEvents ? 'checked' : ''}> Capture extension page and widget lifecycle events</label>
-              <label class="checkbox"><input type="checkbox" id="debug-flag-persist-console-history" ${flags.persistConsoleHistory ? 'checked' : ''}> Persist request console history in local storage</label>
-              <label class="checkbox"><input type="checkbox" id="debug-flag-show-state-overlay" ${flags.showStateOverlay ? 'checked' : ''}> Show compact admin state overlay</label>
-              <label class="checkbox"><input type="checkbox" id="debug-flag-verbose-event-payloads" ${flags.verboseEventPayloads ? 'checked' : ''}> Show event payload JSON in the runtime event stream</label>
-            </div>`,
-            'Debug-only client-side flags for experiments and deeper tooling'
-          )}
-        </div>
-      </div>`;
-  };
+  const { renderSessions } = createSessionViews({
+    state,
+    panel,
+    escapeHTML,
+    formatDateTime,
+    renderTableControls,
+    sortItems,
+    paginateItems,
+  });
 
   const settingsValue = () => state.settingsForm || {};
   const settingsJSON = (value, empty = '{}') => {
@@ -3029,6 +2200,36 @@ import {
     sortItems,
     paginateItems,
   });
+  const { renderDeveloperDebug } = createDebugViews({
+    state,
+    panel,
+    escapeHTML,
+    formatDateTime,
+    debugEnabled,
+    safeJSON,
+    titleForSection,
+    extensionPageBySection,
+    extensionWidgetsForSlot,
+  });
+  const { publishAdminRuntime, mountActiveExtensionPage, mountVisibleExtensionWidgets } =
+    createExtensionsRuntime({
+      admin,
+      adminBase,
+      state,
+      clone,
+      escapeHTML,
+      capabilitySet,
+      extensionPageBySection,
+      extensionWidgetsForSlot,
+      extensionMountID,
+      recordDebugEvent,
+    });
+  const { loadSessionInventory } = createSessionInventory({
+    admin,
+    state,
+    render: () => render(),
+    capabilityInfoHas,
+  });
 
   const renderSection = () => {
     switch (state.section) {
@@ -3045,7 +2246,7 @@ import {
       case 'diagnostics':
         return renderDiagnostics();
       case 'debug':
-        return renderDebug();
+        return renderDeveloperDebug();
       case 'audit':
         return renderAudit();
       case 'sessions':
@@ -3067,7 +2268,7 @@ import {
         return renderOperations();
       default: {
         const extensionPage = extensionPageBySection(state.section);
-        if (extensionPage) return renderExtensionPage();
+        if (extensionPage) return renderExtensionPage(state.section);
         return `${renderOverview(state)}${renderWidgetPanels('overview.after').join('')}`;
       }
     }
@@ -3282,65 +2483,7 @@ import {
       window.setTimeout(() => document.getElementById('command-palette-query')?.focus(), 0);
     }
     bindDashboardEventsLocal();
-    document.getElementById('debug-events-clear')?.addEventListener('click', () => {
-      state.debugTools.events = [];
-      render();
-    });
-    root.querySelectorAll('[data-debug-preset]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const preset = button.dataset.debugPreset;
-        const presets = {
-          status: { method: 'GET', path: '/api/status', body: '' },
-          runtime: { method: 'GET', path: '/api/debug/runtime', body: '' },
-          validate: { method: 'POST', path: '/api/debug/validate', body: '{}' },
-          rebuild: { method: 'POST', path: '/api/operations/rebuild', body: '{}' },
-          cache: { method: 'POST', path: '/api/operations/cache/clear', body: '{}' },
-        };
-        const next = presets[preset];
-        if (!next) return;
-        state.debugTools.command = { ...state.debugTools.command, ...next, error: '' };
-        render();
-      });
-    });
-    document.getElementById('debug-command-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const method = document.getElementById('debug-command-method')?.value || 'GET';
-      const path = document.getElementById('debug-command-path')?.value || '/api/status';
-      const body = document.getElementById('debug-command-body')?.value || '';
-      state.debugTools.command = { ...state.debugTools.command, method, path, body, error: '' };
-      try {
-        await executeDebugRequest({ method, path, body });
-      } catch (error) {
-        state.debugTools.command = {
-          ...state.debugTools.command,
-          result: '',
-          error: error?.message || String(error),
-          history: [
-            {
-              at: new Date().toISOString(),
-              method,
-              path,
-              ok: false,
-            },
-            ...(state.debugTools.command.history || []),
-          ].slice(0, 12),
-        };
-        persistDebugHistory();
-        recordDebugEvent('request-error', `${method} ${path} failed`, {
-          error: error?.message || String(error),
-        });
-      }
-      render();
-    });
-    root.querySelectorAll('[id^="debug-flag-"]').forEach((input) => {
-      input.addEventListener('change', () => {
-        const key = input.id.replace('debug-flag-', '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-        setDebugFlag(key, !!input.checked);
-        recordDebugEvent('flag', `Toggled ${key}`, { enabled: !!input.checked });
-        scheduleDebugAutoRefresh();
-        render();
-      });
-    });
+    bindDebugControls();
     document.getElementById('settings-structured-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
@@ -3408,7 +2551,7 @@ import {
     scheduleDebugAutoRefresh();
   };
 
-  const render = () => {
+  render = () => {
     if (!state.session || !state.session.authenticated) {
       renderLogin();
       return;
@@ -3456,38 +2599,6 @@ import {
     } catch (error) {
       state.error = error.message || String(error);
       render();
-    }
-  };
-
-  const loadSessionInventory = async ({ rerender = true, force = false } = {}) => {
-    if (!capabilityInfoHas('users.manage')) {
-      state.userSessions = [];
-      state.userSessionsLoaded = true;
-      return;
-    }
-    if (state.userSessionsLoaded && !force) {
-      return;
-    }
-    try {
-      const sessions = await admin.session.list();
-      state.userSessions = Array.isArray(sessions) ? sessions : [];
-      state.selectedSessions = state.selectedSessions.filter((sessionID) =>
-        state.userSessions.some((session) => session.id === sessionID)
-      );
-      state.userSessionsLoaded = true;
-    } catch (error) {
-      state.userSessions = [];
-      state.selectedSessions = [];
-      const message = error?.message || String(error);
-      const unavailable = String(message).includes('404');
-      state.userSessionsLoaded = unavailable;
-      if (rerender && !unavailable) {
-        state.error = error.message || String(error);
-      }
-    } finally {
-      if (rerender) {
-        render();
-      }
     }
   };
 

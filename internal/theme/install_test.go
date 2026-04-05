@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sphireinc/foundry/internal/installutil"
 )
 
 func TestThemeInstallHelpers(t *testing.T) {
@@ -30,13 +32,13 @@ func TestThemeInstallHelpers(t *testing.T) {
 		t.Fatal("expected infer name failure")
 	}
 
-	if zipURL, err := repoZipURL("https://github.com/acme/demo-theme.git"); err != nil || zipURL != "https://github.com/acme/demo-theme/archive/refs/heads/main.zip" {
+	if zipURL, err := installutil.RepoZipURL("https://github.com/acme/demo-theme.git"); err != nil || zipURL != "https://github.com/acme/demo-theme/archive/refs/heads/main.zip" {
 		t.Fatalf("unexpected zip URL: %q %v", zipURL, err)
 	}
-	if zipURL, err := repoZipURL("git@github.com:acme/demo-theme.git"); err != nil || zipURL != "https://github.com/acme/demo-theme/archive/refs/heads/main.zip" {
+	if zipURL, err := installutil.RepoZipURL("git@github.com:acme/demo-theme.git"); err != nil || zipURL != "https://github.com/acme/demo-theme/archive/refs/heads/main.zip" {
 		t.Fatalf("unexpected ssh zip URL: %q %v", zipURL, err)
 	}
-	if _, err := repoZipURL("https://example.com/acme/demo-theme.git"); err == nil {
+	if _, err := installutil.RepoZipURL("https://example.com/acme/demo-theme.git"); err == nil {
 		t.Fatal("expected non-GitHub zip URL rejection")
 	}
 

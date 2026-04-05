@@ -27,6 +27,19 @@ func (r *Router) logAudit(reqActor, action, outcome, target string, reqMetadata 
 	_ = adminaudit.Log(r.cfg, entry)
 }
 
+func (r *Router) handleAudit(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	items, err := adminaudit.List(r.cfg, 200)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 func (r *Router) logAuditRequest(req *http.Request, action, outcome, target string, metadata map[string]string) {
 	if r == nil || r.cfg == nil {
 		return

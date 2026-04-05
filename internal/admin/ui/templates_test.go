@@ -81,13 +81,18 @@ func TestDefaultAdminThemeAssetsIncludeStructuredEditor(t *testing.T) {
 	if !strings.Contains(source, "createAdminClient") || !strings.Contains(source, "/__foundry/sdk/admin/index.js") {
 		t.Fatalf("expected default admin theme to consume the official admin sdk")
 	}
-	if !strings.Contains(source, "foundry:admin-extension-page") || !strings.Contains(source, "window.FoundryAdmin") {
+	extensionsRuntimeBody, err := os.ReadFile(filepath.Join("..", "..", "..", "themes", "admin-themes", "default", "assets", "admin", "core", "extensions-runtime.js"))
+	if err != nil {
+		t.Fatalf("read extension runtime module: %v", err)
+	}
+	extensionsRuntimeSource := string(extensionsRuntimeBody)
+	if !strings.Contains(extensionsRuntimeSource, "foundry:admin-extension-page") || !strings.Contains(extensionsRuntimeSource, "windowRef.FoundryAdmin") {
 		t.Fatalf("expected default admin theme to expose the admin extension mount contract")
 	}
-	if !strings.Contains(source, "mountAdminExtensionPage") || !strings.Contains(source, "module_url") {
+	if !strings.Contains(extensionsRuntimeSource, "mountAdminExtensionPage") || !strings.Contains(extensionsRuntimeSource, "module_url") {
 		t.Fatalf("expected default admin theme to auto-load plugin extension page bundles")
 	}
-	if !strings.Contains(source, "foundry:admin-extension-widget") || !strings.Contains(source, "mountAdminExtensionWidget") {
+	if !strings.Contains(extensionsRuntimeSource, "foundry:admin-extension-widget") || !strings.Contains(extensionsRuntimeSource, "mountAdminExtensionWidget") {
 		t.Fatalf("expected default admin theme to auto-load plugin extension widgets")
 	}
 	if !strings.Contains(source, "admin/editor/frontmatter.js") || !strings.Contains(source, "admin/views/shared.js") {
@@ -107,7 +112,12 @@ func TestDefaultAdminThemeAssetsIncludeStructuredEditor(t *testing.T) {
 	if !strings.Contains(source, "Diagnostics") || !strings.Contains(source, "Embedded pprof") || !strings.Contains(source, "Runtime Summary") || !strings.Contains(source, "/api/debug/runtime") {
 		t.Fatalf("expected default admin theme to expose the diagnostics surface")
 	}
-	if !strings.Contains(source, "Runtime Event Stream") || !strings.Contains(source, "Admin SDK Inspector") || !strings.Contains(source, "Request / Command Console") {
+	debugBody, err := os.ReadFile(filepath.Join("..", "..", "..", "themes", "admin-themes", "default", "assets", "admin", "views", "debug.js"))
+	if err != nil {
+		t.Fatalf("read debug admin view module: %v", err)
+	}
+	debugSource := string(debugBody)
+	if !strings.Contains(debugSource, "Runtime Event Stream") || !strings.Contains(debugSource, "Admin SDK Inspector") || !strings.Contains(debugSource, "Request / Command Console") {
 		t.Fatalf("expected default admin theme to expose the debug tooling surface")
 	}
 	viewBody, err := os.ReadFile(filepath.Join("..", "..", "..", "themes", "admin-themes", "default", "assets", "admin", "views", "shared.js"))

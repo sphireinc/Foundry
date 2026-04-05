@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 type Manager struct {
@@ -61,7 +62,9 @@ func (m *Manager) AssetHandler() http.Handler {
 			return
 		}
 
-		if path := filepath.Join(m.themeRoot(), "assets", filepath.FromSlash(name)); fileExists(path) {
+		assetsRoot := filepath.Join(m.themeRoot(), "assets")
+		path, err := safepath.ResolveRelativeUnderRoot(assetsRoot, filepath.FromSlash(name))
+		if err == nil && fileExists(path) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			http.ServeFile(w, r, path)
 			return

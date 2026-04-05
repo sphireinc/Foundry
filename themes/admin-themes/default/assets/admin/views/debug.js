@@ -1,4 +1,14 @@
-export const createDebugViews = ({ state, panel, escapeHTML, formatDateTime, debugEnabled }) => {
+export const createDebugViews = ({
+  state,
+  panel,
+  escapeHTML,
+  formatDateTime,
+  debugEnabled,
+  safeJSON,
+  titleForSection,
+  extensionPageBySection,
+  extensionWidgetsForSlot,
+}) => {
   const formatBytes = (value) => {
     const bytes = Number(value || 0);
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -206,6 +216,196 @@ export const createDebugViews = ({ state, panel, escapeHTML, formatDateTime, deb
       </div>`;
   };
 
+  const renderDeveloperDebug = () => {
+    const debug = state.debugTools || {};
+    const flags = debug.flags || {};
+    const history = debug.command?.history || [];
+    const sdkSnapshot = {
+      session: state.session
+        ? {
+            username: state.session.username,
+            role: state.session.role,
+            capabilities: state.session.capabilities || [],
+          }
+        : null,
+      capabilityInfo: state.capabilityInfo
+        ? {
+            modules: state.capabilityInfo.modules || {},
+            features: state.capabilityInfo.features || {},
+          }
+        : null,
+      extensions: {
+        pages: (state.adminExtensions?.pages || []).length,
+        widgets: (state.adminExtensions?.widgets || []).length,
+        slots: (state.adminExtensions?.slots || []).length,
+        settings: (state.adminExtensions?.settings || []).length,
+      },
+      foundryAdmin: {
+        available: !!window.FoundryAdmin,
+        api: window.FoundryAdmin
+          ? ['client', 'adminBase', 'getSession', 'getCapabilities', 'getExtensions', 'getSettingsSections']
+          : [],
+      },
+    };
+    const renderTrace = debug.renderTrace || [];
+    const eventRows = (debug.events || [])
+      .map(
+        (entry) => `<div class="debug-event-row">
+          <div class="debug-event-meta">
+            <span class="contract-badge ok">${escapeHTML(entry.kind || 'info')}</span>
+            <span>${escapeHTML(formatDateTime(entry.at) || entry.at || '')}</span>
+          </div>
+          <strong>${escapeHTML(entry.message || '')}</strong>
+          ${
+            flags.verboseEventPayloads && entry.meta
+              ? `<pre class="debug-code-block">${escapeHTML(safeJSON(entry.meta))}</pre>`
+              : ''
+          }
+        </div>`
+      )
+      .join('');
+    const traceRows = renderTrace
+      .map(
+        (entry) => `<div class="debug-trace-row">
+          <div><strong>${escapeHTML(entry.label || entry.section || 'render')}</strong><div class="muted mono">${escapeHTML(entry.path || '')}</div></div>
+          <div class="muted">${escapeHTML(formatDateTime(entry.at) || '')}</div>
+          <div class="muted">${escapeHTML(entry.frontendTheme || 'unknown')} / ${escapeHTML(entry.adminTheme || 'default')}</div>
+        </div>`
+      )
+      .join('');
+    const graphSnapshot = {
+      site: {
+        name: state.status?.name || '',
+        title: state.status?.title || '',
+        base_url: state.status?.base_url || '',
+        default_lang: state.status?.default_lang || '',
+      },
+      content: state.status?.content || {},
+      theme: state.status?.theme || {},
+      plugins: state.status?.plugins || [],
+      taxonomies: state.status?.taxonomies || [],
+      runtime: {
+        content: state.runtimeStatus?.content || {},
+        integrity: state.runtimeStatus?.integrity || {},
+        storage: state.runtimeStatus?.storage || {},
+      },
+    };
+    const currentRenderContext = {
+      section: state.section,
+      title: titleForSection(state.section),
+      extensionPage: extensionPageBySection(state.section),
+      widgetSlots: ['overview.after', 'documents.sidebar', 'media.sidebar', 'plugins.sidebar'].map((slot) => ({
+        slot,
+        widgets: extensionWidgetsForSlot(slot).map((widget) => `${widget.plugin}/${widget.key}`),
+      })),
+      documentEditor: state.documentEditor?.source_path
+        ? {
+            source_path: state.documentEditor.source_path,
+            preview_loaded: !!state.documentPreview,
+            contract_titles: state.documentContractTitles || [],
+          }
+        : null,
+    };
+    return `
+      <div class="layout-grid">
+        <div class="stack">
+          ${panel(
+            'Runtime Event Stream',
+            `<div class="panel-pad stack">
+              <div class="toolbar">
+                <button type="button" class="ghost" id="debug-events-clear">Clear Events</button>
+              </div>
+              ${eventRows || '<div class="empty-state">No debug events captured yet.</div>'}
+            </div>`,
+            'Client-side admin events, extension lifecycle hooks, request activity, and runtime errors'
+          )}
+          ${panel(
+            'Admin SDK Inspector',
+            `<div class="panel-pad stack">
+              <div class="cards">
+                <article class="card"><span class="card-label">Role</span><strong>${escapeHTML(state.session?.role || 'unknown')}</strong><span class="card-copy">Current admin identity role.</span></article>
+                <article class="card"><span class="card-label">Capabilities</span><strong>${escapeHTML(String((state.session?.capabilities || []).length))}</strong><span class="card-copy">Resolved capability set size.</span></article>
+                <article class="card"><span class="card-label">Extension Pages</span><strong>${escapeHTML(String((state.adminExtensions?.pages || []).length))}</strong><span class="card-copy">Pages registered through plugin metadata.</span></article>
+                <article class="card"><span class="card-label">Settings Sections</span><strong>${escapeHTML(String((state.settingsSections || []).length))}</strong><span class="card-copy">Core and plugin-owned sections available in admin.</span></article>
+              </div>
+              <pre class="debug-code-block">${escapeHTML(safeJSON(sdkSnapshot))}</pre>
+            </div>`,
+            'What the authenticated admin SDK and extension registry currently expose'
+          )}
+          ${panel(
+            'Template / Render Trace',
+            `<div class="panel-pad stack">
+              <div class="note">This is an inferred shell/render trace for the current admin surface, not a full server-side template profiler.</div>
+              <pre class="debug-code-block">${escapeHTML(safeJSON(currentRenderContext))}</pre>
+              <div class="debug-trace-list">${traceRows || '<div class="empty-state">No render trace entries yet.</div>'}</div>
+            </div>`,
+            'Current section renderer, active themes, extension mounts, and recent admin render passes'
+          )}
+        </div>
+        <div class="stack">
+          ${panel(
+            'Graph / Content Introspection',
+            `<div class="panel-pad stack">
+              <div class="cards">
+                <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(String(state.status?.content?.document_count || 0))}</strong><span class="card-copy">Documents currently known to the graph.</span></article>
+                <article class="card"><span class="card-label">Routes</span><strong>${escapeHTML(String(state.status?.content?.route_count || 0))}</strong><span class="card-copy">Resolved public routes.</span></article>
+                <article class="card"><span class="card-label">Plugins</span><strong>${escapeHTML(String((state.status?.plugins || []).length))}</strong><span class="card-copy">Loaded plugin status records.</span></article>
+                <article class="card"><span class="card-label">Taxonomies</span><strong>${escapeHTML(String((state.status?.taxonomies || []).length))}</strong><span class="card-copy">Configured taxonomy groups.</span></article>
+              </div>
+              <pre class="debug-code-block">${escapeHTML(safeJSON(graphSnapshot))}</pre>
+            </div>`,
+            'A raw, inspectable snapshot of site status, runtime graph, theme, plugin, and taxonomy state'
+          )}
+          ${panel(
+            'Request / Command Console',
+            `<div class="panel-pad stack">
+              <div class="toolbar">
+                <button type="button" class="ghost small" data-debug-preset="status">Status</button>
+                <button type="button" class="ghost small" data-debug-preset="runtime">Runtime</button>
+                <button type="button" class="ghost small" data-debug-preset="validate">Validate</button>
+                <button type="button" class="ghost small" data-debug-preset="rebuild">Rebuild</button>
+                <button type="button" class="ghost small" data-debug-preset="cache">Clear Cache</button>
+              </div>
+              <form id="debug-command-form" class="stack">
+                <div class="frontmatter-grid">
+                  <label>Method<select id="debug-command-method">
+                    ${['GET', 'POST', 'PUT', 'DELETE'].map((method) => `<option value="${method}" ${debug.command?.method === method ? 'selected' : ''}>${method}</option>`).join('')}
+                  </select></label>
+                  <label>Path<input id="debug-command-path" type="text" value="${escapeHTML(debug.command?.path || '/api/status')}" placeholder="/api/status"></label>
+                </div>
+                <label>Body<textarea id="debug-command-body" rows="8" spellcheck="false" placeholder='{"key":"value"}'>${escapeHTML(debug.command?.body || '')}</textarea></label>
+                <div class="toolbar"><button type="submit">Execute</button></div>
+              </form>
+              ${debug.command?.error ? `<div class="note error">${escapeHTML(debug.command.error)}</div>` : ''}
+              <pre class="debug-code-block">${escapeHTML(debug.command?.result || 'Run a request to inspect the raw response here.')}</pre>
+              <div class="debug-history-list">
+                ${(history || [])
+                  .map(
+                    (entry) => `<div class="mini-list-row">
+                      <span>${escapeHTML(entry.method)} ${escapeHTML(entry.path)}</span>
+                      <strong>${escapeHTML(entry.ok ? formatDateTime(entry.at) || entry.at : 'failed')}</strong>
+                    </div>`
+                  )
+                  .join('') || '<div class="empty-state">No command history yet.</div>'}
+              </div>
+            </div>`,
+            'Run raw admin API requests and keep a short local command history'
+          )}
+          ${panel(
+            'Feature Flags / Experiments',
+            `<div class="panel-pad stack">
+              <label class="checkbox"><input type="checkbox" id="debug-flag-auto-refresh-runtime" ${flags.autoRefreshRuntime ? 'checked' : ''}> Auto-refresh runtime snapshot while Diagnostics or Debug is open</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-capture-extension-events" ${flags.captureExtensionEvents ? 'checked' : ''}> Capture extension page and widget lifecycle events</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-persist-console-history" ${flags.persistConsoleHistory ? 'checked' : ''}> Persist request console history in local storage</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-show-state-overlay" ${flags.showStateOverlay ? 'checked' : ''}> Show compact admin state overlay</label>
+              <label class="checkbox"><input type="checkbox" id="debug-flag-verbose-event-payloads" ${flags.verboseEventPayloads ? 'checked' : ''}> Show event payload JSON in the runtime event stream</label>
+            </div>`,
+            'Debug-only client-side flags for experiments and deeper tooling'
+          )}
+        </div>
+      </div>`;
+  };
+
   return {
     formatBytes,
     formatUptime,
@@ -213,5 +413,6 @@ export const createDebugViews = ({ state, panel, escapeHTML, formatDateTime, deb
     renderMiniList,
     renderLargestFiles,
     renderDebug,
+    renderDeveloperDebug,
   };
 };

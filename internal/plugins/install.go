@@ -1,18 +1,16 @@
 package plugins
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/sphireinc/foundry/internal/installutil"
 	"github.com/sphireinc/foundry/internal/safepath"
 )
 
@@ -161,241 +159,33 @@ func removeInstalledPluginDir(pluginsDir, name string) error {
 }
 
 // repoZipURL returns the GitHub archive URL used by the zip fallback path.
-func repoZipURL(repoURL string) (string, error) {
-	u, err := url.Parse(repoURL)
-	if err != nil {
-		return "", err
-	}
-
-	if !strings.EqualFold(u.Host, "github.com") {
-		return "", fmt.Errorf("zip fallback currently supports GitHub only")
-	}
-
-	path := strings.TrimSuffix(u.Path, ".git")
-	path = strings.Trim(path, "/")
-
-	return fmt.Sprintf("https://github.com/%s/archive/refs/heads/main.zip", path), nil
-}
-
-// downloadAndExtract downloads a repository archive and extracts it into
-// targetDir with zip-slip and symlink protections.
 func downloadAndExtract(repoURL, targetDir string) error {
-	zipURL, err := repoZipURL(repoURL)
-	if err != nil {
-		return err
-	}
-
-	resp, err := pluginDownloadClient.Get(zipURL)
-	if err != nil {
-		return fmt.Errorf("download plugin zip: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed: %s", resp.Status)
-	}
-
-	tmpFile, err := os.CreateTemp("", "foundry-plugin-*.zip")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmpFile.Name())
-
-	written, err := io.Copy(tmpFile, io.LimitReader(resp.Body, pluginZipMaxBytes+1))
-	if err != nil {
-		return err
-	}
-	if written > pluginZipMaxBytes {
-		return fmt.Errorf("plugin zip exceeds %d bytes", pluginZipMaxBytes)
-	}
-	tmpFile.Close()
-
-	zr, err := zip.OpenReader(tmpFile.Name())
-	if err != nil {
-		return err
-	}
-	defer zr.Close()
-
-	tempDir, err := os.MkdirTemp("", "foundry-plugin")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tempDir)
-
-	for _, f := range zr.File {
-		if f.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("zip contains unsupported symlink entry: %s", f.Name)
-		}
-
-		fp, err := safeArchivePath(tempDir, f.Name)
-		if err != nil {
-			return err
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(fp, f.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if err := os.MkdirAll(filepath.Dir(fp), 0755); err != nil {
-			return err
-		}
-
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
-
-		out, err := os.Create(fp)
-		if err != nil {
-			rc.Close()
-			return err
-		}
-
-		if _, err := io.Copy(out, rc); err != nil {
-			rc.Close()
-			out.Close()
-			return err
-		}
-
-		rc.Close()
-		out.Close()
-	}
-
-	entries, err := os.ReadDir(tempDir)
-	if err != nil || len(entries) == 0 {
-		return fmt.Errorf("zip extraction failed")
-	}
-
-	root := filepath.Join(tempDir, entries[0].Name())
-	rootInfo, err := os.Stat(root)
-	if err != nil {
-		return err
-	}
-	if !rootInfo.IsDir() {
-		return fmt.Errorf("zip extraction failed: root entry is not a directory")
-	}
-
-	return os.Rename(root, targetDir)
+	targetRoot := filepath.Dir(targetDir)
+	targetName := filepath.Base(targetDir)
+	return installutil.DownloadAndExtractRepoArchive(
+		pluginDownloadClient,
+		repoURL,
+		targetRoot,
+		targetName,
+		"foundry-plugin",
+		"plugin",
+		pluginZipMaxBytes,
+	)
 }
 
 func stripVCSMetadata(targetDir string) error {
-	for _, rel := range []string{".git", ".gitmodules"} {
-		path := filepath.Join(targetDir, rel)
-		if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove VCS metadata %q: %w", rel, err)
-		}
-	}
-	return nil
-}
-
-// safeArchivePath confines archive extraction paths to the provided root.
-func safeArchivePath(root, name string) (string, error) {
-	if strings.TrimSpace(name) == "" {
-		return "", fmt.Errorf("zip contains empty entry name")
-	}
-	if filepath.IsAbs(name) {
-		return "", fmt.Errorf("zip entry escapes target dir: %s", name)
-	}
-
-	rootAbs, err := filepath.Abs(root)
-	if err != nil {
-		return "", err
-	}
-
-	target := filepath.Join(rootAbs, filepath.Clean(filepath.FromSlash(name)))
-	targetAbs, err := filepath.Abs(target)
-	if err != nil {
-		return "", err
-	}
-
-	rootWithSep := rootAbs + string(filepath.Separator)
-	if targetAbs != rootAbs && !strings.HasPrefix(targetAbs, rootWithSep) {
-		return "", fmt.Errorf("zip entry escapes target dir: %s", name)
-	}
-
-	return targetAbs, nil
+	return installutil.StripVCSMetadata(filepath.Dir(targetDir), filepath.Base(targetDir))
 }
 
 // normalizeInstallURL expands shorthand repository references into cloneable
 // URLs where possible.
 func normalizeInstallURL(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-
-	if strings.HasPrefix(raw, "git@") {
-		return raw
-	}
-
-	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
-		u, err := url.Parse(raw)
-		if err != nil {
-			return raw
-		}
-
-		if strings.EqualFold(u.Host, "github.com") {
-			path := strings.TrimSuffix(u.Path, "/")
-			if !strings.HasSuffix(path, ".git") {
-				path += ".git"
-			}
-			u.Path = path
-			return u.String()
-		}
-
-		return raw
-	}
-
-	parts := strings.Split(raw, "/")
-	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		return "https://github.com/" + raw + ".git"
-	}
-
-	return raw
+	return installutil.NormalizeGitHubInstallURL(raw)
 }
 
 // validateInstallURL constrains plugin install URLs to supported GitHub forms.
 func validateInstallURL(raw string) (string, error) {
-	normalized := normalizeInstallURL(raw)
-	if strings.TrimSpace(normalized) == "" {
-		return "", nil
-	}
-
-	if strings.HasPrefix(normalized, "git@github.com:") {
-		name, err := inferPluginName(normalized)
-		if err != nil {
-			return "", err
-		}
-		if _, err := validatePluginName(name); err != nil {
-			return "", fmt.Errorf("invalid GitHub repository path: %w", err)
-		}
-		return normalized, nil
-	}
-
-	u, err := url.Parse(normalized)
-	if err != nil {
-		return "", fmt.Errorf("parse plugin URL: %w", err)
-	}
-	if !strings.EqualFold(u.Scheme, "https") {
-		return "", fmt.Errorf("plugin URL must use https or git@github.com")
-	}
-	if !strings.EqualFold(u.Host, "github.com") {
-		return "", fmt.Errorf("plugin URL must target github.com")
-	}
-
-	path := strings.Trim(strings.TrimSuffix(u.Path, ".git"), "/")
-	parts := strings.Split(path, "/")
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return "", fmt.Errorf("plugin URL must point to a GitHub owner/repository")
-	}
-	if _, err := validatePluginName(parts[1]); err != nil {
-		return "", fmt.Errorf("invalid GitHub repository path: %w", err)
-	}
-
-	return normalized, nil
+	return installutil.ValidateGitHubInstallURL("plugin", raw, validatePluginName)
 }
 
 func validatePluginName(name string) (string, error) {
@@ -403,40 +193,5 @@ func validatePluginName(name string) (string, error) {
 }
 
 func inferPluginName(raw string) (string, error) {
-	if strings.HasPrefix(raw, "git@") {
-		idx := strings.Index(raw, ":")
-		if idx >= 0 && idx+1 < len(raw) {
-			path := strings.Trim(raw[idx+1:], "/")
-			parts := strings.Split(path, "/")
-			name := parts[len(parts)-1]
-			name = strings.TrimSuffix(name, ".git")
-			name = strings.TrimSpace(name)
-			if name != "" {
-				return name, nil
-			}
-		}
-		return "", fmt.Errorf("could not infer plugin name from URL")
-	}
-
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", fmt.Errorf("parse plugin URL: %w", err)
-	}
-
-	path := strings.TrimSpace(u.Path)
-	path = strings.Trim(path, "/")
-	if path == "" {
-		return "", fmt.Errorf("could not infer plugin name from URL")
-	}
-
-	parts := strings.Split(path, "/")
-	name := parts[len(parts)-1]
-	name = strings.TrimSuffix(name, ".git")
-	name = strings.TrimSpace(name)
-
-	if name == "" {
-		return "", fmt.Errorf("could not infer plugin name from URL")
-	}
-
-	return name, nil
+	return installutil.InferRepoName(raw, "plugin", validatePluginName)
 }
