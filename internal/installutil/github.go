@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 func NormalizeGitHubInstallURL(raw string) string {
@@ -128,8 +130,16 @@ func RepoZipURL(repoURL string) (string, error) {
 	return fmt.Sprintf("https://github.com/%s/archive/refs/heads/main.zip", path), nil
 }
 
-func DownloadAndExtractRepoArchive(client *http.Client, repoURL, targetDir, tempPrefix, kind string, maxBytes int64) error {
+func DownloadAndExtractRepoArchive(client *http.Client, repoURL, targetRoot, targetName, tempPrefix, kind string, maxBytes int64) error {
 	zipURL, err := RepoZipURL(repoURL)
+	if err != nil {
+		return err
+	}
+	targetName, err = safepath.ValidatePathComponent(kind+" install name", targetName)
+	if err != nil {
+		return err
+	}
+	targetDir, err := safepath.ResolveRelativeUnderRoot(targetRoot, targetName)
 	if err != nil {
 		return err
 	}
@@ -170,10 +180,14 @@ func DownloadAndExtractRepoArchive(client *http.Client, repoURL, targetDir, temp
 	defer os.RemoveAll(tempDir)
 
 	for _, f := range zr.File {
+		cleanName := filepath.Clean(filepath.FromSlash(strings.TrimSpace(f.Name)))
+		if cleanName == "." || cleanName == "" || cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("zip entry escapes target dir: %s", f.Name)
+		}
 		if f.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("zip contains unsupported symlink entry: %s", f.Name)
 		}
-		fp, err := SafeArchivePath(tempDir, f.Name)
+		fp, err := SafeArchivePath(tempDir, cleanName)
 		if err != nil {
 			return err
 		}
@@ -219,7 +233,15 @@ func DownloadAndExtractRepoArchive(client *http.Client, repoURL, targetDir, temp
 	return os.Rename(root, targetDir)
 }
 
-func StripVCSMetadata(targetDir string) error {
+func StripVCSMetadata(targetRoot, targetName string) error {
+	targetName, err := safepath.ValidatePathComponent("install name", targetName)
+	if err != nil {
+		return err
+	}
+	targetDir, err := safepath.ResolveRelativeUnderRoot(targetRoot, targetName)
+	if err != nil {
+		return err
+	}
 	for _, rel := range []string{".git", ".gitmodules"} {
 		path := filepath.Join(targetDir, rel)
 		if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {

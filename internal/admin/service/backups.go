@@ -10,6 +10,7 @@ import (
 
 	"github.com/sphireinc/foundry/internal/admin/types"
 	"github.com/sphireinc/foundry/internal/backup"
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 func (s *Service) ListBackups(ctx context.Context) ([]types.BackupRecord, error) {
@@ -35,7 +36,14 @@ func (s *Service) CreateBackup(ctx context.Context, name string) (*types.BackupR
 	if name == "" {
 		snapshot, err = backup.CreateManagedSnapshot(s.cfg)
 	} else {
-		target := filepath.Join(s.cfg.Backup.Dir, filepath.Base(name))
+		validatedName, validateErr := validateBackupName(name)
+		if validateErr != nil {
+			return nil, validateErr
+		}
+		target, validateErr := safepath.ResolveRelativeUnderRoot(s.cfg.Backup.Dir, validatedName)
+		if validateErr != nil {
+			return nil, validateErr
+		}
 		snapshot, err = backup.CreateZipSnapshot(s.cfg, target)
 	}
 	if err != nil {
@@ -47,11 +55,14 @@ func (s *Service) CreateBackup(ctx context.Context, name string) (*types.BackupR
 
 func (s *Service) RestoreBackup(ctx context.Context, name string) (*types.BackupRecord, error) {
 	_ = ctx
-	name = filepath.Base(strings.TrimSpace(name))
-	if name == "" {
-		return nil, fmt.Errorf("backup name is required")
+	validatedName, err := validateBackupName(name)
+	if err != nil {
+		return nil, err
 	}
-	target := filepath.Join(s.cfg.Backup.Dir, name)
+	target, err := safepath.ResolveRelativeUnderRoot(s.cfg.Backup.Dir, validatedName)
+	if err != nil {
+		return nil, err
+	}
 	if err := backup.RestoreZipSnapshot(s.cfg, target); err != nil {
 		return nil, err
 	}
@@ -69,11 +80,14 @@ func (s *Service) RestoreBackup(ctx context.Context, name string) (*types.Backup
 }
 
 func (s *Service) BackupPath(name string) (string, error) {
-	name = filepath.Base(strings.TrimSpace(name))
-	if name == "" {
-		return "", fmt.Errorf("backup name is required")
+	validatedName, err := validateBackupName(name)
+	if err != nil {
+		return "", err
 	}
-	target := filepath.Join(s.cfg.Backup.Dir, name)
+	target, err := safepath.ResolveRelativeUnderRoot(s.cfg.Backup.Dir, validatedName)
+	if err != nil {
+		return "", err
+	}
 	if !backup.PathIsUnderBackupRoot(s.cfg, target) {
 		return "", fmt.Errorf("backup path is outside backup root")
 	}
@@ -130,4 +144,12 @@ func backupRecord(item backup.Snapshot) types.BackupRecord {
 		SizeBytes: item.SizeBytes,
 		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func validateBackupName(name string) (string, error) {
+	validated, err := safepath.ValidatePathComponent("backup name", strings.TrimSpace(name))
+	if err != nil {
+		return "", err
+	}
+	return validated, nil
 }

@@ -1,10 +1,12 @@
 package httpadmin
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 
 	admintypes "github.com/sphireinc/foundry/internal/admin/types"
+	"github.com/sphireinc/foundry/internal/safepath"
 )
 
 func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
@@ -70,6 +72,15 @@ func (r *Router) handleDownloadBackup(w http.ResponseWriter, req *http.Request) 
 	target, err := r.service.BackupPath(req.URL.Query().Get("name"))
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	ok, err := safepath.IsWithinRoot(r.cfg.Backup.Dir, target)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, fmt.Errorf("backup path is outside backup root"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")

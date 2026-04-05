@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -159,10 +160,13 @@ func removeInstalledPluginDir(pluginsDir, name string) error {
 
 // repoZipURL returns the GitHub archive URL used by the zip fallback path.
 func downloadAndExtract(repoURL, targetDir string) error {
+	targetRoot := filepath.Dir(targetDir)
+	targetName := filepath.Base(targetDir)
 	return installutil.DownloadAndExtractRepoArchive(
 		pluginDownloadClient,
 		repoURL,
-		targetDir,
+		targetRoot,
+		targetName,
 		"foundry-plugin",
 		"plugin",
 		pluginZipMaxBytes,
@@ -170,7 +174,7 @@ func downloadAndExtract(repoURL, targetDir string) error {
 }
 
 func stripVCSMetadata(targetDir string) error {
-	return installutil.StripVCSMetadata(targetDir)
+	return installutil.StripVCSMetadata(filepath.Dir(targetDir), filepath.Base(targetDir))
 }
 
 // normalizeInstallURL expands shorthand repository references into cloneable

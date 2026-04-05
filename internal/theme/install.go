@@ -142,10 +142,13 @@ func validateThemeInstallName(name string) (string, error) {
 }
 
 func downloadAndExtractTheme(repoURL, targetDir string) error {
+	targetRoot := filepath.Dir(targetDir)
+	targetName := filepath.Base(targetDir)
 	return installutil.DownloadAndExtractRepoArchive(
 		themeDownloadClient,
 		repoURL,
-		targetDir,
+		targetRoot,
+		targetName,
 		"foundry-theme",
 		"theme",
 		themeZipMaxBytes,
@@ -153,5 +156,5 @@ func downloadAndExtractTheme(repoURL, targetDir string) error {
 }
 
 func stripThemeVCSMetadata(targetDir string) error {
-	return installutil.StripVCSMetadata(targetDir)
+	return installutil.StripVCSMetadata(filepath.Dir(targetDir), filepath.Base(targetDir))
 }

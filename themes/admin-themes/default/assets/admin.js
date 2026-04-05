@@ -203,7 +203,6 @@ import {
     recordDebugEvent,
     recordRenderTrace,
     scheduleDebugAutoRefresh,
-    setDebugFlag,
   } = createDebugTools({
     state,
     root,

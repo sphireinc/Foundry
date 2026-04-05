@@ -20,6 +20,9 @@ func RestoreZipSnapshot(cfg *config.Config, source string) error {
 	if source == "" {
 		return fmt.Errorf("backup source must not be empty")
 	}
+	if !PathIsUnderBackupRoot(cfg, source) {
+		return fmt.Errorf("backup source is outside backup root")
+	}
 	reader, err := zip.OpenReader(source)
 	if err != nil {
 		return err
