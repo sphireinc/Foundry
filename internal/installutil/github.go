@@ -178,18 +178,25 @@ func DownloadAndExtractRepoArchive(client *http.Client, repoURL, targetRoot, tar
 		return err
 	}
 	defer os.RemoveAll(tempDir)
+	tempDirAbs, err := filepath.Abs(tempDir)
+	if err != nil {
+		return err
+	}
 
 	for _, f := range zr.File {
 		cleanName := filepath.Clean(filepath.FromSlash(strings.TrimSpace(f.Name)))
-		if cleanName == "." || cleanName == "" || cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
+		if cleanName == "." || cleanName == "" || cleanName == ".." || filepath.IsAbs(cleanName) || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
 			return fmt.Errorf("zip entry escapes target dir: %s", f.Name)
 		}
 		if f.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("zip contains unsupported symlink entry: %s", f.Name)
 		}
-		fp, err := SafeArchivePath(tempDir, cleanName)
+		fp, err := filepath.Abs(filepath.Join(tempDirAbs, cleanName))
 		if err != nil {
 			return err
+		}
+		if fp != tempDirAbs && !strings.HasPrefix(fp, tempDirAbs+string(filepath.Separator)) {
+			return fmt.Errorf("zip entry escapes target dir: %s", f.Name)
 		}
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(fp, f.Mode()); err != nil {
@@ -222,7 +229,13 @@ func DownloadAndExtractRepoArchive(client *http.Client, repoURL, targetRoot, tar
 	if err != nil || len(entries) == 0 {
 		return fmt.Errorf("zip extraction failed")
 	}
-	root := filepath.Join(tempDir, entries[0].Name())
+	root, err := filepath.Abs(filepath.Join(tempDirAbs, entries[0].Name()))
+	if err != nil {
+		return err
+	}
+	if root != tempDirAbs && !strings.HasPrefix(root, tempDirAbs+string(filepath.Separator)) {
+		return fmt.Errorf("zip extraction failed: root entry escapes temp dir")
+	}
 	rootInfo, err := os.Stat(root)
 	if err != nil {
 		return err

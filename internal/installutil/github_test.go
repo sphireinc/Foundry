@@ -123,6 +123,14 @@ func TestSafeArchivePath(t *testing.T) {
 	}
 }
 
+func TestSafeArchivePathRejectsTraversalWithNestedPrefix(t *testing.T) {
+	root := t.TempDir()
+
+	if _, err := SafeArchivePath(root, "plugin-main/../../escape"); err == nil {
+		t.Fatal("expected nested traversal to be rejected")
+	}
+}
+
 type assertErr string
 
 func (e assertErr) Error() string {
