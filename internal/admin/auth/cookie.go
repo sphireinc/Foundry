@@ -17,7 +17,7 @@ func (m *Middleware) setSessionCookie(w http.ResponseWriter, r *http.Request, to
 		Path:     m.adminPath(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   requestIsHTTPS(r),
+		Secure:   true,
 		MaxAge:   int(m.SessionTTL().Seconds()),
 	})
 }
@@ -32,7 +32,7 @@ func (m *Middleware) clearSessionCookie(w http.ResponseWriter, r *http.Request) 
 		Path:     m.adminPath(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   requestIsHTTPS(r),
+		Secure:   true,
 		MaxAge:   -1,
 	})
 }
