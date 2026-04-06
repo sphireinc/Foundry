@@ -217,7 +217,6 @@ import {
 
   const {
     editorElements,
-    setStructuredFields,
     syncStructuredEditorFromRaw,
     syncRawFromStructuredEditor,
     insertIntoMarkdown,
