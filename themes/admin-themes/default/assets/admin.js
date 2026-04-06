@@ -216,7 +216,6 @@ import {
   bindGlobalDebugEvents();
 
   const {
-    editorElements,
     setStructuredFields,
     syncStructuredEditorFromRaw,
     syncRawFromStructuredEditor,
