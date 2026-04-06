@@ -847,8 +847,8 @@ func buildUnifiedLineDiff(leftPath string, leftBody []byte, rightPath string, ri
 	matches := buildLineLCS(leftLines, rightLines)
 
 	var buf bytes.Buffer
-	_, err := fmt.Fprintf(&buf, "--- %s\n", filepath.ToSlash(leftPath))
-	_, err = fmt.Fprintf(&buf, "+++ %s\n", filepath.ToSlash(rightPath))
+	_, _ = fmt.Fprintf(&buf, "--- %s\n", filepath.ToSlash(leftPath))
+	_, err := fmt.Fprintf(&buf, "+++ %s\n", filepath.ToSlash(rightPath))
 	if err != nil {
 		// TODO Handle this error at some point, even if redundant
 	}
