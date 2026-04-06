@@ -12,7 +12,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 )
 
-func Log(cfg *config.Config, entry admintypes.AuditEntry) error {
+func Log(cfg *config.Config, entry admintypes.AuditEntry) (logErr error) {
 	if cfg == nil {
 		return nil
 	}
@@ -29,10 +29,15 @@ func Log(cfg *config.Config, entry admintypes.AuditEntry) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); logErr == nil && cerr != nil {
+			logErr = cerr
+		}
+	}()
 
 	enc := json.NewEncoder(f)
-	return enc.Encode(entry)
+	logErr = enc.Encode(entry)
+	return
 }
 
 func List(cfg *config.Config, limit int) ([]admintypes.AuditEntry, error) {
