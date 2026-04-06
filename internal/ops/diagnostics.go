@@ -2,6 +2,7 @@ package ops
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,7 +36,17 @@ type DiagnosticReport struct {
 // Messages flattens all diagnostic categories into a single ordered message
 // slice suitable for CLI output.
 func (r DiagnosticReport) Messages() []string {
-	out := make([]string, 0, len(r.BrokenMediaRefs)+len(r.BrokenInternalLinks)+len(r.MissingTemplates)+len(r.OrphanedMedia)+len(r.DuplicateURLs)+len(r.DuplicateSlugs)+len(r.TaxonomyInconsistency))
+	total := int64(len(r.BrokenMediaRefs)) +
+		int64(len(r.BrokenInternalLinks)) +
+		int64(len(r.MissingTemplates)) +
+		int64(len(r.OrphanedMedia)) +
+		int64(len(r.DuplicateURLs)) +
+		int64(len(r.DuplicateSlugs)) +
+		int64(len(r.TaxonomyInconsistency))
+	if total < 0 || total > int64(math.MaxInt) {
+		total = int64(math.MaxInt)
+	}
+	out := make([]string, 0, int(total))
 	out = append(out, r.DuplicateURLs...)
 	out = append(out, r.DuplicateSlugs...)
 	out = append(out, r.BrokenMediaRefs...)
