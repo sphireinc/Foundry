@@ -387,7 +387,6 @@ import {
     snapshotValue,
     dirtyMessage,
     hasUnsavedChanges,
-    clearDirtyState,
     confirmNavigation,
     compareSnapshot,
     updateTablePage,
