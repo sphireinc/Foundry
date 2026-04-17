@@ -6,6 +6,8 @@ const sectionFromPathAliases = Object.fromEntries(
   Object.entries(sectionPathAliases).map(([section, path]) => [path, section])
 );
 
+sectionFromPathAliases['plugins/ai-writer'] = 'plugins/aiwriter';
+
 export const normalizeAdminSection = (section) => {
   const value = String(section || 'overview')
     .trim()

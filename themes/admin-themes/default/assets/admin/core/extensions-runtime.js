@@ -24,29 +24,38 @@ export const createExtensionsRuntime = ({
       getExtensions: () => clone(state.adminExtensions),
       getSettingsSections: () => clone(state.settingsSections),
     };
+  };
+
+  const dispatchExtensionPageEvent = (page) => {
+    if (!page) return;
+    if (state.debugTools.flags.captureExtensionEvents) {
+      recordDebugEvent('extension-page', `Dispatching extension page event for ${page.plugin}/${page.key}`, {
+        section: page.section,
+        route: page.route || '',
+      });
+    }
+    documentRef.dispatchEvent(
+      new CustomEvent('foundry:admin-extension-page', {
+        detail: {
+          page,
+          adminBase,
+          session: state.session,
+          capabilities: [...capabilitySet()],
+          settingsSections: (state.settingsSections || []).filter(
+            (section) => section.source === page.plugin
+          ),
+          extensions: clone(state.adminExtensions),
+          mountId: 'admin-extension-mount',
+        },
+      })
+    );
+  };
+
+  const publishAdminRuntimeAndDispatchActivePage = () => {
+    publishAdminRuntime();
     const page = extensionPageBySection(state.section);
     if (page) {
-      if (state.debugTools.flags.captureExtensionEvents) {
-        recordDebugEvent('extension-page', `Dispatching extension page event for ${page.plugin}/${page.key}`, {
-          section: page.section,
-          route: page.route || '',
-        });
-      }
-      documentRef.dispatchEvent(
-        new CustomEvent('foundry:admin-extension-page', {
-          detail: {
-            page,
-            adminBase,
-            session: state.session,
-            capabilities: [...capabilitySet()],
-            settingsSections: (state.settingsSections || []).filter(
-              (section) => section.source === page.plugin
-            ),
-            extensions: clone(state.adminExtensions),
-            mountId: 'admin-extension-mount',
-          },
-        })
-      );
+      dispatchExtensionPageEvent(page);
     }
   };
 
@@ -103,6 +112,7 @@ export const createExtensionsRuntime = ({
           });
         }
       } else {
+        dispatchExtensionPageEvent(page);
         mount.dataset.extensionStatus = 'ready';
       }
     } catch (error) {
@@ -222,6 +232,7 @@ export const createExtensionsRuntime = ({
 
   return {
     publishAdminRuntime,
+    publishAdminRuntimeAndDispatchActivePage,
     mountActiveExtensionPage,
     mountVisibleExtensionWidgets,
   };
