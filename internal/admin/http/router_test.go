@@ -1130,6 +1130,9 @@ func TestHelpersAndHookWrapping(t *testing.T) {
 	if _, ok := NewHooks(&config.Config{Admin: config.AdminConfig{Enabled: true}}, base).(hookSet); !ok {
 		t.Fatal("expected enabled admin hooks to wrap base hooks")
 	}
+	if provider := pluginMetadataProvider(wrappedMetadataHooks{inner: metadataHooks{}}); provider == nil || provider()["alpha"].Title != "Alpha" {
+		t.Fatalf("expected plugin metadata provider through wrapped hooks")
+	}
 
 	r := New(&config.Config{Admin: config.AdminConfig{Enabled: true}}, service.New(testConfig(t)))
 	before := len(r.registrars)
@@ -1157,6 +1160,22 @@ func (stubHooks) OnRoutesAssigned(*content.SiteGraph) error { return nil }
 func (stubHooks) OnAssetsBuilding(*config.Config) error     { return nil }
 
 var _ server.Hooks = stubHooks{}
+
+type metadataHooks struct{}
+
+func (metadataHooks) RegisterRoutes(*http.ServeMux)             {}
+func (metadataHooks) OnServerStarted(string) error              { return nil }
+func (metadataHooks) OnRoutesAssigned(*content.SiteGraph) error { return nil }
+func (metadataHooks) OnAssetsBuilding(*config.Config) error     { return nil }
+func (metadataHooks) Metadata() map[string]plugins.Metadata {
+	return map[string]plugins.Metadata{"alpha": {Name: "alpha", Title: "Alpha"}}
+}
+
+type wrappedMetadataHooks struct {
+	inner any
+}
+
+func (w wrappedMetadataHooks) UnwrapHooks() any { return w.inner }
 
 func newTestRouter(t *testing.T, cfg *config.Config) *Router {
 	t.Helper()
