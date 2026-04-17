@@ -6,21 +6,13 @@ playwright-report/
 test-results/
 
 ### Foundry planning files
+assessment-files/*
 assessment-*.txt
-assessment-admin.txt
-assessment-product.txt
-assessment-roadmap.txt
-assessment-technical-debt.txt
-assessment-security.txt
-assessment-static-analysis.txt
-assessment-esm.txt
-assessment-customer.txt
-
-### Foundry Internal
 Foundry-Cloud-API
 Foundry-Cloud-Dashboard
 Foundry-Cloud-Landing
-planning-docs
+
+### Foundry Internal
 .foundry/
 
 ### Foundry runtime state
