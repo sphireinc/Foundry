@@ -35,7 +35,7 @@ type DiagnosticReport struct {
 // Messages flattens all diagnostic categories into a single ordered message
 // slice suitable for CLI output.
 func (r DiagnosticReport) Messages() []string {
-	out := make([]string, 0, len(r.BrokenMediaRefs)+len(r.BrokenInternalLinks)+len(r.MissingTemplates)+len(r.OrphanedMedia)+len(r.DuplicateURLs)+len(r.DuplicateSlugs)+len(r.TaxonomyInconsistency))
+	var out []string
 	out = append(out, r.DuplicateURLs...)
 	out = append(out, r.DuplicateSlugs...)
 	out = append(out, r.BrokenMediaRefs...)
