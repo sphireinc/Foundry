@@ -92,6 +92,30 @@ func TestPublicAPIEndpoints(t *testing.T) {
 	}
 }
 
+func TestHookSetExposesWrappedHooks(t *testing.T) {
+	base := passthroughHook{}
+	hooks := NewHooks(&config.Config{}, base)
+	source, ok := hooks.(interface {
+		UnwrapHooks() any
+	})
+	if !ok {
+		t.Fatal("expected platform hook set to expose wrapped hooks")
+	}
+	if source.UnwrapHooks() != base {
+		t.Fatalf("expected wrapped hook to be returned")
+	}
+}
+
+type passthroughHook struct{}
+
+func (h passthroughHook) RegisterRoutes(*http.ServeMux) {}
+
+func (h passthroughHook) OnServerStarted(string) error { return nil }
+
+func (h passthroughHook) OnRoutesAssigned(*content.SiteGraph) error { return nil }
+
+func (h passthroughHook) OnAssetsBuilding(*config.Config) error { return nil }
+
 func TestWriteStaticArtifacts(t *testing.T) {
 	cfg, graph := testGraph(t)
 	if err := WriteStaticArtifacts(cfg, graph); err != nil {

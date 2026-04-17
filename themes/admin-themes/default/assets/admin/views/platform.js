@@ -149,14 +149,23 @@ export const createPlatformViews = ({
         ? `<div class="panel-pad stack">
       <h3>Extension Pages</h3>
       <div class="table table-three">
-        <div class="table-head"><span>Page</span><span>Route</span><span>Plugin</span></div>
+        <div class="table-head">
+            <span>Menu Name</span>
+            <span>Action</span>
+            <span>Route</span>
+        </div>
         ${extensionPages()
           .map(
             (page) => `
           <div class="table-row table-row-actions">
-            <span><strong>${escapeHTML(page.title)}</strong><div class="muted mono">${escapeHTML(page.key)}</div></span>
+            <span>
+                <strong>${escapeHTML(page.title)}</strong>
+                <div class="muted mono">page: /plugins/${escapeHTML(page.key)}</div>
+                <div class="muted mono">plugin: ${escapeHTML(page.plugin)}</div>
+            </span>
+            <span class="row-actions"><button class="ghost small" type="button" data-section="${escapeHTML(page.section)}">Open</button></span>
+            
             <span>${escapeHTML(adminPathForSection(adminBase, page.section))}</span>
-            <span class="row-actions"><span>${escapeHTML(page.plugin)}</span><button class="ghost small" type="button" data-section="${escapeHTML(page.section)}">Open</button></span>
           </div>`
           )
           .join('')}

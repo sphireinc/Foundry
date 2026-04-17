@@ -343,6 +343,32 @@ permissions:
             </li>
           </ul>
 
+          <h2>In-process vs RPC plugins</h2>
+          <p>
+            Foundry supports two plugin runtime shapes, and they behave differently when installed
+            or enabled.
+          </p>
+          <ul>
+            <li>
+              <strong>In-process Go plugins</strong> are compiled into the Foundry binary. They
+              register through Go <code>init()</code> functions, so enabling one from the Admin UI
+              only changes configuration. It cannot import new Go code into an already-built
+              binary. After enabling a newly installed in-process plugin, run
+              <code>foundry plugin sync</code> or <code>go run ./cmd/plugin-sync</code>, rebuild,
+              and restart.
+            </li>
+            <li>
+              <strong>Out-of-process RPC plugins</strong> declare <code>runtime.mode: rpc</code>
+              in <code>plugin.yaml</code>. They do not need generated Go imports because Foundry
+              launches the configured command and communicates through the RPC protocol.
+            </li>
+          </ul>
+          <p>
+            Built-in in-process plugins that ship with Foundry may already be compiled into the
+            binary. Locally installed third-party in-process plugins still require generated imports
+            and a rebuild.
+          </p>
+
           <h2>Plugin runtime contract</h2>
           <p>
             Foundry now supports a first-class <code>runtime</code> block in

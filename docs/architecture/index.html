@@ -84,7 +84,7 @@
             </li>
             <li>
               <strong><code>internal/plugins:</code></strong> plugin metadata, registration,
-              lifecycle hooks, and generated plugin sync.
+              lifecycle hooks, generated plugin sync, and the RPC host for out-of-process plugins.
             </li>
             <li>
               <strong><code>internal/theme:</code></strong> theme management, validation, and
@@ -117,6 +117,14 @@
               Choose between a full rebuild and a targeted rebuild based on the dependency graph.
             </li>
           </ol>
+
+          <h2>Plugin runtime model</h2>
+          <p>
+            Foundry has two plugin runtime paths. First-class Go plugins run in process and are
+            compiled into the binary for deep integration with the CMS lifecycle. RPC plugins run
+            out of process through a declared <code>runtime.mode: rpc</code> command, which lets
+            Foundry expand extension points without loading third-party code into the main process.
+          </p>
 
           <h2>Why the package boundaries matter</h2>
           <p>
