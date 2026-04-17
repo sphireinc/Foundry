@@ -171,6 +171,19 @@ func TestEnabledPluginStatusBranches(t *testing.T) {
 	}
 }
 
+func TestLooksLikeSecretPathDoesNotFlagTokenBudgetFields(t *testing.T) {
+	for _, value := range []string{"max_tokens", "max_output_tokens", "maxOutputTokens"} {
+		if looksLikeSecretPath(value) {
+			t.Fatalf("expected %q not to be classified as a secret path", value)
+		}
+	}
+	for _, value := range []string{".env", "config/secrets.yaml", "admin/session/store.yaml", "api-token"} {
+		if !looksLikeSecretPath(value) {
+			t.Fatalf("expected %q to be classified as a secret path", value)
+		}
+	}
+}
+
 func writePluginMetaFile(t *testing.T, root, name, body string) {
 	t.Helper()
 	dir := filepath.Join(root, name)
