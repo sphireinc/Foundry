@@ -149,9 +149,6 @@ func analyzePluginDirectory(root string) []SecurityFinding {
 			if strings.Contains(importPath, "/internal/admin/users") {
 				addFinding(&findings, seen, "admin.users.read", filepath.ToSlash(path), "import "+importPath, "touches admin users APIs", "direct")
 			}
-			if strings.Contains(importPath, "/internal/admin/auth") {
-				addFinding(&findings, seen, "admin.users.reset_passwords", filepath.ToSlash(path), "import "+importPath, "touches admin auth/session APIs", "heuristic")
-			}
 		}
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
@@ -460,9 +457,21 @@ func looksLikeSecretPath(value string) bool {
 	if value == "" {
 		return false
 	}
-	candidates := []string{".env", "id_rsa", "credentials", "secrets", "token", "session", "passwd", "private_key"}
+	candidates := []string{".env", "id_rsa", "credentials", "secrets", "session", "passwd", "private_key"}
 	for _, candidate := range candidates {
 		if strings.Contains(value, candidate) {
+			return true
+		}
+	}
+
+	return containsSensitivePathToken(value, "token")
+}
+
+func containsSensitivePathToken(value, token string) bool {
+	for _, part := range strings.FieldsFunc(value, func(r rune) bool {
+		return r == '/' || r == '\\' || r == '.' || r == '-' || r == ' '
+	}) {
+		if part == token {
 			return true
 		}
 	}
