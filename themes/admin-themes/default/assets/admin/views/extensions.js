@@ -1,8 +1,6 @@
 export const createExtensionViews = ({
-  state,
   panel,
   escapeHTML,
-  hasCapability,
   normalizeAdminSection,
   extensionPageBySection,
   extensionWidgetsForSlot,
@@ -38,15 +36,6 @@ export const createExtensionViews = ({
         '<div class="panel-pad empty-state">This admin extension page is not registered.</div>'
       );
     }
-    const relatedWidgets = (state.adminExtensions.widgets || []).filter(
-      (widget) => widget.plugin === page.plugin && hasCapability(widget.capability)
-    );
-    const relatedSettings = (state.adminExtensions.settings || []).filter(
-      (setting) => setting.plugin === page.plugin && hasCapability(setting.capability)
-    );
-    const relatedSlots = (state.adminExtensions.slots || []).filter(
-      (slot) => slot.plugin === page.plugin
-    );
     return panel(
       page.title,
       `
@@ -54,52 +43,6 @@ export const createExtensionViews = ({
         <div class="note">
           <strong>${escapeHTML(page.plugin)}</strong>${page.description ? ` • ${escapeHTML(page.description)}` : ''}
         </div>
-        <div class="cards">
-          <article class="card"><span class="card-label">Route</span><strong>${escapeHTML(page.route || `/${page.section}`)}</strong><span class="card-copy">Mounted from plugin metadata.</span></article>
-          <article class="card"><span class="card-label">Widgets</span><strong>${escapeHTML(relatedWidgets.length)}</strong><span class="card-copy">Plugin widgets registered for admin slots.</span></article>
-          <article class="card"><span class="card-label">Settings</span><strong>${escapeHTML(relatedSettings.length)}</strong><span class="card-copy">Plugin settings sections exposed to admin.</span></article>
-          <article class="card"><span class="card-label">Slots</span><strong>${escapeHTML(relatedSlots.length)}</strong><span class="card-copy">Declared admin shell slots.</span></article>
-        </div>
-        ${
-          relatedSettings.length
-            ? `<div class="stack">
-          <h3>Settings Sections</h3>
-          <div class="table table-three">
-            <div class="table-head"><span>Section</span><span>Capability</span><span>Description</span></div>
-            ${relatedSettings
-              .map(
-                (setting) => `
-              <div class="table-row">
-                <span><strong>${escapeHTML(setting.title)}</strong><div class="muted mono">${escapeHTML(setting.key)}</div></span>
-                <span>${escapeHTML(setting.capability || '-')}</span>
-                <span>${escapeHTML(setting.description || '-')}</span>
-              </div>`
-              )
-              .join('')}
-          </div>
-        </div>`
-            : ''
-        }
-        ${
-          relatedWidgets.length
-            ? `<div class="stack">
-          <h3>Widgets</h3>
-          <div class="table table-three">
-            <div class="table-head"><span>Widget</span><span>Slot</span><span>Description</span></div>
-            ${relatedWidgets
-              .map(
-                (widget) => `
-              <div class="table-row">
-                <span><strong>${escapeHTML(widget.title)}</strong><div class="muted mono">${escapeHTML(widget.key)}</div></span>
-                <span>${escapeHTML(widget.slot)}</span>
-                <span>${escapeHTML(widget.description || '-')}</span>
-              </div>`
-              )
-              .join('')}
-          </div>
-        </div>`
-            : ''
-        }
         <div id="admin-extension-mount"
              class="admin-extension-mount"
              data-plugin="${escapeHTML(page.plugin)}"

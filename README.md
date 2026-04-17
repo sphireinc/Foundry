@@ -10,7 +10,7 @@
   <img height="300" src="readme-assets/logo.png" alt="logo">
 </p>
 
-Foundry is a Markdown-first CMS written in Go. It keeps content in files, renders through themes, extends through plugins, and supports both static output and local preview serving.
+Foundry is a Markdown-first CMS written in Go. It keeps content in files, renders through themes, and extends through both first-class compiled Go plugins and out-of-process RPC plugins.
 
 The project is aimed at teams that want a file-based workflow without giving up CMS-style features such as taxonomies, theme-owned custom fields, feeds, plugin hooks, and an admin surface.
 
@@ -22,7 +22,9 @@ See more of Foundry here: [Foundry Screenshots](README_SCREENSHOTS.md)
 - Supports language-aware routing and content grouping
 - Builds a normalized site graph in memory
 - Uses themes for layouts, partials, and theme assets
-- Uses plugins for hooks, asset injection, and runtime extensions
+- Supports first-class compiled Go plugins for deep CMS integration
+- Supports out-of-process RPC plugins for process-isolated extension points
+- Uses plugins for hooks, asset injection, admin pages, and runtime extensions
 - Generates RSS and sitemap output
 - Publishes static output to `public/`
 - Serves the site locally with live reload during development
@@ -1147,7 +1149,12 @@ It also checks:
 
 ## Plugins
 
-Plugins live under `plugins/<name>/` and are registered through generated imports.
+Plugins live under `plugins/<name>/`. Foundry supports two plugin runtime shapes:
+
+- **In-process Go plugins** are compiled into the Foundry binary. They register through Go `init()` functions, so enabling one from the Admin UI only changes config; it cannot import new Go code into an already-built binary. After enabling a newly installed in-process plugin, run `foundry plugin sync` or `go run ./cmd/plugin-sync`, rebuild, and restart.
+- **Out-of-process RPC plugins** declare `runtime.mode: rpc` in `plugin.yaml`. They do not need generated Go imports because Foundry launches the configured command and talks to it through the RPC protocol. The current RPC host supports the context hook family.
+
+Built-in in-process plugins that ship with Foundry may already be compiled into the binary. Locally installed third-party in-process plugins still require generated imports and a rebuild.
 
 Current plugin capabilities include:
 
