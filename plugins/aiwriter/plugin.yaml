@@ -1,0 +1,119 @@
+name: aiwriter
+title: AI Writer
+version: 0.1.0
+description: Generates Markdown draft posts from admin-provided prompts using OpenAI, Anthropic Claude, or Google Gemini.
+author: Foundry
+homepage: https://github.com/sphireinc/foundry/plugins/aiwriter
+license: MIT
+repo: github.com/sphireinc/foundry/plugins/aiwriter
+foundry_api: v1
+min_foundry_version: 1.3.9
+compatibility_version: v1
+config_schema:
+  - name: params.ai_writer.provider
+    label: Provider
+    type: string
+    default: openai
+    enum:
+      - openai
+      - anthropic
+      - gemini
+    help: AI provider used for post generation.
+  - name: params.ai_writer.api_key_env
+    label: API key environment variable
+    type: string
+    default: OPENAI_API_KEY
+    help: Environment variable that stores the provider API key.
+  - name: params.ai_writer.model
+    label: Model
+    type: string
+    default: gpt-4o-mini
+    help: Provider model name.
+  - name: params.ai_writer.endpoint
+    label: Endpoint override
+    type: string
+    help: Optional provider endpoint override for gateways or tests.
+  - name: params.ai_writer.endpoint_version
+    label: Endpoint version
+    type: string
+    help: API endpoint version used in default endpoints, or in custom endpoints containing {version}.
+  - name: params.ai_writer.temperature
+    label: Temperature
+    type: number
+    default: 0.7
+    help: Provider sampling temperature.
+  - name: params.ai_writer.max_tokens
+    label: Max tokens
+    type: number
+    default: 2400
+    help: Maximum output token budget.
+  - name: params.ai_writer.timeout_seconds
+    label: Timeout seconds
+    type: number
+    default: 60
+    help: HTTP timeout for provider requests.
+  - name: params.ai_writer.default_status
+    label: Default status
+    type: string
+    default: draft
+    help: Default frontmatter status for generated posts.
+  - name: params.ai_writer.default_author
+    label: Default author
+    type: string
+    help: Default frontmatter author.
+  - name: params.ai_writer.default_lang
+    label: Default language
+    type: string
+    help: Default frontmatter language.
+  - name: params.ai_writer.system_prompt
+    label: System prompt
+    type: text
+    help: Site-specific writing instructions appended to the built-in Foundry prompt.
+permissions:
+  filesystem:
+    read:
+      content: true
+    write:
+      content: true
+  network:
+    outbound:
+      https: true
+      domains:
+        - api.openai.com
+        - api.anthropic.com
+        - generativelanguage.googleapis.com
+      methods:
+        - POST
+    inbound:
+      register_routes: true
+      admin_routes: true
+  environment:
+    read:
+      allowed: true
+      variables:
+        - OPENAI_API_KEY
+        - ANTHROPIC_API_KEY
+        - GEMINI_API_KEY
+  config:
+    read:
+      site: true
+      plugin_config: true
+  content:
+    documents:
+      write: true
+  admin:
+    extensions:
+      pages: true
+  capabilities:
+    requires_admin_approval: true
+admin:
+  pages:
+    - key: ai-writer
+      title: AI Writer
+      route: /plugins/aiwriter
+      nav_group: content
+      capability: documents.create
+      description: Generate draft Markdown posts with an AI provider configured on the server.
+      module: assets/admin.js
+      styles:
+        - assets/admin.css
