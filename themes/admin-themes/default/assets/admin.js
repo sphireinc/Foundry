@@ -268,10 +268,8 @@ import {
     return normalized === 'settings' || normalized === 'config';
   };
   const { extensionMountID, renderExtensionPage, renderWidgetPanels } = createExtensionViews({
-    state,
     panel,
     escapeHTML,
-    hasCapability,
     normalizeAdminSection,
     extensionPageBySection,
     extensionWidgetsForSlot,
