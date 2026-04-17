@@ -41,6 +41,10 @@ type hookSet struct {
 	api  *API
 }
 
+func (h hookSet) UnwrapHooks() any {
+	return h.base
+}
+
 // API serves Foundry's stable frontend-facing platform contract.
 //
 // Frontend themes and JS applications should prefer this surface, or the
