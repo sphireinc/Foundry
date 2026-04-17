@@ -127,7 +127,7 @@ func Start(projectDir string, rawArgs []string) (*State, error) {
 	return startWithCommand(projectDir, command)
 }
 
-func startWithCommand(projectDir string, command []string) (*State, error) {
+func startWithCommand(projectDir string, command []string) (state *State, retErr error) {
 	if _, running, err := RunningState(projectDir); err != nil {
 		return nil, err
 	} else if running {
@@ -147,7 +147,11 @@ func startWithCommand(projectDir string, command []string) (*State, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer logFile.Close()
+	defer func() {
+		if err := logFile.Close(); err != nil && retErr == nil {
+			retErr = err
+		}
+	}()
 
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = projectDir
@@ -164,7 +168,7 @@ func startWithCommand(projectDir string, command []string) (*State, error) {
 		return nil, err
 	}
 
-	state := &State{
+	state = &State{
 		PID:        cmd.Process.Pid,
 		StartedAt:  time.Now().UTC(),
 		ProjectDir: projectDir,
