@@ -75,7 +75,7 @@ export const createFrontendClient = ({
     content: createFrontendContentAPI(transport, routes),
     collections: createFrontendCollectionsAPI(transport),
     search: createFrontendSearchAPI(transport),
-    media: createFrontendMediaAPI(transport),
+    media: createFrontendMediaAPI(),
     preview: createFrontendPreviewAPI(transport, capabilities),
     raw: {
       http,
