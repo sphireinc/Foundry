@@ -67,14 +67,30 @@ func NewHooks(cfg *config.Config, base server.Hooks, opts ...service.Option) ser
 		return base
 	}
 
-	if pm, ok := base.(interface {
-		Metadata() map[string]plugins.Metadata
-	}); ok {
-		opts = append(opts, service.WithPluginMetadata(pm.Metadata))
+	if metadata := pluginMetadataProvider(base); metadata != nil {
+		opts = append(opts, service.WithPluginMetadata(metadata))
 	}
 	svc := service.New(cfg, opts...)
 	router := New(cfg, svc)
 	return WrapHooks(base, router)
+}
+
+func pluginMetadataProvider(h any) func() map[string]plugins.Metadata {
+	for h != nil {
+		if pm, ok := h.(interface {
+			Metadata() map[string]plugins.Metadata
+		}); ok {
+			return pm.Metadata
+		}
+		unwrap, ok := h.(interface {
+			UnwrapHooks() any
+		})
+		if !ok {
+			return nil
+		}
+		h = unwrap.UnwrapHooks()
+	}
+	return nil
 }
 
 // RegisterRegistrar appends an admin route group to the router.
