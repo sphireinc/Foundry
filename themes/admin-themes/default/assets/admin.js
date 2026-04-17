@@ -216,8 +216,6 @@ import {
   bindGlobalDebugEvents();
 
   const {
-    editorElements,
-    setStructuredFields,
     syncStructuredEditorFromRaw,
     syncRawFromStructuredEditor,
     insertIntoMarkdown,
@@ -380,12 +378,9 @@ import {
     resetDocumentEditor,
     setFlash: uiSetFlash,
     setError: uiSetError,
-    pushToast,
-    markDirty,
     snapshotValue,
     dirtyMessage,
     hasUnsavedChanges,
-    clearDirtyState,
     confirmNavigation,
     compareSnapshot,
     updateTablePage,
