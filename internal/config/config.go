@@ -44,7 +44,10 @@ type FoundryConfig struct {
 }
 
 type ManagedRuntimeConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled      bool   `yaml:"enabled"`
+	InstanceID   string `yaml:"instance_id,omitempty"`
+	CallbackURL  string `yaml:"callback_url,omitempty"`
+	SharedSecret string `yaml:"shared_secret,omitempty"`
 }
 
 type AdminConfig struct {

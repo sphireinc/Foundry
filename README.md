@@ -416,6 +416,30 @@ The production compose shape is stricter:
 Before using the production Docker overlay, set the real HTTPS origin in
 `content/config/site.docker.prod.yaml`.
 
+#### Managed Runtime Storage Layout
+
+When `foundry.managed.enabled` is true, Foundry expects a provider-neutral
+runtime layout that also works with a read-only container root filesystem.
+The executable, built-in assets, and application code should be treated as
+immutable. Mutable runtime state must live in writable mounts or volumes:
+
+- `content_dir`: customer-authored Markdown, media references, and content metadata
+- `data_dir`: admin/runtime state, managed bootstrap state, sessions, locks, indexes, and other local state
+- `themes_dir`: installed or customized themes
+- `plugins_dir`: installed plugins
+- `public_dir`: generated public output
+- `/tmp`: ephemeral scratch space, usually `tmpfs`
+
+Foundry does not prescribe the backing provider for these paths. A managed
+operator can map them to local volumes, network filesystems, object-backed
+sync jobs, or another storage system. The important invariant is that the
+configured paths are readable and writable by the Foundry process while the
+container/application root remains read-only.
+
+`foundry doctor` and `GET /__health` both check the managed storage layout.
+The checks report only logical names such as `storage.data` and generic
+failure messages, not absolute filesystem paths or secret values.
+
 #### Source / local binary
 
 Start the local preview server from the project root:

@@ -190,6 +190,7 @@ func (s *Server) newMux() *http.ServeMux {
 	if s.cfg.Server.DebugRoutes {
 		mux.HandleFunc("/__debug/deps", s.handleDepsDebug)
 	}
+	mux.HandleFunc("/__health", s.handleHealth)
 
 	mux.HandleFunc(s.cfg.Feed.RSSPath, s.handleRSS)
 	mux.HandleFunc(s.cfg.Feed.SitemapPath, s.handleSitemap)

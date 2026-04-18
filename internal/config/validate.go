@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"path"
 	"regexp"
 	"strings"
@@ -197,7 +198,39 @@ func validateManagedRuntimeConfig(cfg *Config) []error {
 	if cfg.Admin.Debug.Pprof {
 		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.debug.pprof to be false"))
 	}
+	errs = append(errs, validateManagedRuntimeCallbackConfig(cfg.Foundry.Managed)...)
 	return errs
+}
+
+func validateManagedRuntimeCallbackConfig(managed ManagedRuntimeConfig) []error {
+	callbackURL := strings.TrimSpace(managed.CallbackURL)
+	sharedSecret := strings.TrimSpace(managed.SharedSecret)
+	if callbackURL == "" && sharedSecret == "" {
+		return nil
+	}
+	var errs []error
+	if callbackURL == "" {
+		errs = append(errs, fmt.Errorf("foundry.managed.callback_url is required when foundry.managed.shared_secret is set"))
+	} else if err := validateManagedCallbackURL(callbackURL); err != nil {
+		errs = append(errs, err)
+	}
+	if sharedSecret == "" {
+		errs = append(errs, fmt.Errorf("foundry.managed.shared_secret is required when foundry.managed.callback_url is set"))
+	} else if err := validateManagedSecret("foundry.managed.shared_secret", sharedSecret, false); err != nil {
+		errs = append(errs, err)
+	}
+	return errs
+}
+
+func validateManagedCallbackURL(value string) error {
+	u, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || u == nil || u.Host == "" {
+		return fmt.Errorf("foundry.managed.callback_url must be a valid URL")
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return fmt.Errorf("foundry.managed.callback_url must use http or https")
+	}
+	return nil
 }
 
 func validateManagedSecret(name, value string, requireBase64Key bool) error {
