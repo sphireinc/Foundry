@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -224,5 +226,51 @@ func TestUnmarshalYAMLPreservesExplicitAdminLocalOnlyFalse(t *testing.T) {
 	}
 	if cfg.Admin.LocalOnly {
 		t.Fatal("expected explicit admin.local_only=false to be preserved")
+	}
+}
+
+func TestManagedRuntimeConfigValidation(t *testing.T) {
+	cfg := &Config{}
+	cfg.ApplyDefaults()
+	cfg.Foundry.Managed.Enabled = true
+	cfg.Admin.Enabled = true
+	cfg.Admin.SessionSecret = strings.Repeat("a", 32)
+	cfg.Admin.TOTPSecretKey = base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32)))
+	if errs := Validate(cfg); len(errs) != 0 {
+		t.Fatalf("expected managed runtime config to validate, got %v", errs)
+	}
+
+	cfg.Admin.SessionSecret = "local-dev-secret"
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected managed runtime to reject development session secret")
+	}
+
+	cfg.Admin.SessionSecret = strings.Repeat("a", 32)
+	cfg.Admin.TOTPSecretKey = base64.StdEncoding.EncodeToString([]byte("short"))
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected managed runtime to reject short TOTP key")
+	}
+}
+
+func TestManagedRuntimeConfigParsesFromYAML(t *testing.T) {
+	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nfoundry:\n  managed:\n    enabled: true\nadmin:\n  enabled: true\n  session_secret: " + strings.Repeat("a", 32) + "\n  totp_secret_key: " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))) + "\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n")
+	var cfg Config
+	if err := UnmarshalYAML(body, &cfg); err != nil {
+		t.Fatalf("unmarshal managed config: %v", err)
+	}
+	if !cfg.ManagedRuntimeEnabled() {
+		t.Fatal("expected managed runtime to be enabled from YAML")
+	}
+}
+
+func TestManagedRuntimeDisabledDoesNotRequireAdminSecrets(t *testing.T) {
+	cfg := &Config{}
+	cfg.ApplyDefaults()
+	cfg.Foundry.Managed.Enabled = false
+	cfg.Admin.Enabled = true
+	cfg.Admin.SessionSecret = ""
+	cfg.Admin.TOTPSecretKey = ""
+	if errs := Validate(cfg); len(errs) != 0 {
+		t.Fatalf("expected non-managed config to allow missing admin secrets, got %v", errs)
 	}
 }

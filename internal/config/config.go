@@ -14,6 +14,7 @@ type Config struct {
 	BaseURL     string                `yaml:"base_url"`
 	Theme       string                `yaml:"theme"`
 	Environment string                `yaml:"environment"`
+	Foundry     FoundryConfig         `yaml:"foundry"`
 	Admin       AdminConfig           `yaml:"admin"`
 	Backup      BackupConfig          `yaml:"backup"`
 	DefaultLang string                `yaml:"default_lang"`
@@ -36,6 +37,14 @@ type Config struct {
 	Deploy      DeployConfig          `yaml:"deploy"`
 	Params      map[string]any        `yaml:"params"`
 	Menus       map[string][]MenuItem `yaml:"menus"`
+}
+
+type FoundryConfig struct {
+	Managed ManagedRuntimeConfig `yaml:"managed"`
+}
+
+type ManagedRuntimeConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type AdminConfig struct {
@@ -194,6 +203,10 @@ type MenuItem struct {
 
 func (c *Config) MarkAdminLocalOnlyExplicit() {
 	c.Admin.localOnlySet = true
+}
+
+func (c *Config) ManagedRuntimeEnabled() bool {
+	return c != nil && c.Foundry.Managed.Enabled
 }
 
 func (c *Config) ApplyDefaults() {
