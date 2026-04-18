@@ -98,6 +98,40 @@ func TestDoctorRunFailsOnLegacyAuthRecords(t *testing.T) {
 	}
 }
 
+func TestDoctorRunFailsManagedStorageCheck(t *testing.T) {
+	root := t.TempDir()
+	cfg := testProjectConfig(t, root)
+	cfg.Foundry.Managed.Enabled = true
+	cfg.Admin.Enabled = true
+	cfg.Admin.SessionSecret = strings.Repeat("a", 32)
+	cfg.Admin.TOTPSecretKey = "YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI="
+	cfg.PublicDir = filepath.Join(root, "missing-public")
+	if _, err := theme.Scaffold(cfg.ThemesDir, cfg.Theme); err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "internal", "generated"), 0o755); err != nil {
+		t.Fatalf("mkdir generated: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "internal", "generated", "plugins_gen.go"), []byte("package generated\n"), 0o644); err != nil {
+		t.Fatalf("write generated imports: %v", err)
+	}
+
+	wd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(wd) }()
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	cmd := command{}
+	err := cmd.Run(cfg, nil)
+	if err == nil {
+		t.Fatal("expected doctor failure for missing managed public storage")
+	}
+	if !strings.Contains(err.Error(), "problem") {
+		t.Fatalf("unexpected doctor error: %v", err)
+	}
+}
+
 func testProjectConfig(t *testing.T, root string) *config.Config {
 	t.Helper()
 	cfg := &config.Config{

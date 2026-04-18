@@ -167,6 +167,68 @@ func TestServerHelpersAndHandlers(t *testing.T) {
 	}
 }
 
+func TestManagedHealthEndpointHealthyAndDoesNotBreakRoutes(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Admin.Enabled = true
+	cfg.Foundry.Managed.Enabled = true
+	cfg.Foundry.Managed.InstanceID = "instance-123"
+	for _, dir := range []string{cfg.ContentDir, cfg.PublicDir, cfg.ThemesDir, cfg.DataDir, cfg.PluginsDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	oldTimeNow := timeNow
+	timeNow = func() time.Time {
+		return time.Date(2026, 4, 18, 12, 0, 0, 0, time.UTC)
+	}
+	t.Cleanup(func() { timeNow = oldTimeNow })
+
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), &hookRecorder{}, false)
+	mux := s.newMux()
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/__health", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected healthy status code, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode health response: %v", err)
+	}
+	if payload["status"] != "healthy" || payload["managed"] != true || payload["instance_id"] != "instance-123" {
+		t.Fatalf("unexpected health payload: %#v", payload)
+	}
+	if strings.Contains(rr.Body.String(), cfg.DataDir) {
+		t.Fatalf("health response leaked filesystem path: %s", rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/hook", nil))
+	if rr.Code != http.StatusOK || rr.Body.String() != "hook" {
+		t.Fatalf("expected existing hook route to keep working, got %d %q", rr.Code, rr.Body.String())
+	}
+}
+
+func TestManagedHealthEndpointDegraded(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Admin.Enabled = false
+	for _, dir := range []string{cfg.ContentDir, cfg.ThemesDir, cfg.DataDir, cfg.PluginsDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), &hookRecorder{}, false)
+
+	rr := httptest.NewRecorder()
+	s.newMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/__health", nil))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected degraded status code, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), cfg.PublicDir) {
+		t.Fatalf("health response leaked filesystem path: %s", rr.Body.String())
+	}
+}
+
 func TestServerChangeClassificationAndWatchHelpers(t *testing.T) {
 	cfg := testServerConfig(t)
 	s := &Server{cfg: cfg}
