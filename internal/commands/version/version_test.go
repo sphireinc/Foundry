@@ -40,3 +40,14 @@ func TestEmbeddedVersionFallback(t *testing.T) {
 		t.Fatal("expected embedded version fallback to be non-empty")
 	}
 }
+
+func TestCurrentReportsManagedRuntimeFromEnvironment(t *testing.T) {
+	t.Setenv("FOUNDRY_MANAGED_RUNTIME", "true")
+	meta := Current(t.TempDir())
+	if !meta.ManagedRuntime {
+		t.Fatal("expected managed runtime metadata when env flag is set")
+	}
+	if !strings.Contains(meta.String(), "Managed runtime: enabled") {
+		t.Fatalf("expected version string to show managed runtime, got %q", meta.String())
+	}
+}
