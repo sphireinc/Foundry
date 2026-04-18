@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/mail"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -17,6 +19,9 @@ const (
 	BootstrapSignatureAlgorithm = "hmac-sha256"
 	minBootstrapSecretLength    = 32
 	minBootstrapNonceLength     = 16
+	bootstrapStateDir           = "managed"
+	bootstrapStateFile          = "bootstrap-state.json"
+	bootstrapLockFile           = "bootstrap-state.lock"
 )
 
 type BootstrapPayload struct {
@@ -39,6 +44,21 @@ type SignedBootstrapPayload struct {
 
 type BootstrapValidationOptions struct {
 	Now time.Time
+}
+
+type BootstrapState struct {
+	WorkspaceID   string    `json:"workspace_id"`
+	InstanceID    string    `json:"instance_id"`
+	CompletedAt   time.Time `json:"completed_at"`
+	Nonce         string    `json:"nonce"`
+	PayloadSHA256 string    `json:"payload_sha256"`
+}
+
+type BootstrapApplyOptions struct {
+	DataDir string
+	Payload BootstrapPayload
+	Now     time.Time
+	Apply   func(BootstrapPayload) error
 }
 
 func SignBootstrapPayload(payload BootstrapPayload, secret []byte) (SignedBootstrapPayload, error) {
@@ -89,6 +109,97 @@ func ValidateBootstrapPayload(signed SignedBootstrapPayload, secret []byte, opts
 		return BootstrapPayload{}, fmt.Errorf("invalid bootstrap signature")
 	}
 	return signed.Payload, nil
+}
+
+func ApplyBootstrapOnce(opts BootstrapApplyOptions) (BootstrapState, error) {
+	dataDir := strings.TrimSpace(opts.DataDir)
+	if dataDir == "" {
+		return BootstrapState{}, fmt.Errorf("bootstrap data directory is required")
+	}
+	if opts.Apply == nil {
+		return BootstrapState{}, fmt.Errorf("bootstrap apply function is required")
+	}
+	if err := validateBootstrapPayloadFields(opts.Payload, time.Time{}); err != nil {
+		return BootstrapState{}, err
+	}
+
+	statePath, lockPath, err := bootstrapStatePaths(dataDir)
+	if err != nil {
+		return BootstrapState{}, err
+	}
+	if existing, err := ReadBootstrapState(dataDir); err == nil {
+		return existing, fmt.Errorf("bootstrap has already completed")
+	} else if !os.IsNotExist(err) {
+		return BootstrapState{}, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o700); err != nil {
+		return BootstrapState{}, fmt.Errorf("create bootstrap state directory: %w", err)
+	}
+	lock, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			return BootstrapState{}, fmt.Errorf("bootstrap is already in progress")
+		}
+		return BootstrapState{}, fmt.Errorf("create bootstrap lock: %w", err)
+	}
+	_ = lock.Close()
+	defer func() {
+		_ = os.Remove(lockPath)
+	}()
+
+	if _, err := os.Stat(statePath); err == nil {
+		state, readErr := ReadBootstrapState(dataDir)
+		if readErr != nil {
+			return BootstrapState{}, readErr
+		}
+		return state, fmt.Errorf("bootstrap has already completed")
+	} else if !os.IsNotExist(err) {
+		return BootstrapState{}, fmt.Errorf("inspect bootstrap state: %w", err)
+	}
+
+	if err := opts.Apply(opts.Payload); err != nil {
+		return BootstrapState{}, fmt.Errorf("apply bootstrap payload: %w", err)
+	}
+
+	completedAt := opts.Now
+	if completedAt.IsZero() {
+		completedAt = time.Now().UTC()
+	}
+	hash, err := bootstrapPayloadHash(opts.Payload)
+	if err != nil {
+		return BootstrapState{}, err
+	}
+	state := BootstrapState{
+		WorkspaceID:   strings.TrimSpace(opts.Payload.WorkspaceID),
+		InstanceID:    strings.TrimSpace(opts.Payload.InstanceID),
+		CompletedAt:   completedAt.UTC(),
+		Nonce:         strings.TrimSpace(opts.Payload.Nonce),
+		PayloadSHA256: hash,
+	}
+	if err := writeBootstrapState(statePath, state); err != nil {
+		return BootstrapState{}, err
+	}
+	return state, nil
+}
+
+func ReadBootstrapState(dataDir string) (BootstrapState, error) {
+	statePath, _, err := bootstrapStatePaths(dataDir)
+	if err != nil {
+		return BootstrapState{}, err
+	}
+	b, err := os.ReadFile(statePath)
+	if err != nil {
+		return BootstrapState{}, err
+	}
+	var state BootstrapState
+	if err := json.Unmarshal(b, &state); err != nil {
+		return BootstrapState{}, fmt.Errorf("decode bootstrap state: %w", err)
+	}
+	if strings.TrimSpace(state.WorkspaceID) == "" || strings.TrimSpace(state.InstanceID) == "" || state.CompletedAt.IsZero() {
+		return BootstrapState{}, fmt.Errorf("bootstrap state is incomplete")
+	}
+	return state, nil
 }
 
 func validateBootstrapPayloadFields(payload BootstrapPayload, now time.Time) error {
@@ -186,4 +297,43 @@ func bootstrapSignature(payload BootstrapPayload, secret []byte) (string, error)
 		return "", fmt.Errorf("sign bootstrap payload: %w", err)
 	}
 	return hex.EncodeToString(mac.Sum(nil)), nil
+}
+
+func bootstrapPayloadHash(payload BootstrapPayload) (string, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal bootstrap payload: %w", err)
+	}
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func bootstrapStatePaths(dataDir string) (string, string, error) {
+	dataDir = strings.TrimSpace(dataDir)
+	if dataDir == "" {
+		return "", "", fmt.Errorf("bootstrap data directory is required")
+	}
+	root, err := filepath.Abs(dataDir)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve bootstrap data directory: %w", err)
+	}
+	stateDir := filepath.Join(root, bootstrapStateDir)
+	return filepath.Join(stateDir, bootstrapStateFile), filepath.Join(stateDir, bootstrapLockFile), nil
+}
+
+func writeBootstrapState(path string, state BootstrapState) error {
+	body, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal bootstrap state: %w", err)
+	}
+	body = append(body, '\n')
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, body, 0o600); err != nil {
+		return fmt.Errorf("write bootstrap state: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("commit bootstrap state: %w", err)
+	}
+	return nil
 }

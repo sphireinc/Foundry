@@ -1,6 +1,9 @@
 package managed
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -116,6 +119,132 @@ func TestValidateBootstrapPayloadRejectsInvalidAdminPathAndCallbackURL(t *testin
 				t.Fatal("expected invalid payload to be rejected")
 			}
 		})
+	}
+}
+
+func TestApplyBootstrapOnceWritesStateAndRejectsReplay(t *testing.T) {
+	now := time.Date(2026, 4, 18, 12, 0, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+	applied := 0
+
+	state, err := ApplyBootstrapOnce(BootstrapApplyOptions{
+		DataDir: dataDir,
+		Payload: validBootstrapPayload(now),
+		Now:     now,
+		Apply: func(payload BootstrapPayload) error {
+			applied++
+			if payload.WorkspaceID != "workspace-123" {
+				t.Fatalf("unexpected workspace ID passed to apply: %q", payload.WorkspaceID)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("apply bootstrap: %v", err)
+	}
+	if applied != 1 {
+		t.Fatalf("expected apply callback once, got %d", applied)
+	}
+	if state.WorkspaceID != "workspace-123" || state.InstanceID != "instance-456" {
+		t.Fatalf("unexpected bootstrap state: %#v", state)
+	}
+	if state.CompletedAt != now {
+		t.Fatalf("expected completed_at %s, got %s", now, state.CompletedAt)
+	}
+	if state.Nonce == "" || state.PayloadSHA256 == "" {
+		t.Fatalf("expected nonce and payload hash in state: %#v", state)
+	}
+
+	read, err := ReadBootstrapState(dataDir)
+	if err != nil {
+		t.Fatalf("read bootstrap state: %v", err)
+	}
+	if read.PayloadSHA256 != state.PayloadSHA256 {
+		t.Fatalf("expected persisted hash %q, got %q", state.PayloadSHA256, read.PayloadSHA256)
+	}
+
+	_, err = ApplyBootstrapOnce(BootstrapApplyOptions{
+		DataDir: dataDir,
+		Payload: validBootstrapPayload(now.Add(time.Minute)),
+		Now:     now.Add(time.Minute),
+		Apply: func(BootstrapPayload) error {
+			applied++
+			return nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "already completed") {
+		t.Fatalf("expected replay rejection, got %v", err)
+	}
+	if applied != 1 {
+		t.Fatalf("expected replay not to call apply callback, got %d calls", applied)
+	}
+}
+
+func TestApplyBootstrapOnceFailedApplyLeavesNoCompletedMarker(t *testing.T) {
+	now := time.Date(2026, 4, 18, 12, 0, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+	expectedErr := errors.New("write site config")
+
+	if _, err := ApplyBootstrapOnce(BootstrapApplyOptions{
+		DataDir: dataDir,
+		Payload: validBootstrapPayload(now),
+		Now:     now,
+		Apply: func(BootstrapPayload) error {
+			return expectedErr
+		},
+	}); !errors.Is(err, expectedErr) {
+		t.Fatalf("expected apply error %v, got %v", expectedErr, err)
+	}
+	if _, err := ReadBootstrapState(dataDir); !os.IsNotExist(err) {
+		t.Fatalf("expected no completed bootstrap state, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, bootstrapStateDir, bootstrapLockFile)); !os.IsNotExist(err) {
+		t.Fatalf("expected bootstrap lock cleanup, got %v", err)
+	}
+
+	applied := 0
+	if _, err := ApplyBootstrapOnce(BootstrapApplyOptions{
+		DataDir: dataDir,
+		Payload: validBootstrapPayload(now),
+		Now:     now,
+		Apply: func(BootstrapPayload) error {
+			applied++
+			return nil
+		},
+	}); err != nil {
+		t.Fatalf("expected retry after failed apply to succeed, got %v", err)
+	}
+	if applied != 1 {
+		t.Fatalf("expected retry apply callback once, got %d", applied)
+	}
+}
+
+func TestApplyBootstrapOnceRejectsInProgressBootstrap(t *testing.T) {
+	now := time.Date(2026, 4, 18, 12, 0, 0, 0, time.UTC)
+	dataDir := t.TempDir()
+	lockDir := filepath.Join(dataDir, bootstrapStateDir)
+	if err := os.MkdirAll(lockDir, 0o700); err != nil {
+		t.Fatalf("create lock dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(lockDir, bootstrapLockFile), []byte("locked"), 0o600); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	called := false
+	_, err := ApplyBootstrapOnce(BootstrapApplyOptions{
+		DataDir: dataDir,
+		Payload: validBootstrapPayload(now),
+		Now:     now,
+		Apply: func(BootstrapPayload) error {
+			called = true
+			return nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "already in progress") {
+		t.Fatalf("expected in-progress rejection, got %v", err)
+	}
+	if called {
+		t.Fatal("expected in-progress bootstrap not to call apply callback")
 	}
 }
 
