@@ -250,16 +250,43 @@ func TestManagedRuntimeConfigValidation(t *testing.T) {
 	if errs := Validate(cfg); len(errs) == 0 {
 		t.Fatal("expected managed runtime to reject short TOTP key")
 	}
+
+	cfg.Admin.TOTPSecretKey = base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32)))
+	cfg.Foundry.Managed.CallbackURL = "https://control.example.com/runtime/register"
+	cfg.Foundry.Managed.SharedSecret = strings.Repeat("s", 32)
+	if errs := Validate(cfg); len(errs) != 0 {
+		t.Fatalf("expected managed runtime callback config to validate, got %v", errs)
+	}
+
+	cfg.Foundry.Managed.CallbackURL = "file:///tmp/register"
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected managed runtime to reject invalid callback URL")
+	}
+
+	cfg.Foundry.Managed.CallbackURL = "https://control.example.com/runtime/register"
+	cfg.Foundry.Managed.SharedSecret = "short"
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected managed runtime to reject short callback shared secret")
+	}
 }
 
 func TestManagedRuntimeConfigParsesFromYAML(t *testing.T) {
-	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nfoundry:\n  managed:\n    enabled: true\nadmin:\n  enabled: true\n  session_secret: " + strings.Repeat("a", 32) + "\n  totp_secret_key: " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))) + "\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n")
+	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nfoundry:\n  managed:\n    enabled: true\n    instance_id: instance-123\n    callback_url: https://control.example.com/runtime/register\n    shared_secret: " + strings.Repeat("s", 32) + "\nadmin:\n  enabled: true\n  session_secret: " + strings.Repeat("a", 32) + "\n  totp_secret_key: " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))) + "\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n")
 	var cfg Config
 	if err := UnmarshalYAML(body, &cfg); err != nil {
 		t.Fatalf("unmarshal managed config: %v", err)
 	}
 	if !cfg.ManagedRuntimeEnabled() {
 		t.Fatal("expected managed runtime to be enabled from YAML")
+	}
+	if cfg.Foundry.Managed.InstanceID != "instance-123" {
+		t.Fatalf("expected managed instance ID from YAML, got %q", cfg.Foundry.Managed.InstanceID)
+	}
+	if cfg.Foundry.Managed.CallbackURL != "https://control.example.com/runtime/register" {
+		t.Fatalf("expected managed callback URL from YAML, got %q", cfg.Foundry.Managed.CallbackURL)
+	}
+	if cfg.Foundry.Managed.SharedSecret != strings.Repeat("s", 32) {
+		t.Fatal("expected managed shared secret from YAML")
 	}
 }
 

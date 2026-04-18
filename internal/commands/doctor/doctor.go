@@ -13,6 +13,7 @@ import (
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/managed"
 	"github.com/sphireinc/foundry/internal/ops"
 	"github.com/sphireinc/foundry/internal/plugins"
 	"github.com/sphireinc/foundry/internal/renderer"
@@ -70,6 +71,9 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 	}
 	if cfg.ManagedRuntimeEnabled() {
 		add("managed_runtime", true, "enabled")
+		for _, check := range managed.CheckStorageLayout(cfg) {
+			add("managed_"+check.Name, check.Status == managed.HealthCheckPass, check.Message)
+		}
 	} else {
 		add("managed_runtime", true, "disabled")
 	}
