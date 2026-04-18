@@ -68,6 +68,11 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 	} else {
 		add("config", false, fmt.Sprintf("%d validation error(s)", len(errs)))
 	}
+	if cfg.ManagedRuntimeEnabled() {
+		add("managed_runtime", true, "enabled")
+	} else {
+		add("managed_runtime", true, "disabled")
+	}
 
 	checkDir := func(label, path string) {
 		info, err := os.Stat(path)

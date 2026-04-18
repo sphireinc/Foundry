@@ -31,6 +31,7 @@ type Metadata struct {
 	NearestTag     string `json:"nearest_tag,omitempty"`
 	CommitCount    int    `json:"commit_count,omitempty"`
 	Dirty          bool   `json:"dirty,omitempty"`
+	ManagedRuntime bool   `json:"managed_runtime"`
 }
 
 func Current(projectDir string) Metadata {
@@ -42,6 +43,9 @@ func Current(projectDir string) Metadata {
 		GOOS:        runtime.GOOS,
 		GOARCH:      runtime.GOARCH,
 		InstallMode: string(installmode.Detect(projectDir)),
+		ManagedRuntime: envBool("FOUNDRY_MANAGED_RUNTIME") ||
+			envBool("FOUNDRY_MANAGED_ENABLED") ||
+			envBool("FOUNDRY_CLOUD_MANAGED"),
 	}
 	if exe, err := os.Executable(); err == nil {
 		meta.Executable = exe
@@ -122,6 +126,7 @@ func (m Metadata) String() string {
 		fmt.Sprintf("Go: %s", m.GoVersion),
 		fmt.Sprintf("Target: %s/%s", m.GOOS, m.GOARCH),
 		fmt.Sprintf("Install mode: %s", m.InstallMode),
+		fmt.Sprintf("Managed runtime: %s", boolLabel(m.ManagedRuntime, "enabled", "disabled")),
 	}
 	if m.Executable != "" {
 		lines = append(lines, fmt.Sprintf("Executable: %s", m.Executable))
@@ -144,6 +149,15 @@ func (m Metadata) String() string {
 		lines = append(lines, fmt.Sprintf("Local changes: %s", boolLabel(m.Dirty, "dirty", "clean")))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func envBool(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "t", "true", "y", "yes", "on", "enabled":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m Metadata) ShortString() string {

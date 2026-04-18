@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"path"
 	"regexp"
@@ -139,6 +140,9 @@ func Validate(cfg *Config) []error {
 	if strings.TrimSpace(cfg.Admin.TOTPIssuer) == "" {
 		errs = append(errs, fmt.Errorf("admin.totp_issuer must not be empty"))
 	}
+	if cfg.ManagedRuntimeEnabled() {
+		errs = append(errs, validateManagedRuntimeConfig(cfg)...)
+	}
 	for _, name := range cfg.Plugins.Enabled {
 		if strings.TrimSpace(name) == "" {
 			continue
@@ -174,4 +178,68 @@ func Validate(cfg *Config) []error {
 	}
 
 	return errs
+}
+
+func validateManagedRuntimeConfig(cfg *Config) []error {
+	var errs []error
+	if cfg == nil {
+		return []error{fmt.Errorf("foundry.managed.enabled requires config")}
+	}
+	if !cfg.Admin.Enabled {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.enabled to be true"))
+	}
+	if err := validateManagedSecret("admin.session_secret", cfg.Admin.SessionSecret, false); err != nil {
+		errs = append(errs, err)
+	}
+	if err := validateManagedSecret("admin.totp_secret_key", cfg.Admin.TOTPSecretKey, true); err != nil {
+		errs = append(errs, err)
+	}
+	if cfg.Admin.Debug.Pprof {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.debug.pprof to be false"))
+	}
+	return errs
+}
+
+func validateManagedSecret(name, value string, requireBase64Key bool) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fmt.Errorf("foundry.managed.enabled requires %s", name)
+	}
+	if len(value) < 32 {
+		return fmt.Errorf("foundry.managed.enabled requires %s to be at least 32 characters", name)
+	}
+	normalized := strings.NewReplacer("-", "", "_", "", " ", "", ".", "").Replace(strings.ToLower(value))
+	for _, weak := range []string{
+		"localdevsecret",
+		"localruntimesecret",
+		"localsecretsencryptionkey32b",
+		"changeme",
+		"default",
+		"development",
+		"password",
+		"secret",
+		"example",
+	} {
+		if normalized == weak {
+			return fmt.Errorf("foundry.managed.enabled rejects development/default value for %s", name)
+		}
+	}
+	if requireBase64Key {
+		key, err := decodeManagedBase64Key(value)
+		if err != nil {
+			return fmt.Errorf("foundry.managed.enabled requires %s to be base64 encoded: %w", name, err)
+		}
+		if len(key) != 32 {
+			return fmt.Errorf("foundry.managed.enabled requires %s to decode to 32 bytes", name)
+		}
+	}
+	return nil
+}
+
+func decodeManagedBase64Key(raw string) ([]byte, error) {
+	raw = strings.TrimSpace(raw)
+	if key, err := base64.RawStdEncoding.DecodeString(raw); err == nil {
+		return key, nil
+	}
+	return base64.StdEncoding.DecodeString(raw)
 }
