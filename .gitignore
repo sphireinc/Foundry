@@ -8,9 +8,7 @@ test-results/
 ### Foundry planning files
 assessment-files/*
 assessment-*.txt
-Foundry-Cloud-API
-Foundry-Cloud-Dashboard
-Foundry-Cloud-Landing
+Foundry-Cloud-*
 roadmap-v2
 
 ### Foundry Internal
