@@ -10,7 +10,9 @@
     "test:e2e": "playwright test",
     "test:e2e:full": "go run ./scripts/cmd/e2e-run",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:acceptance": "playwright test --config=playwright.mvp.config.js",
+    "test:acceptance:headed": "playwright test --config=playwright.mvp.config.js --headed"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
