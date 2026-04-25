@@ -1,0 +1,16 @@
+name: syntaxhighlight
+title: Syntax Highlight
+version: 1.0.0
+description: Adds syntax highlighting to fenced code blocks with a copy button and language label
+author: Foundry Contributors
+homepage: https://github.com/sphireinc/foundry/plugins/syntaxhighlight
+license: MIT
+foundry_api: v1
+min_foundry_version: 0.1.0
+compatibility_version: v1
+permissions:
+  render:
+    assets:
+      inject_css: true
+    after_render:
+      rewrite: true
