@@ -187,6 +187,34 @@ func TestHighlightJSON(t *testing.T) {
 	}
 }
 
+func TestHighlightHTML(t *testing.T) {
+	out := highlightHTML("&lt;div&gt;&lt;/div&gt;")
+	if !strings.Contains(out, `sh-tag`) {
+		t.Fatal("expected tag spans in HTML output")
+	}
+	out2 := highlightHTML("&lt;a href=&quot;url&quot;&gt;&lt;/a&gt;")
+	if !strings.Contains(out2, `sh-attr`) {
+		t.Fatal("expected attr spans in HTML output")
+	}
+}
+
+func TestHighlightCSS(t *testing.T) {
+	out := highlightCSS(".foo {\n  color: red;\n}")
+	if !strings.Contains(out, `sh-keyword`) {
+		t.Fatal("expected selector spans in CSS output")
+	}
+	if !strings.Contains(out, `sh-attr`) {
+		t.Fatal("expected property spans in CSS output")
+	}
+}
+
+func TestHighlightJSONString(t *testing.T) {
+	out := highlightJSON(`{&quot;query&quot;: &quot;value&quot;}`)
+	if !strings.Contains(out, `sh-string`) {
+		t.Fatal("expected string spans for HTML-escaped JSON strings containing q/u")
+	}
+}
+
 func TestHighlightUnknownLangPassthrough(t *testing.T) {
 	code := "some unknown language code"
 	if highlightCode(code, "brainfuck") != code {

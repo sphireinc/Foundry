@@ -127,7 +127,7 @@ var (
 	yamlValueRE  = regexp.MustCompile(`(?m)(:\s+)(.+)$`)
 	yamlCommentRE = regexp.MustCompile(`(#[^\n]*)`)
 
-	jsonStringRE = regexp.MustCompile("(?s)(&quot;[^&quot;]*&quot;)")
+	jsonStringRE = regexp.MustCompile(`(?s)(&quot;(?:[^&]|&[^q]|&q[^u]|&qu[^o]|&quo[^t])*&quot;)`)
 	jsonNumberRE = regexp.MustCompile(`\b(\d+(?:\.\d+)?)\b`)
 	jsonBoolRE   = regexp.MustCompile(`\b(true|false|null)\b`)
 
