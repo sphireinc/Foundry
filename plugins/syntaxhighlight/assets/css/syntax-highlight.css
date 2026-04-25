@@ -1,0 +1,93 @@
+:root {
+  --sh-bg: #1e1e2e;
+  --sh-fg: #cdd6f4;
+  --sh-border: #313244;
+  --sh-toolbar-bg: #181825;
+  --sh-toolbar-fg: #a6adc8;
+  --sh-keyword: #cba6f7;
+  --sh-string: #a6e3a1;
+  --sh-comment: #6c7086;
+  --sh-number: #fab387;
+  --sh-builtin: #89dceb;
+  --sh-attr: #89b4fa;
+  --sh-tag: #f38ba8;
+  --sh-flag: #f9e2af;
+  --sh-punctuation: #bac2de;
+}
+
+.sh-wrapper {
+  position: relative;
+  margin: 1.5rem 0;
+  border: 1px solid var(--sh-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.sh-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.85rem;
+  background: var(--sh-toolbar-bg);
+  border-bottom: 1px solid var(--sh-border);
+}
+
+.sh-lang {
+  font-size: 0.72rem;
+  font-family: inherit;
+  color: var(--sh-toolbar-fg);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.sh-copy {
+  font-size: 0.72rem;
+  font-family: inherit;
+  color: var(--sh-toolbar-fg);
+  background: transparent;
+  border: 1px solid var(--sh-border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.sh-copy:hover {
+  color: var(--sh-fg);
+  border-color: var(--sh-fg);
+}
+
+.sh-copy.sh-copied {
+  color: var(--sh-string);
+  border-color: var(--sh-string);
+}
+
+.sh-pre {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  background: var(--sh-bg);
+  color: var(--sh-fg);
+  font-size: 0.875rem;
+  line-height: 1.65;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+.sh-pre code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.sh-keyword    { color: var(--sh-keyword); font-weight: 500; }
+.sh-string     { color: var(--sh-string); }
+.sh-comment    { color: var(--sh-comment); font-style: italic; }
+.sh-number     { color: var(--sh-number); }
+.sh-builtin    { color: var(--sh-builtin); }
+.sh-attr       { color: var(--sh-attr); }
+.sh-tag        { color: var(--sh-tag); }
+.sh-flag       { color: var(--sh-flag); }
+.sh-punctuation { color: var(--sh-punctuation); }
+
