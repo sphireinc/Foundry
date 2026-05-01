@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/customfields"
@@ -284,17 +283,5 @@ func buildSummary(explicit, body string) string {
 	if strings.TrimSpace(explicit) != "" {
 		return strings.TrimSpace(explicit)
 	}
-
-	body = strings.TrimSpace(body)
-	body = strings.ReplaceAll(body, "\n", " ")
-	body = strings.ReplaceAll(body, "\r", " ")
-	body = strings.Join(strings.Fields(body), " ")
-
-	const maxLen = 180
-	if utf8.RuneCountInString(body) <= maxLen {
-		return body
-	}
-
-	runes := []rune(body)
-	return strings.TrimSpace(string(runes[:maxLen])) + "..."
+	return ""
 }

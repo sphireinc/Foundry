@@ -41,6 +41,7 @@ export const bindDashboardEvents = (ctx) => {
     parseTagInput,
     parseDocumentEditor,
     buildDocumentRaw,
+    zenMode,
   } = ctx;
 
   const pluginRecordByName = (name) =>
@@ -67,7 +68,9 @@ export const bindDashboardEvents = (ctx) => {
     if (pluginRecord?.security_mismatches?.length) {
       lines.push('');
       lines.push(`Detected security mismatches: ${pluginRecord.security_mismatches.length}`);
-      lines.push(...pluginRecord.security_mismatches.slice(0, 3).map((diag) => `- ${diag.message}`));
+      lines.push(
+        ...pluginRecord.security_mismatches.slice(0, 3).map((diag) => `- ${diag.message}`)
+      );
     } else {
       lines.push('');
       lines.push('Proceeding will explicitly approve the plugin risk profile.');
@@ -268,7 +271,9 @@ export const bindDashboardEvents = (ctx) => {
         .filter(Boolean)
         .map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment));
       const contractKey = path[0];
-      const contract = (state.sharedFieldContracts || []).find((entry) => entry.key === contractKey);
+      const contract = (state.sharedFieldContracts || []).find(
+        (entry) => entry.key === contractKey
+      );
       const schema = (contract?.fields || []).find((entry) => entry.name === path[1]);
       if (!schema) return;
       const current = getValueAtPath(state.customFields?.values || {}, path);
@@ -286,7 +291,11 @@ export const bindDashboardEvents = (ctx) => {
         .map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment));
       const wrapper = { documentFieldValues: state.customFields?.values || {} };
       removeNestedFieldValue(wrapper, path);
-      state.customFields = state.customFields || { path: 'content/custom-fields.yaml', raw: '', values: {} };
+      state.customFields = state.customFields || {
+        path: 'content/custom-fields.yaml',
+        raw: '',
+        values: {},
+      };
       state.customFields.values = wrapper.documentFieldValues;
       compareSnapshot('customFields', state.customFields.values || {});
       render();
@@ -411,6 +420,7 @@ export const bindDashboardEvents = (ctx) => {
       state.documentEditor = {
         source_path: saved.source_path || document.getElementById('document-source-path').value,
         raw: saved.raw || document.getElementById('document-raw').value,
+        html_body: state.documentEditor.html_body || '',
         version_comment: '',
         lock_token: state.documentEditor.lock_token,
       };
@@ -453,6 +463,22 @@ export const bindDashboardEvents = (ctx) => {
       state.error = error.message || String(error);
       render();
     }
+  });
+
+  document.getElementById('document-zen-button')?.addEventListener('click', async () => {
+    await zenMode?.open?.();
+  });
+
+  document.getElementById('zen-close')?.addEventListener('click', () => {
+    zenMode?.close?.();
+  });
+
+  document.getElementById('zen-save-document')?.addEventListener('click', () => {
+    zenMode?.save?.();
+  });
+
+  document.getElementById('zen-preview-refresh')?.addEventListener('click', async () => {
+    await zenMode?.refreshPreview?.();
   });
 
   document.getElementById('document-reset-button')?.addEventListener('click', () => {
@@ -980,8 +1006,10 @@ export const bindDashboardEvents = (ctx) => {
         const detail = await admin.documents.get(sourcePath, { include_drafts: 1 });
         let raw = detail.raw_body || '';
         const parsed = parseDocumentEditor(raw, sourcePath);
-        if (state.documentBulk.author) parsed.extraLines = parsed.extraLines.filter((line) => !/^author:\s*/i.test(line));
-        if (state.documentBulk.author) parsed.extraLines.push(`author: ${JSON.stringify(state.documentBulk.author)}`);
+        if (state.documentBulk.author)
+          parsed.extraLines = parsed.extraLines.filter((line) => !/^author:\s*/i.test(line));
+        if (state.documentBulk.author)
+          parsed.extraLines.push(`author: ${JSON.stringify(state.documentBulk.author)}`);
         if (state.documentBulk.lang) parsed.fields.lang = state.documentBulk.lang;
         if (state.documentBulk.tags) {
           parsed.fields.tags = Array.from(
@@ -996,10 +1024,22 @@ export const bindDashboardEvents = (ctx) => {
             ])
           );
         }
-        raw = buildDocumentRaw(parsed.fields, parsed.body, parsed.extraLines, parsed.fields.lang || 'en');
-        await admin.documents.save({ source_path: sourcePath, raw, version_comment: 'Bulk editorial update' });
+        raw = buildDocumentRaw(
+          parsed.fields,
+          parsed.body,
+          parsed.extraLines,
+          parsed.fields.lang || 'en'
+        );
+        await admin.documents.save({
+          source_path: sourcePath,
+          raw,
+          version_comment: 'Bulk editorial update',
+        });
         if (state.documentBulk.status) {
-          await admin.documents.setStatus({ source_path: sourcePath, status: state.documentBulk.status });
+          await admin.documents.setStatus({
+            source_path: sourcePath,
+            status: state.documentBulk.status,
+          });
         }
       }
       state.selectedDocuments = [];
@@ -1262,8 +1302,7 @@ export const bindDashboardEvents = (ctx) => {
 
   document.getElementById('session-filter-form')?.addEventListener('submit', (event) => {
     event.preventDefault();
-    state.sessionFilters.username =
-      document.getElementById('session-filter-username')?.value || '';
+    state.sessionFilters.username = document.getElementById('session-filter-username')?.value || '';
     render();
   });
 
@@ -1273,9 +1312,9 @@ export const bindDashboardEvents = (ctx) => {
   });
 
   document.getElementById('session-select-all')?.addEventListener('click', () => {
-    const visibleSessionIDs = Array.from(
-      root.querySelectorAll('[data-select-session]')
-    ).map((input) => String(input.dataset.selectSession || '').trim()).filter(Boolean);
+    const visibleSessionIDs = Array.from(root.querySelectorAll('[data-select-session]'))
+      .map((input) => String(input.dataset.selectSession || '').trim())
+      .filter(Boolean);
     const allSelected =
       visibleSessionIDs.length > 0 &&
       visibleSessionIDs.every((sessionID) => state.selectedSessions.includes(sessionID));
@@ -1655,7 +1694,11 @@ export const bindDashboardEvents = (ctx) => {
 
   root.querySelectorAll('[data-restore-backup]').forEach((button) => {
     button.addEventListener('click', async () => {
-      if (!window.confirm(`Restore backup ${button.dataset.restoreBackup}? The current content tree will be snapshotted first.`)) {
+      if (
+        !window.confirm(
+          `Restore backup ${button.dataset.restoreBackup}? The current content tree will be snapshotted first.`
+        )
+      ) {
         return;
       }
       try {
@@ -1696,27 +1739,31 @@ export const bindDashboardEvents = (ctx) => {
     }
   });
 
-  document.getElementById('operations-backup-git-form')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    try {
-      const next = structuredClone(state.settingsForm || {});
-      next.Backup = next.Backup || {};
-      next.Backup.GitRemoteURL = document.getElementById('operations-git-remote-url')?.value || '';
-      next.Backup.GitBranch = document.getElementById('operations-git-branch')?.value || 'main';
-      next.Backup.GitPushOnChange = !!document.getElementById('operations-git-push-on-change')?.checked;
-      const saved =
-        typeof admin.settings?.saveForm === 'function'
-          ? await admin.settings.saveForm({ value: next })
-          : await admin.raw.post('/api/settings/form/save', { value: next });
-      state.settingsForm = saved?.value || next;
-      setFlash('Git backup settings saved.');
-      await fetchAll(false);
-      navigate('operations');
-    } catch (error) {
-      state.error = error.message || String(error);
-      render();
-    }
-  });
+  document
+    .getElementById('operations-backup-git-form')
+    ?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const next = structuredClone(state.settingsForm || {});
+        next.Backup = next.Backup || {};
+        next.Backup.GitRemoteURL =
+          document.getElementById('operations-git-remote-url')?.value || '';
+        next.Backup.GitBranch = document.getElementById('operations-git-branch')?.value || 'main';
+        next.Backup.GitPushOnChange = !!document.getElementById('operations-git-push-on-change')
+          ?.checked;
+        const saved =
+          typeof admin.settings?.saveForm === 'function'
+            ? await admin.settings.saveForm({ value: next })
+            : await admin.raw.post('/api/settings/form/save', { value: next });
+        state.settingsForm = saved?.value || next;
+        setFlash('Git backup settings saved.');
+        await fetchAll(false);
+        navigate('operations');
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
 
   document.getElementById('update-refresh')?.addEventListener('click', async () => {
     try {
@@ -1902,9 +1949,7 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('debug-validate-site')?.addEventListener('click', async () => {
     try {
       state.siteValidation = await admin.raw.post('/api/debug/validate', {});
-      setFlash(
-        `Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`
-      );
+      setFlash(`Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`);
       render();
     } catch (error) {
       state.error = error.message || String(error);
@@ -1915,9 +1960,7 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('overview-validate-site')?.addEventListener('click', async () => {
     try {
       state.siteValidation = await admin.raw.post('/api/debug/validate', {});
-      setFlash(
-        `Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`
-      );
+      setFlash(`Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`);
       navigate('debug');
     } catch (error) {
       state.error = error.message || String(error);

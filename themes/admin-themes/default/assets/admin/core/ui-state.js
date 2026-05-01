@@ -40,6 +40,7 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
     state.documentEditor = {
       source_path: '',
       raw: buildDefaultMarkdown(createKind),
+      html_body: '',
       version_comment: '',
       lock_token: '',
     };
@@ -55,6 +56,12 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
     };
     state.documentLock = null;
     state.documentPreview = null;
+    state.documentZenMode = {
+      open: false,
+      loading: false,
+      error: '',
+      previewHtml: '',
+    };
   };
 
   const pushToast = (message, tone = 'info') => {
@@ -95,7 +102,14 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
   const dirtyMessage = () =>
     Object.entries(state.dirty)
       .filter(([, value]) => value)
-      .map(([key]) => ({ customCss: 'custom css', customFields: 'shared custom fields', settings: 'settings form' }[key] || key))
+      .map(
+        ([key]) =>
+          ({
+            customCss: 'custom css',
+            customFields: 'shared custom fields',
+            settings: 'settings form',
+          })[key] || key
+      )
       .join(', ');
 
   const hasUnsavedChanges = () => Object.values(state.dirty).some(Boolean);

@@ -147,7 +147,7 @@ func (r *Router) handleIndex(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob:; media-src 'self' blob:; frame-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")
+	w.Header().Set("Content-Security-Policy", r.adminContentSecurityPolicy())
 	_, _ = w.Write(body)
 }
 
@@ -179,6 +179,10 @@ func (r *Router) routePath(suffix string) string {
 		suffix = "/" + suffix
 	}
 	return r.adminBasePath() + suffix
+}
+
+func (r *Router) adminContentSecurityPolicy() string {
+	return "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob:; media-src 'self' blob:; frame-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'"
 }
 
 // handlePluginExtensionAsset serves plugin-declared admin JS/CSS bundles after
