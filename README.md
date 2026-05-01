@@ -10,7 +10,7 @@
   <img height="300" src="readme-assets/logo.png" alt="logo">
 </p>
 
-Foundry is a Markdown-first CMS written in Go. It keeps content in files, renders through themes, and extends through both first-class compiled Go plugins and out-of-process RPC plugins.
+Foundry is a Markdown-first CMS written in Go. It keeps content in files, renders through themes, includes a Quill-powered rich text editor in the admin UI, and extends through both first-class compiled Go plugins and out-of-process RPC plugins.
 
 The project is aimed at teams that want a file-based workflow without giving up CMS-style features such as taxonomies, theme-owned custom fields, feeds, plugin hooks, and an admin surface.
 
@@ -62,7 +62,6 @@ public/__foundry/*.json
 - Generated during build
 - No server required
 
-
 ## Quick Start
 
 The fastest way to get the project running locally is via Docker:
@@ -103,7 +102,7 @@ HTTPS origin.
 Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, run Foundry locally, or run it in portable standalone mode without Docker.
 
 Foundry will run on `http://localhost:8080/` by default, and the admin panel
-is reachable at `http://localhost:8080/__admin`. The default login on a 
+is reachable at `http://localhost:8080/__admin`. The default login on a
 new install is `admin:admin`.
 
 Production note: set `admin.session_secret` in `content/config/site.yaml` or
@@ -609,6 +608,7 @@ On Linux, user services may need lingering enabled to survive logout and reboot:
 ```bash
 loginctl enable-linger "$USER"
 ```
+
 Embedded media uses normal Markdown image syntax:
 
 ```md
@@ -726,7 +726,7 @@ You can also enable debounced on-change backups in `content/config/site.yaml`:
 ```yaml
 backup:
   enabled: true
-  dir: ".foundry/backups"
+  dir: '.foundry/backups'
   on_change: true
   debounce_seconds: 45
   retention_count: 20
@@ -1091,7 +1091,7 @@ admin:
 
 The dfault admin theme now includes:
 
-- a structured frontmatter editor that stays in sync with raw Markdown
+- a Quill-based rich text editor for pages and posts, with Markdown still stored underneath
 - media-picker insertion for stable `media:` references
 - document and media history/trash views with restore and purge actions
 - restore-preview flows that load a diff before a document restore is committed
@@ -1280,7 +1280,6 @@ go run ./cmd/plugin-sync
 ```
 
 The main CI workflow also verifies formatting, syncs generated plugin imports, builds the project, runs tests, and publishes the coverage report to GitHub Pages on `main`.
-
 
 # License
 
