@@ -55,6 +55,11 @@ bin/
 pkg/
 tmp/
 
+# Keep the vendored Quill assets checked in for offline/admin deployments.
+!themes/admin-themes/default/assets/vendor/
+!themes/admin-themes/default/assets/vendor/quill/
+!themes/admin-themes/default/assets/vendor/quill/**
+
 # Go workspace file
 go.work
 

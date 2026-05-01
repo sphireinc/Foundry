@@ -29,6 +29,11 @@ import {
   updateNestedFieldValue,
 } from './admin/editor/frontmatter.js';
 import { createEditorSync } from './admin/editor/sync.js';
+import {
+  createQuillEditorController,
+  renderQuillToolbar,
+  renderZenModeModal,
+} from './admin/editor/quill.js';
 import { bindDashboardEvents } from './admin/events/dashboard.js';
 import { createDebugViews } from './admin/views/debug.js';
 import { createExtensionViews } from './admin/views/extensions.js';
@@ -229,6 +234,15 @@ import {
     parseDocumentEditor,
     buildDocumentRaw,
   });
+  const zenMode = createQuillEditorController({
+    state,
+    admin,
+    render: () => render(),
+    defaultLang,
+    renderPreviewFrame,
+    parseDocumentEditor,
+    buildDocumentRaw,
+  });
 
   const capabilitySet = () => new Set(state.session?.capabilities || []);
   const hasCapability = (capability) => {
@@ -348,12 +362,15 @@ import {
     state.documentEditor = {
       source_path: detail.source_path,
       raw: detail.raw_body,
+      html_body: detail.html_body || '',
       version_comment: '',
       lock_token: '',
     };
     state.documentFieldSchema = detail.field_schema || [];
     state.documentFieldValues = clone(detail.fields || {});
-    state.documentContractTitles = Array.isArray(detail.field_contract_titles) ? [...detail.field_contract_titles] : [];
+    state.documentContractTitles = Array.isArray(detail.field_contract_titles)
+      ? [...detail.field_contract_titles]
+      : [];
     state.documentMeta = {
       status: detail.status || 'draft',
       author: detail.author || '',
@@ -616,7 +633,11 @@ import {
   const updateSharedFieldValue = (path, nextValue) => {
     const wrapper = { documentFieldValues: state.customFields?.values || {} };
     updateNestedFieldValue(wrapper, path, nextValue);
-    state.customFields = state.customFields || { path: 'content/custom-fields.yaml', raw: '', values: {} };
+    state.customFields = state.customFields || {
+      path: 'content/custom-fields.yaml',
+      raw: '',
+      values: {},
+    };
     state.customFields.values = wrapper.documentFieldValues;
     compareSnapshot('customFields', state.customFields.values || {});
   };
@@ -624,7 +645,8 @@ import {
   const renderSharedFieldSchemaControl = (schema, contractKey, path = []) => {
     const fullPath = [contractKey, ...path, schema.name];
     const pathValue = fullPath.join('.');
-    const value = getValueAtPath(state.customFields?.values || {}, fullPath) ?? defaultValueForSchema(schema);
+    const value =
+      getValueAtPath(state.customFields?.values || {}, fullPath) ?? defaultValueForSchema(schema);
     const label = schema.label || schema.name;
     const help = schema.help ? `<div class="muted">${escapeHTML(schema.help)}</div>` : '';
     const disabledAttr = canManageSharedFields() ? '' : ' disabled aria-disabled="true"';
@@ -834,7 +856,18 @@ import {
               }
             </div>
             <div class="stack">
-              <label>Raw Markdown<textarea id="document-raw" rows="20" spellcheck="false">${escapeHTML(state.documentEditor.raw)}</textarea></label>
+              <div class="quill-editor-shell">
+                <div class="quill-editor-header">
+                  <div>
+                    <strong>Content</strong>
+                    <div class="muted">Images uploaded here are saved in Foundry media.</div>
+                  </div>
+                  <span id="document-quill-status" class="status-line">Editor ready.</span>
+                </div>
+                ${renderQuillToolbar('document-quill-toolbar')}
+                <div id="document-quill-editor" class="document-quill-editor" aria-label="Article body editor"></div>
+              </div>
+              <textarea id="document-raw" hidden rows="20" spellcheck="false">${escapeHTML(state.documentEditor.raw)}</textarea>
               <div class="media-picker">
                 <div class="media-picker-header">
                   <div>
@@ -870,6 +903,7 @@ import {
           <div class="toolbar">
             <button type="submit">Save Document</button>
             <button type="button" class="ghost" id="document-preview-button">Preview</button>
+            <button type="button" class="ghost" id="document-zen-button">Zen Mode</button>
             <button type="button" class="ghost" id="document-reset-button">New Draft</button>
           </div>
         </form>
@@ -916,7 +950,9 @@ import {
           <div class="toolbar"><button type="submit" ${saveEnabled ? '' : 'disabled aria-disabled="true" title="Saving shared custom fields requires config.manage"'}>Save Shared Custom Fields</button></div>
         </form>
       </div>`,
-      contracts.length ? `${contracts.length} shared contract${contracts.length === 1 ? '' : 's'} from the active theme` : 'No shared contracts declared'
+      contracts.length
+        ? `${contracts.length} shared contract${contracts.length === 1 ? '' : 's'} from the active theme`
+        : 'No shared contracts declared'
     );
   };
 
@@ -928,7 +964,9 @@ import {
       if (filters.lang && doc.lang !== filters.lang) return false;
       if (
         filters.author &&
-        !String(doc.author || '').toLowerCase().includes(String(filters.author).toLowerCase())
+        !String(doc.author || '')
+          .toLowerCase()
+          .includes(String(filters.author).toLowerCase())
       ) {
         return false;
       }
@@ -1024,9 +1062,23 @@ import {
             <form id="document-search-form" class="panel-pad stack">
               <label>Search Documents<input id="document-search-query" type="search" value="${escapeHTML(state.documentQuery)}" placeholder="Search title, slug, URL, summary, tags, or path"></label>
               <div class="frontmatter-grid">
-                <label>Status<select id="document-filter-status"><option value="">Any</option>${['Draft','In Review','Scheduled','Published','Archived'].map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
-                <label>Type<select id="document-filter-type"><option value="">Any</option>${Array.from(new Set((state.documents || []).map((doc) => doc.type).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.type === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
-                <label>Language<select id="document-filter-lang"><option value="">Any</option>${Array.from(new Set((state.documents || []).map((doc) => doc.lang).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.lang === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Status<select id="document-filter-status"><option value="">Any</option>${['Draft', 'In Review', 'Scheduled', 'Published', 'Archived'].map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Type<select id="document-filter-type"><option value="">Any</option>${Array.from(
+                  new Set((state.documents || []).map((doc) => doc.type).filter(Boolean))
+                )
+                  .map(
+                    (entry) =>
+                      `<option value="${escapeHTML(entry)}" ${state.documentFilters.type === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
+                  )
+                  .join('')}</select></label>
+                <label>Language<select id="document-filter-lang"><option value="">Any</option>${Array.from(
+                  new Set((state.documents || []).map((doc) => doc.lang).filter(Boolean))
+                )
+                  .map(
+                    (entry) =>
+                      `<option value="${escapeHTML(entry)}" ${state.documentFilters.lang === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
+                  )
+                  .join('')}</select></label>
                 <label>Author<input id="document-filter-author" type="text" value="${escapeHTML(state.documentFilters.author || '')}" placeholder="Filter by author"></label>
                 <label>Tag<input id="document-filter-tag" type="text" value="${escapeHTML(state.documentFilters.tag || '')}" placeholder="Exact tag"></label>
                 <label>Category<input id="document-filter-category" type="text" value="${escapeHTML(state.documentFilters.category || '')}" placeholder="Exact category"></label>
@@ -1042,11 +1094,13 @@ import {
           `,
             'Keep management here, then jump into Editor to write'
           )}
-          ${panel('Bulk Editorial Actions', `
+          ${panel(
+            'Bulk Editorial Actions',
+            `
             <div class="panel-pad stack">
               <div class="note">${selectedDocCount ? `${escapeHTML(selectedDocCount)} documents selected.` : 'Select documents from the list to run bulk editorial actions.'}</div>
               <div class="frontmatter-grid">
-                <label>Status<select id="document-bulk-status"><option value="">No change</option>${['draft','in_review','scheduled','published','archived'].map((entry) => `<option value="${entry}" ${state.documentBulk.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Status<select id="document-bulk-status"><option value="">No change</option>${['draft', 'in_review', 'scheduled', 'published', 'archived'].map((entry) => `<option value="${entry}" ${state.documentBulk.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
                 <label>Author<input id="document-bulk-author" type="text" value="${escapeHTML(state.documentBulk.author || '')}" placeholder="Set author"></label>
                 <label>Language<input id="document-bulk-lang" type="text" value="${escapeHTML(state.documentBulk.lang || '')}" placeholder="Set lang"></label>
                 <label>Tags<input id="document-bulk-tags" type="text" value="${escapeHTML(state.documentBulk.tags || '')}" placeholder="append tags"></label>
@@ -1058,7 +1112,8 @@ import {
                 <button type="button" class="ghost" id="document-bulk-apply" ${selectedDocCount ? '' : 'disabled'}>Apply Bulk Changes</button>
               </div>
             </div>`,
-            'Workflow, taxonomy, language, and author updates for selected documents')}
+            'Workflow, taxonomy, language, and author updates for selected documents'
+          )}
           ${panel('Documents', `${renderTableControls(state, 'documents', filteredDocuments.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search or filters. Try a broader query, clear filters, or create a new page/post.</div>'}</div>`, `${filteredDocuments.length} matching documents`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed`)}
         </div>
@@ -1165,8 +1220,22 @@ import {
             <form id="media-upload-form" class="panel-pad stack">
               <label>Search Library<input id="media-search-query" type="search" value="${escapeHTML(state.mediaQuery)}" placeholder="Search name, reference, metadata, or tags"></label>
               <div class="frontmatter-grid">
-                <label>Kind<select id="media-filter-kind"><option value="">Any</option>${Array.from(new Set((state.media || []).map((item) => item.kind).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.mediaFilters.kind === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
-                <label>Collection<select id="media-filter-collection"><option value="">Any</option>${Array.from(new Set((state.media || []).map((item) => item.collection).filter(Boolean))).map((entry) => `<option value="${escapeHTML(entry)}" ${state.mediaFilters.collection === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
+                <label>Kind<select id="media-filter-kind"><option value="">Any</option>${Array.from(
+                  new Set((state.media || []).map((item) => item.kind).filter(Boolean))
+                )
+                  .map(
+                    (entry) =>
+                      `<option value="${escapeHTML(entry)}" ${state.mediaFilters.kind === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
+                  )
+                  .join('')}</select></label>
+                <label>Collection<select id="media-filter-collection"><option value="">Any</option>${Array.from(
+                  new Set((state.media || []).map((item) => item.collection).filter(Boolean))
+                )
+                  .map(
+                    (entry) =>
+                      `<option value="${escapeHTML(entry)}" ${state.mediaFilters.collection === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
+                  )
+                  .join('')}</select></label>
                 <label>Usage<select id="media-filter-usage"><option value="">Any</option><option value="used" ${state.mediaFilters.usage === 'used' ? 'selected' : ''}>Used</option><option value="unused" ${state.mediaFilters.usage === 'unused' ? 'selected' : ''}>Unused</option></select></label>
               </div>
               <label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="videos">videos</option><option value="audio">audio</option><option value="documents">documents</option></select></label>
@@ -1179,9 +1248,11 @@ import {
               </div>
             </form>
           `,
-          'Uploads return stable media: references that can be used in Markdown'
+            'Uploads return stable media: references that can be used in Markdown'
           )}
-          ${panel('Bulk Media Actions', `
+          ${panel(
+            'Bulk Media Actions',
+            `
             <div class="panel-pad stack">
               <div class="note">${state.selectedMediaLibrary.length ? `${escapeHTML(state.selectedMediaLibrary.length)} media items selected.` : 'Select media from the library to apply bulk tags.'}</div>
               <div class="frontmatter-grid">
@@ -1193,7 +1264,8 @@ import {
                 <button type="button" class="ghost" id="media-bulk-apply" ${state.selectedMediaLibrary.length ? '' : 'disabled'}>Apply Tags</button>
               </div>
             </div>`,
-            'Bulk tag updates for selected media')}
+            'Bulk tag updates for selected media'
+          )}
           ${panel('Library', `${renderTableControls(state, 'media', filteredMedia.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media matched the current search or filters. Upload a file or clear the filters.</div>'}</div>`, `${filteredMedia.length} matching media items`)}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed`)}
         </div>
@@ -1307,12 +1379,16 @@ import {
       const filteredAudit = (state.audit || []).filter((entry) => {
         if (
           filters.actor &&
-          !String(entry.actor || '').toLowerCase().includes(String(filters.actor).toLowerCase())
+          !String(entry.actor || '')
+            .toLowerCase()
+            .includes(String(filters.actor).toLowerCase())
         )
           return false;
         if (
           filters.action &&
-          !String(entry.action || '').toLowerCase().includes(String(filters.action).toLowerCase())
+          !String(entry.action || '')
+            .toLowerCase()
+            .includes(String(filters.action).toLowerCase())
         )
           return false;
         if (
@@ -1594,10 +1670,64 @@ import {
                   <article class="card"><span class="card-label">Findings</span><strong>${escapeHTML(String(state.siteValidation.message_count || 0))}</strong><span class="card-copy">Latest on-demand site validation result.</span></article>
                 </div>
                 <div class="debug-grid-two">
-                  <div><h3>Broken Media</h3>${state.siteValidation.broken_media_refs?.length ? `<div class="mini-list">${state.siteValidation.broken_media_refs.slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No broken media refs.</div>'}</div>
-                  <div><h3>Broken Links</h3>${state.siteValidation.broken_internal_links?.length ? `<div class="mini-list">${state.siteValidation.broken_internal_links.slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No broken internal links.</div>'}</div>
-                  <div><h3>Templates & Routes</h3>${[...(state.siteValidation.missing_templates || []), ...(state.siteValidation.duplicate_urls || []), ...(state.siteValidation.duplicate_slugs || [])].length ? `<div class="mini-list">${[...(state.siteValidation.missing_templates || []), ...(state.siteValidation.duplicate_urls || []), ...(state.siteValidation.duplicate_slugs || [])].slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No template or route issues.</div>'}</div>
-                  <div><h3>Other</h3>${[...(state.siteValidation.orphaned_media || []), ...(state.siteValidation.taxonomy_inconsistency || [])].length ? `<div class="mini-list">${[...(state.siteValidation.orphaned_media || []), ...(state.siteValidation.taxonomy_inconsistency || [])].slice(0, 8).map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div>` : '<div class="empty-state">No orphaned media or taxonomy issues.</div>'}</div>
+                  <div><h3>Broken Media</h3>${
+                    state.siteValidation.broken_media_refs?.length
+                      ? `<div class="mini-list">${state.siteValidation.broken_media_refs
+                          .slice(0, 8)
+                          .map(
+                            (entry) =>
+                              `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
+                          )
+                          .join('')}</div>`
+                      : '<div class="empty-state">No broken media refs.</div>'
+                  }</div>
+                  <div><h3>Broken Links</h3>${
+                    state.siteValidation.broken_internal_links?.length
+                      ? `<div class="mini-list">${state.siteValidation.broken_internal_links
+                          .slice(0, 8)
+                          .map(
+                            (entry) =>
+                              `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
+                          )
+                          .join('')}</div>`
+                      : '<div class="empty-state">No broken internal links.</div>'
+                  }</div>
+                  <div><h3>Templates & Routes</h3>${
+                    [
+                      ...(state.siteValidation.missing_templates || []),
+                      ...(state.siteValidation.duplicate_urls || []),
+                      ...(state.siteValidation.duplicate_slugs || []),
+                    ].length
+                      ? `<div class="mini-list">${[
+                          ...(state.siteValidation.missing_templates || []),
+                          ...(state.siteValidation.duplicate_urls || []),
+                          ...(state.siteValidation.duplicate_slugs || []),
+                        ]
+                          .slice(0, 8)
+                          .map(
+                            (entry) =>
+                              `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
+                          )
+                          .join('')}</div>`
+                      : '<div class="empty-state">No template or route issues.</div>'
+                  }</div>
+                  <div><h3>Other</h3>${
+                    [
+                      ...(state.siteValidation.orphaned_media || []),
+                      ...(state.siteValidation.taxonomy_inconsistency || []),
+                    ].length
+                      ? `<div class="mini-list">${[
+                          ...(state.siteValidation.orphaned_media || []),
+                          ...(state.siteValidation.taxonomy_inconsistency || []),
+                        ]
+                          .slice(0, 8)
+                          .map(
+                            (entry) =>
+                              `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
+                          )
+                          .join('')}</div>`
+                      : '<div class="empty-state">No orphaned media or taxonomy issues.</div>'
+                  }</div>
                 </div>
               </div>`
               : `<div class="panel-pad stack"><div class="note">Run a full validation pass from the admin to surface broken references, duplicate routes/slugs, missing templates, orphaned media, and taxonomy inconsistencies.</div><div class="toolbar"><button type="button" class="ghost" id="debug-validate-site">Run Validation</button></div></div>`,
@@ -1629,20 +1759,75 @@ import {
 
   const commandPaletteCommands = () => {
     const commands = [
-      { id: 'goto-overview', label: 'Go to Overview', section: 'overview', action: () => navigate('overview') },
-      { id: 'goto-documents', label: 'Go to Documents', section: 'documents', action: () => navigate('documents') },
-      { id: 'goto-editor', label: 'Go to Editor', section: 'editor', action: () => navigate('editor') },
+      {
+        id: 'goto-overview',
+        label: 'Go to Overview',
+        section: 'overview',
+        action: () => navigate('overview'),
+      },
+      {
+        id: 'goto-documents',
+        label: 'Go to Documents',
+        section: 'documents',
+        action: () => navigate('documents'),
+      },
+      {
+        id: 'goto-editor',
+        label: 'Go to Editor',
+        section: 'editor',
+        action: () => navigate('editor'),
+      },
       { id: 'goto-media', label: 'Go to Media', section: 'media', action: () => navigate('media') },
-      { id: 'goto-sessions', label: 'Go to Sessions', section: 'sessions', action: () => navigate('sessions') },
+      {
+        id: 'goto-sessions',
+        label: 'Go to Sessions',
+        section: 'sessions',
+        action: () => navigate('sessions'),
+      },
       { id: 'goto-users', label: 'Go to Users', section: 'users', action: () => navigate('users') },
       { id: 'goto-audit', label: 'Go to Audit', section: 'audit', action: () => navigate('audit') },
-      { id: 'goto-settings', label: 'Go to Settings', section: 'settings', action: () => navigate('settings') },
-      { id: 'goto-custom-fields', label: 'Go to Custom Fields', section: 'custom-fields', action: () => navigate('custom-fields') },
-      { id: 'goto-extensions', label: 'Go to Extensions', section: 'extensions', action: () => navigate('extensions') },
-      { id: 'goto-plugins', label: 'Go to Plugins', section: 'plugins', action: () => navigate('plugins') },
-      { id: 'goto-themes', label: 'Go to Themes', section: 'themes', action: () => navigate('themes') },
-      { id: 'goto-operations', label: 'Go to Operations', section: 'operations', action: () => navigate('operations') },
-      { id: 'goto-diagnostics', label: 'Go to Diagnostics', section: 'diagnostics', action: () => navigate('diagnostics') },
+      {
+        id: 'goto-settings',
+        label: 'Go to Settings',
+        section: 'settings',
+        action: () => navigate('settings'),
+      },
+      {
+        id: 'goto-custom-fields',
+        label: 'Go to Custom Fields',
+        section: 'custom-fields',
+        action: () => navigate('custom-fields'),
+      },
+      {
+        id: 'goto-extensions',
+        label: 'Go to Extensions',
+        section: 'extensions',
+        action: () => navigate('extensions'),
+      },
+      {
+        id: 'goto-plugins',
+        label: 'Go to Plugins',
+        section: 'plugins',
+        action: () => navigate('plugins'),
+      },
+      {
+        id: 'goto-themes',
+        label: 'Go to Themes',
+        section: 'themes',
+        action: () => navigate('themes'),
+      },
+      {
+        id: 'goto-operations',
+        label: 'Go to Operations',
+        section: 'operations',
+        action: () => navigate('operations'),
+      },
+      {
+        id: 'goto-diagnostics',
+        label: 'Go to Diagnostics',
+        section: 'diagnostics',
+        action: () => navigate('diagnostics'),
+      },
       {
         id: 'new-page',
         label: 'Create New Page Draft',
@@ -2384,6 +2569,7 @@ import {
       parseDocumentEditor,
       buildDocumentRaw,
       clone,
+      zenMode,
     });
 
   const renderDebugOverlay = () => {
@@ -2398,6 +2584,8 @@ import {
     </div>`;
   };
 
+  const renderZenModal = () => renderZenModeModal({ state, escapeHTML, renderPreviewFrame });
+
   const renderDashboard = () => {
     if (!canAccessSection(state.section)) {
       state.section = firstAccessibleSection();
@@ -2409,8 +2597,7 @@ import {
       runtimeLoaded: !!state.runtimeStatus,
     });
     const topMessage =
-      summarizeLoadErrors(state) ||
-      'Manage content, media, users, settings, themes, and plugins.';
+      summarizeLoadErrors(state) || 'Manage content, media, users, settings, themes, and plugins.';
     root.innerHTML = `
       <div class="foundry-shell">
         ${renderToasts(state)}
@@ -2447,6 +2634,7 @@ import {
             ${renderSection()}
           </main>
         </div>
+        ${renderZenModal()}
         ${renderDebugOverlay()}
       </div>`;
     document.getElementById('shortcut-help-toggle')?.addEventListener('click', () => {
@@ -2476,57 +2664,65 @@ import {
       window.setTimeout(() => document.getElementById('command-palette-query')?.focus(), 0);
     }
     bindDashboardEventsLocal();
+    void zenMode.mountPrimaryEditor();
+    if (state.documentZenMode?.open) {
+      void zenMode.mountEditor();
+    }
     bindDebugControls();
-    document.getElementById('settings-structured-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      try {
-        state.settingsForm = collectSettingsFormPayload();
-        state.settingsDraftError = '';
-        await settingsAPI.saveForm({ value: state.settingsForm });
-        setFlash('Settings saved.');
-        snapshotValue('settings', state.settingsForm);
-        await fetchAll(false);
-        navigate('settings');
-      } catch (error) {
-        if (String(error.message || error).includes('settings-')) {
-          state.settingsDraftError = error.message || String(error);
-        } else {
-          state.error = error.message || String(error);
+    document
+      .getElementById('settings-structured-form')
+      ?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          state.settingsForm = collectSettingsFormPayload();
+          state.settingsDraftError = '';
+          await settingsAPI.saveForm({ value: state.settingsForm });
+          setFlash('Settings saved.');
+          snapshotValue('settings', state.settingsForm);
+          await fetchAll(false);
+          navigate('settings');
+        } catch (error) {
+          if (String(error.message || error).includes('settings-')) {
+            state.settingsDraftError = error.message || String(error);
+          } else {
+            state.error = error.message || String(error);
+          }
+          render();
         }
-        render();
-      }
-    });
-    document.getElementById('custom-fields-save-form')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      if (!canManageSharedFields()) {
-        setFlash('Viewing only. Saving shared custom fields requires config.manage.');
-        return;
-      }
-      try {
-        const raw = document.getElementById('custom-fields-raw')?.value || '';
-        const rawChanged = raw !== (state.customFields?.raw || '');
-        const response = await admin.customFields.save({
-          raw: rawChanged ? raw : '',
-          values: rawChanged ? undefined : state.customFields?.values || {},
-        });
-        state.customFields = response || state.customFields;
-        state.sharedFieldContracts = Array.isArray(response?.contracts) ? response.contracts : state.sharedFieldContracts;
-        snapshotValue('customFields', state.customFields?.values || {});
-        setFlash('Shared custom fields saved.');
-        await fetchAll(false);
-        navigate('custom-fields');
-      } catch (error) {
-        state.error = error.message || String(error);
-        render();
-      }
-    });
-    root
-      .querySelectorAll('[data-settings-input], [data-settings-json]')
-      .forEach((node) =>
-        node.addEventListener(node.type === 'checkbox' ? 'change' : 'input', () => {
-          syncSettingsDraftFromDOM();
-        })
-      );
+      });
+    document
+      .getElementById('custom-fields-save-form')
+      ?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!canManageSharedFields()) {
+          setFlash('Viewing only. Saving shared custom fields requires config.manage.');
+          return;
+        }
+        try {
+          const raw = document.getElementById('custom-fields-raw')?.value || '';
+          const rawChanged = raw !== (state.customFields?.raw || '');
+          const response = await admin.customFields.save({
+            raw: rawChanged ? raw : '',
+            values: rawChanged ? undefined : state.customFields?.values || {},
+          });
+          state.customFields = response || state.customFields;
+          state.sharedFieldContracts = Array.isArray(response?.contracts)
+            ? response.contracts
+            : state.sharedFieldContracts;
+          snapshotValue('customFields', state.customFields?.values || {});
+          setFlash('Shared custom fields saved.');
+          await fetchAll(false);
+          navigate('custom-fields');
+        } catch (error) {
+          state.error = error.message || String(error);
+          render();
+        }
+      });
+    root.querySelectorAll('[data-settings-input], [data-settings-json]').forEach((node) =>
+      node.addEventListener(node.type === 'checkbox' ? 'change' : 'input', () => {
+        syncSettingsDraftFromDOM();
+      })
+    );
     root.querySelectorAll('[data-settings-tab]').forEach((button) => {
       button.addEventListener('click', () => {
         syncSettingsDraftFromDOM();
@@ -2934,7 +3130,9 @@ import {
     }
     const nextSection = sectionForPath(window.location.pathname);
     const normalizedSection = nextSection === 'config' ? 'settings' : nextSection;
-    state.section = canAccessSection(normalizedSection) ? normalizedSection : firstAccessibleSection();
+    state.section = canAccessSection(normalizedSection)
+      ? normalizedSection
+      : firstAccessibleSection();
     render();
     if (state.section === 'users' || state.section === 'sessions') {
       void loadSessionInventory({ rerender: true });
@@ -2951,7 +3149,12 @@ import {
     if (!target) return false;
     if (target.closest?.('[contenteditable="true"]')) return true;
     const tagName = target.tagName?.toLowerCase();
-    return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable;
+    return (
+      tagName === 'input' ||
+      tagName === 'textarea' ||
+      tagName === 'select' ||
+      target.isContentEditable
+    );
   };
 
   window.addEventListener('keydown', (event) => {
@@ -2959,6 +3162,11 @@ import {
     const isMac = /Mac|iPhone|iPad/.test(window.navigator.platform);
     const modifier = isMac ? event.metaKey : event.ctrlKey;
     const typing = isEditableTarget(event.target);
+    if (state.documentZenMode?.open && event.key === 'Escape') {
+      event.preventDefault();
+      zenMode.close();
+      return;
+    }
     if (modifier && event.key.toLowerCase() === 's') {
       event.preventDefault();
       if (state.section === 'editor')
@@ -2981,7 +3189,11 @@ import {
     }
     if (modifier && event.key === 'Enter' && state.section === 'editor') {
       event.preventDefault();
-      document.getElementById('document-preview-button')?.click();
+      if (state.documentZenMode?.open) {
+        zenMode.refreshPreview();
+      } else {
+        document.getElementById('document-preview-button')?.click();
+      }
       return;
     }
     if (modifier && event.key.toLowerCase() === 'k') {
