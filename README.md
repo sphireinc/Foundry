@@ -41,6 +41,28 @@ Either model is fully supported. Content is stored the same way in both cases: M
 
 If your goal is to manage content and publish a static site, Foundry fits that model well. If you also need a live API surface, an admin UI, or incremental rebuilds during development, those are first-class too.
 
+## Headless Mode
+
+Content is exposed as JSON.
+
+Two options:
+
+**Live API**
+\`\`\`text
+/__foundry/api/*
+\`\`\`
+
+- Real-time JSON from running server
+
+**Static JSON**
+\`\`\`text
+public/__foundry/*.json
+\`\`\`
+
+- Generated during build
+- No server required
+
+
 ## Quick Start
 
 The fastest way to get the project running locally is via Docker:
