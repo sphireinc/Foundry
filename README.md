@@ -32,7 +32,7 @@ See more of Foundry here: [Foundry Screenshots](README_SCREENSHOTS.md)
 
 ## Is Foundry primarily a static CMS?
 
-No — Foundry is a Markdown-first, file-based CMS that supports two equally first-class runtime shapes:
+No - Foundry is a Markdown-first, file-based CMS that supports two equally first-class runtime shapes:
 
 - **Static site generation** via `foundry build`, which writes the rendered site (and frontend SDK artifacts under `public/__foundry/`) to the `public/` directory. Use this if you want a static deployment behind a CDN or object storage.
 - **Live server mode** via `foundry serve`, `foundry serve-standalone`, or `foundry service install`, which runs Foundry as a long-running process with the themeable admin UI mounted at `/__admin` and a live JSON API under `/__foundry`.
@@ -43,21 +43,21 @@ If your goal is to manage content and publish a static site, Foundry fits that m
 
 ## Headless Mode
 
-Content is exposed as JSON.
+Content is exposed as JSON via two options:
 
-Two options:
+**1. Live API**
 
-**Live API**
-\`\`\`text
+```text
 /__foundry/api/*
-\`\`\`
+```
 
 - Real-time JSON from running server
 
-**Static JSON**
-\`\`\`text
+**2. Static JSON**
+
+```text
 public/__foundry/*.json
-\`\`\`
+```
 
 - Generated during build
 - No server required
