@@ -9,6 +9,7 @@
     "test:e2e:clean": "go run ./scripts/cmd/e2e-cleanup",
     "test:e2e": "playwright test",
     "test:e2e:full": "go run ./scripts/cmd/e2e-run",
+    "screenshots:readme": "go run ./scripts/cmd/readme-screenshots",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
     "test:acceptance": "playwright test --config=playwright.mvp.config.js",
