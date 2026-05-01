@@ -106,17 +106,23 @@ func TestLoaderLoadAndHelpers(t *testing.T) {
 	if pageDoc.Title != "About" || pageDoc.Layout != "page" || pageDoc.Summary == "" || pageDoc.HTMLBody == "" {
 		t.Fatalf("unexpected page document: %#v", pageDoc)
 	}
+	if pageDoc.Summary != "Summary" {
+		t.Fatalf("expected explicit frontmatter summary, got %q", pageDoc.Summary)
+	}
 
 	lang, rel, isDefault := loader.resolveLanguage(filepath.Join("fr", "bonjour.md"))
 	if lang != "fr" || rel != "bonjour.md" || isDefault {
 		t.Fatalf("unexpected resolved language: %q %q %v", lang, rel, isDefault)
 	}
 
-	if got := buildSummary("", strings.Repeat("word ", 100)); !strings.HasSuffix(got, "...") {
-		t.Fatalf("expected truncated summary, got %q", got)
+	if got := buildSummary("", strings.Repeat("word ", 100)); got != "" {
+		t.Fatalf("expected empty summary without explicit frontmatter, got %q", got)
 	}
 	if got := buildSummary(" explicit ", "ignored"); got != "explicit" {
 		t.Fatalf("expected explicit summary, got %q", got)
+	}
+	if got := buildSummary("", "# About\n\nThis **CMS** is built in Go with Markdown content.\n\nthis is a test\n\n![logo](media:images/logo.png)"); got != "" {
+		t.Fatalf("expected empty summary without explicit frontmatter, got %q", got)
 	}
 }
 

@@ -66,31 +66,43 @@
 
           <h2>How Admin Settings Relate To <code>site.yaml</code></h2>
           <p>
-            Foundry keeps <code>content/config/site.yaml</code> as the source of truth on disk,
-            even when you edit settings through the admin UI.
+            Foundry keeps <code>content/config/site.yaml</code> as the source of truth on disk, even
+            when you edit settings through the admin UI.
           </p>
           <p>
             The admin Settings area uses structured forms because forms are safer and more usable
-            for most changes than editing a raw YAML document directly. Under the hood, the flow
-            is:
+            for most changes than editing a raw YAML document directly. Under the hood, the flow is:
           </p>
           <ul>
             <li><strong>YAML on disk</strong>: the persistent project config remains YAML.</li>
-            <li><strong>Structured object in memory</strong>: the admin loads that YAML into a config object.</li>
-            <li><strong>Forms in the UI</strong>: the object is presented as inputs, toggles, selects, and section-specific editors.</li>
-            <li><strong>Structured save back to YAML</strong>: when you save, Foundry validates the structured config and writes it back to <code>site.yaml</code>.</li>
+            <li>
+              <strong>Structured object in memory</strong>: the admin loads that YAML into a config
+              object.
+            </li>
+            <li>
+              <strong>Forms in the UI</strong>: the object is presented as inputs, toggles, selects,
+              and section-specific editors.
+            </li>
+            <li>
+              <strong>Structured save back to YAML</strong>: when you save, Foundry validates the
+              structured config and writes it back to <code>site.yaml</code>.
+            </li>
           </ul>
           <p>
-            Some parts of the config surface are naturally scalar and form-friendly. Others, such
-            as taxonomy definitions, field schemas, deploy targets, menus, params, and permalinks,
-            are more deeply nested. Those still live inside the structured Settings area, but they
-            may use JSON-shaped editors in their own tabs rather than trying to force everything
-            into a single giant YAML textarea.
+            Some parts of the config surface are naturally scalar and form-friendly. Others, such as
+            taxonomy definitions, field schemas, deploy targets, menus, params, and permalinks, are
+            more deeply nested. Those still live inside the structured Settings area, but they may
+            use JSON-shaped editors in their own tabs rather than trying to force everything into a
+            single giant YAML textarea.
           </p>
           <p>
             Foundry also keeps an <strong>Advanced YAML</strong> tab in admin. That exists so
-            advanced users can still edit the raw config directly when they need full manual
-            control or want to work with values that are easier to express in YAML than in a form.
+            advanced users can still edit the raw config directly when they need full manual control
+            or want to work with values that are easier to express in YAML than in a form.
+          </p>
+          <p>
+            The admin also includes a Quill-powered rich text editor for document content, with
+            Markdown stored beneath it and fullscreen Zen mode available for focused editing.
           </p>
 
           <h2>Minimal example</h2>
@@ -188,9 +200,8 @@ content:
             </li>
             <li>
               <strong><code>on_change</code></strong
-              >: when true, <code>foundry serve</code> and <code>foundry serve-preview</code>
-              create backups after content changes settle. <strong>Default: </strong
-              ><code>false</code>.
+              >: when true, <code>foundry serve</code> and <code>foundry serve-preview</code> create
+              backups after content changes settle. <strong>Default: </strong><code>false</code>.
             </li>
             <li>
               <strong><code>debounce_seconds</code></strong
@@ -199,13 +210,13 @@ content:
             </li>
             <li>
               <strong><code>retention_count</code></strong
-              >: number of backup archives to keep in <code>backup.dir</code> before older ones
-              are pruned. <strong>Default: </strong><code>20</code>.
+              >: number of backup archives to keep in <code>backup.dir</code> before older ones are
+              pruned. <strong>Default: </strong><code>20</code>.
             </li>
             <li>
               <strong><code>min_free_mb</code></strong
-              >: minimum safety buffer added to backup free-space checks. <strong>Default:
-              </strong><code>256</code>.
+              >: minimum safety buffer added to backup free-space checks. <strong>Default: </strong
+              ><code>256</code>.
             </li>
             <li>
               <strong><code>headroom_percent</code></strong
@@ -305,9 +316,9 @@ content:
             </li>
             <li>
               <strong><code>totp_secret_key</code></strong
-              >: base64-encoded 32-byte key used to encrypt stored TOTP secrets at rest. Set this
-              in production or via <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code>. New TOTP setup
-              requires it. <strong>Default: </strong>empty.
+              >: base64-encoded 32-byte key used to encrypt stored TOTP secrets at rest. Set this in
+              production or via <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code>. New TOTP setup requires
+              it. <strong>Default: </strong>empty.
             </li>
             <li>
               <strong><code>users_file</code></strong
@@ -337,8 +348,8 @@ content:
             </li>
             <li>
               <strong><code>session_max_age_minutes</code></strong
-              >: absolute maximum admin session lifetime, even if the session remains active.
-              Set to <code>0</code> to disable the cap. <strong>Default: </strong><code>0</code>.
+              >: absolute maximum admin session lifetime, even if the session remains active. Set to
+              <code>0</code> to disable the cap. <strong>Default: </strong><code>0</code>.
             </li>
             <li>
               <strong><code>single_session_per_user</code></strong
@@ -394,17 +405,47 @@ content:
 
           <h3>Admin security</h3>
           <ul>
-            <li>Set <code>admin.session_secret</code> or <code>FOUNDRY_ADMIN_SESSION_SECRET</code> in production.</li>
-            <li>Without it, Foundry still hashes session tokens at rest, but with plain SHA-256 instead of keyed HMAC-SHA-256.</li>
-            <li>Set <code>admin.totp_secret_key</code> or <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code> in production to encrypt TOTP secrets at rest.</li>
-            <li>New TOTP setup requires that encryption key. Legacy plaintext TOTP secrets still verify and are migrated to encrypted form when used.</li>
+            <li>
+              Set <code>admin.session_secret</code> or <code>FOUNDRY_ADMIN_SESSION_SECRET</code> in
+              production.
+            </li>
+            <li>
+              Without it, Foundry still hashes session tokens at rest, but with plain SHA-256
+              instead of keyed HMAC-SHA-256.
+            </li>
+            <li>
+              Set <code>admin.totp_secret_key</code> or
+              <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code> in production to encrypt TOTP secrets at
+              rest.
+            </li>
+            <li>
+              New TOTP setup requires that encryption key. Legacy plaintext TOTP secrets still
+              verify and are migrated to encrypted form when used.
+            </li>
             <li>Admin password hashes now default to <code>argon2id$...</code>.</li>
-            <li>Legacy PBKDF2 password hashes still verify and are upgraded automatically on successful login.</li>
-            <li>For non-local admin access, set <code>base_url</code> to an <code>https://</code> origin and make sure your reverse proxy forwards HTTPS correctly so <code>Secure</code> cookies work as intended.</li>
+            <li>
+              Legacy PBKDF2 password hashes still verify and are upgraded automatically on
+              successful login.
+            </li>
+            <li>
+              For non-local admin access, set <code>base_url</code> to an
+              <code>https://</code> origin and make sure your reverse proxy forwards HTTPS correctly
+              so <code>Secure</code> cookies work as intended.
+            </li>
             <li>Rotating <code>admin.session_secret</code> invalidates all browser sessions.</li>
-            <li>Rotating <code>admin.totp_secret_key</code> requires TOTP re-enrollment for any still-encrypted secrets that cannot be migrated under the new key.</li>
-            <li>If either secret is suspected compromised, rotate it, revoke active sessions, and review the audit log before restoring access.</li>
-            <li>Compatibility note: legacy plaintext sessions, legacy plaintext TOTP secrets, and legacy PBKDF2 hashes are kept only as a migration bridge and are intended to be removed after the <code>1.4.x</code> line.</li>
+            <li>
+              Rotating <code>admin.totp_secret_key</code> requires TOTP re-enrollment for any
+              still-encrypted secrets that cannot be migrated under the new key.
+            </li>
+            <li>
+              If either secret is suspected compromised, rotate it, revoke active sessions, and
+              review the audit log before restoring access.
+            </li>
+            <li>
+              Compatibility note: legacy plaintext sessions, legacy plaintext TOTP secrets, and
+              legacy PBKDF2 hashes are kept only as a migration bridge and are intended to be
+              removed after the <code>1.4.x</code> line.
+            </li>
           </ul>
 
           <h2><code>build</code></h2>
@@ -632,12 +673,16 @@ content:
               <code>fields:</code>.
             </li>
             <li>
+              <strong>Page summaries:</strong> set <code>summary:</code> in page frontmatter when
+              you want an excerpt or teaser. Foundry does not auto-generate summaries from the body.
+            </li>
+            <li>
               <strong>Shared values:</strong> store shared/global field values in
               <code>content/custom-fields.yaml</code>.
             </li>
             <li>
-              <strong>Admin discoverability:</strong> the editor resolves applicable fields from
-              the active theme based on document type, layout, and slug.
+              <strong>Admin discoverability:</strong> the editor resolves applicable fields from the
+              active theme based on document type, layout, and slug.
             </li>
           </ul>
           <pre><code>field_contracts:
@@ -872,9 +917,9 @@ fields:
               targets when a setting should only change for preview or production builds.
             </li>
             <li>
-              When a group contains nested structures like <code>taxonomies.definitions</code>,
-              or <code>deploy.targets</code>, prefer full YAML snippets over terse one-line docs so
-              the expected shape stays obvious. For advanced custom fields, define the contract in
+              When a group contains nested structures like <code>taxonomies.definitions</code>, or
+              <code>deploy.targets</code>, prefer full YAML snippets over terse one-line docs so the
+              expected shape stays obvious. For advanced custom fields, define the contract in
               <code>theme.yaml</code> and keep shared values in
               <code>content/custom-fields.yaml</code>.
             </li>

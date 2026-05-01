@@ -280,12 +280,11 @@ slots:
           </ul>
 
           <h2>End-to-end custom fields example</h2>
-          <p>
-            A complete theme-driven custom field flow has four parts:
-          </p>
+          <p>A complete theme-driven custom field flow has four parts:</p>
           <ol>
             <li>the theme declares contracts in <code>theme.yaml</code></li>
             <li>page-specific values live in document frontmatter under <code>fields:</code></li>
+            <li>page summaries live in document frontmatter under <code>summary:</code></li>
             <li>shared/global values live in <code>content/custom-fields.yaml</code></li>
             <li>templates read those values at render time</li>
           </ol>
@@ -337,13 +336,12 @@ slots:
         label: Primary CTA URL</code></pre>
 
           <h3>2. Page-specific values</h3>
-          <p>
-            A matching page document keeps its own values in frontmatter:
-          </p>
+          <p>A matching page document keeps its own values in frontmatter:</p>
           <pre><code>---
 title: Pricing
 slug: pricing
 layout: page
+summary: A short teaser for the pricing page.
 fields:
   hero_eyebrow: Clear pricing
   hero_title: Pricing that keeps infrastructure calm
@@ -394,9 +392,7 @@ Page body content here.</code></pre>
               The <code>Custom Fields</code> admin section shows shared contracts like
               <code>Shared Marketing Copy</code>.
             </li>
-            <li>
-              Users with <code>config.manage</code> can edit and save shared values there.
-            </li>
+            <li>Users with <code>config.manage</code> can edit and save shared values there.</li>
             <li>
               Users without <code>config.manage</code> can still view shared contracts, but the save
               controls stay disabled.
@@ -420,8 +416,14 @@ Page body content here.</code></pre>
           <h2>Validation checklist</h2>
           <ol>
             <li>Run <code>foundry theme validate &lt;name&gt; --security --csp</code>.</li>
-            <li>Inspect the generated CSP and remote asset summary with <code>foundry theme security &lt;name&gt;</code>.</li>
-            <li>Preview with <code>foundry serve</code>, <code>foundry serve-preview</code>, or <code>foundry serve-standalone</code>.</li>
+            <li>
+              Inspect the generated CSP and remote asset summary with
+              <code>foundry theme security &lt;name&gt;</code>.
+            </li>
+            <li>
+              Preview with <code>foundry serve</code>, <code>foundry serve-preview</code>, or
+              <code>foundry serve-standalone</code>.
+            </li>
             <li>Confirm page, post, and taxonomy archive templates all render cleanly.</li>
             <li>Check that plugin slots still have sensible placement.</li>
           </ol>

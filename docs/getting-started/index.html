@@ -50,9 +50,15 @@
           <h2>Core ideas</h2>
           <ul>
             <li>Content lives in Markdown files with frontmatter.</li>
+            <li>If you want a teaser or excerpt, set <code>summary:</code> in frontmatter.</li>
             <li>Routes are assigned from structured content and language-aware conventions.</li>
             <li>Themes own presentation through layouts and partials.</li>
-            <li>Themes also own advanced custom-field contracts through <code>theme.yaml</code>.</li>
+            <li>
+              Themes also own advanced custom-field contracts through <code>theme.yaml</code>.
+            </li>
+            <li>
+              Foundry includes a Quill-powered rich text editor for document editing in admin.
+            </li>
             <li>Plugins extend behavior through explicit hook interfaces.</li>
             <li>
               A dependency graph supports incremental rebuilds for both documents and taxonomy
@@ -64,7 +70,8 @@
             Advanced custom fields are no longer declared in <code>content/config/site.yaml</code>.
             Themes declare field contracts in <code>theme.yaml</code>, page-specific values stay in
             frontmatter under <code>fields:</code>, and shared/global values live in
-            <code>content/custom-fields.yaml</code>.
+            <code>content/custom-fields.yaml</code>. Page summaries are also explicit frontmatter
+            values under <code>summary:</code>; if it is omitted, no summary is shown.
           </p>
 
           <h2>Key directories</h2>
@@ -99,8 +106,8 @@ export FOUNDRY_ADMIN_TOTP_SECRET_KEY="$(openssl rand -base64 32)"
 docker compose -f docker-compose.prod.yml up -d --build</code></pre>
           <p>
             Before using the production Docker overlay, update
-            <code>content/config/site.docker.prod.yaml</code> so <code>base_url</code> matches
-            the deployed HTTPS origin.
+            <code>content/config/site.docker.prod.yaml</code> so <code>base_url</code> matches the
+            deployed HTTPS origin.
           </p>
 
           <h2>Common commands</h2>
@@ -140,19 +147,18 @@ foundry admin hash-password your-password</code></pre>
           <p>
             If you want Foundry to keep running after the terminal closes, use
             <code>foundry serve-standalone</code>. Manage that background runtime with
-            <code>foundry status</code>, <code>foundry restart</code>,
-            <code>foundry stop</code>, <code>foundry logs -f</code>, and
-            <code>foundry update check</code>. Foundry stores its runtime files under
-            <code>.foundry/run/</code> in the project root. If you launch standalone
-            from source with <code>go run</code>, Foundry first builds a managed binary
+            <code>foundry status</code>, <code>foundry restart</code>, <code>foundry stop</code>,
+            <code>foundry logs -f</code>, and <code>foundry update check</code>. Foundry stores its
+            runtime files under <code>.foundry/run/</code> in the project root. If you launch
+            standalone from source with <code>go run</code>, Foundry first builds a managed binary
             under that directory and keeps the managed binary running.
           </p>
           <p>
             For a more durable self-hosted runtime, use
-            <code>foundry service install</code>. That installs Foundry as a user-level OS
-            service: <code>systemd --user</code> on Linux or a LaunchAgent on macOS. You can
-            then manage it with <code>foundry service status</code>,
-            <code>foundry service restart</code>, and <code>foundry service uninstall</code>.
+            <code>foundry service install</code>. That installs Foundry as a user-level OS service:
+            <code>systemd --user</code> on Linux or a LaunchAgent on macOS. You can then manage it
+            with <code>foundry service status</code>, <code>foundry service restart</code>, and
+            <code>foundry service uninstall</code>.
           </p>
           <p>
             Live reload supports two transport modes: <code>stream</code> uses Server-Sent-Events
@@ -265,14 +271,14 @@ foundry backup git-log 10</code></pre>
           </p>
           <p>
             Foundry also keeps a local Git-backed snapshot history under
-            <code>.foundry/backups/git</code>. That path is intended for versioned local history;
-            it does not push to a remote Git provider yet.
+            <code>.foundry/backups/git</code>. That path is intended for versioned local history; it
+            does not push to a remote Git provider yet.
           </p>
 
           <h2>Release updates</h2>
           <p>
-            Foundry can check GitHub Releases and, for managed standalone installs, apply the
-            latest release automatically:
+            Foundry can check GitHub Releases and, for managed standalone installs, apply the latest
+            release automatically:
           </p>
           <pre><code>foundry update check
 foundry update apply</code></pre>
