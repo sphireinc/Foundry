@@ -1,0 +1,1370 @@
+openapi: 3.1.0
+info:
+  title: Foundry API
+  version: 1.0.0
+  description: OpenAPI specification generated from docs/api-documentation.md.
+servers:
+  - url: /{admin_path}/api
+    description: Admin API
+    variables:
+      admin_path:
+        default: __admin
+  - url: /__foundry/api
+    description: Platform API
+  - url: /{admin_path}/plugin-api/{plugin_name}
+    description: Plugin APIs
+    variables:
+      admin_path:
+        default: __admin
+      plugin_name:
+        default: aiwriter
+tags:
+  - name: auth
+    description: Authentication and session management
+  - name: status
+    description: System health and capability inspection
+  - name: documents
+    description: Document management
+  - name: media
+    description: Media management
+  - name: system
+    description: System administration
+  - name: settings
+    description: Settings and custom fields
+  - name: users
+    description: User administration
+  - name: themes
+    description: Theme administration
+  - name: plugins
+    description: Plugin administration
+  - name: audit
+    description: Audit logs
+  - name: platform
+    description: Public frontend APIs
+  - name: plugin-api
+    description: Plugin-specific APIs
+security:
+  - sessionCookie: []
+paths:
+  /login:
+    post:
+      tags: [auth]
+      summary: Authenticate and create a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+  /logout:
+    post:
+      tags: [auth]
+      summary: Destroy the current session
+      security: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+  /session:
+    get:
+      tags: [auth]
+      summary: Get current session information
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+  /sessions:
+    get:
+      tags: [auth]
+      summary: List active sessions
+      parameters:
+        - in: query
+          name: username
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionRecord'
+  /sessions/revoke:
+    post:
+      tags: [auth]
+      summary: Revoke specific sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionRevokeRequest'
+      responses:
+        '200':
+          description: Revoke result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeResponse'
+  /totp/setup:
+    post:
+      tags: [auth]
+      summary: Initialize TOTP setup
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpSetupRequest'
+      responses:
+        '200':
+          description: Setup details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpSetupResponse'
+  /totp/enable:
+    post:
+      tags: [auth]
+      summary: Enable TOTP after verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpEnableRequest'
+      responses:
+        '200':
+          description: TOTP enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /totp/disable:
+    post:
+      tags: [auth]
+      summary: Disable TOTP for a user
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpDisableRequest'
+      responses:
+        '200':
+          description: TOTP disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /status:
+    get:
+      tags: [status]
+      summary: Get system status and health information
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+  /capabilities:
+    get:
+      tags: [status]
+      summary: Get capabilities and available features
+      responses:
+        '200':
+          description: Capabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+  /documents:
+    get:
+      tags: [documents]
+      summary: List documents with pagination and filtering
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string }
+        - in: query
+          name: lang
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedDocumentsResponse'
+  /document:
+    get:
+      tags: [documents]
+      summary: Get detailed document information
+      parameters:
+        - in: query
+          name: path
+          schema: { type: string }
+          required: true
+        - in: query
+          name: id
+          schema: { type: string }
+      responses:
+        '200':
+          description: Document detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetail'
+  /documents/create:
+    post:
+      tags: [documents]
+      summary: Create a new document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentCreateRequest'
+      responses:
+        '200':
+          description: Created document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetail'
+  /documents/save:
+    post:
+      tags: [documents]
+      summary: Save changes to an existing document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentSaveRequest'
+      responses:
+        '200':
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetail'
+  /documents/lock:
+    post:
+      tags: [documents]
+      summary: Lock a document for exclusive editing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PathRequest'
+      responses:
+        '200':
+          description: Document locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /documents/unlock:
+    post:
+      tags: [documents]
+      summary: Release a document lock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PathRequest'
+      responses:
+        '200':
+          description: Document unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /documents/history:
+    get:
+      tags: [documents]
+      summary: Get document revision history
+      parameters:
+        - in: query
+          name: path
+          schema: { type: string }
+          required: true
+      responses:
+        '200':
+          description: History entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentHistoryEntry'
+  /documents/trash:
+    get:
+      tags: [documents]
+      summary: List documents in trash
+      responses:
+        '200':
+          description: Trash entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TrashEntry'
+  /documents/restore:
+    post:
+      tags: [documents]
+      summary: Restore a document from trash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PathRequest'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /documents/delete:
+    post:
+      tags: [documents]
+      summary: Move document to trash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PathRequest'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /media:
+    get:
+      tags: [media]
+      summary: List media files with pagination
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Media items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedMediaResponse'
+  /media/upload:
+    post:
+      tags: [media]
+      summary: Upload a new media file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MediaUploadRequest'
+      responses:
+        '200':
+          description: Uploaded media
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaItem'
+  /media/delete:
+    post:
+      tags: [media]
+      summary: Move media file to trash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PathRequest'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /backups:
+    get:
+      tags: [system]
+      summary: List available backups
+      responses:
+        '200':
+          description: Backups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BackupInfo'
+  /backups/create:
+    post:
+      tags: [system]
+      summary: Create a new backup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackupCreateRequest'
+      responses:
+        '200':
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupInfo'
+  /operations:
+    get:
+      tags: [system]
+      summary: Get operations status
+      responses:
+        '200':
+          description: Operations status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationStatus'
+  /operations/rebuild:
+    post:
+      tags: [system]
+      summary: Trigger site rebuild
+      responses:
+        '200':
+          description: Rebuild triggered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /settings/sections:
+    get:
+      tags: [settings]
+      summary: Get available settings sections
+      responses:
+        '200':
+          description: Settings sections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SettingsSection'
+  /settings/form:
+    get:
+      tags: [settings]
+      summary: Get settings form for a section
+      parameters:
+        - in: query
+          name: section
+          schema: { type: string }
+          required: true
+      responses:
+        '200':
+          description: Settings form
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettingsForm'
+  /settings/form/save:
+    post:
+      tags: [settings]
+      summary: Save settings for a section
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsFormSaveRequest'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /custom-fields:
+    get:
+      tags: [settings]
+      summary: Get custom fields configuration
+      responses:
+        '200':
+          description: Custom fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+  /custom-fields/save:
+    post:
+      tags: [settings]
+      summary: Save custom fields configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericObject'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /users:
+    get:
+      tags: [users]
+      summary: List all users
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserInfo'
+  /users/save:
+    post:
+      tags: [users]
+      summary: Create or update a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSaveRequest'
+      responses:
+        '200':
+          description: Saved user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+  /users/delete:
+    post:
+      tags: [users]
+      summary: Delete a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericObject'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /themes:
+    get:
+      tags: [themes]
+      summary: List available themes
+      responses:
+        '200':
+          description: Themes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ThemeInfo'
+  /themes/install:
+    post:
+      tags: [themes]
+      summary: Install a new theme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericObject'
+      responses:
+        '200':
+          description: Theme installed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemeInfo'
+  /themes/switch:
+    post:
+      tags: [themes]
+      summary: Switch to a different theme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericObject'
+      responses:
+        '200':
+          description: Theme switched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /plugins:
+    get:
+      tags: [plugins]
+      summary: List available plugins
+      responses:
+        '200':
+          description: Plugins
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PluginInfo'
+  /plugins/enable:
+    post:
+      tags: [plugins]
+      summary: Enable a plugin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericObject'
+      responses:
+        '200':
+          description: Plugin enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /audit:
+    get:
+      tags: [audit]
+      summary: Get audit log entries
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+  /site:
+    get:
+      tags: [platform]
+      summary: Get basic site information
+      security: []
+      responses:
+        '200':
+          description: Site info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteInfo'
+  /content:
+    get:
+      tags: [platform]
+      summary: Get content by path or ID
+      security: []
+      parameters:
+        - in: query
+          name: path
+          schema: { type: string }
+        - in: query
+          name: id
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string }
+        - in: query
+          name: lang
+          schema: { type: string }
+      responses:
+        '200':
+          description: Content item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItem'
+  /collections:
+    get:
+      tags: [platform]
+      summary: Get paginated content collections
+      security: []
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string }
+        - in: query
+          name: lang
+          schema: { type: string }
+        - in: query
+          name: taxonomy
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: sort
+          schema: { type: string }
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: Collection results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponse'
+  /aiwriter/settings:
+    get:
+      tags: [plugin-api]
+      summary: Get AI Writer plugin settings
+      responses:
+        '200':
+          description: AI Writer settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiWriterSettings'
+  /aiwriter/generate:
+    post:
+      tags: [plugin-api]
+      summary: Generate content using AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiGenerateRequest'
+      responses:
+        '200':
+          description: Generated content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiGenerateResponse'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+  schemas:
+    GenericObject:
+      type: object
+      additionalProperties: true
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+    LogoutResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        username:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+      required: [authenticated, username, capabilities]
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        totp_code:
+          type: string
+      required: [username, password]
+    AuthSession:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        username:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        mfa_complete:
+          type: boolean
+        csrf_token:
+          type: string
+        ttl_seconds:
+          type: integer
+      required: [authenticated, username, capabilities]
+    SessionRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        mfa_complete:
+          type: boolean
+        remote_addr:
+          type: string
+        user_agent:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+    SessionRevokeRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        session_id:
+          type: string
+        all:
+          type: boolean
+    RevokeResponse:
+      type: object
+      properties:
+        revoked:
+          type: integer
+      required: [revoked]
+    TotpSetupRequest:
+      type: object
+      properties:
+        username:
+          type: string
+    TotpEnableRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        code:
+          type: string
+      required: [code]
+    TotpDisableRequest:
+      type: object
+      properties:
+        username:
+          type: string
+    TotpSetupResponse:
+      type: object
+      properties:
+        username:
+          type: string
+        secret:
+          type: string
+        provisioning_uri:
+          type: string
+    StatusResponse:
+      type: object
+      properties:
+        version:
+          type: string
+        build_time:
+          type: string
+          format: date-time
+        git_commit:
+          type: string
+        uptime_seconds:
+          type: integer
+        memory_usage:
+          type: object
+          properties:
+            allocated:
+              type: string
+            system:
+              type: string
+        disk_usage:
+          type: object
+          properties:
+            used:
+              type: string
+            available:
+              type: string
+        database_status:
+          type: string
+    CapabilitiesResponse:
+      type: object
+      properties:
+        sdk_version:
+          type: string
+        modules:
+          type: object
+          additionalProperties:
+            type: boolean
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        capabilities:
+          type: array
+          items:
+            type: string
+        identity:
+          $ref: '#/components/schemas/AuthSession'
+    DocumentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        lang:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        url:
+          type: string
+        layout:
+          type: string
+        summary:
+          type: string
+        date:
+          type: string
+          format: date-time
+        author:
+          type: string
+        last_editor:
+          type: string
+        taxonomies:
+          $ref: '#/components/schemas/GenericObject'
+    DocumentDetail:
+      allOf:
+        - $ref: '#/components/schemas/DocumentSummary'
+        - type: object
+          properties:
+            html_body:
+              type: string
+            raw_body:
+              type: string
+            fields:
+              $ref: '#/components/schemas/GenericObject'
+            params:
+              $ref: '#/components/schemas/GenericObject'
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+    PagedDocumentsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentSummary'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        has_more:
+          type: boolean
+    DocumentCreateRequest:
+      type: object
+      properties:
+        type:
+          type: string
+        lang:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        content:
+          type: string
+        frontmatter:
+          $ref: '#/components/schemas/GenericObject'
+      required: [type, lang, title, content]
+    DocumentSaveRequest:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+        frontmatter:
+          $ref: '#/components/schemas/GenericObject'
+      required: [path, content]
+    PathRequest:
+      type: object
+      properties:
+        path:
+          type: string
+      required: [path]
+    DocumentHistoryEntry:
+      type: object
+      properties:
+        hash:
+          type: string
+        author:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    TrashEntry:
+      type: object
+      properties:
+        path:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+        deleted_by:
+          type: string
+    MediaItem:
+      type: object
+      properties:
+        path:
+          type: string
+        name:
+          type: string
+        size:
+          type: integer
+        type:
+          type: string
+        url:
+          type: string
+        thumbnail_url:
+          type: string
+        uploaded_at:
+          type: string
+          format: date-time
+        uploaded_by:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/GenericObject'
+        exif:
+          $ref: '#/components/schemas/GenericObject'
+    PagedMediaResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaItem'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+    MediaUploadRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+        path:
+          type: string
+      required: [file]
+    BackupInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        size:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        type:
+          type: string
+    BackupCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        include_media:
+          type: boolean
+        include_database:
+          type: boolean
+      required: [name]
+    OperationStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        last_build:
+          type: string
+          format: date-time
+        build_duration:
+          type: integer
+        cache_size:
+          type: integer
+        queue_length:
+          type: integer
+    SettingsSection:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/GenericObject'
+    SettingsForm:
+      type: object
+      properties:
+        section:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/GenericObject'
+        values:
+          $ref: '#/components/schemas/GenericObject'
+    SettingsFormSaveRequest:
+      type: object
+      properties:
+        section:
+          type: string
+        values:
+          $ref: '#/components/schemas/GenericObject'
+      required: [section, values]
+    UserInfo:
+      type: object
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        enabled:
+          type: boolean
+        last_login:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    UserSaveRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        password:
+          type: string
+        enabled:
+          type: boolean
+      required: [username, name, email, role]
+    ThemeInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        author:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+    PluginInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        author:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        builtin:
+          type: boolean
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        actor:
+          type: string
+        action:
+          type: string
+        target:
+          type: string
+        details:
+          $ref: '#/components/schemas/GenericObject'
+        timestamp:
+          type: string
+          format: date-time
+    SiteInfo:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+        language:
+          type: string
+        version:
+          type: string
+        build_time:
+          type: string
+          format: date-time
+    ContentItem:
+      allOf:
+        - $ref: '#/components/schemas/DocumentDetail'
+    CollectionResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentSummary'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        has_more:
+          type: boolean
+    AiWriterSettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        api_key_configured:
+          type: boolean
+        model:
+          type: string
+        max_tokens:
+          type: integer
+        temperature:
+          type: number
+    AiGenerateRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        max_length:
+          type: integer
+        style:
+          type: string
+      required: [prompt]
+    AiGenerateResponse:
+      type: object
+      properties:
+        content:
+          type: string
+        tokens_used:
+          type: integer
+        model:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
