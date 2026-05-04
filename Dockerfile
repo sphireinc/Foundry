@@ -28,7 +28,7 @@ RUN set -eu; \
 FROM alpine:3.20
 
 RUN addgroup -S foundry && adduser -S -G foundry foundry \
-  && apk add --no-cache ca-certificates tzdata
+  && apk add --no-cache ca-certificates tzdata wget
 
 WORKDIR /app
 
