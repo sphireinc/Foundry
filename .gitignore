@@ -5,12 +5,6 @@ node_modules
 playwright-report/
 test-results/
 
-### Foundry planning files
-assessment-files/*
-assessment-*.txt
-Foundry-Cloud-*
-roadmap-v2
-
 ### Foundry Internal
 .foundry/
 
