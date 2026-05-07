@@ -18,6 +18,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/platformapi"
+	"github.com/sphireinc/foundry/internal/safepath"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -1135,6 +1136,12 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 
 	files := []string{basePath, pagePath}
 	files = append(files, partials...)
+	themeRoot := filepath.Join(r.cfg.ThemesDir, r.cfg.Theme)
+	for _, path := range files {
+		if err := safepath.EnsureNoSymlinkEscape(themeRoot, path); err != nil {
+			return nil, fmt.Errorf("parse templates: %w", err)
+		}
+	}
 
 	// These template functions are the stable extension helpers exposed to
 	// frontend themes:

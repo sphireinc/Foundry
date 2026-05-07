@@ -3,6 +3,7 @@ package theme
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -225,6 +226,129 @@ func TestValidateInstalledDetailedChecksThemeSecurity(t *testing.T) {
 	}
 	if !result.Valid {
 		t.Fatalf("expected security declaration to validate, got %#v", result.Diagnostics)
+	}
+}
+
+func TestLoadManifestRejectsSymlinkedManifest(t *testing.T) {
+	root := t.TempDir()
+	themeRoot := filepath.Join(root, "symlink-theme")
+	if err := os.MkdirAll(themeRoot, 0o755); err != nil {
+		t.Fatalf("mkdir theme root: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "theme.yaml")
+	if err := os.WriteFile(outside, []byte("name: symlink-theme\n"), 0o644); err != nil {
+		t.Fatalf("write outside manifest: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(themeRoot, "theme.yaml")); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
+	}
+
+	if _, err := LoadManifest(root, "symlink-theme"); err == nil {
+		t.Fatal("expected symlinked manifest to be rejected")
+	}
+}
+
+func TestLoadManifestRejectsSymlinkRoot(t *testing.T) {
+	root := t.TempDir()
+	realTheme := filepath.Join(root, "real-theme")
+	if err := os.MkdirAll(realTheme, 0o755); err != nil {
+		t.Fatalf("mkdir theme root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(realTheme, "theme.yaml"), []byte("name: linked-theme\n"), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if err := os.Symlink(realTheme, filepath.Join(root, "linked-theme")); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
+	}
+
+	if _, err := LoadManifest(root, "linked-theme"); err == nil {
+		t.Fatal("expected symlinked theme root to be rejected")
+	}
+}
+
+func TestValidateInstalledDetailedRejectsSymlinkedLayout(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "layout-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "page.html")
+	if err := os.WriteFile(outside, []byte(`{{ define "content" }}outside{{ end }}`), 0o644); err != nil {
+		t.Fatalf("write outside layout: %v", err)
+	}
+	layoutPath := filepath.Join(scaffolded, "layouts", "page.html")
+	if err := os.Remove(layoutPath); err != nil {
+		t.Fatalf("remove layout: %v", err)
+	}
+	if err := os.Symlink(outside, layoutPath); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "layout-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected symlinked layout to invalidate theme")
+	}
+}
+
+func TestValidateInstalledDetailedRejectsSymlinkRoot(t *testing.T) {
+	root := t.TempDir()
+	realTheme := filepath.Join(root, "real-theme")
+	if err := os.MkdirAll(realTheme, 0o755); err != nil {
+		t.Fatalf("mkdir theme root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(realTheme, "theme.yaml"), []byte(`name: linked-theme
+title: Linked Theme
+version: 0.1.0
+min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
+layouts: [base, index, page, post, list]
+slots: [head.end, body.start, body.end, page.before_main, page.after_main, page.before_content, page.after_content, post.before_header, post.after_header, post.before_content, post.after_content, post.sidebar.top, post.sidebar.overview, post.sidebar.bottom]
+`), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if err := os.Symlink(realTheme, filepath.Join(root, "linked-theme")); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "linked-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected symlinked root to invalidate theme")
+	}
+	var found bool
+	for _, diagnostic := range result.Diagnostics {
+		if strings.Contains(strings.ToLower(diagnostic.Message), "symlink") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected symlink diagnostic, got %#v", result.Diagnostics)
+	}
+}
+
+func TestManagerMustExistRejectsSymlinkRoot(t *testing.T) {
+	root := t.TempDir()
+	themeRoot := filepath.Join(root, "linked-theme")
+	if err := os.MkdirAll(filepath.Join(root, "real-theme"), 0o755); err != nil {
+		t.Fatalf("mkdir theme root: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "real-theme"), themeRoot); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
+	}
+
+	mgr := NewManager(root, "linked-theme")
+	if err := mgr.MustExist(); err == nil {
+		t.Fatal("expected symlinked theme root to be rejected")
+	}
+	if err := ValidateInstalled(root, "linked-theme"); err == nil {
+		t.Fatal("expected symlinked theme root validation to fail")
 	}
 }
 

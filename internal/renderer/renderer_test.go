@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -445,6 +446,41 @@ func TestRendererHookFailuresAndBuild(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.PublicDir, "__foundry", "sdk", "frontend", "index.js")); err != nil {
 		t.Fatalf("expected frontend sdk asset to be copied: %v", err)
+	}
+}
+
+func TestRendererRejectsSymlinkedThemeLayout(t *testing.T) {
+	cfg := testRendererConfig(t)
+	writeRendererTheme(t, cfg)
+
+	outside := filepath.Join(t.TempDir(), "base.html")
+	if err := os.WriteFile(outside, []byte(`{{ define "base" }}symlinked{{ end }}`), 0o644); err != nil {
+		t.Fatalf("write outside layout: %v", err)
+	}
+	basePath := filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "base.html")
+	if err := os.Remove(basePath); err != nil {
+		t.Fatalf("remove base layout: %v", err)
+	}
+	if err := os.Symlink(outside, basePath); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
+	}
+
+	r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil)
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       cfg.DefaultLang,
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+		HTMLBody:   template.HTML("<p>About</p>"),
+	})
+
+	if _, err := r.RenderURL(graph, "/about/", false); err == nil {
+		t.Fatal("expected symlinked layout to be rejected")
 	}
 }
 

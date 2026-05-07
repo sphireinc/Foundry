@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -1032,11 +1033,18 @@ func TestAdminCustomPathRoutesAndAssets(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Admin.Path = "/cms-admin"
 	cfg.ApplyDefaults()
+	outside := filepath.Join(t.TempDir(), "secret.js")
+	if err := os.WriteFile(outside, []byte(`export default function secret(){}`), 0o644); err != nil {
+		t.Fatalf("write outside plugin asset: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Join(cfg.PluginsDir, "search", "admin"), 0o755); err != nil {
 		t.Fatalf("mkdir plugin admin assets: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(cfg.PluginsDir, "search", "admin", "console.js"), []byte(`export default function () {}`), 0o644); err != nil {
 		t.Fatalf("write plugin admin asset: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(cfg.PluginsDir, "search", "admin", "linked.js")); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
 	}
 	if err := os.WriteFile(filepath.Join(cfg.PluginsDir, "search", "admin", "secret.txt"), []byte(`top-secret`), 0o644); err != nil {
 		t.Fatalf("write undeclared plugin admin asset: %v", err)
@@ -1046,7 +1054,13 @@ func TestAdminCustomPathRoutesAndAssets(t *testing.T) {
 			"search": {
 				Name: "search",
 				AdminExtensions: plugins.AdminExtensions{
-					Pages: []plugins.AdminPage{{Key: "search-console", Title: "Search Console", Route: "/plugins/search", Module: "admin/console.js"}},
+					Pages: []plugins.AdminPage{{
+						Key:    "search-console",
+						Title:  "Search Console",
+						Route:  "/plugins/search",
+						Module: "admin/console.js",
+						Styles: []string{"admin/linked.js"},
+					}},
 				},
 			},
 		}
@@ -1104,6 +1118,15 @@ func TestAdminCustomPathRoutesAndAssets(t *testing.T) {
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected undeclared plugin asset to be hidden, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/cms-admin/extensions/search/admin/linked.js", nil)
+	req.RemoteAddr = "127.0.0.1:10000"
+	req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected symlinked plugin asset to be hidden, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
 

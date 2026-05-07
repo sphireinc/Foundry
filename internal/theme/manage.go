@@ -165,7 +165,11 @@ func LoadManifest(themesDir, name string) (*Manifest, error) {
 		return nil, err
 	}
 
-	path := filepath.Join(themesDir, name, "theme.yaml")
+	root := filepath.Join(themesDir, name)
+	path := filepath.Join(root, "theme.yaml")
+	if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
+		return nil, err
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

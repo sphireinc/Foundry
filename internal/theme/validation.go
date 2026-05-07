@@ -50,6 +50,14 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 		}
 		return nil, err
 	}
+	if symlinkInfo, lstatErr := os.Lstat(root); lstatErr == nil && symlinkInfo.Mode()&os.ModeSymlink != 0 {
+		result := &ValidationResult{Valid: false, Diagnostics: []ValidationDiagnostic{{
+			Severity: "error",
+			Path:     filepath.ToSlash(root),
+			Message:  "theme path is a symlink",
+		}}}
+		return result, nil
+	}
 	if !info.IsDir() {
 		return nil, fmt.Errorf("theme path %q is not a directory", root)
 	}
@@ -85,6 +93,10 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	requiredLayouts := manifest.RequiredLayouts()
 	for _, layout := range requiredLayouts {
 		path := filepath.Join(root, "layouts", layout+".html")
+		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
+			add("error", path, err.Error())
+			continue
+		}
 		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
 				add("error", path, "missing required theme layout")
@@ -100,6 +112,10 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 		filepath.Join(root, "layouts", "partials", "footer.html"),
 	}
 	for _, path := range requiredPartials {
+		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
+			add("error", path, err.Error())
+			continue
+		}
 		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
 				add("error", path, "missing required theme partial")
@@ -162,6 +178,9 @@ func validateThemeSecurityDetailed(root string, manifest *Manifest, add func(sev
 	assetAllowlist := themeExternalAssetAllowlist(manifest.Security)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return err
+		}
+		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
 			return err
 		}
 		if d.IsDir() {
@@ -288,6 +307,10 @@ func validateRequiredLaunchSlotsDetailed(root string, manifest *Manifest, add fu
 
 	for slot, relPath := range requiredLaunchSlotFiles {
 		path := filepath.Join(root, relPath)
+		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
+			add("error", path, err.Error())
+			continue
+		}
 		body, err := os.ReadFile(path)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -323,6 +346,10 @@ func validateTemplateReferences(root string, manifest *Manifest, add func(severi
 	files, _ := filepath.Glob(filepath.Join(root, "layouts", "*.html"))
 	files = append(files, partials...)
 	for _, path := range files {
+		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
+			add("error", path, err.Error())
+			continue
+		}
 		body, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -348,6 +375,12 @@ func validateTemplateParsing(root string, add func(severity, path, message strin
 	files = append(files, partials...)
 	if len(files) == 0 {
 		return
+	}
+	for _, path := range files {
+		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
+			add("error", path, err.Error())
+			return
+		}
 	}
 	_, err := template.New("validate").Funcs(template.FuncMap{
 		"safeHTML": func(v any) template.HTML { return "" },

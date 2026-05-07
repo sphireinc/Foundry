@@ -38,6 +38,9 @@ func main() {
 	if err := cleanupAudit(filepath.Join(cfg.DataDir, "admin", "audit.jsonl")); err != nil {
 		fatalf("cleanup audit: %v", err)
 	}
+	if err := cleanupPlaywrightOutputs("."); err != nil {
+		fatalf("cleanup playwright outputs: %v", err)
+	}
 }
 
 func cleanupContent(root string) error {
@@ -185,6 +188,19 @@ func cleanupAudit(path string) error {
 	out := bytes.Join(filtered, []byte{'\n'})
 	out = append(out, '\n')
 	return os.WriteFile(path, out, 0o644)
+}
+
+func cleanupPlaywrightOutputs(root string) error {
+	if strings.TrimSpace(root) == "" {
+		root = "."
+	}
+	for _, name := range []string{"test-results", "playwright-report"} {
+		target := filepath.Join(root, name)
+		if err := os.RemoveAll(target); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func fatalf(format string, args ...any) {
