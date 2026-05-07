@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -164,6 +165,23 @@ func TestLoaderDefaultsAndErrors(t *testing.T) {
 	}
 	if _, err := loader.loadDocument(filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "missing.md"), "missing.md", "en", true, "page"); err == nil {
 		t.Fatal("expected read error")
+	}
+}
+
+func TestLoaderRejectsSymlinkedContent(t *testing.T) {
+	cfg := testLoaderConfig(t)
+	outside := filepath.Join(t.TempDir(), "secret.md")
+	if err := os.WriteFile(outside, []byte("---\ntitle: Secret\n---\n\nsecret"), 0o600); err != nil {
+		t.Fatalf("write outside content: %v", err)
+	}
+	link := filepath.Join(cfg.ContentDir, cfg.Content.PagesDir, "linked.md")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink not supported on %s: %v", runtime.GOOS, err)
+	}
+
+	loader := NewLoader(cfg, nil, true)
+	if _, err := loader.Load(context.Background()); err == nil {
+		t.Fatal("expected loader to reject symlinked content")
 	}
 }
 

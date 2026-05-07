@@ -2,8 +2,8 @@
 package generated
 
 import (
-	_ "github.com/sphireinc/foundry/plugins/aiwriter"
 	_ "github.com/sphireinc/foundry/plugins/readingtime"
+	_ "github.com/sphireinc/foundry/plugins/relatedposts"
 	_ "github.com/sphireinc/foundry/plugins/syntaxhighlight"
 	_ "github.com/sphireinc/foundry/plugins/toc"
 )

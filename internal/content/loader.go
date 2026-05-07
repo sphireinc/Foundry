@@ -15,6 +15,7 @@ import (
 	"github.com/sphireinc/foundry/internal/i18n"
 	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
+	"github.com/sphireinc/foundry/internal/safepath"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -141,6 +142,9 @@ func (l *Loader) loadSection(graph *SiteGraph, docType, root string) error {
 		}
 		if info.IsDir() || filepath.Ext(path) != ".md" || lifecycle.IsDerivedPath(path) {
 			return nil
+		}
+		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
+			return err
 		}
 
 		if err := l.hooks.OnContentDiscovered(path); err != nil {

@@ -222,6 +222,10 @@ func (r *Router) handlePluginExtensionAsset(w http.ResponseWriter, req *http.Req
 		http.NotFound(w, req)
 		return
 	}
+	if err := safepath.EnsureNoSymlinkEscape(root, target); err != nil {
+		http.NotFound(w, req)
+		return
+	}
 	info, err := os.Stat(target)
 	if err != nil || info.IsDir() {
 		http.NotFound(w, req)

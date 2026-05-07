@@ -39,9 +39,12 @@ func (m *Manager) MustExist() error {
 	}
 
 	themeDir := filepath.Join(m.root, themeName)
-	info, err := os.Stat(themeDir)
+	info, err := os.Lstat(themeDir)
 	if err != nil {
 		return fmt.Errorf("active theme not found: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("theme path is a symlink: %s", themeDir)
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("theme path is not a directory: %s", themeDir)
