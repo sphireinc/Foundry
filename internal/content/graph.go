@@ -18,7 +18,6 @@ type SiteGraph struct {
 func NewSiteGraph(cfg *config.Config) *SiteGraph {
 	return &SiteGraph{
 		Config:     cfg,
-		Documents:  make([]*Document, 0),
 		ByURL:      make(map[string]*Document),
 		ByType:     make(map[string][]*Document),
 		ByLang:     make(map[string][]*Document),
