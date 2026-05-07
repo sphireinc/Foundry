@@ -175,11 +175,7 @@ type AssetSet struct {
 
 // NewAssetSet creates an empty asset accumulator for a render pass.
 func NewAssetSet() *AssetSet {
-	return &AssetSet{
-		styles:      make([]string, 0),
-		headScripts: make([]string, 0),
-		bodyScripts: make([]string, 0),
-	}
+	return &AssetSet{}
 }
 
 func (a *AssetSet) AddStyle(url string) {
@@ -339,7 +335,7 @@ func (r *Renderer) buildTaxonomyArchives(ctx context.Context, graph *content.Sit
 
 		for _, term := range graph.Taxonomies.OrderedTerms(taxonomyName) {
 			entries := terms[term]
-			byLang := make(map[string][]*content.Document)
+			byLang := make(map[string][]*content.Document, len(entries))
 
 			for _, entry := range entries {
 				doc, ok := r.findDocumentByID(graph, entry.DocumentID)
@@ -462,12 +458,13 @@ func (r *Renderer) writeSearchIndex(graph *content.SiteGraph) error {
 		if doc == nil || doc.Draft || documentArchived(doc) {
 			continue
 		}
+		normalizedContent := normalizeSearchContent(doc)
 		items = append(items, searchIndexEntry{
 			Title:      doc.Title,
 			URL:        doc.URL,
 			Summary:    doc.Summary,
-			Snippet:    buildSearchSnippet(doc.Summary, normalizeSearchContent(doc)),
-			Content:    normalizeSearchContent(doc),
+			Snippet:    buildSearchSnippet(doc.Summary, normalizedContent),
+			Content:    normalizedContent,
 			Type:       doc.Type,
 			Lang:       doc.Lang,
 			Layout:     doc.Layout,
@@ -877,13 +874,19 @@ func (r *Renderer) documentsForSearch(graph *content.SiteGraph, lang, query stri
 			continue
 		}
 		if needle != "" {
-			haystack := strings.ToLower(strings.Join([]string{
-				doc.Title,
-				doc.Slug,
-				doc.URL,
-				doc.Summary,
-				normalizeSearchContent(doc),
-			}, " "))
+			normalizedContent := normalizeSearchContent(doc)
+			var haystackBuilder strings.Builder
+			haystackBuilder.Grow(len(doc.Title) + len(doc.Slug) + len(doc.URL) + len(doc.Summary) + len(normalizedContent) + 4)
+			haystackBuilder.WriteString(doc.Title)
+			haystackBuilder.WriteByte(' ')
+			haystackBuilder.WriteString(doc.Slug)
+			haystackBuilder.WriteByte(' ')
+			haystackBuilder.WriteString(doc.URL)
+			haystackBuilder.WriteByte(' ')
+			haystackBuilder.WriteString(doc.Summary)
+			haystackBuilder.WriteByte(' ')
+			haystackBuilder.WriteString(normalizedContent)
+			haystack := strings.ToLower(haystackBuilder.String())
 			if !strings.Contains(haystack, needle) {
 				continue
 			}

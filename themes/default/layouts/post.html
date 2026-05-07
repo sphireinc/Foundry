@@ -5,11 +5,16 @@
 
     <header class="post-header">
       <div class="eyebrow">Post</div>
-      <h1>{{ .Page.Title }}</h1>
+      <h1>{{ with field .Page "hero_title" }}{{ . }}{{ else }}{{ .Page.Title }}{{ end }}</h1>
 
-      {{ if .Page.Summary }}
+      {{ with field .Page "hero_body" }}
+      <p>{{ . }}</p>
+      {{ else }}
+        {{ if .Page.Summary }}
       <p>{{ .Page.Summary }}</p>
-      {{ end }} {{ template "post_meta" . }}
+        {{ end }}
+      {{ end }}
+      {{ template "post_meta" . }}
     </header>
 
     {{ pluginSlot "post.after_header" }}

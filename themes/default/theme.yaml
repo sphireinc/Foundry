@@ -26,7 +26,24 @@ config_schema:
     label: Accent Color
     type: text
     default: "#0c7c59"
-field_contracts: []
+field_contracts:
+  - key: marketing-page
+    title: Marketing Page
+    description: Fields for standard marketing pages and feature posts.
+    target:
+      scope: document
+      types:
+        - post
+      layouts:
+        - post
+    fields:
+      - name: hero_title
+        type: text
+        label: Hero Title
+        required: true
+      - name: hero_body
+        type: textarea
+        label: Hero Body
 slots:
   - head.end
   - body.start

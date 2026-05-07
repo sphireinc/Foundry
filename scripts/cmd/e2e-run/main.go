@@ -7,12 +7,19 @@ import (
 )
 
 func main() {
-	if err := run("go", "run", "./scripts/cmd/e2e-cleanup"); err != nil {
+	gocache := os.Getenv("GOCACHE")
+	if gocache == "" {
+		if tmp, err := os.MkdirTemp("", "foundry-e2e-gocache-"); err == nil {
+			gocache = tmp
+		}
+	}
+
+	if err := runWithEnv(gocache, "go", "run", "./scripts/cmd/e2e-cleanup"); err != nil {
 		fatalf("pre-clean failed: %v", err)
 	}
 
 	testErr := run("npx", "playwright", "test")
-	cleanErr := run("go", "run", "./scripts/cmd/e2e-cleanup")
+	cleanErr := runWithEnv(gocache, "go", "run", "./scripts/cmd/e2e-cleanup")
 	if cleanErr != nil {
 		fatalf("post-clean failed: %v", cleanErr)
 	}
@@ -25,11 +32,19 @@ func main() {
 }
 
 func run(name string, args ...string) error {
+	return runWithEnv("", name, args...)
+}
+
+func runWithEnv(gocache string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	cmd.Env = os.Environ()
+	if gocache != "" {
+		cmd.Env = append(cmd.Env, "GOCACHE="+gocache)
+	}
+	cmd.Env = append(cmd.Env, "GOTOOLCHAIN=go1.26.1")
 	return cmd.Run()
 }
 
