@@ -4,6 +4,7 @@ MAIN=./cmd/foundry
 PLUGIN_SYNC=./cmd/plugin-sync
 
 GO=go
+E2E_GOCACHE:=$(shell mktemp -d /tmp/foundry-e2e-gocache.XXXXXX)
 
 .PHONY: help
 help:
@@ -98,7 +99,7 @@ test: plugins-sync
 
 .PHONY: test-e2e
 test-e2e:
-	npm run test:e2e:full
+	GOTOOLCHAIN=go1.26.1 GOCACHE=$(E2E_GOCACHE) npm run test:e2e:full
 
 .PHONY: tidy
 tidy:

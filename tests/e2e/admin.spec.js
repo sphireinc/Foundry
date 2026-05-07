@@ -11,13 +11,15 @@ test.describe.configure({ mode: 'serial' });
 async function login(page, username = ADMIN_USERNAME, password = ADMIN_PASSWORD) {
   await page.goto('/__admin');
   const loginHeading = page.getByRole('heading', { name: /Foundry Admin/i });
-  if (await loginHeading.count()) {
+  const shellMain = page.locator('.foundry-main');
+  await expect(loginHeading.or(shellMain)).toBeVisible();
+  if (await loginHeading.isVisible()) {
     await expect(loginHeading).toBeVisible();
     await page.getByLabel(/Username/i).fill(username);
     await page.getByLabel(/Password/i).fill(password);
     await page.getByRole('button', { name: /Log In/i }).click();
   }
-  await expect(page.locator('.foundry-shell')).toBeVisible();
+  await expect(shellMain).toBeVisible();
   await expect(page.locator('.foundry-nav')).toBeVisible();
   await expect(page.getByText(/insufficient admin capabilities/i)).toHaveCount(0);
 }
@@ -236,7 +238,7 @@ test.describe('default admin theme', () => {
     await expect(page).toHaveURL(/\/__admin\/operations$/);
     await expect(page.getByRole('heading', { level: 2, name: /^Operations$/i })).toBeVisible();
     await expect(page.getByText(/Current Release/i)).toBeVisible();
-    await expect(page.getByText(/Latest Release/i)).toBeVisible();
+    await expect(page.getByText('Latest Release', { exact: true })).toBeVisible();
     await expect(page.getByText(/Install Mode/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Refresh Update Status/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Apply Update/i })).toBeVisible();
@@ -266,7 +268,8 @@ test.describe('default admin theme', () => {
     await openHelloWorldInEditor(page);
 
     await expect(page.locator('#document-frontmatter-title')).toBeVisible();
-    await expect(page.locator('#document-raw')).toBeVisible();
+    await expect(page.locator('#document-raw')).toBeHidden();
+    await expect(page.locator('#document-raw')).toHaveValue(/Hello World/i);
     await expect(page.locator('#document-frontmatter-title')).toHaveValue(/Hello World/i);
     await expect(page.getByText(/Structured Frontmatter/i)).toBeVisible();
   });
@@ -331,16 +334,21 @@ test.describe('default admin theme', () => {
       layout: 'post',
       body: '# E2E Custom Seed\n\nA seeded post for custom fields.\n',
       draft: false,
+      fields: {
+        hero_title: 'E2E Seed Hero',
+        hero_body: 'A seeded hero body for the contract-driven editor path.',
+      },
     });
 
     try {
       await createDocumentViaAdminAPI(page, 'post', slug, 'en', 'post');
       await saveDocumentViaAdminAPI(page, sourcePath, initialRaw, 'e2e create custom field post');
-      await switchFrontendThemeViaAdminAPI(page, 'Foundry-Cloud-Landing');
+      await switchFrontendThemeViaAdminAPI(page, currentTheme);
       await page.reload();
 
       await openDocumentInEditor(page, slug, sourcePath);
-      await expect(page.locator('#document-save-form').getByText(/^Custom Fields$/i)).toBeVisible();
+      await expect(page.locator('.frontmatter-card-header strong', { hasText: 'Custom Fields' }).first()).toBeVisible();
+      await expect(page.locator('[data-custom-field="hero_title"]')).toBeVisible();
       await page.locator('[data-custom-field="hero_title"]').fill(heroTitle);
       await page.locator('#document-version-comment').fill('e2e custom field update');
       await page.getByRole('button', { name: /^Save Document$/i }).click();
@@ -375,7 +383,8 @@ test.describe('default admin theme', () => {
     await ensureFrontendTheme(page, 'default');
 
     await openHelloWorldInEditor(page);
-    await expect(page.locator('#document-raw')).toBeVisible();
+    await expect(page.locator('#document-raw')).toBeHidden();
+    await expect(page.locator('#document-raw')).toHaveValue(/Hello World/i);
 
     await page.getByRole('button', { name: /^Preview$/i }).click();
 

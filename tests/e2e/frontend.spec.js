@@ -69,7 +69,7 @@ test.describe('default frontend theme', () => {
     await ensureFrontendTheme(page, 'default');
     await page.goto('/posts/hello-world/');
 
-    await expect(page.locator('.post-header h1')).toHaveText(/^Hello World$/i);
+    await expect(page.locator('.post-header h1')).toHaveText(/^Build with confidence$/i);
     await expect(page.locator('.meta-panel')).toContainText(/Overview/i);
     await expect(page.locator('.meta-panel')).toContainText(/On this page/i);
     await expect(page.locator('.meta-panel')).toContainText(/go/i);
