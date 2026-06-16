@@ -186,7 +186,11 @@ func NormalizeTarget(raw string) (string, error) {
 	if !strings.HasPrefix(value, "/") {
 		value = "/" + value
 	}
-	path := normalizePath(u.Path)
+	pathValue := u.Path
+	if !strings.HasPrefix(pathValue, "/") {
+		pathValue = "/" + pathValue
+	}
+	path := normalizePath(pathValue)
 	if u.RawQuery != "" {
 		path += "?" + u.RawQuery
 	}
