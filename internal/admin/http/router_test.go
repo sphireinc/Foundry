@@ -50,6 +50,49 @@ func TestStatusEndpoint(t *testing.T) {
 	}
 }
 
+func TestRedirectManagementRoutes(t *testing.T) {
+	cfg := testConfig(t)
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	doReq := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.RemoteAddr = "127.0.0.1:10000"
+		req.Header.Set("X-Foundry-Admin-Token", cfg.Admin.AccessToken)
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+		return rr
+	}
+
+	save := doReq(http.MethodPost, "/__admin/api/redirects/save", `{"redirects":[{"from":"/old","to":"/about/","status":301,"enabled":true,"preserve_query":true,"note":"legacy"}]}`)
+	if save.Code != http.StatusOK {
+		t.Fatalf("expected save 200, got %d: %s", save.Code, save.Body.String())
+	}
+	var saved admintypes.RedirectListResponse
+	if err := json.Unmarshal(save.Body.Bytes(), &saved); err != nil {
+		t.Fatalf("decode saved redirects: %v", err)
+	}
+	if len(saved.Redirects) != 1 || saved.Redirects[0].From != "/old/" || !saved.Redirects[0].PreserveQuery {
+		t.Fatalf("unexpected saved redirects: %#v", saved.Redirects)
+	}
+
+	list := doReq(http.MethodGet, "/__admin/api/redirects", "")
+	if list.Code != http.StatusOK {
+		t.Fatalf("expected list 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var listed admintypes.RedirectListResponse
+	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode listed redirects: %v", err)
+	}
+	if len(listed.Redirects) != 1 || listed.Redirects[0].To != "/about/" {
+		t.Fatalf("unexpected listed redirects: %#v", listed.Redirects)
+	}
+}
+
 func TestCapabilitiesIncludePprofFeatureWhenEnabled(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Admin.Debug.Pprof = true

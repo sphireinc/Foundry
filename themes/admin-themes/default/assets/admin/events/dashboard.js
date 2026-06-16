@@ -112,6 +112,77 @@ export const bindDashboardEvents = (ctx) => {
     });
   });
 
+  const ensureRedirectState = () => {
+    state.redirects = state.redirects || { path: 'data/redirects.yaml', redirects: [] };
+    if (!Array.isArray(state.redirects.redirects)) {
+      state.redirects.redirects = [];
+    }
+    return state.redirects.redirects;
+  };
+
+  root.querySelectorAll('[data-redirect-field]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const redirects = ensureRedirectState();
+      const index = Number.parseInt(input.dataset.redirectIndex || '-1', 10);
+      if (!Number.isInteger(index) || index < 0 || !redirects[index]) return;
+      const field = input.dataset.redirectField;
+      if (field === 'status') {
+        redirects[index][field] = Number.parseInt(input.value || '301', 10);
+      } else if (field === 'enabled' || field === 'preserve_query') {
+        redirects[index][field] = !!input.checked;
+      } else {
+        redirects[index][field] = input.value || '';
+      }
+    });
+    input.addEventListener('change', () => {
+      input.dispatchEvent(new Event('input'));
+    });
+  });
+
+  document.getElementById('redirect-add')?.addEventListener('click', () => {
+    const redirects = ensureRedirectState();
+    redirects.push({
+      from: '',
+      to: '',
+      status: 301,
+      enabled: true,
+      preserve_query: false,
+      note: '',
+    });
+    updateTablePage('redirects', Math.ceil(redirects.length / state.tables.redirects.pageSize));
+    render();
+  });
+
+  root.querySelectorAll('[data-delete-redirect]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const redirects = ensureRedirectState();
+      const index = Number.parseInt(button.dataset.deleteRedirect || '-1', 10);
+      if (!Number.isInteger(index) || index < 0 || !redirects[index]) return;
+      redirects.splice(index, 1);
+      updateTablePage('redirects', state.tables.redirects.page);
+      render();
+    });
+  });
+
+  document.getElementById('redirect-save')?.addEventListener('click', async () => {
+    try {
+      const redirects = ensureRedirectState().map((rule) => ({
+        from: rule.from || '',
+        to: rule.to || '',
+        status: Number.parseInt(rule.status || '301', 10),
+        enabled: !!rule.enabled,
+        preserve_query: !!rule.preserve_query,
+        note: rule.note || '',
+      }));
+      state.redirects = await admin.redirects.save({ redirects });
+      setFlash('Redirects saved.');
+      await fetchAll();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
   document.getElementById('logout')?.addEventListener('click', async () => {
     await releaseCurrentDocumentLock();
     try {

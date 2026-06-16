@@ -12,6 +12,7 @@ export const renderTableControls = (state, tableName, totalCount, totalPages) =>
     audit: ['timestamp', 'action', 'actor', 'outcome'],
     plugins: ['name', 'status', 'version'],
     themes: ['name', 'version', 'valid'],
+    redirects: ['from', 'to', 'status', 'enabled'],
   }[tableName] || [table.sort];
   const options = Array.from(new Set([table.sort, ...choices]))
     .map(
@@ -146,11 +147,17 @@ export const shellNav = (state, adminBase, options = {}) => {
     ['custom-fields', 'Custom Fields'],
     ['audit', 'Audit'],
     ['settings', 'Settings'],
+    ['redirects', 'Redirects'],
     ['extensions', 'Extensions'],
     ['plugins', 'Plugins'],
     ['themes', 'Themes'],
     ['operations', 'Operations'],
-    ...(options.debugEnabled ? [['diagnostics', 'Diagnostics'], ['debug', 'Debug']] : []),
+    ...(options.debugEnabled
+      ? [
+          ['diagnostics', 'Diagnostics'],
+          ['debug', 'Debug'],
+        ]
+      : []),
   ];
   const extensionPages = Array.isArray(options.extensionPages) ? options.extensionPages : [];
   const grouped = new Map(navGroups.map((group) => [group.key, []]));
@@ -159,16 +166,22 @@ export const shellNav = (state, adminBase, options = {}) => {
     .forEach(([key, label]) => {
       const groupKey = builtinSectionGroup(key);
       if (!grouped.has(groupKey)) grouped.set(groupKey, []);
-      grouped.get(groupKey).push(
-        `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
-      );
+      grouped
+        .get(groupKey)
+        .push(
+          `<a class="foundry-nav-item${currentSection === key ? ' active' : ''}" href="${adminPathForSection(adminBase, key)}" data-section="${key}">${label}</a>`
+        );
     });
   extensionPages.forEach((page) => {
-    const groupKey = String(page.navGroup || 'admin').trim().toLowerCase();
+    const groupKey = String(page.navGroup || 'admin')
+      .trim()
+      .toLowerCase();
     if (!grouped.has(groupKey)) grouped.set(groupKey, []);
-    grouped.get(groupKey).push(
-      `<a class="foundry-nav-item foundry-nav-item-extension${currentSection === normalizeAdminSection(page.section) ? ' active' : ''}" href="${adminPathForSection(adminBase, page.section)}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
-    );
+    grouped
+      .get(groupKey)
+      .push(
+        `<a class="foundry-nav-item foundry-nav-item-extension${currentSection === normalizeAdminSection(page.section) ? ' active' : ''}" href="${adminPathForSection(adminBase, page.section)}" data-section="${page.section}" data-extension-page="${escapeHTML(page.key)}">${escapeHTML(page.title)}</a>`
+      );
   });
   return navGroups
     .map((group) => {
@@ -299,7 +312,9 @@ export const renderTrashSelectionRows = (entries, selected, kind) =>
 export const renderOverview = (state) => {
   const content = state.status?.content || {};
   const runtime = state.runtimeStatus || {};
-  const failingChecks = (state.status?.checks || []).filter((check) => check?.status && check.status !== 'ok');
+  const failingChecks = (state.status?.checks || []).filter(
+    (check) => check?.status && check.status !== 'ok'
+  );
   const sessionWarnings = [];
   if ((runtime.activity?.concurrent_users || 0) > 0) {
     sessionWarnings.push({
@@ -356,7 +371,8 @@ export const renderOverview = (state) => {
         <div class="mini-list panel-pad">
           ${combinedWarnings
             .map(
-              (check) => `<div class="mini-list-row"><span>${escapeHTML(check.name || 'check')}</span><strong>${escapeHTML(check.message || check.status || 'attention required')}</strong></div>`
+              (check) =>
+                `<div class="mini-list-row"><span>${escapeHTML(check.name || 'check')}</span><strong>${escapeHTML(check.message || check.status || 'attention required')}</strong></div>`
             )
             .join('')}
         </div>
@@ -410,13 +426,15 @@ export const renderOverview = (state) => {
       <section class="panel">
         <div class="panel-header"><div><h2>Recent Activity</h2><div class="muted">${escapeHTML(runtime.activity?.recent_audit_events || 0)} audit events in window</div></div></div>
         <div class="panel-pad mini-list">
-          ${Object.entries(runtime.activity?.recent_audit_by_action || {})
-            .slice(0, 6)
-            .map(
-              ([action, count]) =>
-                `<div class="mini-list-row"><span>${escapeHTML(action)}</span><strong>${escapeHTML(count)}</strong></div>`
-            )
-            .join('') || '<div class="empty-state">No recent audit activity yet.</div>'}
+          ${
+            Object.entries(runtime.activity?.recent_audit_by_action || {})
+              .slice(0, 6)
+              .map(
+                ([action, count]) =>
+                  `<div class="mini-list-row"><span>${escapeHTML(action)}</span><strong>${escapeHTML(count)}</strong></div>`
+              )
+              .join('') || '<div class="empty-state">No recent audit activity yet.</div>'
+          }
         </div>
       </section>
     </div>` +

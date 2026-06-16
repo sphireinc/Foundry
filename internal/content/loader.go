@@ -15,6 +15,7 @@ import (
 	"github.com/sphireinc/foundry/internal/i18n"
 	"github.com/sphireinc/foundry/internal/lifecycle"
 	"github.com/sphireinc/foundry/internal/markup"
+	"github.com/sphireinc/foundry/internal/redirects"
 	"github.com/sphireinc/foundry/internal/safepath"
 	"github.com/sphireinc/foundry/internal/theme"
 )
@@ -110,6 +111,12 @@ func (l *Loader) Load(ctx context.Context) (*SiteGraph, error) {
 	if err := l.hooks.OnDataLoaded(graph.Data); err != nil {
 		return nil, err
 	}
+
+	redirectStore, err := redirects.Load(l.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("load redirects: %w", err)
+	}
+	graph.Redirects = redirectStore.Redirects
 
 	if err := l.hooks.OnGraphBuilding(graph); err != nil {
 		return nil, err

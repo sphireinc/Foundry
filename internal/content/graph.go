@@ -2,6 +2,7 @@ package content
 
 import (
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/redirects"
 	"github.com/sphireinc/foundry/internal/taxonomy"
 )
 
@@ -13,6 +14,7 @@ type SiteGraph struct {
 	ByLang     map[string][]*Document
 	Taxonomies *taxonomy.Index
 	Data       map[string]any
+	Redirects  []redirects.Rule
 }
 
 func NewSiteGraph(cfg *config.Config) *SiteGraph {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/redirects"
 )
 
 func TestResolverAssignURLsAndHelpers(t *testing.T) {
@@ -56,5 +57,16 @@ func TestResolverErrors(t *testing.T) {
 	}
 	if err := r.AssignURLs(graph); err == nil {
 		t.Fatal("expected route collision")
+	}
+
+	graph = content.NewSiteGraph(cfg)
+	graph.Documents = []*content.Document{
+		{Type: "page", Slug: "about", Lang: "en", SourcePath: "about.md"},
+	}
+	graph.Redirects = []redirects.Rule{
+		{From: "/about/", To: "/company/", Status: 301, Enabled: true},
+	}
+	if err := r.AssignURLs(graph); err == nil {
+		t.Fatal("expected redirect collision")
 	}
 }

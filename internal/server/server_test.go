@@ -17,6 +17,7 @@ import (
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/deps"
 	"github.com/sphireinc/foundry/internal/diag"
+	"github.com/sphireinc/foundry/internal/redirects"
 	"github.com/sphireinc/foundry/internal/renderer"
 	"github.com/sphireinc/foundry/internal/router"
 	"github.com/sphireinc/foundry/internal/theme"
@@ -89,6 +90,9 @@ func TestServerHelpersAndHandlers(t *testing.T) {
 		Taxonomies: map[string][]string{"tags": {"go"}},
 	}
 	graph.Add(doc)
+	graph.Redirects = []redirects.Rule{
+		{From: "/moved/", To: "/posts/hello/", Status: http.StatusMovedPermanently, Enabled: true, PreserveQuery: true},
+	}
 
 	s := &Server{
 		cfg:          cfg,
@@ -151,6 +155,12 @@ func TestServerHelpersAndHandlers(t *testing.T) {
 	}
 
 	cfg.Server.LiveReload = false
+	rr = httptest.NewRecorder()
+	s.handlePage(rr, httptest.NewRequest(http.MethodGet, "/moved?utm=1", nil))
+	if rr.Code != http.StatusMovedPermanently || rr.Header().Get("Location") != "/posts/hello/?utm=1" {
+		t.Fatalf("unexpected redirect response: %d %q", rr.Code, rr.Header().Get("Location"))
+	}
+
 	rr = httptest.NewRecorder()
 	s.handlePage(rr, httptest.NewRequest(http.MethodGet, "/posts/hello", nil))
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "post Hello") {

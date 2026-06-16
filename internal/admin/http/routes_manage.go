@@ -8,12 +8,20 @@ func registerManagementRoutes(r *Router) []routeDef {
 	routes := make([]routeDef, 0, 32)
 	routes = append(routes, backupRoutes(r)...)
 	routes = append(routes, operationsRoutes(r)...)
+	routes = append(routes, redirectRoutes(r)...)
 	routes = append(routes, settingsRoutes(r)...)
 	routes = append(routes, userRoutes(r)...)
 	routes = append(routes, themeRoutes(r)...)
 	routes = append(routes, pluginRoutes(r)...)
 	routes = append(routes, auditRoutes(r)...)
 	return routes
+}
+
+func redirectRoutes(r *Router) []routeDef {
+	return []routeDef{
+		{pattern: r.routePath("/api/redirects"), handler: http.HandlerFunc(r.handleRedirects), capability: "config.manage"},
+		{pattern: r.routePath("/api/redirects/save"), handler: http.HandlerFunc(r.handleSaveRedirects), capability: "config.manage"},
+	}
 }
 
 func backupRoutes(r *Router) []routeDef {
