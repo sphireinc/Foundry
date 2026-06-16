@@ -47,6 +47,8 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Content grouping by language** inside the site graph
 - **Configurable permalink patterns** for pages and posts
 - **Default-language and i18n-aware route generation**
+- **First-class redirect management** for moved URLs, aliases, migration redirects, and canonicalization
+- **Preview and static-build redirect output** sourced from `data/redirects.yaml`
 - **Basic translation manager support** for theme and runtime usage
 
 ## Taxonomies and content relationships
@@ -193,7 +195,7 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 ## Platform SDKs and client contracts
 
 - **Shared SDK core** for request handling, error normalization, and capability helpers
-- **Official Admin SDK** with session, capabilities, status, documents, media, settings, users, themes, plugins, and audit modules
+- **Official Admin SDK** with session, capabilities, status, documents, media, settings, redirects, users, themes, plugins, and audit modules
 - **Official Frontend SDK** with site, navigation, routes, content, collections, search, media, and preview modules
 - **Capability discovery endpoints** for both admin and frontend clients
 - **Live frontend platform API** under `/__foundry/api`

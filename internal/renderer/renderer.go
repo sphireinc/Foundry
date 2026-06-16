@@ -271,6 +271,9 @@ func (r *Renderer) BuildWithStats(ctx context.Context, graph *content.SiteGraph)
 	if err := r.buildCoreRoutes(graph, false, nil); err != nil {
 		return stats, err
 	}
+	if err := r.buildRedirects(graph); err != nil {
+		return stats, err
+	}
 
 	start = time.Now()
 	if err := r.writeSearchIndex(graph); err != nil {
@@ -306,6 +309,9 @@ func (r *Renderer) BuildURLs(ctx context.Context, graph *content.SiteGraph, urls
 	}
 
 	if err := r.buildCoreRoutes(graph, false, nil); err != nil {
+		return err
+	}
+	if err := r.buildRedirects(graph); err != nil {
 		return err
 	}
 
@@ -396,6 +402,39 @@ func (r *Renderer) writeRenderedURL(url string, html []byte) error {
 	}
 
 	return nil
+}
+
+func (r *Renderer) buildRedirects(graph *content.SiteGraph) error {
+	if graph == nil || len(graph.Redirects) == 0 {
+		return nil
+	}
+	for _, rule := range graph.Redirects {
+		if !rule.Enabled {
+			continue
+		}
+		if err := r.writeRenderedURL(rule.From, redirectHTML(rule.To)); err != nil {
+			return fmt.Errorf("write redirect %s: %w", rule.From, err)
+		}
+	}
+	return nil
+}
+
+func redirectHTML(target string) []byte {
+	escapedTarget := template.HTMLEscapeString(target)
+	return []byte(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0;url=` + escapedTarget + `">
+  <link rel="canonical" href="` + escapedTarget + `">
+  <title>Redirecting...</title>
+  <script>window.location.replace(document.querySelector('link[rel="canonical"]').href);</script>
+</head>
+<body>
+  <p>Redirecting to <a href="` + escapedTarget + `">` + escapedTarget + `</a>.</p>
+</body>
+</html>
+`)
 }
 
 func (r *Renderer) RenderURL(graph *content.SiteGraph, urlPath string, liveReload bool) ([]byte, error) {

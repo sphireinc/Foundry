@@ -27,6 +27,7 @@ import (
 	"github.com/sphireinc/foundry/internal/logx"
 	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/ops"
+	"github.com/sphireinc/foundry/internal/redirects"
 	"github.com/sphireinc/foundry/internal/renderer"
 	"github.com/sphireinc/foundry/internal/router"
 )
@@ -654,6 +655,13 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if !strings.HasSuffix(path, "/") && !strings.Contains(filepath.Base(path), ".") {
 		path += "/"
+	}
+
+	if graph != nil {
+		if rule, ok := redirects.Lookup(graph.Redirects, path); ok {
+			http.Redirect(w, r, redirects.TargetWithQuery(rule, r.URL.RawQuery), rule.Status)
+			return
+		}
 	}
 
 	_, finishDebug := s.beginDebugRequest(r, path)

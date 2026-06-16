@@ -11,6 +11,7 @@ import (
 
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/redirects"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -96,6 +97,9 @@ func TestRendererBuildsCoreSearchAuthorAndNotFoundRoutes(t *testing.T) {
 	writeRendererTheme(t, cfg)
 
 	graph := content.NewSiteGraph(cfg)
+	graph.Redirects = []redirects.Rule{
+		{From: "/moved/", To: "/posts/hello/", Status: 301, Enabled: true},
+	}
 	graph.Add(&content.Document{
 		ID:         "post-1",
 		Type:       "post",
@@ -137,6 +141,13 @@ func TestRendererBuildsCoreSearchAuthorAndNotFoundRoutes(t *testing.T) {
 	}
 	if !strings.Contains(string(notFoundPage), "404 Page not found") {
 		t.Fatalf("expected 404 layout output, got %q", string(notFoundPage))
+	}
+	redirectPage, err := os.ReadFile(filepath.Join(cfg.PublicDir, "moved", "index.html"))
+	if err != nil {
+		t.Fatalf("expected redirect output: %v", err)
+	}
+	if !strings.Contains(string(redirectPage), `url=/posts/hello/`) || !strings.Contains(string(redirectPage), `window.location.replace(document.querySelector('link[rel="canonical"]').href)`) {
+		t.Fatalf("expected redirect page to target post, got %s", string(redirectPage))
 	}
 }
 

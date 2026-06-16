@@ -8,6 +8,7 @@ import { createAdminDocumentsAPI } from './documents.js';
 import { createAdminMediaAPI } from './media.js';
 import { createAdminOperationsAPI } from './operations.js';
 import { createAdminPluginsAPI } from './plugins.js';
+import { createAdminRedirectsAPI } from './redirects.js';
 import { createAdminSessionAPI } from './session.js';
 import { createAdminSettingsAPI } from './settings.js';
 import { createAdminStatusAPI } from './status.js';
@@ -68,6 +69,7 @@ export const createAdminClient = ({
     users: createAdminUsersAPI(http),
     themes: createAdminThemesAPI(http),
     plugins: createAdminPluginsAPI(http),
+    redirects: createAdminRedirectsAPI(http),
     operations: createAdminOperationsAPI(http),
     audit: createAdminAuditAPI(http),
     backups: createAdminBackupsAPI(http),

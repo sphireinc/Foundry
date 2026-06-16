@@ -112,6 +112,13 @@ import {
   if (typeof admin.backups.listGit !== 'function') {
     admin.backups.listGit = () => admin.raw.get('/api/backups/git');
   }
+  admin.redirects = admin.redirects || {};
+  if (typeof admin.redirects.list !== 'function') {
+    admin.redirects.list = () => admin.raw.get('/api/redirects');
+  }
+  if (typeof admin.redirects.save !== 'function') {
+    admin.redirects.save = (payload = {}) => admin.raw.post('/api/redirects/save', payload);
+  }
   admin.customFields = admin.customFields || {};
   if (typeof admin.customFields.get !== 'function') {
     admin.customFields.get = () => admin.raw.get('/api/custom-fields');
@@ -953,6 +960,64 @@ import {
       contracts.length
         ? `${contracts.length} shared contract${contracts.length === 1 ? '' : 's'} from the active theme`
         : 'No shared contracts declared'
+    );
+  };
+
+  const renderRedirects = () => {
+    const redirects = Array.isArray(state.redirects?.redirects) ? state.redirects.redirects : [];
+    const sortedRedirects = sortItems(redirects, 'redirects', (rule, field) => {
+      if (field === 'status') return String(rule.status || 301);
+      if (field === 'enabled') return rule.enabled ? 'enabled' : 'disabled';
+      return rule[field] || '';
+    });
+    const pagedRedirects = paginateItems(sortedRedirects, 'redirects');
+    const rows = pagedRedirects.items
+      .map((rule) => {
+        const index = redirects.indexOf(rule);
+        return `
+      <div class="table-row table-row-actions redirect-row" data-redirect-index="${escapeHTML(String(index))}">
+        <span>
+          <input type="text" data-redirect-field="from" data-redirect-index="${escapeHTML(String(index))}" value="${escapeHTML(rule.from || '')}" placeholder="/old-url/">
+          <div class="muted mono">Source URL</div>
+        </span>
+        <span>
+          <input type="text" data-redirect-field="to" data-redirect-index="${escapeHTML(String(index))}" value="${escapeHTML(rule.to || '')}" placeholder="/new-url/">
+          <input type="text" data-redirect-field="note" data-redirect-index="${escapeHTML(String(index))}" value="${escapeHTML(rule.note || '')}" placeholder="Internal note">
+        </span>
+        <span>
+          <select data-redirect-field="status" data-redirect-index="${escapeHTML(String(index))}">
+            ${[301, 302, 307, 308]
+              .map(
+                (status) =>
+                  `<option value="${status}" ${Number(rule.status || 301) === status ? 'selected' : ''}>${status}</option>`
+              )
+              .join('')}
+          </select>
+          <label class="checkbox"><input type="checkbox" data-redirect-field="enabled" data-redirect-index="${escapeHTML(String(index))}" ${rule.enabled ? 'checked' : ''}> Enabled</label>
+          <label class="checkbox"><input type="checkbox" data-redirect-field="preserve_query" data-redirect-index="${escapeHTML(String(index))}" ${rule.preserve_query ? 'checked' : ''}> Preserve query</label>
+        </span>
+        <span class="row-actions">
+          <button type="button" class="ghost small danger" data-delete-redirect="${escapeHTML(String(index))}">Delete</button>
+        </span>
+      </div>`;
+      })
+      .join('');
+
+    return panel(
+      'Redirects',
+      `<div class="panel-pad stack">
+        <div class="note">Redirects are stored in <span class="mono">${escapeHTML(state.redirects?.path || 'data/redirects.yaml')}</span> and are applied before normal page rendering.</div>
+        <div class="toolbar">
+          <button type="button" id="redirect-add">Add Redirect</button>
+          <button type="button" class="ghost" id="redirect-save">Save Redirects</button>
+        </div>
+      </div>
+      ${renderTableControls(state, 'redirects', redirects.length, pagedRedirects.totalPages)}
+      <div class="table table-four redirects-table">
+        <div class="table-head"><span>From</span><span>Target</span><span>Behavior</span><span>Action</span></div>
+        ${rows || '<div class="panel-pad empty-state">No redirects configured.</div>'}
+      </div>`,
+      `${redirects.filter((rule) => rule.enabled).length} active redirect${redirects.filter((rule) => rule.enabled).length === 1 ? '' : 's'}`
     );
   };
 
@@ -1799,6 +1864,12 @@ import {
         action: () => navigate('custom-fields'),
       },
       {
+        id: 'goto-redirects',
+        label: 'Go to Redirects',
+        section: 'redirects',
+        action: () => navigate('redirects'),
+      },
+      {
         id: 'goto-extensions',
         label: 'Go to Extensions',
         section: 'extensions',
@@ -2436,6 +2507,8 @@ import {
         return renderSettings();
       case 'custom-fields':
         return renderCustomFields();
+      case 'redirects':
+        return renderRedirects();
       case 'extensions':
         return renderExtensions();
       case 'plugins':
@@ -2824,6 +2897,7 @@ import {
         capabilityInfoHas('dashboard.read') ? admin.operations.logs() : Promise.resolve(null),
         capabilityInfoHas('dashboard.read') ? admin.updates.get() : Promise.resolve(null),
         capabilityInfoHas('audit.read') ? admin.audit.list() : Promise.resolve([]),
+        capabilityInfoHas('config.manage') ? admin.redirects.list() : Promise.resolve(null),
       ]);
 
       const assignResult = (index, label, onSuccess, fallback) => {
@@ -3036,6 +3110,16 @@ import {
         },
         () => {
           state.audit = [];
+        }
+      );
+      assignResult(
+        20,
+        'redirects',
+        (value) => {
+          state.redirects = value || { path: 'data/redirects.yaml', redirects: [] };
+        },
+        () => {
+          state.redirects = { path: 'data/redirects.yaml', redirects: [] };
         }
       );
       state.selectedDocumentTrash = state.selectedDocumentTrash.filter((path) =>

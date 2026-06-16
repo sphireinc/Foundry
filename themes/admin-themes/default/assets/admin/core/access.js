@@ -8,7 +8,11 @@ export const createAccessHelpers = ({
   debugEnabled,
 }) => {
   const normalizeNavGroup = (group) => {
-    switch (String(group || '').trim().toLowerCase()) {
+    switch (
+      String(group || '')
+        .trim()
+        .toLowerCase()
+    ) {
       case 'dashboard':
       case 'content':
       case 'manage':
@@ -45,6 +49,7 @@ export const createAccessHelpers = ({
         return 'audit.read';
       case 'settings':
       case 'config':
+      case 'redirects':
         return 'config.manage';
       case 'plugins':
         return 'plugins.manage';
@@ -71,6 +76,7 @@ export const createAccessHelpers = ({
       case 'audit':
       case 'settings':
       case 'config':
+      case 'redirects':
         return 'manage';
       case 'extensions':
       case 'plugins':
@@ -127,8 +133,20 @@ export const createAccessHelpers = ({
   };
 
   const firstAccessibleSection = () => {
-    const candidates = ['overview', 'documents', 'editor', 'media', 'custom-fields', 'sessions', 'audit'];
-    return candidates.find((section) => canAccessSection(section)) || extensionPages()[0]?.section || 'overview';
+    const candidates = [
+      'overview',
+      'documents',
+      'editor',
+      'media',
+      'custom-fields',
+      'sessions',
+      'audit',
+    ];
+    return (
+      candidates.find((section) => canAccessSection(section)) ||
+      extensionPages()[0]?.section ||
+      'overview'
+    );
   };
 
   return {
