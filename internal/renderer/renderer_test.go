@@ -146,7 +146,7 @@ func TestRendererBuildsCoreSearchAuthorAndNotFoundRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected redirect output: %v", err)
 	}
-	if !strings.Contains(string(redirectPage), `url=/posts/hello/`) || !strings.Contains(string(redirectPage), `window.location.replace("/posts/hello/")`) {
+	if !strings.Contains(string(redirectPage), `url=/posts/hello/`) || !strings.Contains(string(redirectPage), `window.location.replace(document.querySelector('link[rel="canonical"]').href)`) {
 		t.Fatalf("expected redirect page to target post, got %s", string(redirectPage))
 	}
 }

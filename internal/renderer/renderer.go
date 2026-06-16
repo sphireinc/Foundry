@@ -421,7 +421,6 @@ func (r *Renderer) buildRedirects(graph *content.SiteGraph) error {
 
 func redirectHTML(target string) []byte {
 	escapedTarget := template.HTMLEscapeString(target)
-	scriptTarget, _ := json.Marshal(target)
 	return []byte(`<!doctype html>
 <html lang="en">
 <head>
@@ -429,7 +428,7 @@ func redirectHTML(target string) []byte {
   <meta http-equiv="refresh" content="0;url=` + escapedTarget + `">
   <link rel="canonical" href="` + escapedTarget + `">
   <title>Redirecting...</title>
-  <script>window.location.replace(` + string(scriptTarget) + `);</script>
+  <script>window.location.replace(document.querySelector('link[rel="canonical"]').href);</script>
 </head>
 <body>
   <p>Redirecting to <a href="` + escapedTarget + `">` + escapedTarget + `</a>.</p>
