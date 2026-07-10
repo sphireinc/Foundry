@@ -1,0 +1,19 @@
+version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+
+linters:
+  default: standard
+  enable:
+    - asciicheck
+    - bodyclose
+    - dogsled
+    - errorlint
+    - gosec
+    - nolintlint
+    - unconvert
+  exclusions:
+    generated: strict
+    warn-unused: true
