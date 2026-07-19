@@ -42,6 +42,19 @@ func TestLoadCachesGraphsWithinTTL(t *testing.T) {
 	}
 }
 
+func TestManagedRuntimeBlocksRawConfigDocuments(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.Foundry.Managed.Enabled = true
+	svc := New(cfg)
+
+	if _, err := svc.LoadConfigDocument(context.Background()); err == nil {
+		t.Fatal("expected managed runtime to reject raw config reads")
+	}
+	if _, err := svc.SaveConfigDocument(context.Background(), "theme: default"); err == nil {
+		t.Fatal("expected managed runtime to reject raw config writes")
+	}
+}
+
 func TestSaveDocumentInvalidatesGraphCache(t *testing.T) {
 	cfg := testServiceConfig(t)
 	var loads int

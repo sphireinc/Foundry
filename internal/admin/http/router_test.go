@@ -50,6 +50,24 @@ func TestStatusEndpoint(t *testing.T) {
 	}
 }
 
+func TestManagedRuntimeHidesRawConfigRoutes(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Foundry.Managed.Enabled = true
+	r := newTestRouter(t, cfg)
+	mux := http.NewServeMux()
+	r.RegisterRoutes(mux)
+
+	for _, path := range []string{"/__admin/api/config", "/__admin/api/config/save"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "127.0.0.1:10000"
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("expected managed runtime to hide %s, got %d: %s", path, rr.Code, rr.Body.String())
+		}
+	}
+}
+
 func TestRedirectManagementRoutes(t *testing.T) {
 	cfg := testConfig(t)
 	r := newTestRouter(t, cfg)

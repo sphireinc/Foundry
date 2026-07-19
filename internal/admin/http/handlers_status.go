@@ -75,6 +75,7 @@ func (r *Router) handleCapabilities(w http.ResponseWriter, req *http.Request) {
 			"structured_editing":    true,
 			"plugin_admin_registry": true,
 			"settings_sections":     true,
+			"raw_config":            r != nil && r.cfg != nil && !r.cfg.ManagedRuntimeEnabled(),
 			"pprof":                 r != nil && r.cfg != nil && r.cfg.Admin.Debug.Pprof,
 			"sync":                  false,
 			"storage":               false,

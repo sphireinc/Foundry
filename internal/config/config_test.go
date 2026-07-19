@@ -234,10 +234,34 @@ func TestManagedRuntimeConfigValidation(t *testing.T) {
 	cfg.ApplyDefaults()
 	cfg.Foundry.Managed.Enabled = true
 	cfg.Admin.Enabled = true
+	cfg.BaseURL = "https://foundry.example.com"
 	cfg.Admin.SessionSecret = strings.Repeat("a", 32)
 	cfg.Admin.TOTPSecretKey = base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32)))
+	cfg.Admin.SessionIdleTimeoutMinutes = 15
+	cfg.Admin.SessionMaxAgeMinutes = 480
 	if errs := Validate(cfg); len(errs) != 0 {
 		t.Fatalf("expected managed runtime config to validate, got %v", errs)
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*Config)
+	}{
+		{name: "access token", mutate: func(candidate *Config) { candidate.Admin.AccessToken = "legacy-token" }},
+		{name: "public debug routes", mutate: func(candidate *Config) { candidate.Server.DebugRoutes = true }},
+		{name: "local only admin", mutate: func(candidate *Config) { candidate.Admin.LocalOnly = true }},
+		{name: "missing https base url", mutate: func(candidate *Config) { candidate.BaseURL = "http://foundry.example.com" }},
+		{name: "missing idle timeout", mutate: func(candidate *Config) { candidate.Admin.SessionIdleTimeoutMinutes = 0 }},
+		{name: "missing maximum age", mutate: func(candidate *Config) { candidate.Admin.SessionMaxAgeMinutes = 0 }},
+		{name: "idle exceeds maximum age", mutate: func(candidate *Config) { candidate.Admin.SessionIdleTimeoutMinutes = 481 }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := *cfg
+			test.mutate(&candidate)
+			if errs := Validate(&candidate); len(errs) == 0 {
+				t.Fatal("expected managed runtime config to be rejected")
+			}
+		})
 	}
 
 	cfg.Admin.SessionSecret = "local-dev-secret"
@@ -275,7 +299,7 @@ func TestManagedRuntimeConfigValidation(t *testing.T) {
 }
 
 func TestManagedRuntimeConfigParsesFromYAML(t *testing.T) {
-	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nfoundry:\n  managed:\n    enabled: true\n    instance_id: instance-123\n    callback_url: https://control.example.com/runtime/register\n    shared_secret: " + strings.Repeat("s", 32) + "\nadmin:\n  enabled: true\n  session_secret: " + strings.Repeat("a", 32) + "\n  totp_secret_key: " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))) + "\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n")
+	body := []byte("theme: default\nbase_url: https://foundry.example.com\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nfoundry:\n  managed:\n    enabled: true\n    instance_id: instance-123\n    callback_url: https://control.example.com/runtime/register\n    shared_secret: " + strings.Repeat("s", 32) + "\nadmin:\n  enabled: true\n  session_secret: " + strings.Repeat("a", 32) + "\n  totp_secret_key: " + base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))) + "\n  session_idle_timeout_minutes: 15\n  session_max_age_minutes: 480\nserver:\n  addr: :8080\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\n")
 	var cfg Config
 	if err := UnmarshalYAML(body, &cfg); err != nil {
 		t.Fatalf("unmarshal managed config: %v", err)

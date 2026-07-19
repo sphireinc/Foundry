@@ -140,6 +140,9 @@ func (s *Service) AllowsAdminAsset(pluginName, assetPath string) bool {
 
 func (s *Service) LoadConfigDocument(ctx context.Context) (*types.ConfigDocumentResponse, error) {
 	_ = ctx
+	if s.cfg.ManagedRuntimeEnabled() {
+		return nil, fmt.Errorf("raw configuration is unavailable for managed runtimes")
+	}
 	path := consts.ConfigFilePath
 	b, err := s.fs.ReadFile(path)
 	if err != nil {
@@ -150,6 +153,9 @@ func (s *Service) LoadConfigDocument(ctx context.Context) (*types.ConfigDocument
 
 func (s *Service) SaveConfigDocument(ctx context.Context, raw string) (*types.ConfigDocumentResponse, error) {
 	_ = ctx
+	if s.cfg.ManagedRuntimeEnabled() {
+		return nil, fmt.Errorf("raw configuration is unavailable for managed runtimes")
+	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, fmt.Errorf("config body is required")

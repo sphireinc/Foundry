@@ -2362,10 +2362,12 @@ import {
       ['plugins', 'Plugins'],
       ['publish', 'Publish'],
       ['navigation', 'Navigation'],
-      ['config', 'Advanced YAML'],
       ['custom-css', 'Custom CSS'],
       ['sections', 'Sections'],
     ];
+    if (state.capabilityInfo?.features?.raw_config !== false) {
+      tabs.splice(9, 0, ['config', 'Advanced YAML']);
+    }
     let body = '';
     let subtitle = '';
     if (activeTab === 'custom-css') {
@@ -2882,7 +2884,9 @@ import {
         admin.media.trash(),
         capabilityInfoHas('users.manage') ? admin.users.list() : Promise.resolve([]),
         capabilityInfoHas('config.manage') ? settingsAPI.getForm() : Promise.resolve(null),
-        capabilityInfoHas('config.manage') ? settingsAPI.getConfig() : Promise.resolve(null),
+        capabilityInfoHas('config.manage') && state.capabilityInfo?.features?.raw_config !== false
+          ? settingsAPI.getConfig()
+          : Promise.resolve(null),
         capabilityInfoHas('config.manage') ? settingsAPI.getCustomCSS() : Promise.resolve(null),
         capabilityInfoHas('dashboard.read') ? admin.customFields.get() : Promise.resolve(null),
         capabilityInfoHas('dashboard.read') ? settingsAPI.getSections() : Promise.resolve([]),

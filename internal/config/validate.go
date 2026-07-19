@@ -198,6 +198,26 @@ func validateManagedRuntimeConfig(cfg *Config) []error {
 	if cfg.Admin.Debug.Pprof {
 		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.debug.pprof to be false"))
 	}
+	if cfg.Server.DebugRoutes {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires server.debug_routes to be false"))
+	}
+	if cfg.Admin.LocalOnly {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.local_only to be false"))
+	}
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.BaseURL)), "https://") {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires an https base_url"))
+	}
+	if strings.TrimSpace(cfg.Admin.AccessToken) != "" {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled does not permit admin.access_token; use named user sessions instead"))
+	}
+	if cfg.Admin.SessionIdleTimeoutMinutes <= 0 {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.session_idle_timeout_minutes to be greater than zero"))
+	}
+	if cfg.Admin.SessionMaxAgeMinutes <= 0 {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.session_max_age_minutes to be greater than zero"))
+	} else if cfg.Admin.SessionIdleTimeoutMinutes > cfg.Admin.SessionMaxAgeMinutes {
+		errs = append(errs, fmt.Errorf("admin.session_idle_timeout_minutes must not exceed admin.session_max_age_minutes"))
+	}
 	errs = append(errs, validateManagedRuntimeCallbackConfig(cfg.Foundry.Managed)...)
 	return errs
 }
