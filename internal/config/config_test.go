@@ -262,6 +262,10 @@ func TestManagedRuntimeConfigValidation(t *testing.T) {
 	if errs := Validate(cfg); len(errs) == 0 {
 		t.Fatal("expected managed runtime to reject invalid callback URL")
 	}
+	cfg.Foundry.Managed.CallbackURL = "http://control.example.com/runtime/register"
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected managed runtime to reject an insecure callback URL")
+	}
 
 	cfg.Foundry.Managed.CallbackURL = "https://control.example.com/runtime/register"
 	cfg.Foundry.Managed.SharedSecret = "short"

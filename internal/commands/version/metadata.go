@@ -36,16 +36,14 @@ type Metadata struct {
 
 func Current(projectDir string) Metadata {
 	meta := Metadata{
-		Version:     normalizeValue(Version, "dev"),
-		Commit:      normalizeValue(Commit, "none"),
-		BuiltAt:     normalizeValue(Date, "unknown"),
-		GoVersion:   runtime.Version(),
-		GOOS:        runtime.GOOS,
-		GOARCH:      runtime.GOARCH,
-		InstallMode: string(installmode.Detect(projectDir)),
-		ManagedRuntime: envBool("FOUNDRY_MANAGED_RUNTIME") ||
-			envBool("FOUNDRY_MANAGED_ENABLED") ||
-			envBool("FOUNDRY_CLOUD_MANAGED"),
+		Version:        normalizeValue(Version, "dev"),
+		Commit:         normalizeValue(Commit, "none"),
+		BuiltAt:        normalizeValue(Date, "unknown"),
+		GoVersion:      runtime.Version(),
+		GOOS:           runtime.GOOS,
+		GOARCH:         runtime.GOARCH,
+		InstallMode:    string(installmode.Detect(projectDir)),
+		ManagedRuntime: envBool("FOUNDRY_MANAGED_RUNTIME") || envBool("FOUNDRY_MANAGED_ENABLED"),
 	}
 	if exe, err := os.Executable(); err == nil {
 		meta.Executable = exe

@@ -144,6 +144,10 @@ scripts/           release and maintenance utilities
 
 ## Architecture
 
+Managed runtime integrations are optional and provider-neutral. See
+[`docs/managed-runtime-boundary.md`](docs/managed-runtime-boundary.md) for the
+configuration and Cloud boundary.
+
 Foundry keeps a clean separation between content loading, route assignment, rendering, and runtime orchestration.
 
 The main pipeline is:

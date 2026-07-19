@@ -227,8 +227,11 @@ func validateManagedCallbackURL(value string) error {
 	if err != nil || u == nil || u.Host == "" {
 		return fmt.Errorf("foundry.managed.callback_url must be a valid URL")
 	}
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("foundry.managed.callback_url must use http or https")
+	if u.Scheme != "https" {
+		return fmt.Errorf("foundry.managed.callback_url must use https")
+	}
+	if u.User != nil {
+		return fmt.Errorf("foundry.managed.callback_url must not include user info")
 	}
 	return nil
 }
