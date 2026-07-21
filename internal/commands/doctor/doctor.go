@@ -106,14 +106,14 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 		add("theme", true, cfg.Theme)
 	}
 
-	if _, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled); err != nil {
+	if _, err := plugins.NewManagerWithGovernance(cfg.PluginsDir, cfg.Plugins.Enabled, plugins.GovernancePolicyFromConfig(cfg)); err != nil {
 		add("plugins", false, err.Error())
 	} else {
 		add("plugins", true, fmt.Sprintf("%d enabled", len(cfg.Plugins.Enabled)))
 	}
 
 	pmStart := time.Now()
-	pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	pm, err := plugins.NewManagerWithGovernance(cfg.PluginsDir, cfg.Plugins.Enabled, plugins.GovernancePolicyFromConfig(cfg))
 	if err == nil {
 		err = pm.OnConfigLoaded(cfg)
 	}

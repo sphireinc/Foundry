@@ -199,6 +199,12 @@ type Manager struct {
 // declarations, and instantiates registered plugin factories for the enabled
 // list in configuration order.
 func NewManager(pluginsDir string, enabled []string) (*Manager, error) {
+	return NewManagerWithGovernance(pluginsDir, enabled, GovernancePolicy{})
+}
+
+// NewManagerWithGovernance loads enabled plugins subject to an optional
+// deployment-owned policy. Self-hosted callers can continue using NewManager.
+func NewManagerWithGovernance(pluginsDir string, enabled []string, policy GovernancePolicy) (*Manager, error) {
 	m := &Manager{
 		plugins:  make([]Plugin, 0),
 		metadata: make(map[string]Metadata),
@@ -221,6 +227,9 @@ func NewManager(pluginsDir string, enabled []string) (*Manager, error) {
 		}
 		meta, ok := metadata[name]
 		if ok {
+			if err := EnforceGovernance(meta, policy); err != nil {
+				return nil, err
+			}
 			if err := EnsureRuntimeSupported(meta); err != nil {
 				return nil, err
 			}

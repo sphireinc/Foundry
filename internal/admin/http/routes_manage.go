@@ -48,7 +48,7 @@ func operationsRoutes(r *Router) []routeDef {
 }
 
 func settingsRoutes(r *Router) []routeDef {
-	return []routeDef{
+	routes := []routeDef{
 		{pattern: r.routePath("/api/extensions"), handler: http.HandlerFunc(r.handleExtensions), capability: "dashboard.read"},
 		{pattern: r.routePath("/api/settings/sections"), handler: http.HandlerFunc(r.handleSettingsSections), capability: "dashboard.read"},
 		{pattern: r.routePath("/api/settings/form"), handler: http.HandlerFunc(r.handleSettingsForm), capability: "config.manage"},
@@ -57,9 +57,16 @@ func settingsRoutes(r *Router) []routeDef {
 		{pattern: r.routePath("/api/settings/custom-css/save"), handler: http.HandlerFunc(r.handleSaveCustomCSSDocument), capability: "config.manage"},
 		{pattern: r.routePath("/api/custom-fields"), handler: http.HandlerFunc(r.handleCustomFieldsDocument), capability: "documents.read"},
 		{pattern: r.routePath("/api/custom-fields/save"), handler: http.HandlerFunc(r.handleSaveCustomFieldsDocument), capability: "config.manage"},
-		{pattern: r.routePath("/api/config"), handler: http.HandlerFunc(r.handleConfigDocument), capability: "config.manage"},
-		{pattern: r.routePath("/api/config/save"), handler: http.HandlerFunc(r.handleSaveConfigDocument), capability: "config.manage"},
 	}
+	// Raw YAML can contain runtime callback and session secrets. Managed sites use
+	// the structured settings surface so customer admins cannot read or replace it.
+	if r == nil || r.cfg == nil || !r.cfg.ManagedRuntimeEnabled() {
+		routes = append(routes,
+			routeDef{pattern: r.routePath("/api/config"), handler: http.HandlerFunc(r.handleConfigDocument), capability: "config.manage"},
+			routeDef{pattern: r.routePath("/api/config/save"), handler: http.HandlerFunc(r.handleSaveConfigDocument), capability: "config.manage"},
+		)
+	}
+	return routes
 }
 
 func userRoutes(r *Router) []routeDef {

@@ -44,10 +44,25 @@ type FoundryConfig struct {
 }
 
 type ManagedRuntimeConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	InstanceID   string `yaml:"instance_id,omitempty"`
-	CallbackURL  string `yaml:"callback_url,omitempty"`
-	SharedSecret string `yaml:"shared_secret,omitempty"`
+	Enabled      bool                      `yaml:"enabled"`
+	InstanceID   string                    `yaml:"instance_id,omitempty"`
+	CallbackURL  string                    `yaml:"callback_url,omitempty"`
+	SharedSecret string                    `yaml:"shared_secret,omitempty"`
+	PluginPolicy ManagedPluginPolicyConfig `yaml:"plugin_policy,omitempty"`
+}
+
+// ManagedPluginPolicyConfig is a provider-neutral allowlist for deployments
+// where plugin supply-chain decisions are controlled outside the CMS.
+type ManagedPluginPolicyConfig struct {
+	Approved             []ManagedPluginApproval `yaml:"approved,omitempty"`
+	AllowedLicenses      []string                `yaml:"allowed_licenses,omitempty"`
+	RequireStrictSandbox bool                    `yaml:"require_strict_sandbox,omitempty"`
+}
+
+type ManagedPluginApproval struct {
+	Name    string `yaml:"name"`
+	Version string `yaml:"version"`
+	SHA256  string `yaml:"sha256"`
 }
 
 type AdminConfig struct {
