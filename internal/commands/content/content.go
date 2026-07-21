@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sphireinc/foundry/internal/backup"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
@@ -51,6 +50,7 @@ func (command) Details() []string {
 		"foundry content list",
 		"foundry content graph",
 		"foundry content export <bundle.zip>",
+		"foundry content import bundle <bundle.zip>",
 		"foundry content import markdown <dir>",
 		"foundry content import wordpress <wxr.xml>",
 		"foundry content migrate layout <from> <to>",
@@ -321,27 +321,13 @@ func runGraph(cfg *config.Config) error {
 	return nil
 }
 
-func runExport(cfg *config.Config, args []string) error {
-	if len(args) < 4 {
-		return fmt.Errorf("usage: foundry content export <bundle.zip>")
-	}
-	target := strings.TrimSpace(args[3])
-	if target == "" {
-		return fmt.Errorf("bundle path must not be empty")
-	}
-	if _, err := backup.CreateZipSnapshot(cfg, target); err != nil {
-		return err
-	}
-
-	fmt.Printf("exported content bundle to %s\n", target)
-	return nil
-}
-
 func runImport(cfg *config.Config, args []string) error {
 	if len(args) < 5 {
-		return fmt.Errorf("usage: foundry content import [markdown|wordpress] <source>")
+		return fmt.Errorf("usage: foundry content import [bundle|markdown|wordpress] <source>")
 	}
 	switch strings.TrimSpace(args[3]) {
+	case "bundle":
+		return importContentBundle(cfg, strings.TrimSpace(args[4]))
 	case "markdown":
 		return importMarkdownTree(cfg, strings.TrimSpace(args[4]))
 	case "wordpress":

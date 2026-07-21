@@ -115,6 +115,56 @@ func TestContentMigrateDryRunDoesNotWriteFiles(t *testing.T) {
 	}
 }
 
+func TestContentBundleRoundTripAndValidation(t *testing.T) {
+	root := t.TempDir()
+	source := testProjectConfig(t, filepath.Join(root, "source"))
+	if _, err := theme.Scaffold(source.ThemesDir, source.Theme); err != nil {
+		t.Fatalf("scaffold source theme: %v", err)
+	}
+	writeMarkdown(t, filepath.Join(source.ContentDir, source.Content.PagesDir, "welcome.md"), "---\ntitle: Welcome\nslug: welcome\nlayout: page\n---\n\n# Welcome")
+	mediaPath := filepath.Join(source.ContentDir, source.Content.ImagesDir, "hero.txt")
+	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o750); err != nil {
+		t.Fatalf("mkdir media: %v", err)
+	}
+	// #nosec G306 -- fixture mirrors publicly readable media files.
+	if err := os.WriteFile(mediaPath, []byte("media"), 0o644); err != nil {
+		t.Fatalf("write media: %v", err)
+	}
+	bundle := filepath.Join(root, "site.zip")
+	if err := exportContentBundle(source, bundle); err != nil {
+		t.Fatalf("export bundle: %v", err)
+	}
+
+	target := testProjectConfig(t, filepath.Join(root, "target"))
+	if _, err := theme.Scaffold(target.ThemesDir, target.Theme); err != nil {
+		t.Fatalf("scaffold target theme: %v", err)
+	}
+	writeMarkdown(t, filepath.Join(target.ContentDir, target.Content.PagesDir, "old.md"), "old")
+	if err := importContentBundle(target, bundle); err != nil {
+		t.Fatalf("import bundle: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target.ContentDir, target.Content.PagesDir, "welcome.md")); err != nil {
+		t.Fatalf("expected imported page: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target.ContentDir, target.Content.ImagesDir, "hero.txt")); err != nil {
+		t.Fatalf("expected imported media: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target.ContentDir, target.Content.PagesDir, "old.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected old content to be replaced, got %v", err)
+	}
+
+	badBundle := filepath.Join(root, "bad.zip")
+	if err := os.WriteFile(badBundle, []byte("not a zip"), 0o600); err != nil {
+		t.Fatalf("write bad bundle: %v", err)
+	}
+	if err := importContentBundle(target, badBundle); err == nil {
+		t.Fatal("expected invalid bundle rejection")
+	}
+	if _, err := os.Stat(filepath.Join(target.ContentDir, target.Content.PagesDir, "welcome.md")); err != nil {
+		t.Fatalf("invalid import changed existing content: %v", err)
+	}
+}
+
 func TestWriteNewContentFileRejectsDuplicate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "page.md")
 	if err := writeNewContentFile(path, "body"); err != nil {
