@@ -71,12 +71,13 @@ func exportContentBundle(cfg *config.Config, target string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return err
 	}
 	tmp := target + ".tmp"
 	defer func() { _ = os.Remove(tmp) }()
-	out, err := os.Create(tmp)
+	// #nosec G304 -- tmp is derived from the caller-provided export target.
+	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -213,9 +214,10 @@ func extractBundle(files []*zip.File, stage string) (contentBundle, error) {
 		if err != nil {
 			return manifest, err
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return manifest, err
 		}
+		// #nosec G306 -- imported content is intentionally readable by the CMS runtime.
 		if err := os.WriteFile(target, body, 0o644); err != nil {
 			return manifest, err
 		}
@@ -260,6 +262,7 @@ func writeZipFile(zw *zip.Writer, name string, body []byte) error {
 	return err
 }
 func writeZipPath(zw *zip.Writer, name, source string) error {
+	// #nosec G304 -- source was enumerated under cfg.ContentDir by bundleFiles.
 	body, err := os.ReadFile(source)
 	if err != nil {
 		return err
@@ -275,6 +278,7 @@ func readZipFile(file *zip.File) ([]byte, error) {
 	return io.ReadAll(r)
 }
 func fileSHA256(path string) (string, error) {
+	// #nosec G304 -- path is validated as a root-bounded staged bundle file.
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err

@@ -123,9 +123,10 @@ func TestContentBundleRoundTripAndValidation(t *testing.T) {
 	}
 	writeMarkdown(t, filepath.Join(source.ContentDir, source.Content.PagesDir, "welcome.md"), "---\ntitle: Welcome\nslug: welcome\nlayout: page\n---\n\n# Welcome")
 	mediaPath := filepath.Join(source.ContentDir, source.Content.ImagesDir, "hero.txt")
-	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o750); err != nil {
 		t.Fatalf("mkdir media: %v", err)
 	}
+	// #nosec G306 -- fixture mirrors publicly readable media files.
 	if err := os.WriteFile(mediaPath, []byte("media"), 0o644); err != nil {
 		t.Fatalf("write media: %v", err)
 	}
@@ -153,7 +154,7 @@ func TestContentBundleRoundTripAndValidation(t *testing.T) {
 	}
 
 	badBundle := filepath.Join(root, "bad.zip")
-	if err := os.WriteFile(badBundle, []byte("not a zip"), 0o644); err != nil {
+	if err := os.WriteFile(badBundle, []byte("not a zip"), 0o600); err != nil {
 		t.Fatalf("write bad bundle: %v", err)
 	}
 	if err := importContentBundle(target, badBundle); err == nil {
