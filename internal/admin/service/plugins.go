@@ -35,6 +35,7 @@ func (s *Service) ListPlugins(ctx context.Context) ([]types.PluginRecord, error)
 			Health:  pluginStatus.Status,
 		}
 		if meta, ok := metaByName[pluginStatus.Name]; ok {
+			policy := plugins.GovernancePolicyFromConfig(s.cfg)
 			record.Description = meta.Description
 			record.Author = meta.Author
 			record.Repo = meta.Repo
@@ -62,6 +63,15 @@ func (s *Service) ListPlugins(ctx context.Context) ([]types.PluginRecord, error)
 			record.Security = &security
 			record.SecurityFindings = append([]plugins.SecurityFinding(nil), report.Security.Findings...)
 			record.SecurityMismatches = toPluginDiagnostics(report.Security.Mismatches)
+			record.ReviewStatus = plugins.GovernanceReviewStatus(meta, policy)
+			if err := plugins.EnforceGovernance(meta, policy); err != nil {
+				record.Health = "blocked"
+				record.Diagnostics = append(record.Diagnostics, types.ValidationDiagnostic{
+					Severity: "error",
+					Path:     "managed plugin policy",
+					Message:  err.Error(),
+				})
+			}
 		}
 		out = append(out, record)
 	}
@@ -101,6 +111,9 @@ func (s *Service) EnablePlugin(ctx context.Context, name string, approveRisk, ac
 		return fmt.Errorf("plugin %q has %d security mismatch(es); acknowledge_mismatches is required", name, len(report.Mismatches))
 	}
 	if err := plugins.EnsureRuntimeSupported(meta); err != nil {
+		return err
+	}
+	if err := plugins.EnforceGovernance(meta, plugins.GovernancePolicyFromConfig(s.cfg)); err != nil {
 		return err
 	}
 	if err := plugins.EnableInConfig(consts.ConfigFilePath, name); err != nil {
@@ -143,6 +156,10 @@ func (s *Service) InstallPlugin(ctx context.Context, url, name string, approveRi
 		_ = plugins.Uninstall(s.cfg.PluginsDir, meta.Name)
 		return nil, fmt.Errorf("plugin %q has %d security mismatch(es); acknowledge_mismatches is required", meta.Name, len(report.Security.Mismatches))
 	}
+	if err := plugins.EnforceGovernance(meta, plugins.GovernancePolicyFromConfig(s.cfg)); err != nil {
+		_ = plugins.Uninstall(s.cfg.PluginsDir, meta.Name)
+		return nil, err
+	}
 	security := report.Security
 	return &types.PluginRecord{
 		Name:                 meta.Name,
@@ -175,6 +192,10 @@ func (s *Service) UpdatePlugin(ctx context.Context, name string, approveRisk, ac
 	_ = ctx
 	meta, err := plugins.UpdateInstalled(s.cfg.PluginsDir, name, approveRisk)
 	if err != nil {
+		return nil, err
+	}
+	if err := plugins.EnforceGovernance(meta, plugins.GovernancePolicyFromConfig(s.cfg)); err != nil {
+		_, _ = plugins.RollbackInstalled(s.cfg.PluginsDir, name)
 		return nil, err
 	}
 	report := plugins.DiagnoseInstalled(s.cfg.PluginsDir, meta, containsString(s.cfg.Plugins.Enabled, meta.Name))
