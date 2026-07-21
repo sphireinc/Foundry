@@ -20,6 +20,20 @@ the normal admin capability and audit controls. Raw YAML configuration is not
 served to managed administrators because it can contain runtime credentials;
 the structured settings surface remains available for supported site settings.
 
+## Managed Plugin Governance
+
+Managed deployments can set `foundry.managed.plugin_policy` as a deployment-owned
+allowlist. Each enabled plugin must match an approved name, version, and SHA-256
+artifact digest; an empty allowlist allows no managed plugins. The policy can
+also limit licenses and require the supported strict RPC runtime profile. The
+CMS rechecks this policy at startup and before plugin install, enable, and
+update operations. A failed update is rolled back to its previous snapshot.
+
+`plugin.yaml` declarations and source analysis remain useful customer-facing
+warnings, but they do not establish marketplace approval. The deployment
+policy is the trusted review record. Managed settings edits preserve both that
+policy and the enabled plugin list.
+
 Provider-specific provisioning, billing, tenancy, and callback persistence
 belong outside this repository. A managed deployment may supply the generic
 configuration through its runtime overlay, but this CMS does not contain

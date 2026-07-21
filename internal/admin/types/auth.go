@@ -272,6 +272,7 @@ type PluginRecord struct {
 	Status               string                    `json:"status"`
 	Health               string                    `json:"health,omitempty"`
 	CanRollback          bool                      `json:"can_rollback,omitempty"`
+	ReviewStatus         string                    `json:"review_status,omitempty"`
 	CompatibilityVersion string                    `json:"compatibility_version,omitempty"`
 	MinFoundryVersion    string                    `json:"min_foundry_version,omitempty"`
 	FoundryAPI           string                    `json:"foundry_api,omitempty"`

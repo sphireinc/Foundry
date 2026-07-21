@@ -146,7 +146,7 @@ func runRoutes(cfg *config.Config) error {
 }
 
 func runPlugins(cfg *config.Config) error {
-	pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	pm, err := plugins.NewManagerWithGovernance(cfg.PluginsDir, cfg.Plugins.Enabled, plugins.GovernancePolicyFromConfig(cfg))
 	if err != nil {
 		return err
 	}

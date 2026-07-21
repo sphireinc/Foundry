@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"path"
@@ -217,6 +218,20 @@ func validateManagedRuntimeConfig(cfg *Config) []error {
 		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.session_max_age_minutes to be greater than zero"))
 	} else if cfg.Admin.SessionIdleTimeoutMinutes > cfg.Admin.SessionMaxAgeMinutes {
 		errs = append(errs, fmt.Errorf("admin.session_idle_timeout_minutes must not exceed admin.session_max_age_minutes"))
+	}
+	for _, approval := range cfg.Foundry.Managed.PluginPolicy.Approved {
+		if _, err := safepath.ValidatePathComponent("managed plugin approval name", approval.Name); err != nil {
+			errs = append(errs, err)
+		}
+		if strings.TrimSpace(approval.Version) == "" {
+			errs = append(errs, fmt.Errorf("managed plugin approval %q must include a version", approval.Name))
+		}
+		digest := strings.TrimSpace(approval.SHA256)
+		if len(digest) != 64 {
+			errs = append(errs, fmt.Errorf("managed plugin approval %q must include a SHA-256 digest", approval.Name))
+		} else if _, err := hex.DecodeString(digest); err != nil {
+			errs = append(errs, fmt.Errorf("managed plugin approval %q must include a hexadecimal SHA-256 digest", approval.Name))
+		}
 	}
 	errs = append(errs, validateManagedRuntimeCallbackConfig(cfg.Foundry.Managed)...)
 	return errs

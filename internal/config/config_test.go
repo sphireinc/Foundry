@@ -264,6 +264,12 @@ func TestManagedRuntimeConfigValidation(t *testing.T) {
 		})
 	}
 
+	cfg.Foundry.Managed.PluginPolicy.Approved = []ManagedPluginApproval{{Name: "plugin", Version: "1.0.0", SHA256: "short"}}
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected managed runtime to reject an invalid plugin approval digest")
+	}
+	cfg.Foundry.Managed.PluginPolicy.Approved = nil
+
 	cfg.Admin.SessionSecret = "local-dev-secret"
 	if errs := Validate(cfg); len(errs) == 0 {
 		t.Fatal("expected managed runtime to reject development session secret")

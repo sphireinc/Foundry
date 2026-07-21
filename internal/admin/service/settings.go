@@ -270,6 +270,12 @@ func (s *Service) LoadSettingsForm(ctx context.Context) (*types.SettingsFormResp
 
 func (s *Service) SaveSettingsForm(ctx context.Context, value config.Config) (*types.SettingsFormResponse, error) {
 	_ = ctx
+	if s.cfg.ManagedRuntimeEnabled() {
+		// Runtime ownership and the enabled-plugin list are deployment controls;
+		// customer settings edits must not disable managed governance.
+		value.Foundry = s.cfg.Foundry
+		value.Plugins = s.cfg.Plugins
+	}
 	value.MarkAdminLocalOnlyExplicit()
 	value.ApplyDefaults()
 	if errs := config.Validate(&value); len(errs) > 0 {

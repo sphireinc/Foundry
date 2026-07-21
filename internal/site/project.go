@@ -11,7 +11,7 @@ import (
 )
 
 func NewPluginManager(cfg *config.Config) (*plugins.Manager, error) {
-	pm, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	pm, err := plugins.NewManagerWithGovernance(cfg.PluginsDir, cfg.Plugins.Enabled, plugins.GovernancePolicyFromConfig(cfg))
 	if err != nil {
 		return nil, diag.Wrap(diag.KindPlugin, "load plugins", err)
 	}
