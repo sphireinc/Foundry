@@ -115,6 +115,7 @@ func ArtifactSHA256(root string) (string, error) {
 		if _, err := io.WriteString(h, filepath.ToSlash(rel)+"\n"); err != nil {
 			return "", err
 		}
+		// #nosec G304 -- path is a regular file returned by WalkDir below root.
 		file, err := os.Open(path)
 		if err != nil {
 			return "", err
