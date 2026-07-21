@@ -42,6 +42,58 @@ func TestLoadCachesGraphsWithinTTL(t *testing.T) {
 	}
 }
 
+func TestManagedRuntimeBlocksRawConfigDocuments(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.Foundry.Managed.Enabled = true
+	svc := New(cfg)
+
+	if _, err := svc.LoadConfigDocument(context.Background()); err == nil {
+		t.Fatal("expected managed runtime to reject raw config reads")
+	}
+	if _, err := svc.SaveConfigDocument(context.Background(), "theme: default"); err == nil {
+		t.Fatal("expected managed runtime to reject raw config writes")
+	}
+}
+
+func TestManagedRuntimeSettingsPreservePluginGovernance(t *testing.T) {
+	workdir := t.TempDir()
+	previousWorkdir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("change working directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(previousWorkdir) })
+
+	cfg := testServiceConfig(t)
+	cfg.Foundry.Managed.Enabled = true
+	cfg.Foundry.Managed.PluginPolicy.AllowedLicenses = []string{"MIT"}
+	cfg.Plugins.Enabled = []string{"approved"}
+	cfg.BaseURL = "https://foundry.example.com"
+	cfg.Admin.Enabled = true
+	cfg.Admin.SessionSecret = strings.Repeat("a", 32)
+	cfg.Admin.TOTPSecretKey = "YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI="
+	cfg.Admin.SessionIdleTimeoutMinutes = 15
+	cfg.Admin.SessionMaxAgeMinutes = 480
+	svc := New(cfg)
+
+	updated := *cfg
+	updated.Foundry.Managed.Enabled = false
+	updated.Foundry.Managed.PluginPolicy.AllowedLicenses = []string{"Proprietary"}
+	updated.Plugins.Enabled = nil
+	resp, err := svc.SaveSettingsForm(context.Background(), updated)
+	if err != nil {
+		t.Fatalf("save managed settings: %v", err)
+	}
+	if !resp.Value.Foundry.Managed.Enabled || len(resp.Value.Foundry.Managed.PluginPolicy.AllowedLicenses) != 1 || resp.Value.Foundry.Managed.PluginPolicy.AllowedLicenses[0] != "MIT" {
+		t.Fatalf("managed policy changed through settings form: %#v", resp.Value.Foundry.Managed)
+	}
+	if len(resp.Value.Plugins.Enabled) != 1 || resp.Value.Plugins.Enabled[0] != "approved" {
+		t.Fatalf("managed plugin list changed through settings form: %#v", resp.Value.Plugins.Enabled)
+	}
+}
+
 func TestSaveDocumentInvalidatesGraphCache(t *testing.T) {
 	cfg := testServiceConfig(t)
 	var loads int

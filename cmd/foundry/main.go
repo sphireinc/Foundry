@@ -51,7 +51,7 @@ func main() {
 
 	handleConfigBoundCLI(cfg, args)
 
-	pluginManager, err := plugins.NewManager(cfg.PluginsDir, cfg.Plugins.Enabled)
+	pluginManager, err := plugins.NewManagerWithGovernance(cfg.PluginsDir, cfg.Plugins.Enabled, plugins.GovernancePolicyFromConfig(cfg))
 	if err != nil {
 		exitWithError(diag.Wrap(diag.KindPlugin, "load plugins", err))
 	}

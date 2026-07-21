@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"path"
@@ -198,6 +199,40 @@ func validateManagedRuntimeConfig(cfg *Config) []error {
 	if cfg.Admin.Debug.Pprof {
 		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.debug.pprof to be false"))
 	}
+	if cfg.Server.DebugRoutes {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires server.debug_routes to be false"))
+	}
+	if cfg.Admin.LocalOnly {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.local_only to be false"))
+	}
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.BaseURL)), "https://") {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires an https base_url"))
+	}
+	if strings.TrimSpace(cfg.Admin.AccessToken) != "" {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled does not permit admin.access_token; use named user sessions instead"))
+	}
+	if cfg.Admin.SessionIdleTimeoutMinutes <= 0 {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.session_idle_timeout_minutes to be greater than zero"))
+	}
+	if cfg.Admin.SessionMaxAgeMinutes <= 0 {
+		errs = append(errs, fmt.Errorf("foundry.managed.enabled requires admin.session_max_age_minutes to be greater than zero"))
+	} else if cfg.Admin.SessionIdleTimeoutMinutes > cfg.Admin.SessionMaxAgeMinutes {
+		errs = append(errs, fmt.Errorf("admin.session_idle_timeout_minutes must not exceed admin.session_max_age_minutes"))
+	}
+	for _, approval := range cfg.Foundry.Managed.PluginPolicy.Approved {
+		if _, err := safepath.ValidatePathComponent("managed plugin approval name", approval.Name); err != nil {
+			errs = append(errs, err)
+		}
+		if strings.TrimSpace(approval.Version) == "" {
+			errs = append(errs, fmt.Errorf("managed plugin approval %q must include a version", approval.Name))
+		}
+		digest := strings.TrimSpace(approval.SHA256)
+		if len(digest) != 64 {
+			errs = append(errs, fmt.Errorf("managed plugin approval %q must include a SHA-256 digest", approval.Name))
+		} else if _, err := hex.DecodeString(digest); err != nil {
+			errs = append(errs, fmt.Errorf("managed plugin approval %q must include a hexadecimal SHA-256 digest", approval.Name))
+		}
+	}
 	errs = append(errs, validateManagedRuntimeCallbackConfig(cfg.Foundry.Managed)...)
 	return errs
 }
@@ -227,8 +262,11 @@ func validateManagedCallbackURL(value string) error {
 	if err != nil || u == nil || u.Host == "" {
 		return fmt.Errorf("foundry.managed.callback_url must be a valid URL")
 	}
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("foundry.managed.callback_url must use http or https")
+	if u.Scheme != "https" {
+		return fmt.Errorf("foundry.managed.callback_url must use https")
+	}
+	if u.User != nil {
+		return fmt.Errorf("foundry.managed.callback_url must not include user info")
 	}
 	return nil
 }
