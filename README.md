@@ -148,6 +148,9 @@ Managed runtime integrations are optional and provider-neutral. See
 [`docs/managed-runtime-boundary.md`](docs/managed-runtime-boundary.md) for the
 configuration and Cloud boundary.
 
+For portable content and media transfers, see
+[`docs/content-bundles.md`](docs/content-bundles.md).
+
 Foundry keeps a clean separation between content loading, route assignment, rendering, and runtime orchestration.
 
 The main pipeline is:
