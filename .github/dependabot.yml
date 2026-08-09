@@ -8,6 +8,10 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -30,6 +34,10 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
     schedule:
       interval: "weekly"
       day: "monday"
