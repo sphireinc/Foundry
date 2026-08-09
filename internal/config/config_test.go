@@ -100,6 +100,22 @@ func TestLoadValidateAndEditYAML(t *testing.T) {
 	}
 }
 
+func TestShippedDockerConfigurationExcludesSourceOnlyRPCDemo(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	cfg, err := LoadWithOptions(filepath.Join(root, "content", "config", "site.yaml"), LoadOptions{
+		OverlayPaths: []string{filepath.Join(root, "content", "config", "site.docker.yaml")},
+	})
+	if err != nil {
+		t.Fatalf("load shipped Docker configuration: %v", err)
+	}
+
+	for _, name := range cfg.Plugins.Enabled {
+		if name == "rpc-context-demo" {
+			t.Fatal("the Docker runtime must not enable the source-only rpc-context-demo plugin")
+		}
+	}
+}
+
 func TestValidateAndSequenceHelpersErrors(t *testing.T) {
 	cfg := &Config{
 		Theme:   "..",

@@ -84,7 +84,6 @@ plugins:
     - readingtime
     - toc
     - relatedposts
-    - rpc-context-demo
     - syntaxhighlight
 seo:
   enabled: true
