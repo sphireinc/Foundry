@@ -102,6 +102,44 @@ async function openHelloWorldInEditor(page) {
   await openDocumentInEditor(page, 'hello world', 'content/posts/hello-world.md');
 }
 
+// Editing a document from the documents list routes straight into the editor,
+// so this waits on the editor itself rather than the list's Open Editor button.
+async function openSeededDocumentInEditor(page, query, sourcePath) {
+  await page.getByRole('link', { name: /^Documents$/i }).click();
+  await expect(page.getByRole('heading', { name: /^Find Documents$/i })).toBeVisible();
+
+  await page.getByLabel(/Search Documents/i).fill(query);
+  await page.getByRole('button', { name: /^Search$/i }).click();
+
+  const documentRow = page.locator('.table-row', { hasText: sourcePath });
+  await expect(documentRow).toHaveCount(1);
+  await documentRow.locator('[data-edit-document]').click();
+
+  await expect(page).toHaveURL(/\/__admin\/editor$/);
+  await expect(page.locator('#document-source-path')).toHaveValue(sourcePath);
+}
+
+async function openZenMode(page) {
+  await page.locator('#document-zen-button').click();
+  await expect(page.locator('#zen-editor .ql-editor')).toBeVisible({ timeout: 15_000 });
+}
+
+async function seedPageForEditor(page, slug, sourcePath, title) {
+  await createDocumentViaAdminAPI(page, 'page', slug, 'en', 'page');
+  await saveDocumentViaAdminAPI(
+    page,
+    sourcePath,
+    buildDocumentRaw({
+      title,
+      slug,
+      layout: 'page',
+      body: `# ${title}\n\nInitial body.\n`,
+      draft: false,
+    }),
+    'e2e zen seed'
+  );
+}
+
 async function getDocumentViaAdminAPI(page, sourcePath) {
   const result = await adminGet(
     page,
@@ -391,6 +429,82 @@ test.describe('default admin theme', () => {
     await expect(page).toHaveURL(/\/__admin\/documents$/);
     await expect(page.getByRole('heading', { name: /^Preview$/i })).toBeVisible();
     await expect(page.locator('iframe').first()).toBeVisible();
+  });
+
+  test('zen mode coalesces raw sync while typing', async ({ page }) => {
+    await login(page);
+    await ensureFrontendTheme(page, 'default');
+
+    const slug = `e2e-zen-sync-${Date.now()}`;
+    const sourcePath = `content/pages/${slug}.md`;
+
+    try {
+      await seedPageForEditor(page, slug, sourcePath, 'E2E Zen Sync');
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await openZenMode(page);
+
+      // The edits run in one synchronous burst, so no debounce timer can fire
+      // between them: whatever is counted here is per-edit work.
+      const syncsDuringBurst = await page.evaluate(() => {
+        window.__zenRawSyncs = 0;
+        document.addEventListener(
+          'input',
+          (event) => {
+            if (event.target && event.target.id === 'document-raw') {
+              window.__zenRawSyncs += 1;
+            }
+          },
+          true
+        );
+        const quill = window.Quill.find(document.getElementById('zen-editor'));
+        for (let index = 0; index < 10; index += 1) {
+          quill.insertText(quill.getLength() - 1, 'z', 'user');
+        }
+        return window.__zenRawSyncs;
+      });
+
+      expect(syncsDuringBurst, 'typing must not rebuild the raw document per edit').toBe(0);
+      await expect.poll(() => page.evaluate(() => window.__zenRawSyncs)).toBe(1);
+      await expect(page.locator('#document-raw')).toHaveValue(/zzzzzzzzzz/);
+    } finally {
+      if (page.isClosed()) {
+        return;
+      }
+      await deleteDocumentViaAdminAPI(page, sourcePath);
+    }
+  });
+
+  test('saving from zen mode keeps edits made inside the debounce window', async ({ page }) => {
+    await login(page);
+    await ensureFrontendTheme(page, 'default');
+
+    const slug = `e2e-zen-save-${Date.now()}`;
+    const sourcePath = `content/pages/${slug}.md`;
+    const marker = `zenflush${Date.now()}`;
+
+    try {
+      await seedPageForEditor(page, slug, sourcePath, 'E2E Zen Save');
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await openZenMode(page);
+
+      await page.evaluate((text) => {
+        const quill = window.Quill.find(document.getElementById('zen-editor'));
+        quill.insertText(quill.getLength() - 1, text, 'user');
+      }, marker);
+      // The save lands inside the debounce window, so it only carries the
+      // marker when the pending editor sync is flushed first.
+      await expect(page.locator('#document-raw')).not.toHaveValue(new RegExp(marker));
+      await page.locator('#zen-save-document').click();
+
+      await expect(page.getByText(/Document saved\./i)).toBeVisible();
+      const detail = await getDocumentViaAdminAPI(page, sourcePath);
+      expect(detail.raw_body).toContain(marker);
+    } finally {
+      if (page.isClosed()) {
+        return;
+      }
+      await deleteDocumentViaAdminAPI(page, sourcePath);
+    }
   });
 
   test('media upload and metadata save flow work', async ({ page }) => {

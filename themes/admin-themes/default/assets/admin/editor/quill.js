@@ -1,3 +1,7 @@
+// Rebuilding the raw document from the editor walks the whole body, so it runs
+// once the typist pauses instead of once per keystroke.
+const RAW_SYNC_DEBOUNCE_MS = 250;
+
 const loadStylesheet = (href) => {
   if (
     [...document.querySelectorAll('link[data-quill-style]')].some(
@@ -489,6 +493,8 @@ export const createQuillEditorController = ({
   let quillPromise = null;
   let zenPreviewTimer = null;
   let zenPreviewRequestId = 0;
+  let rawSyncTimer = null;
+  let pendingRawSync = null;
   let primaryQuill = null;
   let zenQuill = null;
   let primaryMount = null;
@@ -500,6 +506,13 @@ export const createQuillEditorController = ({
     if (zenPreviewTimer) {
       window.clearTimeout(zenPreviewTimer);
       zenPreviewTimer = null;
+    }
+  };
+
+  const clearRawSyncTimer = () => {
+    if (rawSyncTimer) {
+      window.clearTimeout(rawSyncTimer);
+      rawSyncTimer = null;
     }
   };
 
@@ -537,6 +550,8 @@ export const createQuillEditorController = ({
   };
 
   const rebuildRawFromQuill = (quill, kind) => {
+    clearRawSyncTimer();
+    pendingRawSync = null;
     const rawNode = document.getElementById('document-raw');
     if (!rawNode) return;
     const parsed = parseDocumentEditor(
@@ -555,6 +570,25 @@ export const createQuillEditorController = ({
     }
   };
 
+  const flushRawSync = () => {
+    if (!pendingRawSync) return;
+    const { quill, kind, sourcePath } = pendingRawSync;
+    // A queued rebuild belongs to the document it was typed into; dropping it on
+    // a document switch keeps stale body text out of the newly loaded one.
+    if (sourcePath !== state.documentEditor.source_path) {
+      clearRawSyncTimer();
+      pendingRawSync = null;
+      return;
+    }
+    rebuildRawFromQuill(quill, kind);
+  };
+
+  const queueRawSync = (quill, kind) => {
+    pendingRawSync = { quill, kind, sourcePath: state.documentEditor.source_path };
+    clearRawSyncTimer();
+    rawSyncTimer = window.setTimeout(flushRawSync, RAW_SYNC_DEBOUNCE_MS);
+  };
+
   const updatePreviewPane = (html) => {
     const pane = document.getElementById('zen-preview');
     if (!pane) return;
@@ -567,6 +601,7 @@ export const createQuillEditorController = ({
 
   const refreshPreview = async () => {
     if (!state.documentZenMode?.open) return;
+    flushRawSync();
     const requestId = ++zenPreviewRequestId;
     state.documentZenMode.loading = true;
     updateStatus('zen', 'Updating preview…');
@@ -714,7 +749,13 @@ export const createQuillEditorController = ({
     });
 
     quill.on('text-change', () => {
-      rebuildRawFromQuill(quill, kind);
+      queueRawSync(quill, kind);
+    });
+
+    // Leaving the editor settles the pending rebuild before any other control
+    // reads the raw document.
+    quill.root.addEventListener('blur', () => {
+      flushRawSync();
     });
   };
 
@@ -799,6 +840,7 @@ export const createQuillEditorController = ({
 
   const open = async () => {
     if (state.documentZenMode?.open) return;
+    flushRawSync();
     state.documentZenMode = {
       open: true,
       loading: true,
@@ -812,6 +854,7 @@ export const createQuillEditorController = ({
   };
 
   const close = () => {
+    flushRawSync();
     zenPreviewRequestId += 1;
     clearZenPreviewTimer();
     zenQuill = null;
@@ -826,10 +869,12 @@ export const createQuillEditorController = ({
   };
 
   const save = () => {
+    flushRawSync();
     document.getElementById('document-save-form')?.requestSubmit();
   };
 
   const disposeEditor = () => {
+    flushRawSync();
     clearZenPreviewTimer();
     zenQuill = null;
     zenMount = null;
@@ -844,6 +889,7 @@ export const createQuillEditorController = ({
     save,
     refreshPreview,
     queuePreviewRefresh,
+    flushRawSync,
     disposeEditor,
   };
 };
