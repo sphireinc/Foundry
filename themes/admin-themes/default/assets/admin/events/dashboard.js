@@ -382,6 +382,7 @@ export const bindDashboardEvents = (ctx) => {
     button.addEventListener('click', () => {
       const item = state.media.find((entry) => entry.reference === button.dataset.insertMedia);
       if (!item) return;
+      zenMode?.flushRawSync?.();
       insertIntoMarkdown(mediaSnippet(item, button.dataset.insertMode || 'auto'));
     });
   });
@@ -462,6 +463,7 @@ export const bindDashboardEvents = (ctx) => {
   });
 
   document.getElementById('editor-preview-documents')?.addEventListener('click', async () => {
+    zenMode?.flushRawSync?.();
     try {
       state.documentPreview = await admin.documents.preview({
         source_path:
@@ -480,6 +482,7 @@ export const bindDashboardEvents = (ctx) => {
 
   document.getElementById('document-save-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    zenMode?.flushRawSync?.();
     try {
       const saved = await admin.documents.save({
         source_path: document.getElementById('document-source-path').value,
@@ -522,6 +525,7 @@ export const bindDashboardEvents = (ctx) => {
   });
 
   document.getElementById('document-preview-button')?.addEventListener('click', async () => {
+    zenMode?.flushRawSync?.();
     try {
       state.documentPreview = await admin.documents.preview({
         source_path: document.getElementById('document-source-path').value,
