@@ -431,7 +431,7 @@ test.describe('default admin theme', () => {
     await expect(page.locator('iframe').first()).toBeVisible();
   });
 
-  test('zen mode coalesces raw sync while typing', async ({ page }) => {
+  test('zen mode waits one second before synchronizing raw changes', async ({ page }) => {
     await login(page);
     await ensureFrontendTheme(page, 'default');
 
@@ -443,7 +443,7 @@ test.describe('default admin theme', () => {
       await openSeededDocumentInEditor(page, slug, sourcePath);
       await openZenMode(page);
 
-      // The edits run in one synchronous burst, so no debounce timer can fire
+      // The edits run in one synchronous burst, so no idle timer can fire
       // between them: whatever is counted here is per-edit work.
       const syncsDuringBurst = await page.evaluate(() => {
         window.__zenRawSyncs = 0;
@@ -464,6 +464,8 @@ test.describe('default admin theme', () => {
       });
 
       expect(syncsDuringBurst, 'typing must not rebuild the raw document per edit').toBe(0);
+      await page.waitForTimeout(750);
+      expect(await page.evaluate(() => window.__zenRawSyncs)).toBe(0);
       await expect.poll(() => page.evaluate(() => window.__zenRawSyncs)).toBe(1);
       await expect(page.locator('#document-raw')).toHaveValue(/zzzzzzzzzz/);
     } finally {
@@ -472,6 +474,28 @@ test.describe('default admin theme', () => {
       }
       await deleteDocumentViaAdminAPI(page, sourcePath);
     }
+  });
+
+  test('zen mode keeps the formatting toolbar compact', async ({ page }) => {
+    await login(page);
+    await ensureFrontendTheme(page, 'default');
+
+    await openHelloWorldInEditor(page);
+    await openZenMode(page);
+
+    const dimensions = await page.locator('.zen-quill-shell').evaluate((shell) => {
+      const toolbar = shell.querySelector('.quill-toolbar');
+      const editor = shell.querySelector('.zen-editor');
+      const toolbarBounds = toolbar.getBoundingClientRect();
+      const editorBounds = editor.getBoundingClientRect();
+      return {
+        toolbarHeight: toolbarBounds.height,
+        verticalGap: editorBounds.top - toolbarBounds.bottom,
+      };
+    });
+
+    expect(dimensions.toolbarHeight).toBe(42);
+    expect(dimensions.verticalGap).toBe(0);
   });
 
   test('saving from zen mode keeps edits made inside the debounce window', async ({ page }) => {

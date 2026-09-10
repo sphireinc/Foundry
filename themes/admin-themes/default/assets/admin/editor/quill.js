@@ -1,6 +1,6 @@
-// Rebuilding the raw document from the editor walks the whole body, so it runs
-// once the typist pauses instead of once per keystroke.
-const RAW_SYNC_DEBOUNCE_MS = 250;
+// Rebuilding the raw document walks the whole body and updates the preview, so
+// wait for a full second of idle time rather than interrupting normal typing.
+const RAW_SYNC_DEBOUNCE_MS = 1000;
 
 const loadStylesheet = (href) => {
   if (
@@ -491,7 +491,6 @@ export const createQuillEditorController = ({
   };
 
   let quillPromise = null;
-  let zenPreviewTimer = null;
   let zenPreviewRequestId = 0;
   let rawSyncTimer = null;
   let pendingRawSync = null;
@@ -501,13 +500,6 @@ export const createQuillEditorController = ({
   let zenMount = null;
   const uploadedMediaByURL = new Map();
   const pendingUploadInputs = new Map();
-
-  const clearZenPreviewTimer = () => {
-    if (zenPreviewTimer) {
-      window.clearTimeout(zenPreviewTimer);
-      zenPreviewTimer = null;
-    }
-  };
 
   const clearRawSyncTimer = () => {
     if (rawSyncTimer) {
@@ -549,7 +541,7 @@ export const createQuillEditorController = ({
     return markdownBodyToHTML(getBodyMarkdown(), state);
   };
 
-  const rebuildRawFromQuill = (quill, kind) => {
+  const rebuildRawFromQuill = (quill) => {
     clearRawSyncTimer();
     pendingRawSync = null;
     const rawNode = document.getElementById('document-raw');
@@ -565,12 +557,9 @@ export const createQuillEditorController = ({
     state.documentEditor.raw = nextRaw;
     state.documentEditor.html_body = quill.root.innerHTML;
     rawNode.dispatchEvent(new Event('input', { bubbles: true }));
-    if (kind === 'zen' && state.documentZenMode?.open) {
-      queuePreviewRefresh();
-    }
   };
 
-  const flushRawSync = () => {
+  const flushRawSync = ({ refreshZenPreview = false } = {}) => {
     if (!pendingRawSync) return;
     const { quill, kind, sourcePath } = pendingRawSync;
     // A queued rebuild belongs to the document it was typed into; dropping it on
@@ -580,13 +569,18 @@ export const createQuillEditorController = ({
       pendingRawSync = null;
       return;
     }
-    rebuildRawFromQuill(quill, kind);
+    rebuildRawFromQuill(quill);
+    if (refreshZenPreview && kind === 'zen' && state.documentZenMode?.open) {
+      void refreshPreview();
+    }
   };
 
   const queueRawSync = (quill, kind) => {
     pendingRawSync = { quill, kind, sourcePath: state.documentEditor.source_path };
     clearRawSyncTimer();
-    rawSyncTimer = window.setTimeout(flushRawSync, RAW_SYNC_DEBOUNCE_MS);
+    rawSyncTimer = window.setTimeout(() => {
+      flushRawSync({ refreshZenPreview: true });
+    }, RAW_SYNC_DEBOUNCE_MS);
   };
 
   const updatePreviewPane = (html) => {
@@ -625,14 +619,6 @@ export const createQuillEditorController = ({
       updateStatus('zen', 'Preview failed');
       render();
     }
-  };
-
-  const queuePreviewRefresh = () => {
-    clearZenPreviewTimer();
-    zenPreviewTimer = window.setTimeout(() => {
-      void refreshPreview();
-    }, 1000);
-    updateStatus('zen', 'Preview sync queued');
   };
 
   const getImageUploadDir = () => currentDocumentMediaDir(state.documentEditor.source_path);
@@ -674,10 +660,15 @@ export const createQuillEditorController = ({
   };
 
   const handleImageFiles = async (quill, files) => {
+    let changed = false;
     for (const file of files) {
       if (!file || !String(file.type || '').startsWith('image/')) continue;
       await insertUploadedImage(quill, file);
-      rebuildRawFromQuill(quill, quill === zenQuill ? 'zen' : 'primary');
+      rebuildRawFromQuill(quill);
+      changed = true;
+    }
+    if (changed && quill === zenQuill && state.documentZenMode?.open) {
+      void refreshPreview();
     }
   };
 
@@ -856,7 +847,6 @@ export const createQuillEditorController = ({
   const close = () => {
     flushRawSync();
     zenPreviewRequestId += 1;
-    clearZenPreviewTimer();
     zenQuill = null;
     zenMount = null;
     state.documentZenMode = {
@@ -875,7 +865,6 @@ export const createQuillEditorController = ({
 
   const disposeEditor = () => {
     flushRawSync();
-    clearZenPreviewTimer();
     zenQuill = null;
     zenMount = null;
   };
@@ -888,7 +877,6 @@ export const createQuillEditorController = ({
     close,
     save,
     refreshPreview,
-    queuePreviewRefresh,
     flushRawSync,
     disposeEditor,
   };

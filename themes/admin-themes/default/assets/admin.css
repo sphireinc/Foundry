@@ -731,8 +731,7 @@ button.panel:hover {
   align-items: start;
 }
 
-.quill-editor-shell,
-.zen-quill-shell {
+.quill-editor-shell {
   display: grid;
   gap: 10px;
 }
@@ -1080,6 +1079,17 @@ button.panel:hover {
 .zen-quill-shell {
   min-height: 0;
   padding: 16px;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  gap: 0;
+}
+
+.zen-quill-shell .quill-toolbar {
+  box-sizing: border-box;
+  height: 42px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
 }
 
 .zen-edit-pane {
