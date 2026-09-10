@@ -16,6 +16,19 @@ server:
   live_reload_mode: "stream"
   auto_open_browser: false
   debug_routes: false
+  rate_limit:
+    admin_api:
+      requests_per_minute: 120
+      burst: 30
+      max_clients: 10000
+    admin:
+      requests_per_minute: 240
+      burst: 60
+      max_clients: 10000
+    public:
+      requests_per_minute: 600
+      burst: 120
+      max_clients: 10000
 
 admin:
   enabled: false

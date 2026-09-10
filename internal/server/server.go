@@ -181,7 +181,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 // newMux builds the HTTP route tree for preview mode.
-func (s *Server) newMux() *http.ServeMux {
+func (s *Server) newMux() http.Handler {
 	mux := http.NewServeMux()
 
 	if s.cfg.Server.LiveReload {
@@ -208,11 +208,13 @@ func (s *Server) newMux() *http.ServeMux {
 	s.hooks.RegisterRoutes(mux)
 	mux.HandleFunc("/", s.handlePage)
 
+	handler := s.wrapRateLimit(mux)
+
 	if s.debug {
-		return s.wrapDebugHTTP(mux)
+		return s.wrapDebugHTTP(handler)
 	}
 
-	return mux
+	return handler
 }
 
 // publicStaticHandler serves files from the generated public directory with
@@ -691,7 +693,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(out)
 }
 
-func (s *Server) wrapDebugHTTP(next http.Handler) *http.ServeMux {
+func (s *Server) wrapDebugHTTP(next http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqID := requestSequence.Add(1)

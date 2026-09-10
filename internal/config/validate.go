@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"path"
 	"regexp"
@@ -13,6 +14,12 @@ import (
 )
 
 var adminPathSegmentRE = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+const (
+	maxRateLimitRequestsPerMinute = 1_000_000
+	maxRateLimitBurst             = 10_000
+	maxRateLimitClients           = 100_000
+)
 
 func Validate(cfg *Config) []error {
 	if cfg == nil {
@@ -74,6 +81,14 @@ func Validate(cfg *Config) []error {
 			errs = append(errs, fmt.Errorf("server.live_reload_mode must be one of: stream, poll"))
 		}
 	}
+	for _, proxy := range cfg.Server.TrustedProxies {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(proxy)); err != nil {
+			errs = append(errs, fmt.Errorf("server.trusted_proxies must contain CIDR prefixes: %q", proxy))
+		}
+	}
+	errs = append(errs, validateRateLimitPolicy("server.rate_limit.admin_api", cfg.Server.RateLimit.AdminAPI)...)
+	errs = append(errs, validateRateLimitPolicy("server.rate_limit.admin", cfg.Server.RateLimit.Admin)...)
+	errs = append(errs, validateRateLimitPolicy("server.rate_limit.public", cfg.Server.RateLimit.Public)...)
 	if cfg.Backup.DebounceSeconds <= 0 {
 		errs = append(errs, fmt.Errorf("backup.debounce_seconds must be greater than zero"))
 	}
@@ -179,6 +194,35 @@ func Validate(cfg *Config) []error {
 		}
 	}
 
+	return errs
+}
+
+func validateRateLimitPolicy(name string, policy RateLimitPolicy) []error {
+	var errs []error
+	if policy.RequestsPerMinute < 0 || policy.RequestsPerMinute > maxRateLimitRequestsPerMinute {
+		errs = append(errs, fmt.Errorf("%s.requests_per_minute must be between 0 and %d", name, maxRateLimitRequestsPerMinute))
+	}
+	if policy.Burst < 0 || policy.Burst > maxRateLimitBurst {
+		errs = append(errs, fmt.Errorf("%s.burst must be between 0 and %d", name, maxRateLimitBurst))
+	}
+	if policy.MaxClients < 0 || policy.MaxClients > maxRateLimitClients {
+		errs = append(errs, fmt.Errorf("%s.max_clients must be between 0 and %d", name, maxRateLimitClients))
+	}
+	if policy.RequestsPerMinute == 0 {
+		if policy.Burst != 0 {
+			errs = append(errs, fmt.Errorf("%s.burst requires requests_per_minute to be greater than zero", name))
+		}
+		if policy.MaxClients != 0 {
+			errs = append(errs, fmt.Errorf("%s.max_clients requires requests_per_minute to be greater than zero", name))
+		}
+		return errs
+	}
+	if policy.Burst <= 0 {
+		errs = append(errs, fmt.Errorf("%s.burst must be greater than zero when requests_per_minute is enabled", name))
+	}
+	if policy.MaxClients <= 0 {
+		errs = append(errs, fmt.Errorf("%s.max_clients must be greater than zero when requests_per_minute is enabled", name))
+	}
 	return errs
 }
 

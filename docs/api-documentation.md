@@ -1066,7 +1066,11 @@ Error responses include a JSON body with error details:
 
 ## Rate Limiting
 
-API endpoints may implement rate limiting. When rate limited, you'll receive a `429 Too Many Requests` response with a `Retry-After` header indicating when to retry.
+When `server.rate_limit.admin_api` is configured, admin API endpoints, including
+login, are limited per client IP. A rejected API request receives a `429 Too
+Many Requests` JSON response with `Retry-After` and `Cache-Control: no-store`
+headers indicating when to retry. See the [server configuration](../README.md#server)
+for the public and admin-shell policies and trusted-proxy configuration.
 
 ## OpenAPI Specification
 

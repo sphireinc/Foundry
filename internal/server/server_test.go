@@ -56,6 +56,17 @@ func (h *hookRecorder) OnRoutesAssigned(*content.SiteGraph) error {
 }
 func (h *hookRecorder) OnAssetsBuilding(*config.Config) error { return h.err }
 
+type rateLimitHook struct{}
+
+func (rateLimitHook) RegisterRoutes(mux *http.ServeMux) {
+	for _, path := range []string{"/rate-public", "/__admin/rate-shell", "/__admin/api/rate-api", "/cms/rate-shell", "/cms/api/rate-api"} {
+		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	}
+}
+func (rateLimitHook) OnServerStarted(string) error              { return nil }
+func (rateLimitHook) OnRoutesAssigned(*content.SiteGraph) error { return nil }
+func (rateLimitHook) OnAssetsBuilding(*config.Config) error     { return nil }
+
 type responseWriterNoFlush struct {
 	header http.Header
 	body   strings.Builder
@@ -302,6 +313,114 @@ func TestPublicStaticHandlerAddsSecurityHeaders(t *testing.T) {
 	if rr.Header().Get("Content-Disposition") != "" {
 		t.Fatalf("expected safe media file to render inline, got %#v", rr.Header())
 	}
+}
+
+func TestServerRateLimitsPublicAdminShellAndAdminAPIIndependently(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Server.RateLimit = config.RateLimitConfig{
+		Public:   config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10},
+		Admin:    config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10},
+		AdminAPI: config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10},
+	}
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), rateLimitHook{}, false)
+	handler := s.newMux()
+
+	for _, test := range []struct {
+		name     string
+		path     string
+		wantJSON bool
+	}{
+		{name: "public", path: "/rate-public"},
+		{name: "admin shell", path: "/__admin/rate-shell"},
+		{name: "admin api", path: "/__admin/api/rate-api", wantJSON: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			first := rateLimitRequest(http.MethodGet, test.path, "203.0.113.10:1234")
+			firstRR := httptest.NewRecorder()
+			handler.ServeHTTP(firstRR, first)
+			if firstRR.Code != http.StatusOK {
+				t.Fatalf("expected first request to pass, got %d: %s", firstRR.Code, firstRR.Body.String())
+			}
+
+			second := rateLimitRequest(http.MethodGet, test.path, "203.0.113.10:1234")
+			secondRR := httptest.NewRecorder()
+			handler.ServeHTTP(secondRR, second)
+			if secondRR.Code != http.StatusTooManyRequests {
+				t.Fatalf("expected second request to be limited, got %d: %s", secondRR.Code, secondRR.Body.String())
+			}
+			if secondRR.Header().Get("Retry-After") != "1" || secondRR.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("expected retry headers, got %#v", secondRR.Header())
+			}
+			if test.wantJSON && secondRR.Header().Get("Content-Type") != "application/json; charset=utf-8" {
+				t.Fatalf("expected JSON API response, got %#v", secondRR.Header())
+			}
+		})
+	}
+}
+
+func TestServerRateLimitIgnoresUntrustedForwardedHeaders(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Server.RateLimit.Public = config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10}
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), rateLimitHook{}, false)
+	handler := s.newMux()
+
+	first := rateLimitRequest(http.MethodGet, "/rate-public", "198.51.100.10:443")
+	first.Header.Set("X-Forwarded-For", "203.0.113.1")
+	handler.ServeHTTP(httptest.NewRecorder(), first)
+	second := rateLimitRequest(http.MethodGet, "/rate-public", "198.51.100.10:443")
+	second.Header.Set("X-Forwarded-For", "203.0.113.2")
+	secondRR := httptest.NewRecorder()
+	handler.ServeHTTP(secondRR, second)
+	if secondRR.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected spoofed forwarded header not to evade limit, got %d", secondRR.Code)
+	}
+}
+
+func TestServerRateLimitUsesForwardedClientForTrustedProxy(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Server.TrustedProxies = []string{"10.0.0.0/8"}
+	cfg.Server.RateLimit.Public = config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10}
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), rateLimitHook{}, false)
+	handler := s.newMux()
+
+	for _, client := range []string{"203.0.113.1", "203.0.113.2"} {
+		req := rateLimitRequest(http.MethodGet, "/rate-public", "10.0.0.2:443")
+		req.Header.Set("X-Forwarded-For", client)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected independent forwarded client %s to pass, got %d", client, rr.Code)
+		}
+	}
+
+	req := rateLimitRequest(http.MethodGet, "/rate-public", "10.0.0.2:443")
+	req.Header.Set("X-Forwarded-For", "203.0.113.1")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected repeated forwarded client to be limited, got %d", rr.Code)
+	}
+}
+
+func TestServerRateLimitClassifiesCustomAdminPath(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Admin.Path = "/cms"
+	s := &Server{cfg: cfg}
+	if got := s.rateLimitScope("/cms/api/login"); got != rateLimitAdminAPI {
+		t.Fatalf("expected custom admin API path, got %d", got)
+	}
+	if got := s.rateLimitScope("/cms/theme/admin.css"); got != rateLimitAdmin {
+		t.Fatalf("expected custom admin shell path, got %d", got)
+	}
+	if got := s.rateLimitScope("/cms-copy/api/login"); got != rateLimitPublic {
+		t.Fatalf("expected unrelated prefix to remain public, got %d", got)
+	}
+}
+
+func rateLimitRequest(method, path, remoteAddr string) *http.Request {
+	req := httptest.NewRequest(method, path, nil)
+	req.RemoteAddr = remoteAddr
+	return req
 }
 
 func TestServerRebuildIncrementalAndNew(t *testing.T) {
