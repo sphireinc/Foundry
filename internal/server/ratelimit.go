@@ -61,9 +61,10 @@ func newRateLimiter(policy config.RateLimitPolicy) *ratelimit.Limiter {
 
 func (s *Server) rateLimitScope(requestPath string) rateLimitScope {
 	adminPath := s.cfg.AdminPath()
-	apiPath := adminPath + "/api"
-	if requestPath == apiPath || strings.HasPrefix(requestPath, apiPath+"/") {
-		return rateLimitAdminAPI
+	for _, apiPrefix := range []string{adminPath + "/api", adminPath + "/plugin-api"} {
+		if requestPath == apiPrefix || strings.HasPrefix(requestPath, apiPrefix+"/") {
+			return rateLimitAdminAPI
+		}
 	}
 	if requestPath == adminPath || strings.HasPrefix(requestPath, adminPath+"/") {
 		return rateLimitAdmin

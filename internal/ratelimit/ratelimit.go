@@ -3,6 +3,7 @@
 package ratelimit
 
 import (
+	"container/list"
 	"math"
 	"net"
 	"net/http"
@@ -26,13 +27,19 @@ type Limiter struct {
 	policy  Policy
 	now     func() time.Time
 	mu      sync.Mutex
-	clients map[string]clientBucket
+	clients map[string]*list.Element
+	lru     list.List // Client entries ordered by lastSeen, oldest first.
 }
 
 type clientBucket struct {
 	tokens     float64
 	lastRefill time.Time
 	lastSeen   time.Time
+}
+
+type clientEntry struct {
+	key    string
+	bucket clientBucket
 }
 
 // New returns a limiter for policy or nil when policy is disabled.
@@ -47,7 +54,7 @@ func newLimiter(policy Policy, now func() time.Time) *Limiter {
 	return &Limiter{
 		policy:  policy,
 		now:     now,
-		clients: make(map[string]clientBucket),
+		clients: make(map[string]*list.Element),
 	}
 }
 
@@ -66,7 +73,11 @@ func (l *Limiter) Allow(key string) (allowed bool, retryAfter time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	bucket, ok := l.clients[key]
+	element, ok := l.clients[key]
+	var bucket clientBucket
+	if ok {
+		bucket = element.Value.(clientEntry).bucket
+	}
 	if !ok {
 		if len(l.clients) >= l.policy.MaxClients {
 			l.evictIdle(now)
@@ -88,21 +99,33 @@ func (l *Limiter) Allow(key string) (allowed bool, retryAfter time.Duration) {
 	}
 	bucket.lastSeen = now
 
-	if bucket.tokens < 1 {
-		l.clients[key] = bucket
+	allowed = bucket.tokens >= 1
+	if allowed {
+		bucket.tokens--
+	}
+	entry := clientEntry{key: key, bucket: bucket}
+	if ok {
+		element.Value = entry
+		l.lru.MoveToBack(element)
+	} else {
+		l.clients[key] = l.lru.PushBack(entry)
+	}
+
+	if !allowed {
 		return false, l.nextTokenDelayFor(bucket.tokens)
 	}
-	bucket.tokens--
-	l.clients[key] = bucket
 	return true, 0
 }
 
 func (l *Limiter) evictIdle(now time.Time) {
 	deadline := now.Add(-l.idleTTL())
-	for key, bucket := range l.clients {
-		if bucket.lastSeen.Before(deadline) {
-			delete(l.clients, key)
+	for element := l.lru.Front(); element != nil; element = l.lru.Front() {
+		entry := element.Value.(clientEntry)
+		if !entry.bucket.lastSeen.Before(deadline) {
+			return
 		}
+		delete(l.clients, entry.key)
+		l.lru.Remove(element)
 	}
 }
 
