@@ -65,10 +65,45 @@ func TestApplyDefaults(t *testing.T) {
 	}
 }
 
+func TestRateLimitConfigurationDefaultsAndValidation(t *testing.T) {
+	cfg := &Config{}
+	cfg.ApplyDefaults()
+	if cfg.Server.RateLimit.Public.MaxClients != 0 {
+		t.Fatalf("expected omitted rate limits to remain disabled, got %#v", cfg.Server.RateLimit.Public)
+	}
+
+	cfg.Server.RateLimit.Public = RateLimitPolicy{RequestsPerMinute: 600, Burst: 120}
+	cfg.ApplyDefaults()
+	if cfg.Server.RateLimit.Public.MaxClients != defaultRateLimitMaxClients {
+		t.Fatalf("expected default max clients, got %d", cfg.Server.RateLimit.Public.MaxClients)
+	}
+	if errs := Validate(cfg); len(errs) != 0 {
+		t.Fatalf("expected configured rate limit to validate, got %v", errs)
+	}
+
+	for _, policy := range []RateLimitPolicy{
+		{RequestsPerMinute: 60, Burst: 0, MaxClients: 10},
+		{RequestsPerMinute: 0, Burst: 1, MaxClients: 0},
+		{RequestsPerMinute: 60, Burst: 1, MaxClients: 0},
+		{RequestsPerMinute: maxRateLimitRequestsPerMinute + 1, Burst: 1, MaxClients: 10},
+	} {
+		candidate := *cfg
+		candidate.Server.RateLimit.Public = policy
+		if errs := Validate(&candidate); len(errs) == 0 {
+			t.Fatalf("expected invalid rate limit policy to be rejected: %#v", policy)
+		}
+	}
+
+	cfg.Server.TrustedProxies = []string{"not-a-cidr"}
+	if errs := Validate(cfg); len(errs) == 0 {
+		t.Fatal("expected invalid trusted proxy CIDR to be rejected")
+	}
+}
+
 func TestLoadValidateAndEditYAML(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "site.yaml")
-	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nserver:\n  addr: :8080\n  live_reload_mode: poll\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\nplugins:\n  enabled:\n    - toc\n")
+	body := []byte("theme: default\ndefault_lang: en\ncontent_dir: content\npublic_dir: public\nthemes_dir: themes\ndata_dir: data\nplugins_dir: plugins\nserver:\n  addr: :8080\n  live_reload_mode: poll\n  trusted_proxies:\n    - 10.0.0.0/8\n  rate_limit:\n    public:\n      requests_per_minute: 600\n      burst: 120\nfeed:\n  rss_path: /rss.xml\n  sitemap_path: /sitemap.xml\nplugins:\n  enabled:\n    - toc\n")
 	if err := os.WriteFile(path, body, 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -79,6 +114,9 @@ func TestLoadValidateAndEditYAML(t *testing.T) {
 	}
 	if errs := Validate(cfg); len(errs) != 0 {
 		t.Fatalf("expected valid config, got %v", errs)
+	}
+	if cfg.Server.RateLimit.Public.MaxClients != defaultRateLimitMaxClients {
+		t.Fatalf("expected rate limit max client default, got %d", cfg.Server.RateLimit.Public.MaxClients)
 	}
 
 	if err := UpsertTopLevelScalar(path, "theme", "custom"); err != nil {

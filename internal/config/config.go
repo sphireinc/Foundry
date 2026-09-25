@@ -106,11 +106,42 @@ type BackupConfig struct {
 }
 
 type ServerConfig struct {
-	Addr            string `yaml:"addr"`
-	LiveReload      bool   `yaml:"live_reload"`
-	LiveReloadMode  string `yaml:"live_reload_mode"`
-	AutoOpenBrowser bool   `yaml:"auto_open_browser"`
-	DebugRoutes     bool   `yaml:"debug_routes"`
+	Addr            string          `yaml:"addr"`
+	LiveReload      bool            `yaml:"live_reload"`
+	LiveReloadMode  string          `yaml:"live_reload_mode"`
+	AutoOpenBrowser bool            `yaml:"auto_open_browser"`
+	DebugRoutes     bool            `yaml:"debug_routes"`
+	TrustedProxies  []string        `yaml:"trusted_proxies"`
+	RateLimit       RateLimitConfig `yaml:"rate_limit"`
+}
+
+// RateLimitConfig defines independent per-client request limits for the three
+// server traffic classes. A policy with requests_per_minute set to zero is
+// disabled, preserving the existing behavior when rate_limit is omitted.
+type RateLimitConfig struct {
+	AdminAPI RateLimitPolicy `yaml:"admin_api"`
+	Admin    RateLimitPolicy `yaml:"admin"`
+	Public   RateLimitPolicy `yaml:"public"`
+}
+
+// RateLimitPolicy configures a token bucket for one traffic class.
+type RateLimitPolicy struct {
+	RequestsPerMinute int `yaml:"requests_per_minute"`
+	Burst             int `yaml:"burst"`
+	MaxClients        int `yaml:"max_clients"`
+}
+
+const defaultRateLimitMaxClients = 10_000
+
+func (c *RateLimitConfig) applyDefaults() {
+	if c == nil {
+		return
+	}
+	for _, policy := range []*RateLimitPolicy{&c.AdminAPI, &c.Admin, &c.Public} {
+		if policy.RequestsPerMinute > 0 && policy.MaxClients == 0 {
+			policy.MaxClients = defaultRateLimitMaxClients
+		}
+	}
 }
 
 type BuildConfig struct {
@@ -321,6 +352,7 @@ func (c *Config) ApplyDefaults() {
 	} else {
 		c.Server.LiveReloadMode = strings.ToLower(strings.TrimSpace(c.Server.LiveReloadMode))
 	}
+	c.Server.RateLimit.applyDefaults()
 	if c.Content.PagesDir == "" {
 		c.Content.PagesDir = "pages"
 	}

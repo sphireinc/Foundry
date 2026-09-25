@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,6 +57,17 @@ func (h *hookRecorder) OnRoutesAssigned(*content.SiteGraph) error {
 }
 func (h *hookRecorder) OnAssetsBuilding(*config.Config) error { return h.err }
 
+type rateLimitHook struct{}
+
+func (rateLimitHook) RegisterRoutes(mux *http.ServeMux) {
+	for _, path := range []string{"/rate-public", "/__admin/rate-shell", "/__admin/api/rate-api", "/cms/rate-shell", "/cms/api/rate-api"} {
+		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	}
+}
+func (rateLimitHook) OnServerStarted(string) error              { return nil }
+func (rateLimitHook) OnRoutesAssigned(*content.SiteGraph) error { return nil }
+func (rateLimitHook) OnAssetsBuilding(*config.Config) error     { return nil }
+
 type responseWriterNoFlush struct {
 	header http.Header
 	body   strings.Builder
@@ -70,6 +82,37 @@ func (w *responseWriterNoFlush) Header() http.Header {
 }
 func (w *responseWriterNoFlush) Write(b []byte) (int, error) { return w.body.Write(b) }
 func (w *responseWriterNoFlush) WriteHeader(status int)      { w.status = status }
+
+type reloadStreamResponseWriter struct {
+	header  http.Header
+	mu      sync.Mutex
+	body    strings.Builder
+	flushes chan string
+}
+
+func newReloadStreamResponseWriter() *reloadStreamResponseWriter {
+	return &reloadStreamResponseWriter{
+		header:  make(http.Header),
+		flushes: make(chan string, 4),
+	}
+}
+
+func (w *reloadStreamResponseWriter) Header() http.Header { return w.header }
+
+func (w *reloadStreamResponseWriter) Write(b []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.body.Write(b)
+}
+
+func (w *reloadStreamResponseWriter) WriteHeader(int) {}
+
+func (w *reloadStreamResponseWriter) Flush() {
+	w.mu.Lock()
+	body := w.body.String()
+	w.mu.Unlock()
+	w.flushes <- body
+}
 
 func TestServerHelpersAndHandlers(t *testing.T) {
 	cfg := testServerConfig(t)
@@ -109,15 +152,23 @@ func TestServerHelpersAndHandlers(t *testing.T) {
 	if got := s.reloadVer.Load(); got != 0 {
 		t.Fatalf("expected initial reload version to be zero, got %d", got)
 	}
+	firstReload := s.reloadNotify()
 	s.signalReload()
+	select {
+	case <-firstReload:
+	default:
+		t.Fatal("expected first reload notification")
+	}
+
+	secondReload := s.reloadNotify()
 	s.signalReload()
 	if got := s.reloadVer.Load(); got != 2 {
 		t.Fatalf("expected reload version to increment, got %d", got)
 	}
 	select {
-	case <-s.reloadSignal:
+	case <-secondReload:
 	default:
-		t.Fatal("expected reload signal")
+		t.Fatal("expected second reload notification")
 	}
 
 	if got := s.listenURL(); got != "http://localhost:8080" {
@@ -302,6 +353,114 @@ func TestPublicStaticHandlerAddsSecurityHeaders(t *testing.T) {
 	if rr.Header().Get("Content-Disposition") != "" {
 		t.Fatalf("expected safe media file to render inline, got %#v", rr.Header())
 	}
+}
+
+func TestServerRateLimitsPublicAdminShellAndAdminAPIIndependently(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Server.RateLimit = config.RateLimitConfig{
+		Public:   config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10},
+		Admin:    config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10},
+		AdminAPI: config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10},
+	}
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), rateLimitHook{}, false)
+	handler := s.newMux()
+
+	for _, test := range []struct {
+		name     string
+		path     string
+		wantJSON bool
+	}{
+		{name: "public", path: "/rate-public"},
+		{name: "admin shell", path: "/__admin/rate-shell"},
+		{name: "admin api", path: "/__admin/api/rate-api", wantJSON: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			first := rateLimitRequest(http.MethodGet, test.path, "203.0.113.10:1234")
+			firstRR := httptest.NewRecorder()
+			handler.ServeHTTP(firstRR, first)
+			if firstRR.Code != http.StatusOK {
+				t.Fatalf("expected first request to pass, got %d: %s", firstRR.Code, firstRR.Body.String())
+			}
+
+			second := rateLimitRequest(http.MethodGet, test.path, "203.0.113.10:1234")
+			secondRR := httptest.NewRecorder()
+			handler.ServeHTTP(secondRR, second)
+			if secondRR.Code != http.StatusTooManyRequests {
+				t.Fatalf("expected second request to be limited, got %d: %s", secondRR.Code, secondRR.Body.String())
+			}
+			if secondRR.Header().Get("Retry-After") != "1" || secondRR.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("expected retry headers, got %#v", secondRR.Header())
+			}
+			if test.wantJSON && secondRR.Header().Get("Content-Type") != "application/json; charset=utf-8" {
+				t.Fatalf("expected JSON API response, got %#v", secondRR.Header())
+			}
+		})
+	}
+}
+
+func TestServerRateLimitIgnoresUntrustedForwardedHeaders(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Server.RateLimit.Public = config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10}
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), rateLimitHook{}, false)
+	handler := s.newMux()
+
+	first := rateLimitRequest(http.MethodGet, "/rate-public", "198.51.100.10:443")
+	first.Header.Set("X-Forwarded-For", "203.0.113.1")
+	handler.ServeHTTP(httptest.NewRecorder(), first)
+	second := rateLimitRequest(http.MethodGet, "/rate-public", "198.51.100.10:443")
+	second.Header.Set("X-Forwarded-For", "203.0.113.2")
+	secondRR := httptest.NewRecorder()
+	handler.ServeHTTP(secondRR, second)
+	if secondRR.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected spoofed forwarded header not to evade limit, got %d", secondRR.Code)
+	}
+}
+
+func TestServerRateLimitUsesForwardedClientForTrustedProxy(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Server.TrustedProxies = []string{"10.0.0.0/8"}
+	cfg.Server.RateLimit.Public = config.RateLimitPolicy{RequestsPerMinute: 60, Burst: 1, MaxClients: 10}
+	s := New(cfg, stubLoader{}, router.NewResolver(cfg), renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil), rateLimitHook{}, false)
+	handler := s.newMux()
+
+	for _, client := range []string{"203.0.113.1", "203.0.113.2"} {
+		req := rateLimitRequest(http.MethodGet, "/rate-public", "10.0.0.2:443")
+		req.Header.Set("X-Forwarded-For", client)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected independent forwarded client %s to pass, got %d", client, rr.Code)
+		}
+	}
+
+	req := rateLimitRequest(http.MethodGet, "/rate-public", "10.0.0.2:443")
+	req.Header.Set("X-Forwarded-For", "203.0.113.1")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected repeated forwarded client to be limited, got %d", rr.Code)
+	}
+}
+
+func TestServerRateLimitClassifiesCustomAdminPath(t *testing.T) {
+	cfg := testServerConfig(t)
+	cfg.Admin.Path = "/cms"
+	s := &Server{cfg: cfg}
+	if got := s.rateLimitScope("/cms/api/login"); got != rateLimitAdminAPI {
+		t.Fatalf("expected custom admin API path, got %d", got)
+	}
+	if got := s.rateLimitScope("/cms/theme/admin.css"); got != rateLimitAdmin {
+		t.Fatalf("expected custom admin shell path, got %d", got)
+	}
+	if got := s.rateLimitScope("/cms-copy/api/login"); got != rateLimitPublic {
+		t.Fatalf("expected unrelated prefix to remain public, got %d", got)
+	}
+}
+
+func rateLimitRequest(method, path, remoteAddr string) *http.Request {
+	req := httptest.NewRequest(method, path, nil)
+	req.RemoteAddr = remoteAddr
+	return req
 }
 
 func TestServerRebuildIncrementalAndNew(t *testing.T) {
@@ -616,6 +775,60 @@ func writeServerTheme(t *testing.T, cfg *config.Config) {
 		}
 		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+}
+
+func TestReloadBroadcastsToAllClients(t *testing.T) {
+	s := &Server{
+		reloadSignal: make(chan struct{}),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	clients := []*reloadStreamResponseWriter{
+		newReloadStreamResponseWriter(),
+		newReloadStreamResponseWriter(),
+	}
+	done := make(chan struct{}, len(clients))
+	defer func() {
+		cancel()
+		for range clients {
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				t.Error("reload handler did not stop after cancellation")
+			}
+		}
+	}()
+
+	for _, client := range clients {
+		go func(w *reloadStreamResponseWriter) {
+			s.handleReload(w, httptest.NewRequest(http.MethodGet, "/__reload", nil).WithContext(ctx))
+			done <- struct{}{}
+		}(client)
+	}
+
+	for i, client := range clients {
+		select {
+		case <-client.flushes:
+			if got := client.Header().Get("Content-Type"); got != "text/event-stream" {
+				t.Fatalf("client %d content type = %q, want text/event-stream", i+1, got)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("client %d SSE handler did not become ready", i+1)
+		}
+	}
+
+	s.signalReload()
+
+	for i, client := range clients {
+		select {
+		case body := <-client.flushes:
+			if !strings.Contains(body, `"reload":true`) {
+				t.Errorf("client %d did not receive reload event: %q", i+1, body)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("client %d SSE handler did not flush reload event", i+1)
 		}
 	}
 }

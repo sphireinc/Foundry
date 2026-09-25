@@ -1128,6 +1128,36 @@ The admin UI also includes breadcrumbs, toast notifications, unsaved-change warn
 - `stream`: uses a long-lived SSE connection to `/__reload`
 - `poll`: polls `/__reload/poll` every 1.5 seconds and reloads when the rebuild version changes
 
+`server.rate_limit` applies independent per-client-IP token-bucket limits to
+the admin API (including login), the remaining admin shell and assets, and all
+other public requests. A policy is disabled when its `requests_per_minute` is
+zero or omitted. Configure trusted reverse-proxy CIDRs before relying on
+`X-Forwarded-For`; untrusted forwarded headers are deliberately ignored.
+
+```yaml
+server:
+  trusted_proxies:
+    - 10.0.0.0/8
+  rate_limit:
+    admin_api:
+      requests_per_minute: 120
+      burst: 30
+      max_clients: 10000
+    admin:
+      requests_per_minute: 240
+      burst: 60
+      max_clients: 10000
+    public:
+      requests_per_minute: 600
+      burst: 120
+      max_clients: 10000
+```
+
+`burst` is the number of requests a client can make immediately;
+`max_clients` bounds retained rate-limit state per traffic class. Rejected
+requests receive `429 Too Many Requests`, `Retry-After`, and `Cache-Control:
+no-store`.
+
 Use `poll` if your browser or proxy environment is sensitive to long-lived local connections.
 
 The preview/admin server uses explicit read, write, and idle timeouts by default.

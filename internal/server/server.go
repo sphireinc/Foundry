@@ -74,6 +74,7 @@ type Server struct {
 	mu           sync.RWMutex
 	graph        *content.SiteGraph
 	depGraph     *deps.Graph
+	reloadMu     sync.Mutex
 	reloadSignal chan struct{}
 	reloadVer    atomic.Uint64
 }
@@ -129,7 +130,7 @@ func New(
 		hooks:        hooks,
 		preview:      preview,
 		connStates:   make(map[net.Conn]http.ConnState),
-		reloadSignal: make(chan struct{}, 1),
+		reloadSignal: make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -181,7 +182,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 // newMux builds the HTTP route tree for preview mode.
-func (s *Server) newMux() *http.ServeMux {
+func (s *Server) newMux() http.Handler {
 	mux := http.NewServeMux()
 
 	if s.cfg.Server.LiveReload {
@@ -208,11 +209,13 @@ func (s *Server) newMux() *http.ServeMux {
 	s.hooks.RegisterRoutes(mux)
 	mux.HandleFunc("/", s.handlePage)
 
+	handler := s.wrapRateLimit(mux)
+
 	if s.debug {
-		return s.wrapDebugHTTP(mux)
+		return s.wrapDebugHTTP(handler)
 	}
 
-	return mux
+	return handler
 }
 
 // publicStaticHandler serves files from the generated public directory with
@@ -393,12 +396,25 @@ func hasRenderableChanges(changes deps.ChangeSet) bool {
 
 func (s *Server) signalReload() {
 	s.reloadVer.Add(1)
-	select {
-	case s.reloadSignal <- struct{}{}:
-	default:
+	s.reloadMu.Lock()
+	if s.reloadSignal != nil {
+		close(s.reloadSignal)
 	}
+	s.reloadSignal = make(chan struct{})
+	s.reloadMu.Unlock()
+
 }
 
+func (s *Server) reloadNotify() <-chan struct{} {
+
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	if s.reloadSignal == nil {
+		s.reloadSignal = make(chan struct{})
+	}
+	return s.reloadSignal
+
+}
 func (s *Server) watch(ctx context.Context) {
 	w, err := content.NewWatcher()
 	if err != nil {
@@ -593,19 +609,23 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 	notify := r.Context().Done()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+	reload := s.reloadNotify()
+	// Flush the response headers once the stream is subscribed so clients can
+	// observe that the SSE connection is ready.
+	flusher.Flush()
 	for {
+		if s.writeReloadEvent(w, flusher, &lastSeen) {
+			return
+		}
 		select {
 		case <-notify:
 			return
-		case <-s.reloadSignal:
-			if s.writeReloadEvent(w, flusher, &lastSeen) {
-				return
-			}
+		case <-reload:
 		case <-ticker.C:
-			if s.writeReloadEvent(w, flusher, &lastSeen) {
-				return
-			}
 		}
+		// Re-subscribe after each notification. A reload between the version
+		// check above and this subscription is still detected by the next check.
+		reload = s.reloadNotify()
 	}
 }
 
@@ -691,7 +711,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(out)
 }
 
-func (s *Server) wrapDebugHTTP(next http.Handler) *http.ServeMux {
+func (s *Server) wrapDebugHTTP(next http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqID := requestSequence.Add(1)
