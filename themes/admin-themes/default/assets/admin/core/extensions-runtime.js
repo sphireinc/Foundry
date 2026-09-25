@@ -1,3 +1,5 @@
+import { _t } from './i18n.js';
+
 export const createExtensionsRuntime = ({
   admin,
   adminBase,
@@ -29,10 +31,14 @@ export const createExtensionsRuntime = ({
   const dispatchExtensionPageEvent = (page) => {
     if (!page) return;
     if (state.debugTools.flags.captureExtensionEvents) {
-      recordDebugEvent('extension-page', `Dispatching extension page event for ${page.plugin}/${page.key}`, {
-        section: page.section,
-        route: page.route || '',
-      });
+      recordDebugEvent(
+        'extension-page',
+        `Dispatching extension page event for ${page.plugin}/${page.key}`,
+        {
+          section: page.section,
+          route: page.route || '',
+        }
+      );
     }
     documentRef.dispatchEvent(
       new CustomEvent('foundry:admin-extension-page', {
@@ -89,7 +95,8 @@ export const createExtensionsRuntime = ({
     try {
       const mod = await loadExtensionModule(page);
       state.extensionRuntimeErrors = state.extensionRuntimeErrors.filter(
-        (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
+        (entry) =>
+          !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
       );
       const mountFn = mod?.mountAdminExtensionPage || mod?.default;
       if (typeof mountFn === 'function') {
@@ -119,7 +126,8 @@ export const createExtensionsRuntime = ({
       mount.dataset.extensionStatus = 'error';
       state.extensionRuntimeErrors = [
         ...state.extensionRuntimeErrors.filter(
-          (entry) => !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
+          (entry) =>
+            !(entry.kind === 'page' && entry.plugin === page.plugin && entry.key === page.key)
         ),
         {
           kind: 'page',
@@ -129,11 +137,15 @@ export const createExtensionsRuntime = ({
         },
       ];
       if (state.debugTools.flags.captureExtensionEvents) {
-        recordDebugEvent('extension-error', `Failed to load extension page ${page.plugin}/${page.key}`, {
-          error: error?.message || String(error),
-        });
+        recordDebugEvent(
+          'extension-error',
+          `Failed to load extension page ${page.plugin}/${page.key}`,
+          {
+            error: error?.message || String(error),
+          }
+        );
       }
-      mount.innerHTML = `<div class="error">Failed to load plugin admin page bundle: ${escapeHTML(error?.message || String(error))}</div>`;
+      mount.innerHTML = `<div class="error">${_t('Failed to load plugin admin page bundle: {error}', { error: escapeHTML(error?.message || String(error)) })}</div>`;
     }
   };
 
@@ -175,9 +187,13 @@ export const createExtensionsRuntime = ({
             })
           );
           if (state.debugTools.flags.captureExtensionEvents) {
-            recordDebugEvent('extension-widget', `Dispatching widget event for ${widget.plugin}/${widget.key}`, {
-              slot: widget.slot,
-            });
+            recordDebugEvent(
+              'extension-widget',
+              `Dispatching widget event for ${widget.plugin}/${widget.key}`,
+              {
+                slot: widget.slot,
+              }
+            );
           }
           if (typeof mountFn === 'function') {
             await mountFn({
@@ -191,9 +207,13 @@ export const createExtensionsRuntime = ({
             });
             mount.dataset.extensionStatus = 'mounted';
             if (state.debugTools.flags.captureExtensionEvents) {
-              recordDebugEvent('extension-widget', `Mounted widget ${widget.plugin}/${widget.key}`, {
-                slot: widget.slot,
-              });
+              recordDebugEvent(
+                'extension-widget',
+                `Mounted widget ${widget.plugin}/${widget.key}`,
+                {
+                  slot: widget.slot,
+                }
+              );
             }
           } else {
             mount.dataset.extensionStatus = 'ready';
@@ -219,12 +239,16 @@ export const createExtensionsRuntime = ({
             },
           ];
           if (state.debugTools.flags.captureExtensionEvents) {
-            recordDebugEvent('extension-error', `Failed to load widget ${widget.plugin}/${widget.key}`, {
-              slot: widget.slot,
-              error: error?.message || String(error),
-            });
+            recordDebugEvent(
+              'extension-error',
+              `Failed to load widget ${widget.plugin}/${widget.key}`,
+              {
+                slot: widget.slot,
+                error: error?.message || String(error),
+              }
+            );
           }
-          mount.innerHTML = `<div class="error">Failed to load plugin admin widget bundle: ${escapeHTML(error?.message || String(error))}</div>`;
+          mount.innerHTML = `<div class="error">${_t('Failed to load plugin admin widget bundle: {error}', { error: escapeHTML(error?.message || String(error)) })}</div>`;
         }
       })
     );

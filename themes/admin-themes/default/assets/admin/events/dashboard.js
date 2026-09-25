@@ -4,6 +4,8 @@
 // The default admin shell renders HTML strings, then rebinds event handlers
 // against the new DOM. This module keeps that wiring in one place instead of
 // scattering imperative listeners across views.
+import { _t } from '../core/i18n.js';
+
 export const bindDashboardEvents = (ctx) => {
   const {
     root,
@@ -56,27 +58,31 @@ export const bindDashboardEvents = (ctx) => {
   };
   const confirmPluginRisk = (action, pluginName, pluginRecord = null) => {
     const lines = [
-      `${action} plugin "${pluginName}"?`,
+      _t('{action} plugin "{plugin}"?', { action: _t(action), plugin: pluginName }),
       '',
       pluginRecord?.risk_tier
-        ? `Declared risk tier: ${pluginRecord.risk_tier}`
-        : 'This plugin requires explicit approval before continuing.',
+        ? _t('Declared risk tier: {tier}', { tier: pluginRecord.risk_tier })
+        : _t('This plugin requires explicit approval before continuing.'),
     ];
     if (pluginRecord?.runtime_summary?.length) {
-      lines.push(`Runtime: ${pluginRecord.runtime_summary.join(' • ')}`);
+      lines.push(_t('Runtime: {summary}', { summary: pluginRecord.runtime_summary.join(' • ') }));
     }
     if (pluginRecord?.security_mismatches?.length) {
       lines.push('');
-      lines.push(`Detected security mismatches: ${pluginRecord.security_mismatches.length}`);
+      lines.push(
+        _t('Detected security mismatches: {count}', {
+          count: pluginRecord.security_mismatches.length,
+        })
+      );
       lines.push(
         ...pluginRecord.security_mismatches.slice(0, 3).map((diag) => `- ${diag.message}`)
       );
     } else {
       lines.push('');
-      lines.push('Proceeding will explicitly approve the plugin risk profile.');
+      lines.push(_t('Proceeding will explicitly approve the plugin risk profile.'));
     }
     lines.push('');
-    lines.push('Continue?');
+    lines.push(_t('Continue?'));
     return window.confirm(lines.join('\n'));
   };
 
@@ -623,7 +629,7 @@ export const bindDashboardEvents = (ctx) => {
           lock_token:
             state.documentEditor.source_path === sourcePath ? state.documentEditor.lock_token : '',
         });
-        setFlash(`Document moved to ${status}.`);
+        setFlash(_t('Document moved to {status}.', { status: _t(status) }));
         if (state.documentEditor.source_path === sourcePath) {
           const detail = await admin.documents.get(sourcePath, { include_drafts: 1 });
           await loadDocumentIntoEditor(detail);
@@ -640,7 +646,11 @@ export const bindDashboardEvents = (ctx) => {
   root.querySelectorAll('[data-restore-document]').forEach((button) => {
     button.addEventListener('click', async () => {
       try {
-        if (!window.confirm(`Restore ${button.dataset.restoreDocument} as the current document?`))
+        if (
+          !window.confirm(
+            _t('Restore {path} as the current document?', { path: button.dataset.restoreDocument })
+          )
+        )
           return;
         const restored = await admin.documents.restore({ path: button.dataset.restoreDocument });
         setFlash('Document restored.');
@@ -663,7 +673,9 @@ export const bindDashboardEvents = (ctx) => {
       try {
         if (
           !window.confirm(
-            `Permanently purge ${button.dataset.purgeDocument}? This cannot be undone.`
+            _t('Permanently purge {path}? This cannot be undone.', {
+              path: button.dataset.purgeDocument,
+            })
           )
         )
           return;
@@ -705,7 +717,8 @@ export const bindDashboardEvents = (ctx) => {
   root.querySelectorAll('[data-delete-document]').forEach((button) => {
     button.addEventListener('click', async () => {
       try {
-        if (!window.confirm(`Move ${button.dataset.deleteDocument} to trash?`)) return;
+        if (!window.confirm(_t('Move {path} to trash?', { path: button.dataset.deleteDocument })))
+          return;
         await admin.documents.delete({
           source_path: button.dataset.deleteDocument,
           lock_token:
@@ -848,7 +861,8 @@ export const bindDashboardEvents = (ctx) => {
   root.querySelectorAll('[data-delete-media]').forEach((button) => {
     button.addEventListener('click', async () => {
       try {
-        if (!window.confirm(`Move ${button.dataset.deleteMedia} to trash?`)) return;
+        if (!window.confirm(_t('Move {path} to trash?', { path: button.dataset.deleteMedia })))
+          return;
         await admin.media.delete({ reference: button.dataset.deleteMedia });
         if (state.selectedMediaReference === button.dataset.deleteMedia) {
           state.selectedMediaReference = '';
@@ -868,7 +882,11 @@ export const bindDashboardEvents = (ctx) => {
     button.addEventListener('click', async () => {
       try {
         if (
-          !window.confirm(`Restore ${button.dataset.restoreMediaPath} as the current media file?`)
+          !window.confirm(
+            _t('Restore {path} as the current media file?', {
+              path: button.dataset.restoreMediaPath,
+            })
+          )
         )
           return;
         const restored = await admin.media.restore({ path: button.dataset.restoreMediaPath });
@@ -902,7 +920,9 @@ export const bindDashboardEvents = (ctx) => {
       try {
         if (
           !window.confirm(
-            `Permanently purge ${button.dataset.purgeMediaPath}? This cannot be undone.`
+            _t('Permanently purge {path}? This cannot be undone.', {
+              path: button.dataset.purgeMediaPath,
+            })
           )
         )
           return;
@@ -936,7 +956,7 @@ export const bindDashboardEvents = (ctx) => {
         },
         { snapshot: true }
       );
-      setFlash(`Editing ${user.username}.`);
+      setFlash(_t('Editing {user}.', { user: user.username }));
       navigate('users');
     });
   });
@@ -958,7 +978,7 @@ export const bindDashboardEvents = (ctx) => {
         },
         { snapshot: true }
       );
-      setFlash(`Loaded ${user.username} from sessions.`);
+      setFlash(_t('Loaded {user} from sessions.', { user: user.username }));
       navigate('users');
     });
   });
@@ -1072,7 +1092,9 @@ export const bindDashboardEvents = (ctx) => {
     };
     if (
       !window.confirm(
-        `Apply bulk updates to ${state.selectedDocuments.length} selected document(s)?`
+        _t('Apply bulk updates to {count} selected document(s)?', {
+          count: state.selectedDocuments.length,
+        })
       )
     )
       return;
@@ -1131,7 +1153,11 @@ export const bindDashboardEvents = (ctx) => {
     if (!state.selectedMediaLibrary.length) return;
     state.mediaBulkTags = document.getElementById('media-bulk-tags')?.value || '';
     if (
-      !window.confirm(`Append tags to ${state.selectedMediaLibrary.length} selected media item(s)?`)
+      !window.confirm(
+        _t('Append tags to {count} selected media item(s)?', {
+          count: state.selectedMediaLibrary.length,
+        })
+      )
     )
       return;
     try {
@@ -1179,7 +1205,9 @@ export const bindDashboardEvents = (ctx) => {
     ?.addEventListener('click', async () => {
       if (
         !state.selectedDocumentTrash.length ||
-        !window.confirm(`Restore ${state.selectedDocumentTrash.length} selected document(s)?`)
+        !window.confirm(
+          _t('Restore {count} selected document(s)?', { count: state.selectedDocumentTrash.length })
+        )
       )
         return;
       try {
@@ -1207,7 +1235,9 @@ export const bindDashboardEvents = (ctx) => {
     if (
       !state.selectedDocumentTrash.length ||
       !window.confirm(
-        `Permanently purge ${state.selectedDocumentTrash.length} selected document(s)?`
+        _t('Permanently purge {count} selected document(s)?', {
+          count: state.selectedDocumentTrash.length,
+        })
       )
     )
       return;
@@ -1228,7 +1258,9 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('media-trash-restore-selected')?.addEventListener('click', async () => {
     if (
       !state.selectedMediaTrash.length ||
-      !window.confirm(`Restore ${state.selectedMediaTrash.length} selected media item(s)?`)
+      !window.confirm(
+        _t('Restore {count} selected media item(s)?', { count: state.selectedMediaTrash.length })
+      )
     )
       return;
     try {
@@ -1249,7 +1281,9 @@ export const bindDashboardEvents = (ctx) => {
     if (
       !state.selectedMediaTrash.length ||
       !window.confirm(
-        `Permanently purge ${state.selectedMediaTrash.length} selected media item(s)?`
+        _t('Permanently purge {count} selected media item(s)?', {
+          count: state.selectedMediaTrash.length,
+        })
       )
     )
       return;
@@ -1317,7 +1351,12 @@ export const bindDashboardEvents = (ctx) => {
     if (!selectedUser) return;
     try {
       const resp = await admin.session.revoke({ username: selectedUser.username });
-      setFlash(`Revoked ${resp.revoked || 0} session(s) for ${selectedUser.username}.`);
+      setFlash(
+        _t('Revoked {count} session(s) for {user}.', {
+          count: resp.revoked || 0,
+          user: selectedUser.username,
+        })
+      );
       await fetchAll(false);
       navigate('users');
     } catch (error) {
@@ -1341,8 +1380,8 @@ export const bindDashboardEvents = (ctx) => {
       if (
         !window.confirm(
           isCurrent
-            ? 'Revoke the current session? You may be signed out immediately.'
-            : 'Revoke this session?'
+            ? _t('Revoke the current session? You may be signed out immediately.')
+            : _t('Revoke this session?')
         )
       )
         return;
@@ -1350,8 +1389,8 @@ export const bindDashboardEvents = (ctx) => {
         const resp = await admin.session.revoke({ session_id: sessionId });
         setFlash(
           isCurrent
-            ? `Revoked ${resp.revoked || 0} current session.`
-            : `Revoked ${resp.revoked || 0} session.`
+            ? _t('Revoked {count} current session.', { count: resp.revoked || 0 })
+            : _t('Revoked {count} session.', { count: resp.revoked || 0 })
         );
         await fetchAll(false);
         navigate('users');
@@ -1363,10 +1402,10 @@ export const bindDashboardEvents = (ctx) => {
   });
 
   document.getElementById('user-revoke-all-sessions')?.addEventListener('click', async () => {
-    if (!window.confirm('Revoke all active admin sessions?')) return;
+    if (!window.confirm(_t('Revoke all active admin sessions?'))) return;
     try {
       const resp = await admin.session.revoke({ all: true });
-      setFlash(`Revoked ${resp.revoked || 0} session(s).`);
+      setFlash(_t('Revoked {count} session(s).', { count: resp.revoked || 0 }));
       await fetchAll(false);
       navigate('users');
     } catch (error) {
@@ -1401,7 +1440,12 @@ export const bindDashboardEvents = (ctx) => {
 
   document.getElementById('session-revoke-selected')?.addEventListener('click', async () => {
     if (!state.selectedSessions.length) return;
-    if (!window.confirm(`Revoke ${state.selectedSessions.length} selected session(s)?`)) return;
+    if (
+      !window.confirm(
+        _t('Revoke {count} selected session(s)?', { count: state.selectedSessions.length })
+      )
+    )
+      return;
     try {
       let revoked = 0;
       for (const sessionID of state.selectedSessions) {
@@ -1410,7 +1454,7 @@ export const bindDashboardEvents = (ctx) => {
       }
       state.selectedSessions = [];
       state.userSessionsLoaded = false;
-      setFlash(`Revoked ${revoked} selected session(s).`);
+      setFlash(_t('Revoked {count} selected session(s).', { count: revoked }));
       await fetchAll(false);
       navigate('sessions');
     } catch (error) {
@@ -1420,7 +1464,7 @@ export const bindDashboardEvents = (ctx) => {
   });
 
   document.getElementById('session-revoke-all')?.addEventListener('click', async () => {
-    if (!window.confirm('Emergency revoke all active admin sessions?')) return;
+    if (!window.confirm(_t('Emergency revoke all active admin sessions?'))) return;
     try {
       const resp = await admin.session.revoke({ all: true });
       state.selectedSessions = [];
@@ -1441,7 +1485,7 @@ export const bindDashboardEvents = (ctx) => {
       state.userSecurity.resetStart = await admin.session.startPasswordReset({
         username: selectedUser.username,
       });
-      setFlash(`Password reset token issued for ${selectedUser.username}.`);
+      setFlash(_t('Password reset token issued for {user}.', { user: selectedUser.username }));
       render();
     } catch (error) {
       state.error = error.message || String(error);
@@ -1461,7 +1505,7 @@ export const bindDashboardEvents = (ctx) => {
         totp_code: document.getElementById('user-reset-totp').value,
       });
       state.userSecurity.resetStart = null;
-      setFlash(`Password reset completed for ${selectedUser.username}.`);
+      setFlash(_t('Password reset completed for {user}.', { user: selectedUser.username }));
       render();
     } catch (error) {
       state.error = error.message || String(error);
@@ -1476,7 +1520,7 @@ export const bindDashboardEvents = (ctx) => {
       state.userSecurity.totpSetup = await admin.session.setupTOTP({
         username: selectedUser.username,
       });
-      setFlash(`TOTP setup generated for ${selectedUser.username}.`);
+      setFlash(_t('TOTP setup generated for {user}.', { user: selectedUser.username }));
       render();
     } catch (error) {
       state.error = error.message || String(error);
@@ -1494,7 +1538,7 @@ export const bindDashboardEvents = (ctx) => {
         code: document.getElementById('user-totp-enable-code').value,
       });
       state.userSecurity.totpSetup = null;
-      setFlash(`TOTP enabled for ${selectedUser.username}.`);
+      setFlash(_t('TOTP enabled for {user}.', { user: selectedUser.username }));
       await fetchAll(false);
       navigate('users');
     } catch (error) {
@@ -1511,11 +1555,11 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('user-totp-disable')?.addEventListener('click', async () => {
     const selectedUser = selectedUserRecord();
     if (!selectedUser) return;
-    if (!window.confirm(`Disable TOTP for ${selectedUser.username}?`)) return;
+    if (!window.confirm(_t('Disable TOTP for {user}?', { user: selectedUser.username }))) return;
     try {
       await admin.session.disableTOTP({ username: selectedUser.username });
       state.userSecurity.totpSetup = null;
-      setFlash(`TOTP disabled for ${selectedUser.username}.`);
+      setFlash(_t('TOTP disabled for {user}.', { user: selectedUser.username }));
       await fetchAll(false);
       navigate('users');
     } catch (error) {
@@ -1615,12 +1659,16 @@ export const bindDashboardEvents = (ctx) => {
         if (
           !window.confirm(
             [
-              `Install plugin from "${input.url}"?`,
+              _t('Install plugin from "{url}"?', { url: input.url }),
               '',
-              'Foundry detected a plugin that requires explicit risk approval or mismatch acknowledgment.',
-              'Continuing will download the plugin and accept the reported risk if validation finds one.',
+              _t(
+                'Foundry detected a plugin that requires explicit risk approval or mismatch acknowledgment.'
+              ),
+              _t(
+                'Continuing will download the plugin and accept the reported risk if validation finds one.'
+              ),
               '',
-              'Continue?',
+              _t('Continue?'),
             ].join('\n')
           )
         ) {
@@ -1632,7 +1680,7 @@ export const bindDashboardEvents = (ctx) => {
           acknowledge_mismatches: true,
         });
       }
-      setFlash(`Plugin ${record.name || 'installed'} installed.`);
+      setFlash(_t('Plugin {name} installed.', { name: record.name || _t('installed') }));
       await fetchAll(false);
       navigate('plugins');
     } catch (error) {
@@ -1676,7 +1724,13 @@ export const bindDashboardEvents = (ctx) => {
       try {
         const record = await admin.plugins.validate(button.dataset.validatePlugin);
         setFlash(
-          `Plugin ${record.valid === false || record.health === 'invalid' || record.health === 'degraded' ? 'validation found issues' : 'validated successfully'}.`
+          _t('Plugin validation {result}.', {
+            result: _t(
+              record.valid === false || record.health === 'invalid' || record.health === 'degraded'
+                ? 'found issues'
+                : 'succeeded'
+            ),
+          })
         );
         await fetchAll(false);
         navigate('plugins');
@@ -1728,7 +1782,10 @@ export const bindDashboardEvents = (ctx) => {
         kind: document.getElementById('theme-install-kind').value || 'frontend',
       });
       setFlash(
-        `${record.kind === 'admin' ? 'Admin theme' : 'Theme'} ${record.name || 'installed'} installed.`
+        _t('{kind} {name} installed.', {
+          kind: _t(record.kind === 'admin' ? 'Admin theme' : 'Theme'),
+          name: record.name || _t('installed'),
+        })
       );
       await fetchAll(false);
       navigate('themes');
@@ -1745,7 +1802,11 @@ export const bindDashboardEvents = (ctx) => {
           name: button.dataset.validateTheme,
           kind: button.dataset.themeKind || 'frontend',
         });
-        setFlash(`Theme ${record.valid ? 'validated successfully' : 'validation found issues'}.`);
+        setFlash(
+          _t('Theme validation {result}.', {
+            result: _t(record.valid ? 'succeeded' : 'found issues'),
+          })
+        );
         await fetchAll(false);
         navigate('themes');
       } catch (error) {
@@ -1758,7 +1819,7 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('backup-create')?.addEventListener('click', async () => {
     try {
       const record = await admin.backups.create({});
-      setFlash(`Backup ${record.name || 'created'} created.`);
+      setFlash(_t('Backup {name} created.', { name: record.name || _t('new') }));
       await fetchAll(false);
       navigate('operations');
     } catch (error) {
@@ -1771,7 +1832,9 @@ export const bindDashboardEvents = (ctx) => {
     button.addEventListener('click', async () => {
       if (
         !window.confirm(
-          `Restore backup ${button.dataset.restoreBackup}? The current content tree will be snapshotted first.`
+          _t('Restore backup {name}? The current content tree will be snapshotted first.', {
+            name: button.dataset.restoreBackup,
+          })
         )
       ) {
         return;
@@ -1791,7 +1854,11 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('backup-git-create')?.addEventListener('click', async () => {
     try {
       const record = await admin.backups.createGit({});
-      setFlash(`Git snapshot ${record.revision?.slice(0, 12) || 'created'} created.`);
+      setFlash(
+        _t('Git snapshot {revision} created.', {
+          revision: record.revision?.slice(0, 12) || _t('new'),
+        })
+      );
       await fetchAll(false);
       navigate('operations');
     } catch (error) {
@@ -1804,7 +1871,10 @@ export const bindDashboardEvents = (ctx) => {
     try {
       const record = await admin.backups.createGit({ push: true });
       setFlash(
-        `Git snapshot ${record.revision?.slice(0, 12) || 'created'} ${record.pushed ? 'pushed' : 'created'}.`
+        _t('Git snapshot {revision} {result}.', {
+          revision: record.revision?.slice(0, 12) || _t('new'),
+          result: _t(record.pushed ? 'pushed' : 'created'),
+        })
       );
       await fetchAll(false);
       navigate('operations');
@@ -1877,7 +1947,7 @@ export const bindDashboardEvents = (ctx) => {
   });
 
   document.getElementById('operations-rebuild')?.addEventListener('click', async () => {
-    if (!window.confirm('Run a full Foundry build now?')) {
+    if (!window.confirm(_t('Run a full Foundry build now?'))) {
       return;
     }
     try {
@@ -1905,7 +1975,11 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('operations-validate')?.addEventListener('click', async () => {
     try {
       state.siteValidation = await admin.operations.validate();
-      setFlash(`Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`);
+      setFlash(
+        _t('Site validation complete. {count} finding(s).', {
+          count: state.siteValidation?.message_count || 0,
+        })
+      );
       render();
     } catch (error) {
       state.error = error.message || String(error);
@@ -1914,7 +1988,9 @@ export const bindDashboardEvents = (ctx) => {
   });
 
   document.getElementById('update-apply')?.addEventListener('click', async () => {
-    if (!window.confirm('Apply the latest Foundry release and restart the standalone runtime?')) {
+    if (
+      !window.confirm(_t('Apply the latest Foundry release and restart the standalone runtime?'))
+    ) {
       return;
     }
     try {
@@ -1924,7 +2000,9 @@ export const bindDashboardEvents = (ctx) => {
       const resp = await admin.updates.apply();
       state.updateInfo = resp || state.updateInfo;
       setFlash(
-        `Update to ${resp?.latest_version || 'the latest release'} scheduled. Refresh logs below to follow progress.`
+        _t('Update to {version} scheduled. Refresh logs below to follow progress.', {
+          version: resp?.latest_version || _t('the latest release'),
+        })
       );
       try {
         state.operationsLog = await admin.operations.logs();
@@ -2024,7 +2102,11 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('debug-validate-site')?.addEventListener('click', async () => {
     try {
       state.siteValidation = await admin.raw.post('/api/debug/validate', {});
-      setFlash(`Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`);
+      setFlash(
+        _t('Site validation complete. {count} finding(s).', {
+          count: state.siteValidation?.message_count || 0,
+        })
+      );
       render();
     } catch (error) {
       state.error = error.message || String(error);
@@ -2035,7 +2117,11 @@ export const bindDashboardEvents = (ctx) => {
   document.getElementById('overview-validate-site')?.addEventListener('click', async () => {
     try {
       state.siteValidation = await admin.raw.post('/api/debug/validate', {});
-      setFlash(`Site validation complete. ${state.siteValidation?.message_count || 0} finding(s).`);
+      setFlash(
+        _t('Site validation complete. {count} finding(s).', {
+          count: state.siteValidation?.message_count || 0,
+        })
+      );
       navigate('debug');
     } catch (error) {
       state.error = error.message || String(error);

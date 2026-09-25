@@ -1,3 +1,5 @@
+import { _t } from '../core/i18n.js';
+
 export const createExtensionViews = ({
   panel,
   escapeHTML,
@@ -21,10 +23,12 @@ export const createExtensionViews = ({
            data-extension-key="${escapeHTML(widget.key)}"
            data-extension-slot="${escapeHTML(widget.slot)}"
            data-extension-kind="widget">
-        <div class="empty-state">This widget slot is ready for a plugin-provided admin widget mount.</div>
+        <div class="empty-state">${_t('This widget slot is ready for a plugin-provided admin widget mount.')}</div>
       </div>
     </div>`,
-        widget.slot || 'Plugin-defined widget'
+        widget.slot || _t('Plugin-defined widget'),
+        '',
+        false
       )
     );
 
@@ -32,8 +36,8 @@ export const createExtensionViews = ({
     const page = extensionPageBySection(section);
     if (!page) {
       return panel(
-        'Admin Extension',
-        '<div class="panel-pad empty-state">This admin extension page is not registered.</div>'
+        _t('Admin Extension'),
+        `<div class="panel-pad empty-state">${_t('This admin extension page is not registered.')}</div>`
       );
     }
     return panel(
@@ -49,10 +53,12 @@ export const createExtensionViews = ({
              data-extension-key="${escapeHTML(page.key)}"
              data-extension-route="${escapeHTML(page.route || '')}"
              data-extension-section="${escapeHTML(normalizeAdminSection(section))}">
-          <div class="empty-state">This page is ready for a plugin-provided admin UI mount. Listen for the <code>foundry:admin-extension-page</code> event or read <code>window.FoundryAdmin</code>.</div>
+          <div class="empty-state">${_t('This page is ready for a plugin-provided admin UI mount. Listen for the <code>foundry:admin-extension-page</code> event or read <code>window.FoundryAdmin</code>.')}</div>
         </div>
       </div>`,
-      page.description || 'Plugin-defined admin page'
+      page.description || _t('Plugin-defined admin page'),
+      '',
+      false
     );
   };
 

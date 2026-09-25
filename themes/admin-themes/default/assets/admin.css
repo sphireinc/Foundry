@@ -36,12 +36,34 @@ textarea {
 }
 
 .login-shell {
+  position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px;
   background:
     linear-gradient(180deg, rgba(34, 113, 177, 0.12), rgba(34, 113, 177, 0.02)), var(--foundry-bg);
+}
+
+.login-language {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.ui-language-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--foundry-muted);
+  font-size: 0.85rem;
+}
+
+.ui-language-picker select {
+  width: auto;
+  min-width: 92px;
+  padding: 6px 8px;
+  font: inherit;
 }
 
 .login-card {

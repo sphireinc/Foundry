@@ -1,7 +1,7 @@
 {{ define "content" }}
 <section class="page-wrap">
   <header class="page-header">
-    <div class="eyebrow">Page</div>
+    <div class="eyebrow">{{ t .Lang "Page" }}</div>
     <h1>{{ .Page.Title }}</h1>
     {{ if .Page.Summary }}
     <p>{{ .Page.Summary }}</p>

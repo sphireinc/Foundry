@@ -1,5 +1,7 @@
 // Rebuilding the raw document walks the whole body and updates the preview, so
 // wait for a full second of idle time rather than interrupting normal typing.
+import { _t } from '../core/i18n.js';
+
 const RAW_SYNC_DEBOUNCE_MS = 1000;
 
 const loadStylesheet = (href) => {
@@ -402,32 +404,32 @@ const currentDocumentMediaDir = (sourcePath) => {
 export const renderQuillToolbar = (toolbarId) => `
   <div id="${toolbarId}" class="quill-toolbar">
     <span class="ql-formats">
-      <button class="ql-bold" type="button"></button>
-      <button class="ql-italic" type="button"></button>
-      <button class="ql-strike" type="button"></button>
+      <button class="ql-bold" type="button" aria-label="${_t('Bold')}" title="${_t('Bold')}"></button>
+      <button class="ql-italic" type="button" aria-label="${_t('Italic')}" title="${_t('Italic')}"></button>
+      <button class="ql-strike" type="button" aria-label="${_t('Strike through')}" title="${_t('Strike through')}"></button>
     </span>
     <span class="ql-formats">
-      <button class="ql-header" value="1" type="button"></button>
-      <button class="ql-header" value="2" type="button"></button>
-      <button class="ql-blockquote" type="button"></button>
-      <button class="ql-code-block" type="button"></button>
+      <button class="ql-header" value="1" type="button" aria-label="${_t('Heading 1')}" title="${_t('Heading 1')}"></button>
+      <button class="ql-header" value="2" type="button" aria-label="${_t('Heading 2')}" title="${_t('Heading 2')}"></button>
+      <button class="ql-blockquote" type="button" aria-label="${_t('Blockquote')}" title="${_t('Blockquote')}"></button>
+      <button class="ql-code-block" type="button" aria-label="${_t('Code block')}" title="${_t('Code block')}"></button>
     </span>
     <span class="ql-formats">
-      <button class="ql-list" value="ordered" type="button"></button>
-      <button class="ql-list" value="bullet" type="button"></button>
-      <button class="ql-link" type="button"></button>
-      <button class="ql-image" type="button"></button>
+      <button class="ql-list" value="ordered" type="button" aria-label="${_t('Numbered list')}" title="${_t('Numbered list')}"></button>
+      <button class="ql-list" value="bullet" type="button" aria-label="${_t('Bulleted list')}" title="${_t('Bulleted list')}"></button>
+      <button class="ql-link" type="button" aria-label="${_t('Insert link')}" title="${_t('Insert link')}"></button>
+      <button class="ql-image" type="button" aria-label="${_t('Insert image')}" title="${_t('Insert image')}"></button>
     </span>
     <span class="ql-formats">
-      <button class="ql-clean" type="button"></button>
+      <button class="ql-clean" type="button" aria-label="${_t('Clear formatting')}" title="${_t('Clear formatting')}"></button>
     </span>
   </div>`;
 
 export const renderZenModeModal = ({ state, escapeHTML, renderPreviewFrame }) => {
   if (!state.documentZenMode?.open) return '';
   const loadingText = state.documentZenMode.loading
-    ? 'Loading preview and editor…'
-    : 'Live preview ready';
+    ? _t('Loading preview and editor…')
+    : _t('Live preview ready');
   const loadingClass = state.documentZenMode.loading
     ? 'zen-status zen-status-loading'
     : 'zen-status zen-status-ready';
@@ -435,38 +437,38 @@ export const renderZenModeModal = ({ state, escapeHTML, renderPreviewFrame }) =>
     ? `<div class="zen-error">${escapeHTML(state.documentZenMode.error)}</div>`
     : '';
   return `
-    <div class="zen-overlay" role="dialog" aria-modal="true" aria-label="Zen mode editor">
+    <div class="zen-overlay" role="dialog" aria-modal="true" aria-label="${_t('Zen mode editor')}">
       <div class="zen-shell">
         <header class="zen-header">
           <div>
-            <div class="zen-eyebrow">Zen Mode</div>
+            <div class="zen-eyebrow">${_t('Zen Mode')}</div>
           </div>
           <div class="zen-header-actions">
             <span id="zen-status" class="${loadingClass}">${escapeHTML(loadingText)}</span>
-            <button type="button" class="ghost" id="zen-preview-refresh">Refresh Preview</button>
-            <button type="button" class="ghost" id="zen-save-document">Save Document</button>
-            <button type="button" class="ghost danger" id="zen-close">Close</button>
+            <button type="button" class="ghost" id="zen-preview-refresh">${_t('Refresh Preview')}</button>
+            <button type="button" class="ghost" id="zen-save-document">${_t('Save Document')}</button>
+            <button type="button" class="ghost danger" id="zen-close">${_t('Close')}</button>
           </div>
         </header>
         ${error}
         <div class="zen-grid">
           <section class="zen-pane zen-edit-pane">
             <div class="zen-pane-header">
-              <strong>Edit</strong>
+              <strong>${_t('Edit')}</strong>
             </div>
             <div class="zen-quill-shell">
               ${renderQuillToolbar('zen-toolbar')}
-              <div id="zen-editor" class="zen-editor" aria-label="Article body editor"></div>
+              <div id="zen-editor" class="zen-editor" aria-label="${_t('Article body editor')}"></div>
             </div>
           </section>
           <section class="zen-pane zen-preview-pane" id="zen-preview">
             <div class="zen-pane-header">
-              <strong>Preview</strong>
+              <strong>${_t('Preview')}</strong>
             </div>
             ${
               state.documentZenMode.previewHtml
                 ? renderPreviewFrame?.(state.documentZenMode.previewHtml)
-                : '<div class="zen-loading">Preview will appear after the first render.</div>'
+                : `<div class="zen-loading">${_t('Preview will appear after the first render.')}</div>`
             }
           </section>
         </div>
@@ -588,9 +590,9 @@ export const createQuillEditorController = ({
     if (!pane) return;
     pane.innerHTML = `
       <div class="zen-pane-header">
-        <strong>Preview</strong>
+        <strong>${_t('Preview')}</strong>
       </div>
-      ${html ? renderPreviewFrame(html) : '<div class="zen-loading">Preview will appear after the first render.</div>'}`;
+      ${html ? renderPreviewFrame(html) : `<div class="zen-loading">${_t('Preview will appear after the first render.')}</div>`}`;
   };
 
   const refreshPreview = async () => {
@@ -598,7 +600,7 @@ export const createQuillEditorController = ({
     flushRawSync();
     const requestId = ++zenPreviewRequestId;
     state.documentZenMode.loading = true;
-    updateStatus('zen', 'Updating preview…');
+    updateStatus('zen', _t('Updating preview…'));
     try {
       const preview = await admin.documents.preview({
         source_path: state.documentEditor.source_path,
@@ -611,12 +613,12 @@ export const createQuillEditorController = ({
       state.documentZenMode.loading = false;
       state.documentZenMode.error = '';
       updatePreviewPane(preview.html || '');
-      updateStatus('zen', 'Preview synced');
+      updateStatus('zen', _t('Preview synced'));
     } catch (error) {
       if (requestId !== zenPreviewRequestId || !state.documentZenMode?.open) return;
       state.documentZenMode.loading = false;
       state.documentZenMode.error = error.message || String(error);
-      updateStatus('zen', 'Preview failed');
+      updateStatus('zen', _t('Preview failed'));
       render();
     }
   };
@@ -655,7 +657,7 @@ export const createQuillEditorController = ({
     if (imageNode) {
       imageNode.setAttribute('alt', alt);
     }
-    updateStatus(quill === zenQuill ? 'zen' : 'primary', `Uploaded ${file.name}`);
+    updateStatus(quill === zenQuill ? 'zen' : 'primary', _t(`Uploaded ${file.name}`));
     return uploaded;
   };
 
@@ -800,7 +802,7 @@ export const createQuillEditorController = ({
       } else {
         state.error = message;
       }
-      mount.innerHTML = `<div class="${kind === 'zen' ? 'zen-error' : 'quill-error'}">Failed to load Quill: ${escapeHTML(message)}</div>`;
+      mount.innerHTML = `<div class="${kind === 'zen' ? 'zen-error' : 'quill-error'}">${escapeHTML(_t(`Failed to load Quill: ${message}`))}</div>`;
       render();
       return null;
     }
@@ -813,7 +815,7 @@ export const createQuillEditorController = ({
       'document-quill-editor',
       'document-quill-toolbar',
       initialHTML,
-      'Write the article body here.'
+      _t('Write the article body here.')
     );
   };
 
@@ -825,7 +827,7 @@ export const createQuillEditorController = ({
       'zen-editor',
       'zen-toolbar',
       initialHTML,
-      'Write the article body here.'
+      _t('Write the article body here.')
     );
   };
 

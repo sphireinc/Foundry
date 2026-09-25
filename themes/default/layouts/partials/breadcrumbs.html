@@ -1,9 +1,9 @@
 {{ define "breadcrumbs" }}
-<nav class="breadcrumbs" aria-label="Breadcrumb">
-  <a href="/">Home</a>
+<nav class="breadcrumbs" aria-label="{{ t .Lang "Breadcrumb" }}">
+  <a href="/">{{ t .Lang "Home" }}</a>
   <span>/</span>
   {{ if .Page }}
-  <span>{{ if eq .Page.Type "post" }}Articles{{ else }}Pages{{ end }}</span>
+  <span>{{ if eq .Page.Type "post" }}{{ t .Lang "Articles" }}{{ else }}{{ t .Lang "Pages" }}{{ end }}</span>
   <span>/</span>
   <span aria-current="page">{{ .Page.Title }}</span>
   {{ else if .TaxonomyName }}
@@ -13,11 +13,11 @@
   <span aria-current="page">{{ .TaxonomyTerm }}</span>
   {{ end }}
   {{ else if .AuthorName }}
-  <span>Authors</span>
+  <span>{{ t .Lang "Authors" }}</span>
   <span>/</span>
   <span aria-current="page">{{ .AuthorName }}</span>
   {{ else if .SearchQuery }}
-  <span aria-current="page">Search</span>
+  <span aria-current="page">{{ t .Lang "Search" }}</span>
   {{ else }}
   <span aria-current="page">{{ .Title }}</span>
   {{ end }}

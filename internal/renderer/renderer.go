@@ -17,6 +17,7 @@ import (
 	"github.com/sphireinc/foundry/internal/assets"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/i18n"
 	"github.com/sphireinc/foundry/internal/platformapi"
 	"github.com/sphireinc/foundry/internal/safepath"
 	"github.com/sphireinc/foundry/internal/theme"
@@ -1188,6 +1189,7 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	//   - field reads schema/custom fields from the current document.
 	//   - data reads from the shared site data map loaded from content/data.
 	//   - pluginSlot renders accumulated HTML for a declared theme slot.
+	//   - t and formatDate localize built-in interface copy for the page language.
 	tmpl, err := template.New("base.html").Funcs(template.FuncMap{
 		"safeHTML": func(v any) template.HTML {
 			if h, ok := v.(template.HTML); ok {
@@ -1210,6 +1212,8 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 		"pluginSlot": func(name string) template.HTML {
 			return slots.Render(name)
 		},
+		"t":          i18n.Translate,
+		"formatDate": i18n.FormatDate,
 	}).ParseFiles(files...)
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)

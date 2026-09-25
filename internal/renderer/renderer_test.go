@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
@@ -329,6 +330,54 @@ func TestRendererHelpersAndRenderTemplate(t *testing.T) {
 	notFoundHTML, err := r.RenderNotFoundPage(graph, "/missing/", false)
 	if err != nil || !strings.Contains(string(notFoundHTML), "404 Page not found /missing/") {
 		t.Fatalf("unexpected 404 render result: %v %q", err, string(notFoundHTML))
+	}
+}
+
+func TestRenderTemplateProvidesLocalizedPublicHelpers(t *testing.T) {
+	cfg := testRendererConfig(t)
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve renderer test source path")
+	}
+	cfg.ThemesDir = filepath.Join(filepath.Dir(sourceFile), "..", "..", "themes")
+
+	updatedAt := time.Date(2025, time.June, 4, 15, 30, 0, 0, time.UTC)
+	doc := &content.Document{
+		Type:      "post",
+		Lang:      "es",
+		Title:     "Hello",
+		Slug:      "hello",
+		URL:       "/posts/hello/",
+		Date:      &updatedAt,
+		UpdatedAt: &updatedAt,
+		HTMLBody:  template.HTML("<p>Hello</p>"),
+	}
+	r := New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil)
+
+	for _, tt := range []struct {
+		lang string
+		want string
+	}{
+		{lang: "es-MX", want: "Artículo"},
+		{lang: "fr-CA", want: "Post"},
+	} {
+		html, err := r.renderTemplate("post", "/posts/hello/", ViewData{
+			Site: cfg,
+			Page: doc,
+			Lang: tt.lang,
+		})
+		if err != nil || !strings.Contains(string(html), tt.want) {
+			t.Fatalf("renderTemplate(%q) = %v %q, want %q", tt.lang, err, string(html), tt.want)
+		}
+		if tt.lang == "es-MX" && !strings.Contains(string(html), "4 de junio de 2025") {
+			t.Fatalf("Spanish post date was not localized: %q", string(html))
+		}
+		if tt.lang == "fr-CA" && !strings.Contains(string(html), "Jun 4, 2025") {
+			t.Fatalf("unsupported locale did not use English date formatting: %q", string(html))
+		}
+		if !strings.Contains(string(html), `class="meta-pill">es</span>`) {
+			t.Fatalf("interface locale %q changed the document language field: %q", tt.lang, string(html))
+		}
 	}
 }
 

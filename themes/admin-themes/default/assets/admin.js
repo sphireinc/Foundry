@@ -10,6 +10,7 @@ import { createDebugTools } from './admin/core/debug-tools.js';
 import { createExtensionsRuntime } from './admin/core/extensions-runtime.js';
 import { createSessionInventory } from './admin/core/session-inventory.js';
 import { createInitialState, sectionTitles } from './admin/core/state.js';
+import { _t, getLocale, initializeI18n, setLocale, supportedLanguages } from './admin/core/i18n.js';
 import { createUIStateHelpers } from './admin/core/ui-state.js';
 import {
   clone,
@@ -61,6 +62,7 @@ import {
   const root = document.getElementById('app');
   if (!root) return;
 
+  initializeI18n(root);
   const adminBase = root.dataset.adminBase || '/__admin';
   const defaultLang = root.dataset.defaultLang || 'en';
   const sectionForPath = createSectionForPath(adminBase);
@@ -68,6 +70,38 @@ import {
   const state = createInitialState({
     section: initialSection === 'config' ? 'settings' : initialSection,
   });
+  const localizedSectionTitles = {};
+  const refreshLocalizedSectionTitles = () => {
+    Object.entries(sectionTitles).forEach(([section, title]) => {
+      localizedSectionTitles[section] = _t(title);
+    });
+  };
+  refreshLocalizedSectionTitles();
+  const renderLanguageSelector = () => `
+    <label class="ui-language-picker">
+      <span>${_t('Language')}</span>
+      <select id="ui-language" aria-label="${escapeHTML(_t('Interface language'))}">
+        ${supportedLanguages()
+          .map(
+            ({ code, name }) =>
+              `<option value="${escapeHTML(code)}" ${getLocale() === code ? 'selected' : ''}>${escapeHTML(_t(name))}</option>`
+          )
+          .join('')}
+      </select>
+    </label>`;
+  const bindLanguageSelector = () => {
+    const selector = document.getElementById('ui-language');
+    if (!selector) return;
+    selector.value = getLocale();
+    selector.addEventListener('change', () => {
+      syncRawEditorsBeforeLocaleChange();
+      const formState = captureFormControlState();
+      setLocale(selector.value);
+      refreshLocalizedSectionTitles();
+      render();
+      restoreFormControlState(formState);
+    });
+  };
   const DEBUG_FLAGS_STORAGE_KEY = 'foundry.admin.debug.flags';
   const DEBUG_HISTORY_STORAGE_KEY = 'foundry.admin.debug.history';
   const admin = createAdminClient({ baseURL: adminBase, getSession: () => state.session });
@@ -276,7 +310,7 @@ import {
     firstAccessibleSection,
   } = createAccessHelpers({
     state,
-    sectionTitles,
+    sectionTitles: localizedSectionTitles,
     hasCapability,
     capabilityInfoHas,
     debugEnabled,
@@ -586,6 +620,78 @@ import {
     }
   };
 
+  const syncRawEditorsBeforeLocaleChange = () => {
+    syncSettingsDraftFromDOM();
+    zenMode.flushRawSync();
+
+    const configEditor = document.getElementById('config-raw');
+    if (configEditor) {
+      state.config = { ...(state.config || {}), raw: configEditor.value };
+    }
+
+    const customCSSEditor = document.getElementById('custom-css-raw');
+    if (customCSSEditor) {
+      state.customCSS = { ...(state.customCSS || {}), raw: customCSSEditor.value };
+    }
+
+    const customFieldsEditor = document.getElementById('custom-fields-raw');
+    if (customFieldsEditor) {
+      state.customFields = { ...(state.customFields || {}), raw: customFieldsEditor.value };
+    }
+  };
+
+  const captureFormControlState = () => {
+    const activeElement = document.activeElement;
+    const controls = Array.from(root.querySelectorAll('input[id], textarea[id], select[id]')).map(
+      (element) => {
+        const entry = {
+          id: element.id,
+          type: element.type,
+          value: element.type === 'file' ? null : element.value,
+          checked: element.checked,
+          focused: element === activeElement,
+        };
+        try {
+          entry.selectionStart = element.selectionStart;
+          entry.selectionEnd = element.selectionEnd;
+        } catch (_error) {
+          // Selects and some input types do not expose a text selection.
+        }
+        return entry;
+      }
+    );
+    const fileInputs = Array.from(root.querySelectorAll('input[type="file"][id]'));
+    return { controls, fileInputs };
+  };
+
+  const restoreFormControlState = ({ controls, fileInputs }) => {
+    fileInputs.forEach((fileInput) => {
+      const replacement = document.getElementById(fileInput.id);
+      if (replacement && replacement.type === 'file' && replacement !== fileInput) {
+        replacement.replaceWith(fileInput);
+      }
+    });
+
+    controls.forEach((entry) => {
+      const element = document.getElementById(entry.id);
+      if (!element || element.type !== entry.type) return;
+      if (entry.value !== null) element.value = entry.value;
+      if (entry.type === 'checkbox' || entry.type === 'radio') {
+        element.checked = entry.checked;
+      }
+      if (entry.focused) {
+        element.focus({ preventScroll: true });
+        if (Number.isInteger(entry.selectionStart) && Number.isInteger(entry.selectionEnd)) {
+          try {
+            element.setSelectionRange(entry.selectionStart, entry.selectionEnd);
+          } catch (_error) {
+            // Some input types do not support selection ranges.
+          }
+        }
+      }
+    });
+  };
+
   const renderFieldSchemaControl = (schema, path = []) => {
     const fullPath = [...path, schema.name];
     const pathValue = fullPath.join('.');
@@ -623,11 +729,11 @@ import {
                         },
                         fullPath
                       );
-                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-repeater-remove="${escapeHTML(itemPath.join('.'))}">Remove</button></div>`;
+                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-repeater-remove="${escapeHTML(itemPath.join('.'))}">${_t('Remove')}</button></div>`;
               })
               .join('')}
           </div>
-          <button type="button" class="ghost small" data-repeater-add="${escapeHTML(pathValue)}">Add Item</button>
+          <button type="button" class="ghost small" data-repeater-add="${escapeHTML(pathValue)}">${_t('Add Item')}</button>
         </fieldset>`;
       }
       case 'textarea':
@@ -688,11 +794,11 @@ import {
                         contractKey,
                         [...path, schema.name]
                       );
-                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-shared-repeater-remove="${escapeHTML(itemPath.join('.'))}"${disabledAttr}>Remove</button></div>`;
+                return `<div class="repeater-item">${body}<button type="button" class="ghost small danger" data-shared-repeater-remove="${escapeHTML(itemPath.join('.'))}"${disabledAttr}>${_t('Remove')}</button></div>`;
               })
               .join('')}
           </div>
-          <button type="button" class="ghost small" data-shared-repeater-add="${escapeHTML(pathValue)}"${disabledAttr}>Add Item</button>
+          <button type="button" class="ghost small" data-shared-repeater-add="${escapeHTML(pathValue)}"${disabledAttr}>${_t('Add Item')}</button>
         </fieldset>`;
       }
       case 'textarea':
@@ -733,8 +839,8 @@ import {
       );
     }
     return `<div class="diff-split">
-      <section><h3>Previous</h3><div class="diff-pane">${leftRows.join('')}</div></section>
-      <section><h3>Current</h3><div class="diff-pane">${rightRows.join('')}</div></section>
+      <section><h3>${_t('Previous')}</h3><div class="diff-pane">${leftRows.join('')}</div></section>
+      <section><h3>${_t('Current')}</h3><div class="diff-pane">${rightRows.join('')}</div></section>
     </div>`;
   };
 
@@ -764,85 +870,85 @@ import {
     return `
       <div class="panel-pad stack">
         <form id="document-create-form" class="inline-form">
-          <label>Kind
+          <label>${_t('Kind')}
             <select id="document-create-kind">
               <option value="page">page</option>
               <option value="post" selected>post</option>
             </select>
           </label>
-          <label>Slug<input id="document-create-slug" type="text" placeholder="launch-notes"></label>
-          <label>Lang<input id="document-create-lang" type="text" placeholder="en"></label>
-          <label>Archetype<input id="document-create-archetype" type="text" placeholder="post"></label>
-          <button type="submit">Create Document</button>
+          <label>${_t('Slug')}<input id="document-create-slug" type="text" placeholder="launch-notes"></label>
+          <label>${_t('Lang')}<input id="document-create-lang" type="text" placeholder="en"></label>
+          <label>${_t('Archetype')}<input id="document-create-archetype" type="text" placeholder="post"></label>
+          <button type="submit">${_t('Create Document')}</button>
         </form>
         <form id="document-save-form" class="stack">
           <div class="editor-grid">
             <div class="stack">
-              <label>Source Path<input id="document-source-path" type="text" value="${escapeHTML(state.documentEditor.source_path)}" placeholder="content/pages/about.md"></label>
-              ${state.documentLock ? `<div class="status-line ${state.documentLock.owned_by_me ? '' : 'error'}">${state.documentLock.owned_by_me ? `Locked by you until ${escapeHTML(formatDateTime(state.documentLock.expires_at))}` : `Currently being edited by ${escapeHTML(state.documentLock.name || state.documentLock.username || 'another user')}`}</div>` : ''}
-              <label>Version Comment<input id="document-version-comment" type="text" value="${escapeHTML(state.documentEditor.version_comment || '')}" placeholder="Explain what changed in this revision"></label>
+              <label>${_t('Source Path')}<input id="document-source-path" type="text" value="${escapeHTML(state.documentEditor.source_path)}" placeholder="content/pages/about.md"></label>
+              ${state.documentLock ? `<div class="status-line ${state.documentLock.owned_by_me ? '' : 'error'}">${state.documentLock.owned_by_me ? `${_t('Locked by you until')} ${escapeHTML(formatDateTime(state.documentLock.expires_at))}` : `${_t('Currently being edited by {user}', { user: escapeHTML(state.documentLock.name || state.documentLock.username || _t('another user')) })}`}</div>` : ''}
+              <label>${_t('Version Comment')}<input id="document-version-comment" type="text" value="${escapeHTML(state.documentEditor.version_comment || '')}" placeholder="${_t('Explain what changed in this revision')}"></label>
               <div class="frontmatter-card">
                 <div class="frontmatter-card-header">
                   <div>
-                    <strong>Workflow</strong>
-                    <div class="muted">Request review, schedule publication windows, and keep editorial notes with the draft.</div>
+                    <strong>${_t('Workflow')}</strong>
+                    <div class="muted">${_t('Request review, schedule publication windows, and keep editorial notes with the draft.')}</div>
                   </div>
                 </div>
                 <div class="frontmatter-grid">
-                  <label>Workflow
+                  <label>${_t('Workflow')}
                     <select id="document-frontmatter-workflow" data-frontmatter-field="workflow">
                       ${['draft', 'in_review', 'scheduled', 'published', 'archived'].map((entry) => `<option value="${entry}" ${workflowStatus === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}
                     </select>
                   </label>
-                  <label>Scheduled Publish<input id="document-frontmatter-scheduled-publish-at" data-frontmatter-field="scheduled_publish_at" type="text" value="${escapeHTML(editorDocument.fields.scheduled_publish_at || '')}" placeholder="2026-03-21T14:00:00Z"></label>
-                  <label>Scheduled Unpublish<input id="document-frontmatter-scheduled-unpublish-at" data-frontmatter-field="scheduled_unpublish_at" type="text" value="${escapeHTML(editorDocument.fields.scheduled_unpublish_at || '')}" placeholder="2026-03-28T14:00:00Z"></label>
-                  <label class="frontmatter-span-3">Editorial Note<textarea id="document-frontmatter-editorial-note" data-frontmatter-field="editorial_note" rows="3">${escapeHTML(editorDocument.fields.editorial_note || '')}</textarea></label>
+                  <label>${_t('Scheduled Publish')}<input id="document-frontmatter-scheduled-publish-at" data-frontmatter-field="scheduled_publish_at" type="text" value="${escapeHTML(editorDocument.fields.scheduled_publish_at || '')}" placeholder="2026-03-21T14:00:00Z"></label>
+                  <label>${_t('Scheduled Unpublish')}<input id="document-frontmatter-scheduled-unpublish-at" data-frontmatter-field="scheduled_unpublish_at" type="text" value="${escapeHTML(editorDocument.fields.scheduled_unpublish_at || '')}" placeholder="2026-03-28T14:00:00Z"></label>
+                  <label class="frontmatter-span-3">${_t('Editorial Note')}<textarea id="document-frontmatter-editorial-note" data-frontmatter-field="editorial_note" rows="3">${escapeHTML(editorDocument.fields.editorial_note || '')}</textarea></label>
                 </div>
                 <div class="toolbar">
-                  <button type="button" class="ghost small" data-apply-workflow="draft">Save as Draft</button>
-                  <button type="button" class="ghost small" data-apply-workflow="in_review">Request Review</button>
-                  <button type="button" class="ghost small" data-apply-workflow="published">Approve & Publish</button>
-                  <button type="button" class="ghost small" data-apply-workflow="archived">Archive</button>
+                  <button type="button" class="ghost small" data-apply-workflow="draft">${_t('Save as Draft')}</button>
+                  <button type="button" class="ghost small" data-apply-workflow="in_review">${_t('Request Review')}</button>
+                  <button type="button" class="ghost small" data-apply-workflow="published">${_t('Approve & Publish')}</button>
+                  <button type="button" class="ghost small" data-apply-workflow="archived">${_t('Archive')}</button>
                 </div>
               </div>
               <div class="frontmatter-card">
                 <div class="frontmatter-card-header">
                   <div>
-                    <strong>Structured Frontmatter</strong>
-                    <div class="muted">Edit the common content fields without leaving raw Markdown.</div>
+                    <strong>${_t('Structured Frontmatter')}</strong>
+                    <div class="muted">${_t('Edit the common content fields without leaving raw Markdown.')}</div>
                   </div>
                 </div>
                 <div class="frontmatter-grid">
-                  <label>Title<input id="document-frontmatter-title" data-frontmatter-field="title" type="text" value="${escapeHTML(editorDocument.fields.title)}"></label>
-                  <label>Slug<input id="document-frontmatter-slug" data-frontmatter-field="slug" type="text" value="${escapeHTML(editorDocument.fields.slug)}"></label>
-                  <label>Layout
+                  <label>${_t('Title')}<input id="document-frontmatter-title" data-frontmatter-field="title" type="text" value="${escapeHTML(editorDocument.fields.title)}"></label>
+                  <label>${_t('Slug')}<input id="document-frontmatter-slug" data-frontmatter-field="slug" type="text" value="${escapeHTML(editorDocument.fields.slug)}"></label>
+                  <label>${_t('Layout')}
                     <select id="document-frontmatter-layout" data-frontmatter-field="layout">
                       <option value="page" ${editorDocument.fields.layout === 'page' ? 'selected' : ''}>page</option>
                       <option value="post" ${editorDocument.fields.layout === 'post' ? 'selected' : ''}>post</option>
                       ${editorDocument.fields.layout && !['page', 'post'].includes(editorDocument.fields.layout) ? `<option value="${escapeHTML(editorDocument.fields.layout)}" selected>${escapeHTML(editorDocument.fields.layout)}</option>` : ''}
                     </select>
                   </label>
-                  <label>Date<input id="document-frontmatter-date" data-frontmatter-field="date" type="text" value="${escapeHTML(editorDocument.fields.date || '')}" placeholder="2026-03-07"></label>
-                  <label class="frontmatter-span-2">Summary<textarea id="document-frontmatter-summary" data-frontmatter-field="summary" rows="3">${escapeHTML(editorDocument.fields.summary || '')}</textarea></label>
-                  <label>Tags<input id="document-frontmatter-tags" data-frontmatter-field="tags" type="text" value="${escapeHTML((editorDocument.fields.tags || []).join(', '))}" placeholder="go, cms, architecture"></label>
-                  <label>Categories<input id="document-frontmatter-categories" data-frontmatter-field="categories" type="text" value="${escapeHTML((editorDocument.fields.categories || []).join(', '))}" placeholder="engineering"></label>
-                  <label>Language<input id="document-frontmatter-lang" data-frontmatter-field="lang" type="text" value="${escapeHTML(editorDocument.fields.lang || defaultLang)}" placeholder="${escapeHTML(defaultLang)}"></label>
-                  <label class="checkbox"><input id="document-frontmatter-draft" data-frontmatter-field="draft" type="checkbox" ${editorDocument.fields.draft ? 'checked' : ''}> Draft</label>
-                  <label class="checkbox"><input id="document-frontmatter-archived" data-frontmatter-field="archived" type="checkbox" ${editorDocument.fields.archived ? 'checked' : ''}> Archived</label>
+                  <label>${_t('Date')}<input id="document-frontmatter-date" data-frontmatter-field="date" type="text" value="${escapeHTML(editorDocument.fields.date || '')}" placeholder="2026-03-07"></label>
+                  <label class="frontmatter-span-2">${_t('Summary')}<textarea id="document-frontmatter-summary" data-frontmatter-field="summary" rows="3">${escapeHTML(editorDocument.fields.summary || '')}</textarea></label>
+                  <label>${_t('Tags')}<input id="document-frontmatter-tags" data-frontmatter-field="tags" type="text" value="${escapeHTML((editorDocument.fields.tags || []).join(', '))}" placeholder="go, cms, architecture"></label>
+                  <label>${_t('Categories')}<input id="document-frontmatter-categories" data-frontmatter-field="categories" type="text" value="${escapeHTML((editorDocument.fields.categories || []).join(', '))}" placeholder="engineering"></label>
+                  <label>${_t('Language')}<input id="document-frontmatter-lang" data-frontmatter-field="lang" type="text" value="${escapeHTML(editorDocument.fields.lang || defaultLang)}" placeholder="${escapeHTML(defaultLang)}"></label>
+                  <label class="checkbox"><input id="document-frontmatter-draft" data-frontmatter-field="draft" type="checkbox" ${editorDocument.fields.draft ? 'checked' : ''}> ${_t('Draft')}</label>
+                  <label class="checkbox"><input id="document-frontmatter-archived" data-frontmatter-field="archived" type="checkbox" ${editorDocument.fields.archived ? 'checked' : ''}> ${_t('Archived')}</label>
                 </div>
               </div>
               <div class="frontmatter-card">
                 <div class="frontmatter-card-header">
                   <div>
-                    <strong>Attribution</strong>
-                    <div class="muted">Tracked automatically in frontmatter and surfaced in history.</div>
+                    <strong>${_t('Attribution')}</strong>
+                    <div class="muted">${_t('Tracked automatically in frontmatter and surfaced in history.')}</div>
                   </div>
                 </div>
                 <div class="frontmatter-grid">
-                  <label>Author<input type="text" value="${escapeHTML(state.documentMeta.author || '')}" readonly></label>
-                  <label>Last Editor<input type="text" value="${escapeHTML(state.documentMeta.last_editor || '')}" readonly></label>
-                  <label>Created<input type="text" value="${escapeHTML(formatDateTime(state.documentMeta.created_at) || '')}" readonly></label>
-                  <label>Updated<input type="text" value="${escapeHTML(formatDateTime(state.documentMeta.updated_at) || '')}" readonly></label>
+                  <label>${_t('Author')}<input type="text" value="${escapeHTML(state.documentMeta.author || '')}" readonly></label>
+                  <label>${_t('Last Editor')}<input type="text" value="${escapeHTML(state.documentMeta.last_editor || '')}" readonly></label>
+                  <label>${_t('Created')}<input type="text" value="${escapeHTML(formatDateTime(state.documentMeta.created_at) || '')}" readonly></label>
+                  <label>${_t('Updated')}<input type="text" value="${escapeHTML(formatDateTime(state.documentMeta.updated_at) || '')}" readonly></label>
                 </div>
               </div>
               ${
@@ -851,8 +957,8 @@ import {
                 <div class="frontmatter-card">
                   <div class="frontmatter-card-header">
                     <div>
-                      <strong>Custom Fields</strong>
-                      <div class="muted">Theme-driven fields for ${escapeHTML(editorDocument.fields.layout || 'document')} content.${state.documentContractTitles?.length ? ` Active contracts: ${escapeHTML(state.documentContractTitles.join(', '))}.` : ''}</div>
+                      <strong>${_t('Custom Fields')}</strong>
+                      <div class="muted">${_t('Theme-driven fields for {layout} content.', { layout: escapeHTML(editorDocument.fields.layout || 'document') })}${state.documentContractTitles?.length ? ` ${_t('Active contracts: {contracts}', { contracts: escapeHTML(state.documentContractTitles.join(', ')) })}` : ''}</div>
                     </div>
                   </div>
                   <div class="frontmatter-grid custom-field-grid">
@@ -866,22 +972,22 @@ import {
               <div class="quill-editor-shell">
                 <div class="quill-editor-header">
                   <div>
-                    <strong>Content</strong>
-                    <div class="muted">Images uploaded here are saved in Foundry media.</div>
+                    <strong>${_t('Content')}</strong>
+                    <div class="muted">${_t('Images uploaded here are saved in Foundry media.')}</div>
                   </div>
-                  <span id="document-quill-status" class="status-line">Editor ready.</span>
+                  <span id="document-quill-status" class="status-line">${_t('Editor ready.')}</span>
                 </div>
                 ${renderQuillToolbar('document-quill-toolbar')}
-                <div id="document-quill-editor" class="document-quill-editor" aria-label="Article body editor"></div>
+                <div id="document-quill-editor" class="document-quill-editor" aria-label="${_t('Article body editor')}"></div>
               </div>
               <textarea id="document-raw" hidden rows="20" spellcheck="false">${escapeHTML(state.documentEditor.raw)}</textarea>
               <div class="media-picker">
                 <div class="media-picker-header">
                   <div>
-                    <strong>Media Picker</strong>
-                    <div class="muted">Insert stable <code>media:</code> references at the cursor.</div>
+                    <strong>${_t('Media Picker')}</strong>
+                    <div class="muted">${_t('Insert stable <code>media:</code> references at the cursor.')}</div>
                   </div>
-                  <input id="document-media-picker-query" type="search" value="${escapeHTML(state.mediaPickerQuery)}" placeholder="Search media">
+                  <input id="document-media-picker-query" type="search" value="${escapeHTML(state.mediaPickerQuery)}" placeholder="${_t('Search media')}">
                 </div>
                 <div class="media-picker-list">
                   ${
@@ -895,23 +1001,23 @@ import {
                           <div class="muted mono">${escapeHTML(item.reference)}</div>
                         </div>
                         <div class="row-actions">
-                          <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="auto">Insert</button>
-                          <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="link">Insert Link</button>
+                          <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="auto">${_t('Insert')}</button>
+                          <button type="button" class="ghost small" data-insert-media="${escapeHTML(item.reference)}" data-insert-mode="link">${_t('Insert Link')}</button>
                         </div>
                       </div>`
                           )
                           .join('')
-                      : '<div class="empty-state">No media matched your search.</div>'
+                      : `<div class="empty-state">${_t('No media matched your search.')}</div>`
                   }
                 </div>
               </div>
             </div>
           </div>
           <div class="toolbar">
-            <button type="submit">Save Document</button>
-            <button type="button" class="ghost" id="document-preview-button">Preview</button>
-            <button type="button" class="ghost" id="document-zen-button">Zen Mode</button>
-            <button type="button" class="ghost" id="document-reset-button">New Draft</button>
+            <button type="submit">${_t('Save Document')}</button>
+            <button type="button" class="ghost" id="document-preview-button">${_t('Preview')}</button>
+            <button type="button" class="ghost" id="document-zen-button">${_t('Zen Mode')}</button>
+            <button type="button" class="ghost" id="document-reset-button">${_t('New Draft')}</button>
           </div>
         </form>
       </div>`;
@@ -925,12 +1031,12 @@ import {
       'Custom Fields',
       `<div class="panel-pad stack">
         <div class="note">
-          Shared custom fields live in <span class="mono">${escapeHTML(state.customFields?.path || 'content/custom-fields.yaml')}</span>. Themes declare the field contracts; this screen edits the shared values they expose.
+          ${_t('Shared custom fields live in')} <span class="mono">${escapeHTML(state.customFields?.path || 'content/custom-fields.yaml')}</span>. ${_t('Themes declare the field contracts; this screen edits the shared values they expose.')}
         </div>
         ${
           saveEnabled
             ? ''
-            : '<div class="note">You can view shared custom fields, but saving them requires the <code>config.manage</code> capability.</div>'
+            : `<div class="note">${_t('You can view shared custom fields, but saving them requires the <code>config.manage</code> capability.')}</div>`
         }
         ${
           contracts.length
@@ -950,21 +1056,24 @@ import {
               </div>`
                 )
                 .join('')
-            : '<div class="empty-state">The active theme does not declare any shared field contracts.</div>'
+            : `<div class="empty-state">${_t('The active theme does not declare any shared field contracts.')}</div>`
         }
         <form id="custom-fields-save-form" class="stack">
-          <label>Raw YAML<textarea id="custom-fields-raw" rows="18" spellcheck="false" ${saveEnabled ? '' : 'readonly aria-readonly="true"'}>${escapeHTML(raw)}</textarea></label>
-          <div class="toolbar"><button type="submit" ${saveEnabled ? '' : 'disabled aria-disabled="true" title="Saving shared custom fields requires config.manage"'}>Save Shared Custom Fields</button></div>
+          <label>${_t('Raw YAML')}<textarea id="custom-fields-raw" rows="18" spellcheck="false" ${saveEnabled ? '' : 'readonly aria-readonly="true"'}>${escapeHTML(raw)}</textarea></label>
+          <div class="toolbar"><button type="submit" ${saveEnabled ? '' : `disabled aria-disabled="true" title="${_t('Saving shared custom fields requires config.manage')}"`}>${_t('Save Shared Custom Fields')}</button></div>
         </form>
       </div>`,
       contracts.length
-        ? `${contracts.length} shared contract${contracts.length === 1 ? '' : 's'} from the active theme`
-        : 'No shared contracts declared'
+        ? _t('{count} shared custom field contract(s) from the active theme', {
+            count: contracts.length,
+          })
+        : _t('No shared contracts declared')
     );
   };
 
   const renderRedirects = () => {
     const redirects = Array.isArray(state.redirects?.redirects) ? state.redirects.redirects : [];
+    const activeRedirectCount = redirects.filter((rule) => rule.enabled).length;
     const sortedRedirects = sortItems(redirects, 'redirects', (rule, field) => {
       if (field === 'status') return String(rule.status || 301);
       if (field === 'enabled') return rule.enabled ? 'enabled' : 'disabled';
@@ -978,11 +1087,11 @@ import {
       <div class="table-row table-row-actions redirect-row" data-redirect-index="${escapeHTML(String(index))}">
         <span>
           <input type="text" data-redirect-field="from" data-redirect-index="${escapeHTML(String(index))}" value="${escapeHTML(rule.from || '')}" placeholder="/old-url/">
-          <div class="muted mono">Source URL</div>
+          <div class="muted mono">${_t('Source URL')}</div>
         </span>
         <span>
           <input type="text" data-redirect-field="to" data-redirect-index="${escapeHTML(String(index))}" value="${escapeHTML(rule.to || '')}" placeholder="/new-url/">
-          <input type="text" data-redirect-field="note" data-redirect-index="${escapeHTML(String(index))}" value="${escapeHTML(rule.note || '')}" placeholder="Internal note">
+          <input type="text" data-redirect-field="note" data-redirect-index="${escapeHTML(String(index))}" value="${escapeHTML(rule.note || '')}" placeholder="${_t('Internal note')}">
         </span>
         <span>
           <select data-redirect-field="status" data-redirect-index="${escapeHTML(String(index))}">
@@ -993,11 +1102,11 @@ import {
               )
               .join('')}
           </select>
-          <label class="checkbox"><input type="checkbox" data-redirect-field="enabled" data-redirect-index="${escapeHTML(String(index))}" ${rule.enabled ? 'checked' : ''}> Enabled</label>
-          <label class="checkbox"><input type="checkbox" data-redirect-field="preserve_query" data-redirect-index="${escapeHTML(String(index))}" ${rule.preserve_query ? 'checked' : ''}> Preserve query</label>
+          <label class="checkbox"><input type="checkbox" data-redirect-field="enabled" data-redirect-index="${escapeHTML(String(index))}" ${rule.enabled ? 'checked' : ''}> ${_t('Enabled')}</label>
+          <label class="checkbox"><input type="checkbox" data-redirect-field="preserve_query" data-redirect-index="${escapeHTML(String(index))}" ${rule.preserve_query ? 'checked' : ''}> ${_t('Preserve query')}</label>
         </span>
         <span class="row-actions">
-          <button type="button" class="ghost small danger" data-delete-redirect="${escapeHTML(String(index))}">Delete</button>
+          <button type="button" class="ghost small danger" data-delete-redirect="${escapeHTML(String(index))}">${_t('Delete')}</button>
         </span>
       </div>`;
       })
@@ -1006,18 +1115,20 @@ import {
     return panel(
       'Redirects',
       `<div class="panel-pad stack">
-        <div class="note">Redirects are stored in <span class="mono">${escapeHTML(state.redirects?.path || 'data/redirects.yaml')}</span> and are applied before normal page rendering.</div>
+        <div class="note">${_t('Redirects are stored in')} <span class="mono">${escapeHTML(state.redirects?.path || 'data/redirects.yaml')}</span> ${_t('and are applied before normal page rendering.')}</div>
         <div class="toolbar">
-          <button type="button" id="redirect-add">Add Redirect</button>
-          <button type="button" class="ghost" id="redirect-save">Save Redirects</button>
+          <button type="button" id="redirect-add">${_t('Add Redirect')}</button>
+          <button type="button" class="ghost" id="redirect-save">${_t('Save Redirects')}</button>
         </div>
       </div>
       ${renderTableControls(state, 'redirects', redirects.length, pagedRedirects.totalPages)}
       <div class="table table-four redirects-table">
-        <div class="table-head"><span>From</span><span>Target</span><span>Behavior</span><span>Action</span></div>
-        ${rows || '<div class="panel-pad empty-state">No redirects configured.</div>'}
+        <div class="table-head"><span>${_t('From')}</span><span>${_t('Target')}</span><span>${_t('Behavior')}</span><span>${_t('Action')}</span></div>
+        ${rows || `<div class="panel-pad empty-state">${_t('No redirects configured.')}</div>`}
       </div>`,
-      `${redirects.filter((rule) => rule.enabled).length} active redirect${redirects.filter((rule) => rule.enabled).length === 1 ? '' : 's'}`
+      activeRedirectCount === 1
+        ? _t('1 active redirect')
+        : _t('{count} active redirects', { count: activeRedirectCount })
     );
   };
 
@@ -1080,34 +1191,34 @@ import {
     const rows = pagedDocuments.items.map(
       (doc) => `
       <div class="table-row table-row-actions">
-        <span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-document="${escapeHTML(doc.source_path)}" ${state.selectedDocuments.includes(doc.source_path) ? 'checked' : ''}><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></label><div class="muted mono">${escapeHTML(doc.source_path)}</div><div class="muted">Author ${escapeHTML(doc.author || '-')} • ${escapeHTML(doc.lang || '-')}</div>${!doc.summary ? '<div class="muted">Missing summary</div>' : ''}${!doc.author ? '<div class="muted">Missing author attribution</div>' : ''}</span>
+        <span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-document="${escapeHTML(doc.source_path)}" ${state.selectedDocuments.includes(doc.source_path) ? 'checked' : ''}><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></label><div class="muted mono">${escapeHTML(doc.source_path)}</div><div class="muted">${_t('Author')} ${escapeHTML(doc.author || '-')} • ${escapeHTML(doc.lang || '-')}</div>${!doc.summary ? `<div class="muted">${_t('Missing summary')}</div>` : ''}${!doc.author ? `<div class="muted">${_t('Missing author attribution')}</div>` : ''}</span>
         <span>${escapeHTML(doc.type)}</span>
-        <span>${escapeHTML(documentStatusLabel(doc))}</span>
+        <span>${escapeHTML(_t(documentStatusLabel(doc)))}</span>
         <span class="row-actions">
-          <button class="ghost small" data-edit-document="${escapeHTML(doc.id)}">Edit</button>
-          <button class="ghost small" data-history-document="${escapeHTML(doc.source_path)}">History</button>
-          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|in_review">Request Review</button>
-          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|published">Publish</button>
-          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|draft">Draft</button>
-          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|archived">Archive</button>
-          <button class="ghost small danger" data-delete-document="${escapeHTML(doc.source_path)}">Delete</button>
+          <button class="ghost small" data-edit-document="${escapeHTML(doc.id)}">${_t('Edit')}</button>
+          <button class="ghost small" data-history-document="${escapeHTML(doc.source_path)}">${_t('History')}</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|in_review">${_t('Request Review')}</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|published">${_t('Publish')}</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|draft">${_t('Draft')}</button>
+          <button class="ghost small" data-set-document-status="${escapeHTML(doc.source_path)}|archived">${_t('Archive')}</button>
+          <button class="ghost small danger" data-delete-document="${escapeHTML(doc.source_path)}">${_t('Delete')}</button>
         </span>
       </div>`
     );
 
     const preview = state.documentPreview
       ? `<div class="panel-pad stack preview-body">
-          ${state.documentPreview.field_errors?.length ? `<div class="warning-panel panel"><div class="panel-pad"><strong>Field Validation</strong><div class="mini-list">${state.documentPreview.field_errors.map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div></div></div>` : ''}
+          ${state.documentPreview.field_errors?.length ? `<div class="warning-panel panel"><div class="panel-pad"><strong>${_t('Field Validation')}</strong><div class="mini-list">${state.documentPreview.field_errors.map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div></div></div>` : ''}
           ${renderPreviewFrame(state.documentPreview.html)}
         </div>`
-      : `<div class="panel-pad empty-state">Use Preview to render the current Markdown body.</div>`;
+      : `<div class="panel-pad empty-state">${_t('Use Preview to render the current Markdown body.')}</div>`;
     const historyRows = renderDocumentHistoryRows(state.documentHistory);
     const trashRows = renderDocumentHistoryRows(state.documentTrash);
     const diffBody = state.documentDiff
       ? `<div class="panel-pad stack">
           <div class="toolbar">
-            <button type="button" class="ghost small ${state.documentDiffMode === 'split' ? 'active-toggle' : ''}" data-diff-mode="split">Split View</button>
-            <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">Unified Diff</button>
+            <button type="button" class="ghost small ${state.documentDiffMode === 'split' ? 'active-toggle' : ''}" data-diff-mode="split">${_t('Split View')}</button>
+            <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">${_t('Unified Diff')}</button>
           </div>
           <div class="status-line mono">${escapeHTML(state.documentDiff.left_path)} -> ${escapeHTML(state.documentDiff.right_path)}</div>
           ${
@@ -1116,7 +1227,7 @@ import {
               : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`
           }
         </div>`
-      : `<div class="panel-pad empty-state">Select a version or trashed document and choose Diff to compare it against the current file.</div>`;
+      : `<div class="panel-pad empty-state">${_t('Select a version or trashed document and choose Diff to compare it against the current file.')}</div>`;
 
     return `
       <div class="layout-grid">
@@ -1125,10 +1236,10 @@ import {
             'Find Documents',
             `
             <form id="document-search-form" class="panel-pad stack">
-              <label>Search Documents<input id="document-search-query" type="search" value="${escapeHTML(state.documentQuery)}" placeholder="Search title, slug, URL, summary, tags, or path"></label>
+              <label>${_t('Search Documents')}<input id="document-search-query" type="search" value="${escapeHTML(state.documentQuery)}" placeholder="${_t('Search title, slug, URL, summary, tags, or path')}"></label>
               <div class="frontmatter-grid">
-                <label>Status<select id="document-filter-status"><option value="">Any</option>${['Draft', 'In Review', 'Scheduled', 'Published', 'Archived'].map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
-                <label>Type<select id="document-filter-type"><option value="">Any</option>${Array.from(
+                <label>${_t('Status')}<select id="document-filter-status"><option value="">${_t('Any')}</option>${['Draft', 'In Review', 'Scheduled', 'Published', 'Archived'].map((entry) => `<option value="${escapeHTML(entry)}" ${state.documentFilters.status === entry ? 'selected' : ''}>${escapeHTML(_t(entry))}</option>`).join('')}</select></label>
+                <label>${_t('Type')}<select id="document-filter-type"><option value="">${_t('Any')}</option>${Array.from(
                   new Set((state.documents || []).map((doc) => doc.type).filter(Boolean))
                 )
                   .map(
@@ -1136,7 +1247,7 @@ import {
                       `<option value="${escapeHTML(entry)}" ${state.documentFilters.type === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
                   )
                   .join('')}</select></label>
-                <label>Language<select id="document-filter-lang"><option value="">Any</option>${Array.from(
+                <label>${_t('Language')}<select id="document-filter-lang"><option value="">${_t('Any')}</option>${Array.from(
                   new Set((state.documents || []).map((doc) => doc.lang).filter(Boolean))
                 )
                   .map(
@@ -1144,16 +1255,16 @@ import {
                       `<option value="${escapeHTML(entry)}" ${state.documentFilters.lang === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
                   )
                   .join('')}</select></label>
-                <label>Author<input id="document-filter-author" type="text" value="${escapeHTML(state.documentFilters.author || '')}" placeholder="Filter by author"></label>
-                <label>Tag<input id="document-filter-tag" type="text" value="${escapeHTML(state.documentFilters.tag || '')}" placeholder="Exact tag"></label>
-                <label>Category<input id="document-filter-category" type="text" value="${escapeHTML(state.documentFilters.category || '')}" placeholder="Exact category"></label>
-                <label>Date From<input id="document-filter-date-from" type="date" value="${escapeHTML(state.documentFilters.dateFrom || '')}"></label>
-                <label>Date To<input id="document-filter-date-to" type="date" value="${escapeHTML(state.documentFilters.dateTo || '')}"></label>
+                <label>${_t('Author')}<input id="document-filter-author" type="text" value="${escapeHTML(state.documentFilters.author || '')}" placeholder="${_t('Filter by author')}"></label>
+                <label>${_t('Tag')}<input id="document-filter-tag" type="text" value="${escapeHTML(state.documentFilters.tag || '')}" placeholder="${_t('Exact tag')}"></label>
+                <label>${_t('Category')}<input id="document-filter-category" type="text" value="${escapeHTML(state.documentFilters.category || '')}" placeholder="${_t('Exact category')}"></label>
+                <label>${_t('Date From')}<input id="document-filter-date-from" type="date" value="${escapeHTML(state.documentFilters.dateFrom || '')}"></label>
+                <label>${_t('Date To')}<input id="document-filter-date-to" type="date" value="${escapeHTML(state.documentFilters.dateTo || '')}"></label>
               </div>
               <div class="toolbar">
-                <button type="submit">Search</button>
-                <button type="button" class="ghost" id="document-search-clear">Clear</button>
-                <button type="button" class="ghost" data-open-editor>Open Editor</button>
+                <button type="submit">${_t('Search')}</button>
+                <button type="button" class="ghost" id="document-search-clear">${_t('Clear')}</button>
+                <button type="button" class="ghost" data-open-editor>${_t('Open Editor')}</button>
               </div>
             </form>
           `,
@@ -1163,28 +1274,28 @@ import {
             'Bulk Editorial Actions',
             `
             <div class="panel-pad stack">
-              <div class="note">${selectedDocCount ? `${escapeHTML(selectedDocCount)} documents selected.` : 'Select documents from the list to run bulk editorial actions.'}</div>
+              <div class="note">${selectedDocCount ? _t('{count} documents selected.', { count: escapeHTML(String(selectedDocCount)) }) : _t('Select documents from the list to run bulk editorial actions.')}</div>
               <div class="frontmatter-grid">
-                <label>Status<select id="document-bulk-status"><option value="">No change</option>${['draft', 'in_review', 'scheduled', 'published', 'archived'].map((entry) => `<option value="${entry}" ${state.documentBulk.status === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`).join('')}</select></label>
-                <label>Author<input id="document-bulk-author" type="text" value="${escapeHTML(state.documentBulk.author || '')}" placeholder="Set author"></label>
-                <label>Language<input id="document-bulk-lang" type="text" value="${escapeHTML(state.documentBulk.lang || '')}" placeholder="Set lang"></label>
-                <label>Tags<input id="document-bulk-tags" type="text" value="${escapeHTML(state.documentBulk.tags || '')}" placeholder="append tags"></label>
-                <label>Categories<input id="document-bulk-categories" type="text" value="${escapeHTML(state.documentBulk.categories || '')}" placeholder="append categories"></label>
+                <label>${_t('Status')}<select id="document-bulk-status"><option value="">${_t('No change')}</option>${['draft', 'in_review', 'scheduled', 'published', 'archived'].map((entry) => `<option value="${entry}" ${state.documentBulk.status === entry ? 'selected' : ''}>${escapeHTML(_t(entry))}</option>`).join('')}</select></label>
+                <label>${_t('Author')}<input id="document-bulk-author" type="text" value="${escapeHTML(state.documentBulk.author || '')}" placeholder="${_t('Set author')}"></label>
+                <label>${_t('Language')}<input id="document-bulk-lang" type="text" value="${escapeHTML(state.documentBulk.lang || '')}" placeholder="${_t('Set lang')}"></label>
+                <label>${_t('Tags')}<input id="document-bulk-tags" type="text" value="${escapeHTML(state.documentBulk.tags || '')}" placeholder="${_t('append tags')}"></label>
+                <label>${_t('Categories')}<input id="document-bulk-categories" type="text" value="${escapeHTML(state.documentBulk.categories || '')}" placeholder="${_t('append categories')}"></label>
               </div>
               <div class="toolbar">
-                <button type="button" id="document-select-all-visible">Select Visible</button>
-                <button type="button" class="ghost" id="document-clear-selection">Clear Selection</button>
-                <button type="button" class="ghost" id="document-bulk-apply" ${selectedDocCount ? '' : 'disabled'}>Apply Bulk Changes</button>
+                <button type="button" id="document-select-all-visible">${_t('Select Visible')}</button>
+                <button type="button" class="ghost" id="document-clear-selection">${_t('Clear Selection')}</button>
+                <button type="button" class="ghost" id="document-bulk-apply" ${selectedDocCount ? '' : 'disabled'}>${_t('Apply Bulk Changes')}</button>
               </div>
             </div>`,
             'Workflow, taxonomy, language, and author updates for selected documents'
           )}
-          ${panel('Documents', `${renderTableControls(state, 'documents', filteredDocuments.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No documents matched the current search or filters. Try a broader query, clear filters, or create a new page/post.</div>'}</div>`, `${filteredDocuments.length} matching documents`)}
-          ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed`)}
+          ${panel('Documents', `${renderTableControls(state, 'documents', filteredDocuments.length, pagedDocuments.totalPages)}<div class="table table-four"><div class="table-head"><span>${_t('Document')}</span><span>${_t('Type')}</span><span>${_t('Status')}</span><span>${_t('Actions')}</span></div>${rows.length ? rows.join('') : `<div class="panel-pad empty-state">${_t('No documents matched the current search or filters. Try a broader query, clear filters, or create a new page/post.')}</div>`}</div>`, _t('{count} matching documents', { count: filteredDocuments.length }))}
+          ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>${_t('Document')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${trashRows || `<div class="panel-pad empty-state">${_t('No trashed documents.')}</div>`}</div>`, _t('{count} trashed', { count: state.documentTrash.length }))}
         </div>
         <div class="stack">
-          ${panel('Preview', preview, state.documentPreview ? state.documentPreview.title || state.documentPreview.slug || 'Rendered preview' : 'No preview yet')}
-          ${panel('History', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${historyRows || '<div class="panel-pad empty-state">Select a document to inspect version and trash history.</div>'}</div>`, state.documentHistoryPath || 'No document selected')}
+          ${panel(_t('Preview'), preview, state.documentPreview ? state.documentPreview.title || state.documentPreview.slug || _t('Rendered preview') : _t('No preview yet'), '', false)}
+          ${panel(_t('History'), `<div class="table table-four"><div class="table-head"><span>${_t('Document')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${historyRows || `<div class="panel-pad empty-state">${_t('Select a document to inspect version and trash history.')}</div>`}</div>`, state.documentHistoryPath || _t('No document selected'), '', false)}
           ${panel('Diff', diffBody, 'Line-based diff against the current version')}
           ${renderWidgetPanels('documents.sidebar').join('')}
         </div>
@@ -1194,31 +1305,31 @@ import {
   const renderEditor = () => `
     <div class="layout-grid">
       <div class="stack">
-        ${panel('Editor', renderEditorPanel(), 'Create, edit, publish, archive, or soft-delete Markdown content')}
+          ${panel('Editor', renderEditorPanel(), 'Create, edit, publish, archive, or soft-delete Markdown content')}
       </div>
       <div class="stack">
         ${panel(
           'Inline Preview',
           state.documentPreview
             ? `<div class="panel-pad stack preview-body">
-                ${state.documentPreview.field_errors?.length ? `<div class="warning-panel panel"><div class="panel-pad"><strong>Field Validation</strong><div class="mini-list">${state.documentPreview.field_errors.map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div></div></div>` : ''}
+                ${state.documentPreview.field_errors?.length ? `<div class="warning-panel panel"><div class="panel-pad"><strong>${_t('Field Validation')}</strong><div class="mini-list">${state.documentPreview.field_errors.map((entry) => `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`).join('')}</div></div></div>` : ''}
                 ${renderPreviewFrame(state.documentPreview.html)}
               </div>`
-            : '<div class="panel-pad empty-state">Use Preview while editing to keep the authoring loop inside Editor.</div>',
+            : `<div class="panel-pad empty-state">${_t('Use Preview while editing to keep the authoring loop inside Editor.')}</div>`,
           'Preview now lives in Editor as well as Documents'
         )}
         ${panel(
           'Editor Status',
           `
           <div class="panel-pad stack">
-            <div class="status-line"><strong>Source Path:</strong> <span class="mono">${escapeHTML(state.documentEditor.source_path || 'Unsaved draft')}</span></div>
-            <div class="status-line"><strong>Current Status:</strong> <span>${escapeHTML(documentStatusLabel({ status: state.documentMeta.status || 'draft' }))}</span></div>
-            <div class="status-line"><strong>Author:</strong> <span>${escapeHTML(state.documentMeta.author || 'Unassigned')}</span></div>
-            <div class="status-line"><strong>Last Editor:</strong> <span>${escapeHTML(state.documentMeta.last_editor || 'Unassigned')}</span></div>
-            <div class="note"><strong>Publishing flow:</strong> draft -> in review -> scheduled/published -> archived. Publishing and scheduling actions now prompt with a summary before save.</div>
+            <div class="status-line"><strong>${_t('Source Path')}:</strong> <span class="mono">${escapeHTML(state.documentEditor.source_path || _t('Unsaved draft'))}</span></div>
+            <div class="status-line"><strong>${_t('Current Status')}:</strong> <span>${escapeHTML(_t(documentStatusLabel({ status: state.documentMeta.status || 'draft' })))}</span></div>
+            <div class="status-line"><strong>${_t('Author')}:</strong> <span>${escapeHTML(state.documentMeta.author || _t('Unassigned'))}</span></div>
+            <div class="status-line"><strong>${_t('Last Editor')}:</strong> <span>${escapeHTML(state.documentMeta.last_editor || _t('Unassigned'))}</span></div>
+            <div class="note"><strong>${_t('Publishing flow')}:</strong> ${_t('draft')} -> ${_t('in review')} -> ${_t('scheduled')}/${_t('published')} -> ${_t('archived')}. ${_t('Publishing and scheduling actions now prompt with a summary before save.')}</div>
             <div class="toolbar">
-              <button type="button" class="ghost" data-open-documents>Open Documents</button>
-              <button type="button" class="ghost" id="editor-preview-documents">Show Preview on Documents</button>
+              <button type="button" class="ghost" data-open-documents>${_t('Open Documents')}</button>
+              <button type="button" class="ghost" id="editor-preview-documents">${_t('Show Preview on Documents')}</button>
             </div>
           </div>
         `,
@@ -1259,15 +1370,15 @@ import {
     const rows = pagedMedia.items.map(
       (item) => `
       <div class="table-row table-row-actions">
-        <span class="media-library-cell">${mediaThumb(item)}<span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-media-library="${escapeHTML(item.reference)}" ${state.selectedMediaLibrary.includes(item.reference) ? 'checked' : ''}><strong>${escapeHTML(item.name)}</strong></label><div class="muted mono">${escapeHTML(item.reference)}</div><div class="muted">Used by ${escapeHTML(String(item.used_by_count || 0))} document(s)</div></span></span>
+        <span class="media-library-cell">${mediaThumb(item)}<span><label class="checkbox inline-checkbox"><input type="checkbox" data-select-media-library="${escapeHTML(item.reference)}" ${state.selectedMediaLibrary.includes(item.reference) ? 'checked' : ''}><strong>${escapeHTML(item.name)}</strong></label><div class="muted mono">${escapeHTML(item.reference)}</div><div class="muted">${_t('Used by {count} document(s)', { count: escapeHTML(String(item.used_by_count || 0)) })}</div></span></span>
         <span>${escapeHTML(item.kind)}</span>
         <span>${escapeHTML(item.metadata?.title || item.metadata?.alt || '')}</span>
         <span class="row-actions">
-          <button class="ghost small" data-edit-media="${escapeHTML(item.reference)}">Details</button>
-          <button class="ghost small" data-history-media-path="${escapeHTML(`content/${item.collection}/${item.path}`)}">History</button>
-          <button class="ghost small" data-prepare-media-replace="${escapeHTML(item.reference)}">Replace</button>
-          <a class="button-link ghost small" href="${escapeHTML(item.public_url)}" target="_blank" rel="noreferrer">View</a>
-          <button class="ghost small danger" data-delete-media="${escapeHTML(item.reference)}">Delete</button>
+          <button class="ghost small" data-edit-media="${escapeHTML(item.reference)}">${_t('Details')}</button>
+          <button class="ghost small" data-history-media-path="${escapeHTML(`content/${item.collection}/${item.path}`)}">${_t('History')}</button>
+          <button class="ghost small" data-prepare-media-replace="${escapeHTML(item.reference)}">${_t('Replace')}</button>
+          <a class="button-link ghost small" href="${escapeHTML(item.public_url)}" target="_blank" rel="noreferrer">${_t('View')}</a>
+          <button class="ghost small danger" data-delete-media="${escapeHTML(item.reference)}">${_t('Delete')}</button>
         </span>
       </div>`
     );
@@ -1283,9 +1394,9 @@ import {
             'Upload Media',
             `
             <form id="media-upload-form" class="panel-pad stack">
-              <label>Search Library<input id="media-search-query" type="search" value="${escapeHTML(state.mediaQuery)}" placeholder="Search name, reference, metadata, or tags"></label>
+              <label>${_t('Search Library')}<input id="media-search-query" type="search" value="${escapeHTML(state.mediaQuery)}" placeholder="${_t('Search name, reference, metadata, or tags')}"></label>
               <div class="frontmatter-grid">
-                <label>Kind<select id="media-filter-kind"><option value="">Any</option>${Array.from(
+                <label>${_t('Kind')}<select id="media-filter-kind"><option value="">${_t('Any')}</option>${Array.from(
                   new Set((state.media || []).map((item) => item.kind).filter(Boolean))
                 )
                   .map(
@@ -1293,7 +1404,7 @@ import {
                       `<option value="${escapeHTML(entry)}" ${state.mediaFilters.kind === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
                   )
                   .join('')}</select></label>
-                <label>Collection<select id="media-filter-collection"><option value="">Any</option>${Array.from(
+                <label>${_t('Collection')}<select id="media-filter-collection"><option value="">${_t('Any')}</option>${Array.from(
                   new Set((state.media || []).map((item) => item.collection).filter(Boolean))
                 )
                   .map(
@@ -1301,15 +1412,15 @@ import {
                       `<option value="${escapeHTML(entry)}" ${state.mediaFilters.collection === entry ? 'selected' : ''}>${escapeHTML(entry)}</option>`
                   )
                   .join('')}</select></label>
-                <label>Usage<select id="media-filter-usage"><option value="">Any</option><option value="used" ${state.mediaFilters.usage === 'used' ? 'selected' : ''}>Used</option><option value="unused" ${state.mediaFilters.usage === 'unused' ? 'selected' : ''}>Unused</option></select></label>
+                <label>${_t('Usage')}<select id="media-filter-usage"><option value="">${_t('Any')}</option><option value="used" ${state.mediaFilters.usage === 'used' ? 'selected' : ''}>${_t('Used')}</option><option value="unused" ${state.mediaFilters.usage === 'unused' ? 'selected' : ''}>${_t('Unused')}</option></select></label>
               </div>
-              <label>Collection<select id="media-collection"><option value="">Auto</option><option value="images">images</option><option value="videos">videos</option><option value="audio">audio</option><option value="documents">documents</option></select></label>
+              <label>${_t('Collection')}<select id="media-collection"><option value="">${_t('Auto')}</option><option value="images">${_t('images')}</option><option value="videos">${_t('videos')}</option><option value="audio">${_t('audio')}</option><option value="documents">${_t('documents')}</option></select></label>
               <!-- Directory uploads remain supported by the backend, but the default admin theme intentionally hides this field to avoid path confusion in the UI. -->
-              <label>File<input id="media-file" type="file"></label>
+              <label>${_t('File')}<input id="media-file" type="file"></label>
               <div class="toolbar">
-                <button type="submit">Upload Media</button>
-                <button type="button" class="ghost" id="media-search-apply">Search</button>
-                <button type="button" class="ghost" id="media-search-clear">Clear</button>
+                <button type="submit">${_t('Upload Media')}</button>
+                <button type="button" class="ghost" id="media-search-apply">${_t('Search')}</button>
+                <button type="button" class="ghost" id="media-search-clear">${_t('Clear')}</button>
               </div>
             </form>
           `,
@@ -1319,20 +1430,20 @@ import {
             'Bulk Media Actions',
             `
             <div class="panel-pad stack">
-              <div class="note">${state.selectedMediaLibrary.length ? `${escapeHTML(state.selectedMediaLibrary.length)} media items selected.` : 'Select media from the library to apply bulk tags.'}</div>
+              <div class="note">${state.selectedMediaLibrary.length ? _t('{count} media items selected.', { count: escapeHTML(String(state.selectedMediaLibrary.length)) }) : _t('Select media from the library to apply bulk tags.')}</div>
               <div class="frontmatter-grid">
-                <label>Append Tags<input id="media-bulk-tags" type="text" value="${escapeHTML(state.mediaBulkTags || '')}" placeholder="campaign, featured"></label>
+                <label>${_t('Append Tags')}<input id="media-bulk-tags" type="text" value="${escapeHTML(state.mediaBulkTags || '')}" placeholder="campaign, featured"></label>
               </div>
               <div class="toolbar">
-                <button type="button" id="media-select-all-visible">Select Visible</button>
-                <button type="button" class="ghost" id="media-clear-selection">Clear Selection</button>
-                <button type="button" class="ghost" id="media-bulk-apply" ${state.selectedMediaLibrary.length ? '' : 'disabled'}>Apply Tags</button>
+                <button type="button" id="media-select-all-visible">${_t('Select Visible')}</button>
+                <button type="button" class="ghost" id="media-clear-selection">${_t('Clear Selection')}</button>
+                <button type="button" class="ghost" id="media-bulk-apply" ${state.selectedMediaLibrary.length ? '' : 'disabled'}>${_t('Apply Tags')}</button>
               </div>
             </div>`,
             'Bulk tag updates for selected media'
           )}
-          ${panel('Library', `${renderTableControls(state, 'media', filteredMedia.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>Name</span><span>Kind</span><span>Metadata</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No media matched the current search or filters. Upload a file or clear the filters.</div>'}</div>`, `${filteredMedia.length} matching media items`)}
-          ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${trashRows || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed`)}
+          ${panel('Library', `${renderTableControls(state, 'media', filteredMedia.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>${_t('Name')}</span><span>${_t('Kind')}</span><span>${_t('Metadata')}</span><span>${_t('Actions')}</span></div>${rows.length ? rows.join('') : `<div class="panel-pad empty-state">${_t('No media matched the current search or filters. Upload a file or clear the filters.')}</div>`}</div>`, _t('{count} matching media items', { count: filteredMedia.length }))}
+          ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>${_t('Name')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${trashRows || `<div class="panel-pad empty-state">${_t('No trashed media.')}</div>`}</div>`, _t('{count} trashed', { count: state.mediaTrash.length }))}
         </div>
         <div class="stack">
           ${panel(
@@ -1342,47 +1453,47 @@ import {
               ${mediaPreview(detail)}
               <div class="status-line mono">${escapeHTML(detail?.reference || '')}</div>
               <div class="stack subtle-meta">
-                <div class="status-line"><strong>Original file:</strong> <span class="mono">${escapeHTML(metadata.original_filename || '')}</span></div>
-                <div class="status-line"><strong>Stored file:</strong> <span class="mono">${escapeHTML(metadata.stored_filename || detail?.name || '')}</span></div>
-                <div class="status-line"><strong>Type:</strong> <span class="mono">${escapeHTML(metadata.mime_type || detail?.kind || '')}</span></div>
-                <div class="status-line"><strong>Hash:</strong> <span class="mono">${escapeHTML(metadata.content_hash || '')}</span></div>
-                <div class="status-line"><strong>Size:</strong> <span class="mono">${escapeHTML(String(metadata.file_size || detail?.size || ''))}</span></div>
-                <div class="status-line"><strong>Dimensions:</strong> <span class="mono">${escapeHTML(
+                <div class="status-line"><strong>${_t('Original file')}:</strong> <span class="mono">${escapeHTML(metadata.original_filename || '')}</span></div>
+                <div class="status-line"><strong>${_t('Stored file')}:</strong> <span class="mono">${escapeHTML(metadata.stored_filename || detail?.name || '')}</span></div>
+                <div class="status-line"><strong>${_t('Type')}:</strong> <span class="mono">${escapeHTML(metadata.mime_type || detail?.kind || '')}</span></div>
+                <div class="status-line"><strong>${_t('Hash')}:</strong> <span class="mono">${escapeHTML(metadata.content_hash || '')}</span></div>
+                <div class="status-line"><strong>${_t('Size')}:</strong> <span class="mono">${escapeHTML(String(metadata.file_size || detail?.size || ''))}</span></div>
+                <div class="status-line"><strong>${_t('Dimensions')}:</strong> <span class="mono">${escapeHTML(
                   metadata.width && metadata.height
                     ? `${metadata.width} x ${metadata.height}`
-                    : 'n/a'
+                    : _t('n/a')
                 )}</span></div>
-                <div class="status-line"><strong>Used by:</strong> <span class="mono">${escapeHTML(String(detail?.used_by?.length || detail?.used_by_count || 0))}</span></div>
-                <div class="status-line"><strong>Duplicate references:</strong> <span class="mono">${escapeHTML(String((duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).length > 1 ? (duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).join(', ') : 'none'))}</span></div>
-                <div class="status-line"><strong>Uploaded:</strong> <span>${escapeHTML(metadata.uploaded_at ? formatDateTime(metadata.uploaded_at) : '')}</span></div>
-                <div class="status-line"><strong>Uploaded by:</strong> <span>${escapeHTML(metadata.uploaded_by || '')}</span></div>
+                <div class="status-line"><strong>${_t('Used by')}:</strong> <span class="mono">${escapeHTML(String(detail?.used_by?.length || detail?.used_by_count || 0))}</span></div>
+                <div class="status-line"><strong>${_t('Duplicate references')}:</strong> <span class="mono">${escapeHTML(String((duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).length > 1 ? (duplicateHashes.find(([hash]) => hash === metadata.content_hash)?.[1] || []).join(', ') : _t('none')))}</span></div>
+                <div class="status-line"><strong>${_t('Uploaded')}:</strong> <span>${escapeHTML(metadata.uploaded_at ? formatDateTime(metadata.uploaded_at) : '')}</span></div>
+                <div class="status-line"><strong>${_t('Uploaded by')}:</strong> <span>${escapeHTML(metadata.uploaded_by || '')}</span></div>
               </div>
               <form id="media-metadata-form" class="stack">
-                <label>Title<input id="media-title" type="text" value="${escapeHTML(metadata.title || '')}"></label>
-                <label>Alt Text<input id="media-alt" type="text" value="${escapeHTML(metadata.alt || '')}"></label>
-                <label>Caption<input id="media-caption" type="text" value="${escapeHTML(metadata.caption || '')}"></label>
-                <label>Description<textarea id="media-description" rows="5">${escapeHTML(metadata.description || '')}</textarea></label>
-                <label>Credit<input id="media-credit" type="text" value="${escapeHTML(metadata.credit || '')}"></label>
-                <label>Tags<input id="media-tags" type="text" value="${escapeHTML((metadata.tags || []).join(', '))}" placeholder="product, hero, launch"></label>
-                <label>Focal Point X<input id="media-focal-x" type="text" value="${escapeHTML(String(metadata.focal_x || ''))}" placeholder="0.5"></label>
-                <label>Focal Point Y<input id="media-focal-y" type="text" value="${escapeHTML(String(metadata.focal_y || ''))}" placeholder="0.5"></label>
-                <label>Version Comment<input id="media-version-comment" type="text" value="${escapeHTML(state.mediaVersionComment || '')}" placeholder="Explain what changed in this metadata revision"></label>
-                <label>Replace File<input id="media-replace-file" type="file" ${detail ? '' : 'disabled'}></label>
+                <label>${_t('Title')}<input id="media-title" type="text" value="${escapeHTML(metadata.title || '')}"></label>
+                <label>${_t('Alt Text')}<input id="media-alt" type="text" value="${escapeHTML(metadata.alt || '')}"></label>
+                <label>${_t('Caption')}<input id="media-caption" type="text" value="${escapeHTML(metadata.caption || '')}"></label>
+                <label>${_t('Description')}<textarea id="media-description" rows="5">${escapeHTML(metadata.description || '')}</textarea></label>
+                <label>${_t('Credit')}<input id="media-credit" type="text" value="${escapeHTML(metadata.credit || '')}"></label>
+                <label>${_t('Tags')}<input id="media-tags" type="text" value="${escapeHTML((metadata.tags || []).join(', '))}" placeholder="product, hero, launch"></label>
+                <label>${_t('Focal Point X')}<input id="media-focal-x" type="text" value="${escapeHTML(String(metadata.focal_x || ''))}" placeholder="0.5"></label>
+                <label>${_t('Focal Point Y')}<input id="media-focal-y" type="text" value="${escapeHTML(String(metadata.focal_y || ''))}" placeholder="0.5"></label>
+                <label>${_t('Version Comment')}<input id="media-version-comment" type="text" value="${escapeHTML(state.mediaVersionComment || '')}" placeholder="${_t('Explain what changed in this metadata revision')}"></label>
+                <label>${_t('Replace File')}<input id="media-replace-file" type="file" ${detail ? '' : 'disabled'}></label>
                 <div class="toolbar">
-                  <button type="submit" ${detail ? '' : 'disabled'}>Save Metadata</button>
-                  <button type="button" class="ghost" id="media-replace-button" ${detail ? '' : 'disabled'}>Replace Media</button>
+                  <button type="submit" ${detail ? '' : 'disabled'}>${_t('Save Metadata')}</button>
+                  <button type="button" class="ghost" id="media-replace-button" ${detail ? '' : 'disabled'}>${_t('Replace Media')}</button>
                 </div>
               </form>
             </div>
           `,
             'Metadata is stored beside the file as .meta.yaml'
           )}
-          ${panel('Duplicate Content Hashes', duplicateHashes.length ? `<div class="table table-two"><div class="table-head"><span>Hash</span><span>References</span></div>${duplicateHashes.map(([hash, refs]) => `<div class="table-row"><span class="mono">${escapeHTML(hash)}</span><span class="muted">${escapeHTML(refs.join(', '))}</span></div>`).join('')}</div>` : '<div class="panel-pad empty-state">No duplicate media hashes detected in the current library snapshot.</div>', 'Hash-level duplicate detection for DAM hygiene')}
+          ${panel('Duplicate Content Hashes', duplicateHashes.length ? `<div class="table table-two"><div class="table-head"><span>${_t('Hash')}</span><span>${_t('References')}</span></div>${duplicateHashes.map(([hash, refs]) => `<div class="table-row"><span class="mono">${escapeHTML(hash)}</span><span class="muted">${escapeHTML(refs.join(', '))}</span></div>`).join('')}</div>` : `<div class="panel-pad empty-state">${_t('No duplicate media hashes detected in the current library snapshot.')}</div>`, 'Hash-level duplicate detection for DAM hygiene')}
           ${panel(
             'Used By',
             `
             <div class="table table-four">
-              <div class="table-head"><span>Document</span><span>Type</span><span>Status</span><span>Path</span></div>
+              <div class="table-head"><span>${_t('Document')}</span><span>${_t('Type')}</span><span>${_t('Status')}</span><span>${_t('Path')}</span></div>
               ${
                 detail?.used_by?.length
                   ? detail.used_by
@@ -1391,18 +1502,20 @@ import {
                   <div class="table-row">
                     <span><strong>${escapeHTML(doc.title || doc.slug || doc.id)}</strong></span>
                     <span>${escapeHTML(doc.type)}</span>
-                    <span>${escapeHTML(documentStatusLabel(doc))}</span>
-                    <span class="mono"><button class="ghost small" data-edit-document-path="${escapeHTML(doc.source_path)}">Open</button> ${escapeHTML(doc.source_path)}</span>
+                    <span>${escapeHTML(_t(documentStatusLabel(doc)))}</span>
+                    <span class="mono"><button class="ghost small" data-edit-document-path="${escapeHTML(doc.source_path)}">${_t('Open')}</button> ${escapeHTML(doc.source_path)}</span>
                   </div>`
                       )
                       .join('')
-                  : '<div class="panel-pad empty-state">No documents reference this media yet.</div>'
+                  : `<div class="panel-pad empty-state">${_t('No documents reference this media yet.')}</div>`
               }
             </div>
           `,
-            'Documents currently referencing this media: reference'
+            _t('Documents currently referencing this media: {reference}', {
+              reference: state.selectedMediaReference || '',
+            })
           )}
-          ${panel('History', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${historyRows || '<div class="panel-pad empty-state">Select a media item to inspect version and trash history.</div>'}</div>`, state.mediaHistoryReference || 'No media selected')}
+          ${panel(_t('History'), `<div class="table table-four"><div class="table-head"><span>${_t('Name')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${historyRows || `<div class="panel-pad empty-state">${_t('Select a media item to inspect version and trash history.')}</div>`}</div>`, state.mediaHistoryReference || _t('No media selected'), '', false)}
           ${renderWidgetPanels('media.sidebar').join('')}
         </div>
       </div>`;
@@ -1411,17 +1524,17 @@ import {
   const renderHistory = () => `
     <div class="layout-grid">
       <div class="stack">
-        ${panel('Document History', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderDocumentHistoryRows(state.documentHistory) || '<div class="panel-pad empty-state">Choose History from a document to inspect revisions and restore points.</div>'}</div>`, state.documentHistoryPath || 'No document selected')}
-        ${panel('Media History', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderMediaHistoryRows(state.mediaHistory) || '<div class="panel-pad empty-state">Choose History from a media item to inspect revisions and restore points.</div>'}</div>`, state.mediaHistoryReference || 'No media selected')}
+        ${panel(_t('Document History'), `<div class="table table-four"><div class="table-head"><span>${_t('Document')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${renderDocumentHistoryRows(state.documentHistory) || `<div class="panel-pad empty-state">${_t('Choose History from a document to inspect revisions and restore points.')}</div>`}</div>`, state.documentHistoryPath || _t('No document selected'), '', false)}
+        ${panel(_t('Media History'), `<div class="table table-four"><div class="table-head"><span>${_t('Name')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${renderMediaHistoryRows(state.mediaHistory) || `<div class="panel-pad empty-state">${_t('Choose History from a media item to inspect revisions and restore points.')}</div>`}</div>`, state.mediaHistoryReference || _t('No media selected'), '', false)}
       </div>
       <div class="stack">
         ${panel(
           'Document Diff',
           state.documentDiff
             ? `<div class="panel-pad stack">
-              <div class="toolbar">
-                <button type="button" class="ghost small ${state.documentDiffMode === 'split' ? 'active-toggle' : ''}" data-diff-mode="split">Split View</button>
-                <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">Unified Diff</button>
+          <div class="toolbar">
+            <button type="button" class="ghost small ${state.documentDiffMode === 'split' ? 'active-toggle' : ''}" data-diff-mode="split">${_t('Split View')}</button>
+            <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">${_t('Unified Diff')}</button>
               </div>
               ${
                 state.documentDiffMode === 'split'
@@ -1429,7 +1542,7 @@ import {
                   : `<pre class="diff-viewer">${escapeHTML(state.documentDiff.diff)}</pre>`
               }
             </div>`
-            : '<div class="panel-pad empty-state">Select a document version and choose Diff to review the changes.</div>',
+            : `<div class="panel-pad empty-state">${_t('Select a document version and choose Diff to review the changes.')}</div>`,
           'Side-by-side and unified views are both available'
         )}
       </div>
@@ -1478,14 +1591,14 @@ import {
       const pagedAudit = paginateItems(sortedAudit, 'audit');
       return `<div class="panel-pad stack">
         <div class="frontmatter-grid">
-          <label>Actor<input id="audit-filter-actor" type="text" value="${escapeHTML(filters.actor || '')}" placeholder="actor"></label>
-          <label>Action<input id="audit-filter-action" type="text" value="${escapeHTML(filters.action || '')}" placeholder="action"></label>
-          <label>Outcome<select id="audit-filter-outcome"><option value="">Any</option><option value="success" ${filters.outcome === 'success' ? 'selected' : ''}>success</option><option value="fail" ${filters.outcome === 'fail' ? 'selected' : ''}>fail</option></select></label>
-          <div class="toolbar"><button type="button" class="ghost" id="audit-filter-apply">Apply Filters</button><button type="button" class="ghost" id="audit-filter-clear">Clear</button></div>
+          <label>${_t('Actor')}<input id="audit-filter-actor" type="text" value="${escapeHTML(filters.actor || '')}" placeholder="${_t('actor')}"></label>
+          <label>${_t('Action')}<input id="audit-filter-action" type="text" value="${escapeHTML(filters.action || '')}" placeholder="${_t('action')}"></label>
+          <label>${_t('Outcome')}<select id="audit-filter-outcome"><option value="">${_t('Any')}</option><option value="success" ${filters.outcome === 'success' ? 'selected' : ''}>${_t('success')}</option><option value="fail" ${filters.outcome === 'fail' ? 'selected' : ''}>${_t('fail')}</option></select></label>
+          <div class="toolbar"><button type="button" class="ghost" id="audit-filter-apply">${_t('Apply Filters')}</button><button type="button" class="ghost" id="audit-filter-clear">${_t('Clear')}</button></div>
         </div>
       </div>${renderTableControls(state, 'audit', filteredAudit.length, pagedAudit.totalPages)}
     <div class="table table-four">
-      <div class="table-head"><span>Action</span><span>Actor</span><span>Outcome</span><span>Details</span></div>
+      <div class="table-head"><span>${_t('Action')}</span><span>${_t('Actor')}</span><span>${_t('Outcome')}</span><span>${_t('Details')}</span></div>
       ${
         pagedAudit.items.length
           ? pagedAudit.items
@@ -1499,7 +1612,7 @@ import {
           </div>`
               )
               .join('')
-          : '<div class="panel-pad empty-state">No audit log entries yet. Activity will appear here after logins and admin actions.</div>'
+          : `<div class="panel-pad empty-state">${_t('No audit log entries yet. Activity will appear here after logins and admin actions.')}</div>`
       }
     </div>`;
     })()}`,
@@ -1533,7 +1646,7 @@ import {
 
   const renderMiniList = (value, formatter = (entryValue) => String(entryValue)) => {
     const entries = sortedEntries(value);
-    if (!entries.length) return '<div class="empty-state">No data yet.</div>';
+    if (!entries.length) return `<div class="empty-state">${_t('No data yet.')}</div>`;
     return `<div class="mini-list">${entries
       .map(
         ([key, entryValue]) => `
@@ -1546,7 +1659,7 @@ import {
   };
 
   const renderLargestFiles = (files) => {
-    if (!files?.length) return '<div class="empty-state">No file size data yet.</div>';
+    if (!files?.length) return `<div class="empty-state">${_t('No file size data yet.')}</div>`;
     return `<div class="mini-list">${files
       .map(
         (file) => `
@@ -1562,7 +1675,7 @@ import {
     if (!debugEnabled()) {
       return panel(
         'Diagnostics',
-        '<div class="panel-pad empty-state">pprof is disabled. Set <code>admin.debug.pprof: true</code> in site.yaml to enable runtime profiling in the admin.</div>'
+        `<div class="panel-pad empty-state">${_t('pprof is disabled. Set <code>admin.debug.pprof: true</code> in site.yaml to enable runtime profiling in the admin.')}</div>`
       );
     }
     const pprofBase = `${adminBase}/debug/pprof`;
@@ -1575,29 +1688,29 @@ import {
             runtime
               ? `<div class="panel-pad stack">
                 <div class="cards">
-                  <article class="card"><span class="card-label">Heap Alloc</span><strong>${escapeHTML(formatBytes(runtime.heap_alloc_bytes))}</strong><span class="card-copy">Live heap bytes allocated.</span></article>
-                  <article class="card"><span class="card-label">Heap In Use</span><strong>${escapeHTML(formatBytes(runtime.heap_inuse_bytes))}</strong><span class="card-copy">Heap spans currently in use.</span></article>
-                  <article class="card"><span class="card-label">Heap Objects</span><strong>${escapeHTML(String(runtime.heap_objects || 0))}</strong><span class="card-copy">Objects tracked by the runtime.</span></article>
-                  <article class="card"><span class="card-label">Goroutines</span><strong>${escapeHTML(String(runtime.goroutines || 0))}</strong><span class="card-copy">Live goroutines right now.</span></article>
-                  <article class="card"><span class="card-label">Process CPU</span><strong>${escapeHTML(String((runtime.process_user_cpu_ms || 0) + (runtime.process_system_cpu_ms || 0)))} ms</strong><span class="card-copy">Accumulated user + system CPU time.</span></article>
-                  <article class="card"><span class="card-label">GC Runs</span><strong>${escapeHTML(String(runtime.num_gc || 0))}</strong><span class="card-copy">Completed garbage collection cycles.</span></article>
-                  <article class="card"><span class="card-label">Uptime</span><strong>${escapeHTML(formatUptime(runtime.uptime_seconds))}</strong><span class="card-copy">Time since the current process started.</span></article>
-                  <article class="card"><span class="card-label">CPU Cores</span><strong>${escapeHTML(String(runtime.num_cpu || 0))}</strong><span class="card-copy">Logical CPUs available to the process.</span></article>
+                  <article class="card"><span class="card-label">${_t('Heap Alloc')}</span><strong>${escapeHTML(formatBytes(runtime.heap_alloc_bytes))}</strong><span class="card-copy">${_t('Live bytes currently allocated.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Heap In Use')}</span><strong>${escapeHTML(formatBytes(runtime.heap_inuse_bytes))}</strong><span class="card-copy">${_t('Heap pages currently in use.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Heap Objects')}</span><strong>${escapeHTML(String(runtime.heap_objects || 0))}</strong><span class="card-copy">${_t('Objects tracked in the heap.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Goroutines')}</span><strong>${escapeHTML(String(runtime.goroutines || 0))}</strong><span class="card-copy">${_t('Live goroutines right now.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Process CPU')}</span><strong>${escapeHTML(String((runtime.process_user_cpu_ms || 0) + (runtime.process_system_cpu_ms || 0)))} ms</strong><span class="card-copy">${_t('Accumulated user + system CPU time.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('GC Runs')}</span><strong>${escapeHTML(String(runtime.num_gc || 0))}</strong><span class="card-copy">${_t('Completed garbage collection cycles.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Uptime')}</span><strong>${escapeHTML(formatUptime(runtime.uptime_seconds))}</strong><span class="card-copy">${_t('Time since the current process started.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('CPU Cores')}</span><strong>${escapeHTML(String(runtime.num_cpu || 0))}</strong><span class="card-copy">${_t('Logical CPUs available to the process.')}</span></article>
                 </div>
                 <div class="subtle-meta">
-                  <div><strong>Captured:</strong> ${escapeHTML(formatDateTime(runtime.captured_at) || '')}</div>
-                  <div><strong>Go Version:</strong> ${escapeHTML(runtime.go_version || 'n/a')}</div>
-                  <div><strong>Stack In Use:</strong> ${escapeHTML(formatBytes(runtime.stack_inuse_bytes))}</div>
-                  <div><strong>Runtime Sys:</strong> ${escapeHTML(formatBytes(runtime.sys_bytes))}</div>
-                  <div><strong>Next GC:</strong> ${escapeHTML(formatBytes(runtime.next_gc_bytes))}</div>
-                  <div><strong>Last GC:</strong> ${escapeHTML(formatDateTime(runtime.last_gc_at) || 'n/a')}</div>
-                  <div><strong>Live Reload Mode:</strong> ${escapeHTML(runtime.live_reload_mode || 'n/a')}</div>
+                  <div><strong>${_t('Captured')}:</strong> ${escapeHTML(formatDateTime(runtime.captured_at) || '')}</div>
+                  <div><strong>${_t('Go Version')}:</strong> ${escapeHTML(runtime.go_version || 'n/a')}</div>
+                  <div><strong>${_t('Stack In Use')}:</strong> ${escapeHTML(formatBytes(runtime.stack_inuse_bytes))}</div>
+                  <div><strong>${_t('Runtime Sys')}:</strong> ${escapeHTML(formatBytes(runtime.sys_bytes))}</div>
+                  <div><strong>${_t('Next GC')}:</strong> ${escapeHTML(formatBytes(runtime.next_gc_bytes))}</div>
+                  <div><strong>${_t('Last GC')}:</strong> ${escapeHTML(formatDateTime(runtime.last_gc_at) || 'n/a')}</div>
+                  <div><strong>${_t('Live Reload Mode')}:</strong> ${escapeHTML(runtime.live_reload_mode || 'n/a')}</div>
                 </div>
                 <div class="toolbar">
-                  <button type="button" class="ghost" id="debug-refresh-runtime">Refresh Runtime Snapshot</button>
+                  <button type="button" class="ghost" id="debug-refresh-runtime">${_t('Refresh Runtime Snapshot')}</button>
                 </div>
               </div>`
-              : '<div class="panel-pad empty-state">No runtime snapshot loaded yet.</div>',
+              : `<div class="panel-pad empty-state">${_t('No runtime snapshot loaded yet.')}</div>`,
             'Heap, CPU, goroutines, and GC at a glance'
           )}
           ${panel(
@@ -1605,31 +1718,31 @@ import {
             runtime
               ? `<div class="panel-pad stack">
                 <div class="cards">
-                  <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(String(runtime.content?.document_count || 0))}</strong><span class="card-copy">Total loaded documents.</span></article>
-                  <article class="card"><span class="card-label">Routes</span><strong>${escapeHTML(String(runtime.content?.route_count || 0))}</strong><span class="card-copy">Resolved routes in the current graph.</span></article>
-                  <article class="card"><span class="card-label">Taxonomies</span><strong>${escapeHTML(String(runtime.content?.taxonomy_count || 0))}</strong><span class="card-copy">Configured taxonomy groups in use.</span></article>
-                  <article class="card"><span class="card-label">Terms</span><strong>${escapeHTML(String(runtime.content?.taxonomy_term_count || 0))}</strong><span class="card-copy">Known taxonomy terms across all groups.</span></article>
+                  <article class="card"><span class="card-label">${_t('Documents')}</span><strong>${escapeHTML(String(runtime.content?.document_count || 0))}</strong><span class="card-copy">${_t('Total loaded documents.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Routes')}</span><strong>${escapeHTML(String(runtime.content?.route_count || 0))}</strong><span class="card-copy">${_t('Resolved routes in the current graph.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Taxonomies')}</span><strong>${escapeHTML(String(runtime.content?.taxonomy_count || 0))}</strong><span class="card-copy">${_t('Configured taxonomy groups in use.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Terms')}</span><strong>${escapeHTML(String(runtime.content?.taxonomy_term_count || 0))}</strong><span class="card-copy">${_t('Known taxonomy terms across all groups.')}</span></article>
                 </div>
                 <div class="debug-grid-two">
                   <div>
-                    <h3>Status</h3>
+                    <h3>${_t('Status')}</h3>
                     ${renderMiniList(runtime.content?.by_status)}
                   </div>
                   <div>
-                    <h3>Languages</h3>
+                    <h3>${_t('Languages')}</h3>
                     ${renderMiniList(runtime.content?.by_lang)}
                   </div>
                   <div>
-                    <h3>Document Types</h3>
+                    <h3>${_t('Document Types')}</h3>
                     ${renderMiniList(runtime.content?.by_type)}
                   </div>
                   <div>
-                    <h3>Media Collections</h3>
+                    <h3>${_t('Media Collections')}</h3>
                     ${renderMiniList(runtime.content?.media_counts)}
                   </div>
                 </div>
               </div>`
-              : '<div class="panel-pad empty-state">No content inventory loaded yet.</div>',
+              : `<div class="panel-pad empty-state">${_t('No content inventory loaded yet.')}</div>`,
             'Document, route, taxonomy, language, and media totals'
           )}
           ${panel(
@@ -1637,30 +1750,30 @@ import {
             runtime
               ? `<div class="panel-pad stack">
                 <div class="cards">
-                  <article class="card"><span class="card-label">Content Dir</span><strong>${escapeHTML(formatBytes(runtime.storage?.content_bytes))}</strong><span class="card-copy">Current size of the content tree.</span></article>
-                  <article class="card"><span class="card-label">Public Dir</span><strong>${escapeHTML(formatBytes(runtime.storage?.public_bytes))}</strong><span class="card-copy">Current generated output footprint.</span></article>
-                  <article class="card"><span class="card-label">Versions</span><strong>${escapeHTML(String(runtime.storage?.derived_version_count || 0))}</strong><span class="card-copy">Retained version snapshots on disk.</span></article>
-                  <article class="card"><span class="card-label">Trash</span><strong>${escapeHTML(String(runtime.storage?.derived_trash_count || 0))}</strong><span class="card-copy">Soft-deleted files still retained.</span></article>
+                  <article class="card"><span class="card-label">${_t('Content Dir')}</span><strong>${escapeHTML(formatBytes(runtime.storage?.content_bytes))}</strong><span class="card-copy">${_t('Current size of the content tree.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Public Dir')}</span><strong>${escapeHTML(formatBytes(runtime.storage?.public_bytes))}</strong><span class="card-copy">${_t('Current generated output footprint.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Versions')}</span><strong>${escapeHTML(String(runtime.storage?.derived_version_count || 0))}</strong><span class="card-copy">${_t('Retained version snapshots on disk.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Trash')}</span><strong>${escapeHTML(String(runtime.storage?.derived_trash_count || 0))}</strong><span class="card-copy">${_t('Soft-deleted files still retained.')}</span></article>
                 </div>
                 <div class="subtle-meta">
-                  <div><strong>Derived Bytes:</strong> ${escapeHTML(formatBytes(runtime.storage?.derived_bytes))}</div>
+                  <div><strong>${_t('Derived Bytes')}:</strong> ${escapeHTML(formatBytes(runtime.storage?.derived_bytes))}</div>
                 </div>
                 <div class="debug-grid-two">
                   <div>
-                    <h3>Media Count By Collection</h3>
+                    <h3>${_t('Media Count By Collection')}</h3>
                     ${renderMiniList(runtime.storage?.media_counts)}
                   </div>
                   <div>
-                    <h3>Media Size By Collection</h3>
+                    <h3>${_t('Media Size By Collection')}</h3>
                     ${renderMiniList(runtime.storage?.media_bytes, formatBytes)}
                   </div>
                 </div>
                 <div>
-                  <h3>Largest Files</h3>
+                  <h3>${_t('Largest Files')}</h3>
                   ${renderLargestFiles(runtime.storage?.largest_files)}
                 </div>
               </div>`
-              : '<div class="panel-pad empty-state">No storage snapshot loaded yet.</div>',
+              : `<div class="panel-pad empty-state">${_t('No storage snapshot loaded yet.')}</div>`,
             'Disk footprint across content, output, and retained lifecycle files'
           )}
           ${panel(
@@ -1668,14 +1781,14 @@ import {
             runtime?.last_build
               ? `<div class="panel-pad stack">
                 <div class="cards">
-                  <article class="card"><span class="card-label">Generated</span><strong>${escapeHTML(formatDateTime(runtime.last_build.generated_at) || 'n/a')}</strong><span class="card-copy">Most recent persisted build report.</span></article>
-                  <article class="card"><span class="card-label">Documents</span><strong>${escapeHTML(String(runtime.last_build.document_count || 0))}</strong><span class="card-copy">Documents included in that build.</span></article>
-                  <article class="card"><span class="card-label">Routes</span><strong>${escapeHTML(String(runtime.last_build.route_count || 0))}</strong><span class="card-copy">Routes emitted in that build.</span></article>
-                  <article class="card"><span class="card-label">Mode</span><strong>${escapeHTML(runtime.last_build.preview ? 'Preview' : 'Standard')}</strong><span class="card-copy">${escapeHTML(runtime.last_build.environment || 'default')}${runtime.last_build.target ? ` / ${escapeHTML(runtime.last_build.target)}` : ''}</span></article>
+                  <article class="card"><span class="card-label">${_t('Generated')}</span><strong>${escapeHTML(formatDateTime(runtime.last_build.generated_at) || 'n/a')}</strong><span class="card-copy">${_t('Most recent persisted build report.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Documents')}</span><strong>${escapeHTML(String(runtime.last_build.document_count || 0))}</strong><span class="card-copy">${_t('Documents included in that build.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Routes')}</span><strong>${escapeHTML(String(runtime.last_build.route_count || 0))}</strong><span class="card-copy">${_t('Routes emitted in that build.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Mode')}</span><strong>${escapeHTML(_t(runtime.last_build.preview ? 'Preview' : 'Standard'))}</strong><span class="card-copy">${escapeHTML(runtime.last_build.environment || 'default')}${runtime.last_build.target ? ` / ${escapeHTML(runtime.last_build.target)}` : ''}</span></article>
                 </div>
                 <div class="debug-grid-two">
                   <div>
-                    <h3>Build Timings</h3>
+                    <h3>${_t('Build Timings')}</h3>
                     ${renderMiniList(
                       {
                         prepare: runtime.last_build.prepare_ms || 0,
@@ -1689,7 +1802,7 @@ import {
                   </div>
                 </div>
               </div>`
-              : '<div class="panel-pad empty-state">No persisted build report yet. Run <code>foundry build</code> or <code>foundry build --preview</code> to capture one.</div>',
+              : `<div class="panel-pad empty-state">${_t('No persisted build report yet. Run <code>foundry build</code> or <code>foundry build --preview</code> to capture one.')}</div>`,
             'Latest static build metrics written by the CLI'
           )}
           ${panel(
@@ -1697,18 +1810,18 @@ import {
             runtime
               ? `<div class="panel-pad stack">
                 <div class="cards">
-                  <article class="card"><span class="card-label">Broken Media Refs</span><strong>${escapeHTML(String(runtime.integrity?.broken_media_refs || 0))}</strong><span class="card-copy">Current unresolved <code>media:</code> references.</span></article>
-                  <article class="card"><span class="card-label">Broken Links</span><strong>${escapeHTML(String(runtime.integrity?.broken_internal_links || 0))}</strong><span class="card-copy">Internal links that do not resolve.</span></article>
-                  <article class="card"><span class="card-label">Orphaned Media</span><strong>${escapeHTML(String(runtime.integrity?.orphaned_media || 0))}</strong><span class="card-copy">Media files with no current references.</span></article>
-                  <article class="card"><span class="card-label">Missing Templates</span><strong>${escapeHTML(String(runtime.integrity?.missing_templates || 0))}</strong><span class="card-copy">Layouts missing from the active theme.</span></article>
-                  <article class="card"><span class="card-label">Active Sessions</span><strong>${escapeHTML(String(runtime.activity?.active_sessions || 0))}</strong><span class="card-copy">Currently persisted admin sessions.</span></article>
-                  <article class="card"><span class="card-label">Document Locks</span><strong>${escapeHTML(String(runtime.activity?.active_document_locks || 0))}</strong><span class="card-copy">Active editor locks right now.</span></article>
-                  <article class="card"><span class="card-label">Audit Events</span><strong>${escapeHTML(String(runtime.activity?.recent_audit_events || 0))}</strong><span class="card-copy">Events in the last ${escapeHTML(String(runtime.activity?.audit_window_hours || 24))} hours.</span></article>
-                  <article class="card"><span class="card-label">Failed Logins</span><strong>${escapeHTML(String(runtime.activity?.recent_failed_logins || 0))}</strong><span class="card-copy">Failed login attempts in the audit window.</span></article>
+                  <article class="card"><span class="card-label">${_t('Broken Media Refs')}</span><strong>${escapeHTML(String(runtime.integrity?.broken_media_refs || 0))}</strong><span class="card-copy">${_t('Current unresolved')} <code>media:</code> ${_t('references.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Broken Links')}</span><strong>${escapeHTML(String(runtime.integrity?.broken_internal_links || 0))}</strong><span class="card-copy">${_t('Internal links that do not resolve.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Orphaned Media')}</span><strong>${escapeHTML(String(runtime.integrity?.orphaned_media || 0))}</strong><span class="card-copy">${_t('Media files with no current references.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Missing Templates')}</span><strong>${escapeHTML(String(runtime.integrity?.missing_templates || 0))}</strong><span class="card-copy">${_t('Layouts missing from the active theme.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Active Sessions')}</span><strong>${escapeHTML(String(runtime.activity?.active_sessions || 0))}</strong><span class="card-copy">${_t('Currently persisted admin sessions.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Document Locks')}</span><strong>${escapeHTML(String(runtime.activity?.active_document_locks || 0))}</strong><span class="card-copy">${_t('Active editor locks right now.')}</span></article>
+                  <article class="card"><span class="card-label">${_t('Audit Events')}</span><strong>${escapeHTML(String(runtime.activity?.recent_audit_events || 0))}</strong><span class="card-copy">${_t(`Events in the last ${runtime.activity?.audit_window_hours || 24} hours.`)}</span></article>
+                  <article class="card"><span class="card-label">${_t('Failed Logins')}</span><strong>${escapeHTML(String(runtime.activity?.recent_failed_logins || 0))}</strong><span class="card-copy">${_t('Failed login attempts in the audit window.')}</span></article>
                 </div>
                 <div class="debug-grid-two">
                   <div>
-                    <h3>Integrity Totals</h3>
+                    <h3>${_t('Integrity Totals')}</h3>
                     ${renderMiniList({
                       duplicate_urls: runtime.integrity?.duplicate_urls || 0,
                       duplicate_slugs: runtime.integrity?.duplicate_slugs || 0,
@@ -1716,12 +1829,12 @@ import {
                     })}
                   </div>
                   <div>
-                    <h3>Recent Audit Actions</h3>
+                    <h3>${_t('Recent Audit Actions')}</h3>
                     ${renderMiniList(runtime.activity?.recent_audit_by_action)}
                   </div>
                 </div>
               </div>`
-              : '<div class="panel-pad empty-state">No integrity or activity snapshot loaded yet.</div>',
+              : `<div class="panel-pad empty-state">${_t('No integrity or activity snapshot loaded yet.')}</div>`,
             'Reference health, route safety, and recent admin activity'
           )}
           ${panel(
@@ -1729,13 +1842,13 @@ import {
             state.siteValidation
               ? `<div class="panel-pad stack">
                 <div class="toolbar">
-                  <button type="button" class="ghost" id="debug-validate-site">Run Validation</button>
+                  <button type="button" class="ghost" id="debug-validate-site">${_t('Run Validation')}</button>
                 </div>
                 <div class="cards">
-                  <article class="card"><span class="card-label">Findings</span><strong>${escapeHTML(String(state.siteValidation.message_count || 0))}</strong><span class="card-copy">Latest on-demand site validation result.</span></article>
+                  <article class="card"><span class="card-label">${_t('Findings')}</span><strong>${escapeHTML(String(state.siteValidation.message_count || 0))}</strong><span class="card-copy">${_t('Latest on-demand site validation result.')}</span></article>
                 </div>
                 <div class="debug-grid-two">
-                  <div><h3>Broken Media</h3>${
+                  <div><h3>${_t('Broken Media')}</h3>${
                     state.siteValidation.broken_media_refs?.length
                       ? `<div class="mini-list">${state.siteValidation.broken_media_refs
                           .slice(0, 8)
@@ -1744,9 +1857,9 @@ import {
                               `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
                           )
                           .join('')}</div>`
-                      : '<div class="empty-state">No broken media refs.</div>'
+                      : `<div class="empty-state">${_t('No broken media refs.')}</div>`
                   }</div>
-                  <div><h3>Broken Links</h3>${
+                  <div><h3>${_t('Broken Links')}</h3>${
                     state.siteValidation.broken_internal_links?.length
                       ? `<div class="mini-list">${state.siteValidation.broken_internal_links
                           .slice(0, 8)
@@ -1755,9 +1868,9 @@ import {
                               `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
                           )
                           .join('')}</div>`
-                      : '<div class="empty-state">No broken internal links.</div>'
+                      : `<div class="empty-state">${_t('No broken internal links.')}</div>`
                   }</div>
-                  <div><h3>Templates & Routes</h3>${
+                  <div><h3>${_t('Templates & Routes')}</h3>${
                     [
                       ...(state.siteValidation.missing_templates || []),
                       ...(state.siteValidation.duplicate_urls || []),
@@ -1774,9 +1887,9 @@ import {
                               `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
                           )
                           .join('')}</div>`
-                      : '<div class="empty-state">No template or route issues.</div>'
+                      : `<div class="empty-state">${_t('No template or route issues.')}</div>`
                   }</div>
-                  <div><h3>Other</h3>${
+                  <div><h3>${_t('Other')}</h3>${
                     [
                       ...(state.siteValidation.orphaned_media || []),
                       ...(state.siteValidation.taxonomy_inconsistency || []),
@@ -1791,33 +1904,33 @@ import {
                               `<div class="mini-list-row"><span>${escapeHTML(entry)}</span></div>`
                           )
                           .join('')}</div>`
-                      : '<div class="empty-state">No orphaned media or taxonomy issues.</div>'
+                      : `<div class="empty-state">${_t('No orphaned media or taxonomy issues.')}</div>`
                   }</div>
                 </div>
               </div>`
-              : `<div class="panel-pad stack"><div class="note">Run a full validation pass from the admin to surface broken references, duplicate routes/slugs, missing templates, orphaned media, and taxonomy inconsistencies.</div><div class="toolbar"><button type="button" class="ghost" id="debug-validate-site">Run Validation</button></div></div>`,
+              : `<div class="panel-pad stack"><div class="note">${_t('Run a full validation pass from the admin to surface broken references, duplicate routes/slugs, missing templates, orphaned media, and taxonomy inconsistencies.')}</div><div class="toolbar"><button type="button" class="ghost" id="debug-validate-site">${_t('Run Validation')}</button></div></div>`,
             'On-demand validation without leaving the admin'
           )}
           ${panel(
             'pprof Profiles',
             `<div class="panel-pad stack">
-            <p class="muted">Inspect live runtime state from the admin surface. These endpoints are served through Go\'s standard <code>net/http/pprof</code> handlers.</p>
+            <p class="muted">${_t("Inspect live runtime state from the admin surface. These endpoints are served through Go's standard <code>net/http/pprof</code> handlers.")}</p>
             <div class="toolbar">
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/`)}" target="_blank" rel="noreferrer">Index</a>
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/heap`)}" target="_blank" rel="noreferrer">Heap</a>
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/allocs`)}" target="_blank" rel="noreferrer">Allocs</a>
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/goroutine?debug=1`)}" target="_blank" rel="noreferrer">Goroutines</a>
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/mutex?debug=1`)}" target="_blank" rel="noreferrer">Mutex</a>
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/block?debug=1`)}" target="_blank" rel="noreferrer">Block</a>
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/profile?seconds=30`)}" target="_blank" rel="noreferrer">CPU 30s</a>
-              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/trace?seconds=5`)}" target="_blank" rel="noreferrer">Trace 5s</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/`)}" target="_blank" rel="noreferrer">${_t('Index')}</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/heap`)}" target="_blank" rel="noreferrer">${_t('Heap')}</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/allocs`)}" target="_blank" rel="noreferrer">${_t('Allocs')}</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/goroutine?debug=1`)}" target="_blank" rel="noreferrer">${_t('Goroutines')}</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/mutex?debug=1`)}" target="_blank" rel="noreferrer">${_t('Mutex')}</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/block?debug=1`)}" target="_blank" rel="noreferrer">${_t('Block')}</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/profile?seconds=30`)}" target="_blank" rel="noreferrer">${_t('CPU 30s')}</a>
+              <a class="button-link ghost" href="${escapeHTML(`${pprofBase}/trace?seconds=5`)}" target="_blank" rel="noreferrer">${_t('Trace 5s')}</a>
             </div>
           </div>`,
             'Admin-only runtime diagnostics'
           )}
         </div>
         <div class="stack">
-          ${panel('Embedded pprof', `<div class="panel-pad"><iframe class="debug-frame" src="${escapeHTML(`${pprofBase}/`)}" title="Foundry pprof"></iframe></div>`, 'Open the index here or pop any profile out into a new tab')}
+          ${panel('Embedded pprof', `<div class="panel-pad"><iframe class="debug-frame" src="${escapeHTML(`${pprofBase}/`)}" title="${escapeHTML(_t('Foundry pprof'))}"></iframe></div>`, 'Open the index here or pop any profile out into a new tab')}
         </div>
       </div>`;
   };
@@ -1826,82 +1939,97 @@ import {
     const commands = [
       {
         id: 'goto-overview',
-        label: 'Go to Overview',
+        label: _t('Go to Overview'),
         section: 'overview',
         action: () => navigate('overview'),
       },
       {
         id: 'goto-documents',
-        label: 'Go to Documents',
+        label: _t('Go to Documents'),
         section: 'documents',
         action: () => navigate('documents'),
       },
       {
         id: 'goto-editor',
-        label: 'Go to Editor',
+        label: _t('Go to Editor'),
         section: 'editor',
         action: () => navigate('editor'),
       },
-      { id: 'goto-media', label: 'Go to Media', section: 'media', action: () => navigate('media') },
+      {
+        id: 'goto-media',
+        label: _t('Go to Media'),
+        section: 'media',
+        action: () => navigate('media'),
+      },
       {
         id: 'goto-sessions',
-        label: 'Go to Sessions',
+        label: _t('Go to Sessions'),
         section: 'sessions',
         action: () => navigate('sessions'),
       },
-      { id: 'goto-users', label: 'Go to Users', section: 'users', action: () => navigate('users') },
-      { id: 'goto-audit', label: 'Go to Audit', section: 'audit', action: () => navigate('audit') },
+      {
+        id: 'goto-users',
+        label: _t('Go to Users'),
+        section: 'users',
+        action: () => navigate('users'),
+      },
+      {
+        id: 'goto-audit',
+        label: _t('Go to Audit'),
+        section: 'audit',
+        action: () => navigate('audit'),
+      },
       {
         id: 'goto-settings',
-        label: 'Go to Settings',
+        label: _t('Go to Settings'),
         section: 'settings',
         action: () => navigate('settings'),
       },
       {
         id: 'goto-custom-fields',
-        label: 'Go to Custom Fields',
+        label: _t('Go to Custom Fields'),
         section: 'custom-fields',
         action: () => navigate('custom-fields'),
       },
       {
         id: 'goto-redirects',
-        label: 'Go to Redirects',
+        label: _t('Go to Redirects'),
         section: 'redirects',
         action: () => navigate('redirects'),
       },
       {
         id: 'goto-extensions',
-        label: 'Go to Extensions',
+        label: _t('Go to Extensions'),
         section: 'extensions',
         action: () => navigate('extensions'),
       },
       {
         id: 'goto-plugins',
-        label: 'Go to Plugins',
+        label: _t('Go to Plugins'),
         section: 'plugins',
         action: () => navigate('plugins'),
       },
       {
         id: 'goto-themes',
-        label: 'Go to Themes',
+        label: _t('Go to Themes'),
         section: 'themes',
         action: () => navigate('themes'),
       },
       {
         id: 'goto-operations',
-        label: 'Go to Operations',
+        label: _t('Go to Operations'),
         section: 'operations',
         action: () => navigate('operations'),
       },
       {
         id: 'goto-diagnostics',
-        label: 'Go to Diagnostics',
+        label: _t('Go to Diagnostics'),
         section: 'diagnostics',
         action: () => navigate('diagnostics'),
       },
       {
         id: 'new-page',
-        label: 'Create New Page Draft',
+        label: _t('Create New Page Draft'),
         section: 'editor',
         action: () => {
           navigate('editor');
@@ -1915,7 +2043,7 @@ import {
       },
       {
         id: 'new-post',
-        label: 'Create New Post Draft',
+        label: _t('Create New Post Draft'),
         section: 'editor',
         action: () => {
           navigate('editor');
@@ -1931,7 +2059,7 @@ import {
     if (debugEnabled()) {
       commands.push({
         id: 'goto-debug',
-        label: 'Go to Debug Dashboard',
+        label: _t('Go to Debug Dashboard'),
         section: 'debug',
         action: () => navigate('debug'),
       });
@@ -1939,7 +2067,7 @@ import {
     extensionPages().forEach((page) => {
       commands.push({
         id: `goto-extension-${page.key}`,
-        label: `Go to ${page.title}`,
+        label: `${_t('Go to')} ${page.title}`,
         action: () => navigate(page.section),
       });
     });
@@ -1964,9 +2092,9 @@ import {
     if (!state.commandPalette?.open) return '';
     const commands = filteredCommandPaletteCommands();
     return `<div class="command-palette-backdrop" id="command-palette-close">
-      <div class="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onclick="event.stopPropagation()">
+      <div class="command-palette" role="dialog" aria-modal="true" aria-label="${_t('Command palette')}" onclick="event.stopPropagation()">
         <div class="panel-pad stack">
-          <input id="command-palette-query" type="search" placeholder="Jump to a section or action" value="${escapeHTML(state.commandPalette.query || '')}" autocomplete="off">
+          <input id="command-palette-query" type="search" placeholder="${_t('Jump to a section or action')}" value="${escapeHTML(state.commandPalette.query || '')}" autocomplete="off">
           <div class="mini-list">
             ${
               commands.length
@@ -1976,7 +2104,7 @@ import {
                         `<button type="button" class="ghost command-palette-item" data-command-palette-action="${escapeHTML(command.id)}">${escapeHTML(command.label)}</button>`
                     )
                     .join('')
-                : '<div class="empty-state">No commands matched that search.</div>'
+                : `<div class="empty-state">${_t('No commands matched that search.')}</div>`
             }
           </div>
         </div>
@@ -1987,10 +2115,10 @@ import {
   const renderTrash = () => `
     <div class="layout-grid">
       <div class="stack">
-        ${panel('Document Trash', `<div class="table table-four"><div class="table-head"><span>Document</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderTrashSelectionRows(state.documentTrash, state.selectedDocumentTrash, 'document') || '<div class="panel-pad empty-state">No trashed documents.</div>'}</div>`, `${state.documentTrash.length} trashed documents`, `<div class="toolbar"><button class="ghost small" type="button" id="document-trash-select-all">Select All</button><button class="ghost small" type="button" id="document-trash-restore-selected" ${state.selectedDocumentTrash.length ? '' : 'disabled'}>Restore Selected</button><button class="ghost small danger" type="button" id="document-trash-purge-selected" ${state.selectedDocumentTrash.length ? '' : 'disabled'}>Purge Selected</button></div>`)}
+        ${panel('Document Trash', `<div class="table table-four"><div class="table-head"><span>${_t('Document')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${renderTrashSelectionRows(state.documentTrash, state.selectedDocumentTrash, 'document') || `<div class="panel-pad empty-state">${_t('No trashed documents.')}</div>`}</div>`, _t('{count} trashed documents', { count: state.documentTrash.length }), `<div class="toolbar"><button class="ghost small" type="button" id="document-trash-select-all">${_t('Select All')}</button><button class="ghost small" type="button" id="document-trash-restore-selected" ${state.selectedDocumentTrash.length ? '' : 'disabled'}>${_t('Restore Selected')}</button><button class="ghost small danger" type="button" id="document-trash-purge-selected" ${state.selectedDocumentTrash.length ? '' : 'disabled'}>${_t('Purge Selected')}</button></div>`)}
       </div>
       <div class="stack">
-        ${panel('Media Trash', `<div class="table table-four"><div class="table-head"><span>Name</span><span>State</span><span>Captured</span><span>Actions</span></div>${renderTrashSelectionRows(state.mediaTrash, state.selectedMediaTrash, 'media') || '<div class="panel-pad empty-state">No trashed media.</div>'}</div>`, `${state.mediaTrash.length} trashed media items`, `<div class="toolbar"><button class="ghost small" type="button" id="media-trash-select-all">Select All</button><button class="ghost small" type="button" id="media-trash-restore-selected" ${state.selectedMediaTrash.length ? '' : 'disabled'}>Restore Selected</button><button class="ghost small danger" type="button" id="media-trash-purge-selected" ${state.selectedMediaTrash.length ? '' : 'disabled'}>Purge Selected</button></div>`)}
+        ${panel('Media Trash', `<div class="table table-four"><div class="table-head"><span>${_t('Name')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${renderTrashSelectionRows(state.mediaTrash, state.selectedMediaTrash, 'media') || `<div class="panel-pad empty-state">${_t('No trashed media.')}</div>`}</div>`, _t('{count} trashed media items', { count: state.mediaTrash.length }), `<div class="toolbar"><button class="ghost small" type="button" id="media-trash-select-all">${_t('Select All')}</button><button class="ghost small" type="button" id="media-trash-restore-selected" ${state.selectedMediaTrash.length ? '' : 'disabled'}>${_t('Restore Selected')}</button><button class="ghost small danger" type="button" id="media-trash-purge-selected" ${state.selectedMediaTrash.length ? '' : 'disabled'}>${_t('Purge Selected')}</button></div>`)}
       </div>
     </div>`;
 
@@ -2017,31 +2145,31 @@ import {
         <span>${escapeHTML(user.name || '')}</span>
         <span>${escapeHTML(user.email || '')}</span>
         <span class="row-actions">
-          <button class="ghost small" data-edit-user="${escapeHTML(user.username)}">Edit</button>
-          <button class="ghost small danger" data-delete-user="${escapeHTML(user.username)}">Delete</button>
+          <button class="ghost small" data-edit-user="${escapeHTML(user.username)}">${_t('Edit')}</button>
+          <button class="ghost small danger" data-delete-user="${escapeHTML(user.username)}">${_t('Delete')}</button>
         </span>
       </div>`
     );
     return `
       <div class="layout-grid">
         <div class="stack">
-          ${panel('Users', `${renderTableControls(state, 'users', state.users.length, pagedUsers.totalPages)}<div class="table table-four"><div class="table-head"><span>Username</span><span>Name</span><span>Email</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No users found.</div>'}</div>`, `${state.users.length} users`)}
+          ${panel('Users', `${renderTableControls(state, 'users', state.users.length, pagedUsers.totalPages)}<div class="table table-four"><div class="table-head"><span>${_t('Username')}</span><span>${_t('Name')}</span><span>${_t('Email')}</span><span>${_t('Actions')}</span></div>${rows.length ? rows.join('') : `<div class="panel-pad empty-state">${_t('No users found.')}</div>`}</div>`, _t('{count} users', { count: state.users.length }))}
         </div>
         <div class="stack">
           ${panel(
             'User Editor',
             `
             <form id="user-save-form" class="panel-pad stack" autocomplete="new-password">
-              <label>Username<input id="user-username" autocomplete="off" type="text" value="${escapeHTML(state.userForm.username)}" placeholder="editor"></label>
-              <label>Name<input id="user-name" autocomplete="off" type="text" value="${escapeHTML(state.userForm.name)}" placeholder="Editor User"></label>
-              <label>Email<input id="user-email" autocomplete="off" type="email" value="${escapeHTML(state.userForm.email)}" placeholder="editor@example.com"></label>
-              <label>Role<input id="user-role" autocomplete="off" type="text" value="${escapeHTML(state.userForm.role)}" placeholder="editor"></label>
-              <label>Password<input id="user-password" autocomplete="new-password" type="password" value="" placeholder="Leave blank to keep current password"></label>
-              <div class="note">Password policy: minimum ${escapeHTML(String(state.settingsForm?.Admin?.PasswordMinLength || 12))} characters. TOTP can be managed below for higher-assurance accounts.</div>
-              <label class="checkbox"><input id="user-disabled" autocomplete="off" type="checkbox" ${state.userForm.disabled ? 'checked' : ''}> Disabled</label>
+              <label>${_t('Username')}<input id="user-username" autocomplete="off" type="text" value="${escapeHTML(state.userForm.username)}" placeholder="editor"></label>
+              <label>${_t('Name')}<input id="user-name" autocomplete="off" type="text" value="${escapeHTML(state.userForm.name)}" placeholder="${escapeHTML(_t('Editor User'))}"></label>
+              <label>${_t('Email')}<input id="user-email" autocomplete="off" type="email" value="${escapeHTML(state.userForm.email)}" placeholder="editor@example.com"></label>
+              <label>${_t('Role')}<input id="user-role" autocomplete="off" type="text" value="${escapeHTML(state.userForm.role)}" placeholder="editor"></label>
+              <label>${_t('Password')}<input id="user-password" autocomplete="new-password" type="password" value="" placeholder="${_t('Leave blank to keep current password')}"></label>
+              <div class="note">${_t('Password policy: minimum {length} characters. TOTP can be managed below for higher-assurance accounts.', { length: escapeHTML(String(state.settingsForm?.Admin?.PasswordMinLength || 12)) })}</div>
+              <label class="checkbox"><input id="user-disabled" autocomplete="off" type="checkbox" ${state.userForm.disabled ? 'checked' : ''}> ${_t('Disabled')}</label>
               <div class="toolbar">
-                <button type="submit">Save User</button>
-                <button type="button" class="ghost" id="user-reset-button">New User</button>
+                <button type="submit">${_t('Save User')}</button>
+                <button type="button" class="ghost" id="user-reset-button">${_t('New User')}</button>
               </div>
             </form>
           `,
@@ -2053,89 +2181,89 @@ import {
               ? `<div class="panel-pad stack">
                 <div class="note">
                   <strong>${escapeHTML(selectedUser.username)}</strong>
-                  <span class="muted">Role: ${escapeHTML(selectedUser.role || 'user')} · TOTP: ${selectedUser.totp_enabled ? 'enabled' : 'disabled'}</span>
+                  <span class="muted">${_t('Role')}: ${escapeHTML(selectedUser.role || 'user')} · TOTP: ${selectedUser.totp_enabled ? _t('enabled') : _t('disabled')}</span>
                 </div>
                 <div class="stack">
                   <div class="toolbar">
-                    <button type="button" class="ghost" id="user-revoke-sessions">Revoke ${escapeHTML(selectedUser.username)} Sessions</button>
-                    <button type="button" class="ghost" id="user-open-sessions">Open Sessions View</button>
-                    <button type="button" class="ghost danger" id="user-revoke-all-sessions">Revoke All Sessions</button>
+                    <button type="button" class="ghost" id="user-revoke-sessions">${_t('Revoke {user} Sessions', { user: escapeHTML(selectedUser.username) })}</button>
+                    <button type="button" class="ghost" id="user-open-sessions">${_t('Open Sessions View')}</button>
+                    <button type="button" class="ghost danger" id="user-revoke-all-sessions">${_t('Revoke All Sessions')}</button>
                   </div>
                   ${
                     selectedSessions.length
                       ? `<div class="table table-five">
-                          <div class="table-head"><span>Session</span><span>Address</span><span>Issued</span><span>Last Seen</span><span>Actions</span></div>
+                          <div class="table-head"><span>${_t('Session')}</span><span>${_t('Address')}</span><span>${_t('Issued')}</span><span>${_t('Last Seen')}</span><span>${_t('Actions')}</span></div>
                           ${selectedSessions
                             .map(
                               (session) => `<div class="table-row table-row-actions">
                                 <span>
-                                  <strong>${escapeHTML(session.current ? 'Current Session' : session.user_agent || session.id)}</strong>
-                                  <div class="muted">${escapeHTML(session.user_agent || 'Unknown client')}</div>
-                                  <div class="muted">Expires ${escapeHTML(formatDateTime(session.expires_at) || session.expires_at || '-')}</div>
+                                  <strong>${escapeHTML(session.current ? _t('Current Session') : session.user_agent || session.id)}</strong>
+                                  <div class="muted">${escapeHTML(session.user_agent || _t('Unknown client'))}</div>
+                                  <div class="muted">${_t('Expires')} ${escapeHTML(formatDateTime(session.expires_at) || session.expires_at || '-')}</div>
                                 </span>
                                 <span>${escapeHTML(session.remote_addr || '-')}</span>
                                 <span>${escapeHTML(formatDateTime(session.issued_at) || session.issued_at || '-')}</span>
                                 <span>${escapeHTML(formatDateTime(session.last_seen) || session.last_seen || '-')}</span>
                                 <span class="row-actions">
-                                  <button type="button" class="ghost small danger" data-revoke-session-id="${escapeHTML(session.id)}" ${session.current ? 'data-current-session="true"' : ''}>Revoke</button>
+                                  <button type="button" class="ghost small danger" data-revoke-session-id="${escapeHTML(session.id)}" ${session.current ? 'data-current-session="true"' : ''}>${_t('Revoke')}</button>
                                 </span>
                               </div>`
                             )
                             .join('')}
                         </div>`
-                      : '<div class="panel-pad empty-state">No active sessions for this user.</div>'
+                      : `<div class="panel-pad empty-state">${_t('No active sessions for this user.')}</div>`
                   }
                 </div>
                 <div class="stack">
-                  <h3>Password Reset</h3>
+                  <h3>${_t('Password Reset')}</h3>
                   <div class="toolbar">
-                    <button type="button" class="ghost" id="user-reset-start">Issue Reset Token</button>
+                    <button type="button" class="ghost" id="user-reset-start">${_t('Issue Reset Token')}</button>
                   </div>
                   ${
                     state.userSecurity.resetStart?.username === selectedUser.username
                       ? `<div class="note">
-                        <div><strong>Reset token</strong></div>
+                        <div><strong>${_t('Reset token')}</strong></div>
                         <div class="mono break-all">${escapeHTML(state.userSecurity.resetStart.reset_token || '')}</div>
-                        <div class="muted">Expires in ${escapeHTML(String(state.userSecurity.resetStart.expires_in_seconds || 0))} seconds.</div>
+                        <div class="muted">${_t('Expires in {seconds} seconds.', { seconds: escapeHTML(String(state.userSecurity.resetStart.expires_in_seconds || 0)) })}</div>
                       </div>
                       <form id="user-reset-complete-form" class="stack" autocomplete="off">
-                        <label>Reset token<input id="user-reset-token" type="text" value="${escapeHTML(state.userSecurity.resetStart.reset_token || '')}"></label>
-                        <label>New password<input id="user-reset-password" type="password" autocomplete="new-password" placeholder="Enter a new password"></label>
-                        <label>TOTP code (optional)<input id="user-reset-totp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Required if the user has TOTP enabled"></label>
-                        <button type="submit">Complete Password Reset</button>
+                        <label>${_t('Reset token')}<input id="user-reset-token" type="text" value="${escapeHTML(state.userSecurity.resetStart.reset_token || '')}"></label>
+                        <label>${_t('New password')}<input id="user-reset-password" type="password" autocomplete="new-password" placeholder="${_t('Enter a new password')}"></label>
+                        <label>${_t('TOTP code (optional)')}<input id="user-reset-totp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="${_t('Required if the user has TOTP enabled')}"></label>
+                        <button type="submit">${_t('Complete Password Reset')}</button>
                       </form>`
-                      : '<div class="panel-pad empty-state">Issue a reset token here, then complete the reset directly from the admin.</div>'
+                      : `<div class="panel-pad empty-state">${_t('Issue a reset token here, then complete the reset directly from the admin.')}</div>`
                   }
                 </div>
                 <div class="stack">
-                  <h3>Two-Factor Authentication</h3>
+                  <h3>${_t('Two-Factor Authentication')}</h3>
                   ${
                     selectedUser.totp_enabled
-                      ? `<div class="note">TOTP is currently enabled for this user.</div>
-                       <div class="toolbar"><button type="button" class="ghost danger" id="user-totp-disable">Disable TOTP</button></div>`
-                      : `<div class="toolbar"><button type="button" class="ghost" id="user-totp-setup">Start TOTP Setup</button></div>`
+                      ? `<div class="note">${_t('TOTP is currently enabled for this user.')}</div>
+                       <div class="toolbar"><button type="button" class="ghost danger" id="user-totp-disable">${_t('Disable TOTP')}</button></div>`
+                      : `<div class="toolbar"><button type="button" class="ghost" id="user-totp-setup">${_t('Start TOTP Setup')}</button></div>`
                   }
                   ${
                     state.userSecurity.totpSetup?.username === selectedUser.username
                       ? `<div class="note">
-                        <div><strong>Secret</strong></div>
+                        <div><strong>${_t('Secret')}</strong></div>
                         <div class="mono break-all">${escapeHTML(state.userSecurity.totpSetup.secret || '')}</div>
-                        <div><strong>Provisioning URI</strong></div>
+                        <div><strong>${_t('Provisioning URI')}</strong></div>
                         <div class="mono break-all">${escapeHTML(state.userSecurity.totpSetup.provisioning_uri || '')}</div>
                       </div>
                       <form id="user-totp-enable-form" class="stack" autocomplete="off">
-                        <label>Verification code<input id="user-totp-enable-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter the 6-digit code from your authenticator"></label>
+                        <label>${_t('Verification code')}<input id="user-totp-enable-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="${_t('Enter the 6-digit code from your authenticator')}"></label>
                         <div class="toolbar">
-                          <button type="submit">Enable TOTP</button>
-                          <button type="button" class="ghost" id="user-totp-cancel">Cancel</button>
+                          <button type="submit">${_t('Enable TOTP')}</button>
+                          <button type="button" class="ghost" id="user-totp-cancel">${_t('Cancel')}</button>
                         </div>
                       </form>`
                       : !selectedUser.totp_enabled
-                        ? '<div class="panel-pad empty-state">Start TOTP setup to generate a secret and provisioning URI for this user.</div>'
+                        ? `<div class="panel-pad empty-state">${_t('Start TOTP setup to generate a secret and provisioning URI for this user.')}</div>`
                         : ''
                   }
               </div>`
-              : '<div class="panel-pad empty-state">Select a user from the list to manage password reset, sessions, and TOTP.</div>'
+              : `<div class="panel-pad empty-state">${_t('Select a user from the list to manage password reset, sessions, and TOTP.')}</div>`
           )}
         </div>
       </div>`;
@@ -2159,13 +2287,13 @@ import {
     return empty;
   };
   const renderSettingsText = (id, label, value, options = {}) =>
-    `<label>${escapeHTML(label)}<input id="${escapeHTML(id)}" data-settings-input type="${escapeHTML(options.type || 'text')}" value="${escapeHTML(value ?? '')}" ${options.placeholder ? `placeholder="${escapeHTML(options.placeholder)}"` : ''}></label>`;
+    `<label>${escapeHTML(_t(label))}<input id="${escapeHTML(id)}" data-settings-input type="${escapeHTML(options.type || 'text')}" value="${escapeHTML(value ?? '')}" ${options.placeholder ? `placeholder="${escapeHTML(options.placeholder)}"` : ''}></label>`;
   const renderSettingsNumber = (id, label, value) =>
-    `<label>${escapeHTML(label)}<input id="${escapeHTML(id)}" data-settings-input type="number" value="${escapeHTML(value ?? 0)}"></label>`;
+    `<label>${escapeHTML(_t(label))}<input id="${escapeHTML(id)}" data-settings-input type="number" value="${escapeHTML(value ?? 0)}"></label>`;
   const renderSettingsCheckbox = (id, label, checked) =>
-    `<label class="checkbox"><input id="${escapeHTML(id)}" data-settings-input type="checkbox" ${checked ? 'checked' : ''}> ${escapeHTML(label)}</label>`;
+    `<label class="checkbox"><input id="${escapeHTML(id)}" data-settings-input type="checkbox" ${checked ? 'checked' : ''}> ${escapeHTML(_t(label))}</label>`;
   const renderSettingsTextarea = (id, label, value, rows = 10) =>
-    `<label>${escapeHTML(label)}<textarea id="${escapeHTML(id)}" data-settings-json rows="${rows}" spellcheck="false">${escapeHTML(value ?? '')}</textarea></label>`;
+    `<label>${escapeHTML(_t(label))}<textarea id="${escapeHTML(id)}" data-settings-json rows="${rows}" spellcheck="false">${escapeHTML(value ?? '')}</textarea></label>`;
   const renderSettingsThemeOptions = (kind, current) =>
     (state.themes || [])
       .filter((themeRecord) => themeRecord.kind === kind)
@@ -2207,7 +2335,7 @@ import {
               ${renderSettingsText('settings-name', 'Name', cfg.Name)}
               ${renderSettingsText('settings-title', 'Title', cfg.Title)}
               ${renderSettingsText('settings-base-url', 'Base URL', cfg.BaseURL, { placeholder: 'https://example.com' })}
-              <label>Frontend Theme<select id="settings-theme" data-settings-input>${renderSettingsThemeOptions('frontend', cfg.Theme)}</select></label>
+              <label>${_t('Frontend Theme')}<select id="settings-theme" data-settings-input>${renderSettingsThemeOptions('frontend', cfg.Theme)}</select></label>
               ${renderSettingsText('settings-environment', 'Environment', cfg.Environment)}
               ${renderSettingsText('settings-default-lang', 'Default Language', cfg.DefaultLang)}
               ${renderSettingsText('settings-content-dir', 'Content Dir', cfg.ContentDir)}
@@ -2216,7 +2344,7 @@ import {
               ${renderSettingsText('settings-data-dir', 'Data Dir', cfg.DataDir)}
               ${renderSettingsText('settings-plugins-dir', 'Plugins Dir', cfg.PluginsDir)}
             </div>
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'server':
@@ -2230,7 +2358,7 @@ import {
               ${renderSettingsCheckbox('settings-server-auto-open-browser', 'Auto Open Browser', !!server.AutoOpenBrowser)}
               ${renderSettingsCheckbox('settings-server-debug-routes', 'Debug Routes', !!server.DebugRoutes)}
             </div>
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'content':
@@ -2251,7 +2379,7 @@ import {
               ${renderSettingsText('settings-content-default-layout-post', 'Default Layout Post', contentCfg.DefaultLayoutPost)}
               ${renderSettingsText('settings-content-default-page-slug-index', 'Default Page Slug Index', contentCfg.DefaultPageSlugIndex)}
             </div>
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'admin':
@@ -2265,7 +2393,7 @@ import {
               ${renderSettingsText('settings-admin-addr', 'Admin Addr', adminCfg.Addr)}
               ${renderSettingsText('settings-admin-path', 'Admin Path', adminCfg.Path)}
               ${renderSettingsText('settings-admin-access-token', 'Access Token', adminCfg.AccessToken)}
-              <label>Admin Theme<select id="settings-admin-theme" data-settings-input>${renderSettingsThemeOptions('admin', adminCfg.Theme)}</select></label>
+              <label>${_t('Admin Theme')}<select id="settings-admin-theme" data-settings-input>${renderSettingsThemeOptions('admin', adminCfg.Theme)}</select></label>
               ${renderSettingsText('settings-admin-users-file', 'Users File', adminCfg.UsersFile)}
               ${renderSettingsText('settings-admin-session-store-file', 'Session Store File', adminCfg.SessionStoreFile)}
               ${renderSettingsText('settings-admin-lock-file', 'Lock File', adminCfg.LockFile)}
@@ -2274,7 +2402,7 @@ import {
               ${renderSettingsNumber('settings-admin-password-reset-ttl', 'Password Reset TTL Minutes', adminCfg.PasswordResetTTL)}
               ${renderSettingsText('settings-admin-totp-issuer', 'TOTP Issuer', adminCfg.TOTPIssuer)}
             </div>
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'build':
@@ -2289,7 +2417,7 @@ import {
               ${renderSettingsCheckbox('settings-build-copy-images', 'Copy Images', !!build.CopyImages)}
               ${renderSettingsCheckbox('settings-build-copy-uploads', 'Copy Uploads', !!build.CopyUploads)}
             </div>
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'taxonomies':
@@ -2300,18 +2428,18 @@ import {
               ${renderSettingsCheckbox('settings-taxonomies-enabled', 'Enable Taxonomies', !!taxonomies.Enabled)}
               ${renderSettingsText('settings-taxonomies-default-set', 'Default Set', (taxonomies.DefaultSet || []).join(', '), { placeholder: 'tags, categories' })}
             </div>
-            <div class="note">Definitions JSON example: {"tags":{"label":"Tags","archive_layout":"list","order":"alpha"}}</div>
+            <div class="note">${_t('Definitions JSON example:')} {"tags":{"label":"Tags","archive_layout":"list","order":"alpha"}}</div>
             ${renderSettingsTextarea('settings-taxonomies-definitions', 'Definitions JSON', settingsJSON(taxonomies.Definitions, '{}'), 18)}
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'plugins':
         return {
           subtitle: topLevelSubtitleMap[activeTab],
           body: `<form id="settings-structured-form" class="panel-pad stack">
-            <div class="note">Enabled plugins are stored as a JSON array of plugin names, for example ["readingtime","relatedposts"].</div>
+            <div class="note">${_t('Enabled plugins are stored as a JSON array of plugin names, for example')} ["readingtime","relatedposts"].</div>
             ${renderSettingsTextarea('settings-plugins-enabled', 'Enabled Plugins JSON Array', settingsJSON(pluginsCfg.Enabled || [], '[]'), 10)}
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'publish':
@@ -2330,20 +2458,20 @@ import {
               ${renderSettingsText('settings-feed-rss-description', 'RSS Description', feed.RSSDescription)}
               ${renderSettingsText('settings-deploy-default-target', 'Default Deploy Target', deploy.DefaultTarget)}
             </div>
-            <div class="note">Deploy targets JSON example: {"production":{"kind":"local","path":"./public"}}.</div>
+            <div class="note">${_t('Deploy targets JSON example:')} {"production":{"kind":"local","path":"./public"}}.</div>
             ${renderSettingsTextarea('settings-deploy-targets', 'Deploy Targets JSON', settingsJSON(deploy.Targets, '{}'), 16)}
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       case 'navigation':
         return {
           subtitle: topLevelSubtitleMap[activeTab],
           body: `<form id="settings-structured-form" class="panel-pad stack">
-            <div class="note">Permalinks, menus, and params stay fully editable here. Use JSON objects such as {"main":[{"name":"Home","url":"/"}]} for menus and {"company_name":"Foundry"} for params.</div>
+            <div class="note">${_t('Permalinks, menus, and params stay fully editable here. Use JSON objects such as')} {"main":[{"name":"Home","url":"/"}]} ${_t('for menus and')} {"company_name":"Foundry"} ${_t('for params.')}</div>
             ${renderSettingsTextarea('settings-permalinks', 'Permalinks JSON', settingsJSON(cfg.Permalinks, '{}'), 10)}
             ${renderSettingsTextarea('settings-menus', 'Menus JSON', settingsJSON(cfg.Menus, '{}'), 14)}
             ${renderSettingsTextarea('settings-params', 'Params JSON', settingsJSON(cfg.Params, '{}'), 14)}
-            <div class="toolbar"><button type="submit">Save Settings</button></div>
+            <div class="toolbar"><button type="submit">${_t('Save Settings')}</button></div>
           </form>`,
         };
       default:
@@ -2374,57 +2502,58 @@ import {
       subtitle = state.customCSS?.path || 'content/assets/css/custom.css';
       body = `
         <form id="custom-css-save-form" class="panel-pad stack">
-          <label>Custom stylesheet<textarea id="custom-css-raw" rows="24" spellcheck="false">${escapeHTML(state.customCSS?.raw || '')}</textarea></label>
+          <label>${_t('Custom stylesheet')}<textarea id="custom-css-raw" rows="24" spellcheck="false">${escapeHTML(state.customCSS?.raw || '')}</textarea></label>
           <div class="note">
-            <strong>Path:</strong> <span class="mono">${escapeHTML(state.customCSS?.path || 'content/assets/css/custom.css')}</span><br>
-            Loaded with the site asset pipeline as the site-level override layer for the active frontend theme.
+            <strong>${_t('Path')}:</strong> <span class="mono">${escapeHTML(state.customCSS?.path || 'content/assets/css/custom.css')}</span><br>
+            ${_t('Loaded with the site asset pipeline as the site-level override layer for the active frontend theme.')}
           </div>
-          <div class="toolbar"><button type="submit">Save Custom CSS</button></div>
+          <div class="toolbar"><button type="submit">${_t('Save Custom CSS')}</button></div>
         </form>`;
     } else if (activeTab === 'sections') {
-      subtitle = 'Core and plugin-defined settings groups';
+      subtitle = _t('Core and plugin-defined settings groups');
       body = `
         <div class="panel-pad stack">
-          ${state.settingsSections.length ? `<div class="note"><strong>Known sections:</strong> ${escapeHTML(state.settingsSections.map((section) => section.title).join(', '))}</div>` : ''}
+          ${state.settingsSections.length ? `<div class="note"><strong>${_t('Known sections')}:</strong> ${escapeHTML(state.settingsSections.map((section) => section.title).join(', '))}</div>` : ''}
           ${
             state.settingsSections.length
               ? `<div class="table table-three">
-            <div class="table-head"><span>Section</span><span>Source</span><span>Writable</span></div>
+            <div class="table-head"><span>${_t('Section')}</span><span>${_t('Source')}</span><span>${_t('Writable')}</span></div>
             ${state.settingsSections
               .map(
                 (section) => `
               <div class="table-row">
                 <span><strong>${escapeHTML(section.title)}</strong><div class="muted mono">${escapeHTML(section.key)}</div></span>
-                <span>${escapeHTML(section.source || 'core')}</span>
-                <span>${section.writable ? 'yes' : 'no'}</span>
+                <span>${escapeHTML(section.source || _t('core'))}</span>
+                <span>${section.writable ? _t('yes') : _t('no')}</span>
               </div>`
               )
               .join('')}
           </div>`
-              : '<div class="empty-state">No settings sections are currently registered.</div>'
+              : `<div class="empty-state">${_t('No settings sections are currently registered.')}</div>`
           }
         </div>`;
     } else if (activeTab === 'config') {
       subtitle = state.config?.path || 'content/config/site.yaml';
       body = `
         <form id="config-save-form" class="panel-pad stack">
-          <label>Config file<textarea id="config-raw" rows="24" spellcheck="false">${escapeHTML(state.config?.raw || '')}</textarea></label>
-          <div class="toolbar"><button type="submit">Save Configuration</button></div>
+          <label>${_t('Config file')}<textarea id="config-raw" rows="24" spellcheck="false">${escapeHTML(state.config?.raw || '')}</textarea></label>
+          <div class="toolbar"><button type="submit">${_t('Save Configuration')}</button></div>
         </form>`;
     } else {
       const rendered = renderSettingsFormTab(activeTab);
       subtitle = rendered.subtitle;
       body = rendered.body;
     }
+    const rawFileTab = activeTab === 'config' || activeTab === 'custom-css';
     return panel(
-      'Settings',
+      rawFileTab ? _t('Settings') : 'Settings',
       `
       <div class="panel-pad stack">
         <div class="toolbar settings-tabs">
           ${tabs
             .map(
               ([key, label]) =>
-                `<button type="button" class="ghost small ${activeTab === key ? 'active-toggle' : ''}" data-settings-tab="${escapeHTML(key)}">${escapeHTML(label)}</button>`
+                `<button type="button" class="ghost small ${activeTab === key ? 'active-toggle' : ''}" data-settings-tab="${escapeHTML(key)}">${escapeHTML(_t(label))}</button>`
             )
             .join('')}
         </div>
@@ -2435,7 +2564,9 @@ import {
         }
       </div>
       ${body}`,
-      subtitle
+      subtitle,
+      '',
+      !rawFileTab
     );
   };
 
@@ -2530,20 +2661,22 @@ import {
   const renderLogin = () => {
     root.innerHTML = `
       <div class="login-shell">
+        <div class="login-language">${renderLanguageSelector()}</div>
         <div class="login-card">
           <div class="login-mark">F</div>
-          <h1>Foundry Admin</h1>
-          <p class="login-copy">Sign in to manage documents, media, users, settings, themes, and plugins.</p>
+          <h1>${_t('Foundry Admin')}</h1>
+          <p class="login-copy">${_t('Sign in to manage documents, media, users, settings, themes, and plugins.')}</p>
           <form id="login-form" class="login-form">
-            <label>Username<input id="username" type="text" autocomplete="username" placeholder="admin"></label>
-            <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Password"></label>
-            <label>Two-Factor Code<input id="totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Optional 6-digit code"></label>
-            <button type="submit">Log In</button>
+            <label>${_t('Username')}<input id="username" type="text" autocomplete="username" placeholder="${_t('admin')}"></label>
+            <label>${_t('Password')}<input id="password" type="password" autocomplete="current-password" placeholder="${_t('Password')}"></label>
+            <label>${_t('Two-Factor Code')}<input id="totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="${_t('Optional 6-digit code')}"></label>
+            <button type="submit">${_t('Log In')}</button>
           </form>
-          <p class="login-hint">Sessions expire after 30 minutes of inactivity and renew while you are active.</p>
+          <p class="login-hint">${_t('Sessions expire after 30 minutes of inactivity and renew while you are active.')}</p>
           <div class="error">${escapeHTML(state.error)}</div>
         </div>
       </div>`;
+    bindLanguageSelector();
 
     document.getElementById('login-form').addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -2651,11 +2784,11 @@ import {
     if (!state.debugTools.flags.showStateOverlay) return '';
     return `<div class="debug-overlay">
       <strong>${escapeHTML(titleForSection(state.section))}</strong>
-      <span>section: ${escapeHTML(state.section)}</span>
-      <span>docs: ${escapeHTML(String(state.documents?.length || 0))}</span>
-      <span>routes: ${escapeHTML(String(state.status?.content?.route_count || 0))}</span>
-      <span>load errors: ${escapeHTML(String(state.loadErrors?.length || 0))}</span>
-      <span>dirty: ${escapeHTML(hasUnsavedChanges() ? dirtyMessage() : 'none')}</span>
+      <span>${_t('section')}: ${escapeHTML(_t(state.section))}</span>
+      <span>${_t('docs')}: ${escapeHTML(String(state.documents?.length || 0))}</span>
+      <span>${_t('routes')}: ${escapeHTML(String(state.status?.content?.route_count || 0))}</span>
+      <span>${_t('load errors')}: ${escapeHTML(String(state.loadErrors?.length || 0))}</span>
+      <span>${_t('dirty')}: ${escapeHTML(hasUnsavedChanges() ? dirtyMessage() : _t('none'))}</span>
     </div>`;
   };
 
@@ -2672,7 +2805,8 @@ import {
       runtimeLoaded: !!state.runtimeStatus,
     });
     const topMessage =
-      summarizeLoadErrors(state) || 'Manage content, media, users, settings, themes, and plugins.';
+      summarizeLoadErrors(state) ||
+      _t('Manage content, media, users, settings, themes, and plugins.');
     root.innerHTML = `
       <div class="foundry-shell">
         ${renderToasts(state)}
@@ -2686,7 +2820,7 @@ import {
             debugEnabled: debugEnabled(),
             canAccessSection,
           })}</nav>
-          <div class="foundry-sidebar-footer">Admin theme: ${escapeHTML(root.dataset.theme || 'default')}</div>
+          <div class="foundry-sidebar-footer">${_t('Admin theme')}: ${escapeHTML(root.dataset.theme || 'default')}</div>
         </aside>
         <div class="foundry-main">
           <header class="foundry-topbar">
@@ -2696,15 +2830,16 @@ import {
               <p>${escapeHTML(topMessage)}</p>
             </div>
             <div class="foundry-topbar-actions">
-              ${hasUnsavedChanges() ? `<span class="dirty-pill">Unsaved: ${escapeHTML(dirtyMessage())}</span>` : ''}
-              <button class="ghost" id="shortcut-help-toggle">Shortcuts</button>
+              ${hasUnsavedChanges() ? `<span class="dirty-pill">${_t('Unsaved: {items}', { items: escapeHTML(dirtyMessage()) })}</span>` : ''}
+              ${renderLanguageSelector()}
+              <button class="ghost" id="shortcut-help-toggle">${_t('Shortcuts')}</button>
               <div class="chrome-user"><strong>${escapeHTML(state.session?.name || state.session?.username || '')}</strong><span>${escapeHTML(state.session?.email || '')}</span></div>
-              <button class="ghost" id="logout">Log Out</button>
+              <button class="ghost" id="logout">${_t('Log Out')}</button>
             </div>
           </header>
           <main class="foundry-content">
-            ${state.error ? `<div class="panel error-panel"><div class="panel-pad"><strong>Action Failed</strong><div class="error">${escapeHTML(state.error)}</div></div></div>` : ''}
-            ${state.loadErrors.length ? `<div class="panel warning-panel"><div class="panel-pad"><strong>Partial Admin Load</strong><div class="muted">${escapeHTML(summarizeLoadErrors(state))}</div></div></div>` : ''}
+            ${state.error ? `<div class="panel error-panel"><div class="panel-pad"><strong>${_t('Action Failed')}</strong><div class="error">${escapeHTML(state.error)}</div></div></div>` : ''}
+            ${state.loadErrors.length ? `<div class="panel warning-panel"><div class="panel-pad"><strong>${_t('Partial Admin Load')}</strong><div class="muted">${escapeHTML(summarizeLoadErrors(state))}</div></div></div>` : ''}
             ${renderUpdateNotice(state)}
             ${renderSection()}
           </main>
@@ -2712,6 +2847,7 @@ import {
         ${renderZenModal()}
         ${renderDebugOverlay()}
       </div>`;
+    bindLanguageSelector();
     document.getElementById('shortcut-help-toggle')?.addEventListener('click', () => {
       state.keyboardHelp = !state.keyboardHelp;
       render();

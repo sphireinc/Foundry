@@ -1,9 +1,9 @@
 {{ define "post_meta" }}
 <div class="meta-row">
   {{ if .Page.Date }}
-  <span class="meta-pill">Published {{ .Page.Date.Format "Jan 2, 2006" }}</span>
+  <span class="meta-pill">{{ t .Lang "Published" }} {{ formatDate .Lang .Page.Date }}</span>
   {{ end }} {{ if .Page.UpdatedAt }}
-  <span class="meta-pill">Updated {{ .Page.UpdatedAt.Format "Jan 2, 2006" }}</span>
+  <span class="meta-pill">{{ t .Lang "Updated" }} {{ formatDate .Lang .Page.UpdatedAt }}</span>
   {{ end }}
   <span class="meta-pill">{{ .Page.Lang }}</span>
 </div>

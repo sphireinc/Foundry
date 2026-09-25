@@ -1,3 +1,5 @@
+import { _t } from '../core/i18n.js';
+
 export const createSessionViews = ({
   state,
   panel,
@@ -8,10 +10,15 @@ export const createSessionViews = ({
   paginateItems,
 }) => {
   const renderSessions = () => {
-    const normalizedFilter = String(state.sessionFilters?.username || '').trim().toLowerCase();
+    const normalizedFilter = String(state.sessionFilters?.username || '')
+      .trim()
+      .toLowerCase();
     const visibleSessions = (state.userSessions || []).filter((session) => {
       if (!normalizedFilter) return true;
-      return String(session.username || '').trim().toLowerCase().includes(normalizedFilter);
+      return String(session.username || '')
+        .trim()
+        .toLowerCase()
+        .includes(normalizedFilter);
     });
     const sortedSessions = sortItems(visibleSessions, 'sessions', (session, field) => {
       switch (field) {
@@ -41,7 +48,9 @@ export const createSessionViews = ({
     const usernameCounts = new Map();
     const addressSets = new Map();
     for (const session of visibleSessions) {
-      const username = String(session.username || '').trim().toLowerCase();
+      const username = String(session.username || '')
+        .trim()
+        .toLowerCase();
       if (!username) continue;
       usernameCounts.set(username, (usernameCounts.get(username) || 0) + 1);
       if (!addressSets.has(username)) addressSets.set(username, new Set());
@@ -49,27 +58,35 @@ export const createSessionViews = ({
         addressSets.get(username).add(String(session.remote_addr || '').trim());
       }
     }
-    const longLivedCount = visibleSessions.filter((session) => sessionAgeHours(session) >= 12).length;
+    const longLivedCount = visibleSessions.filter(
+      (session) => sessionAgeHours(session) >= 12
+    ).length;
     const idleCount = visibleSessions.filter((session) => sessionIdleMinutes(session) >= 30).length;
     const sharedUsers = Array.from(usernameCounts.values()).filter((count) => count > 1).length;
     const spreadUsers = Array.from(addressSets.values()).filter((set) => set.size > 1).length;
     const clientLabel = (session) => {
       const agent = String(session.user_agent || '').trim();
-      if (!agent) return session.current ? 'Current Browser Session' : 'Unknown Client';
+      if (!agent) return session.current ? _t('Current Browser Session') : _t('Unknown Client');
       const lower = agent.toLowerCase();
-      if (lower.includes('iphone') || lower.includes('ios')) return `iPhone / iOS${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('ipad')) return `iPad / iPadOS${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('android')) return `Android Device${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('mac os') || lower.includes('macintosh')) return `Mac Browser${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('windows')) return `Windows Browser${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('linux')) return `Linux Browser${session.current ? ' (Current)' : ''}`;
-      if (lower.includes('curl')) return `CLI Client${session.current ? ' (Current)' : ''}`;
-      return session.current ? `${agent} (Current)` : agent;
+      const currentSuffix = session.current ? ` (${_t('Current')})` : '';
+      if (lower.includes('iphone') || lower.includes('ios'))
+        return `${_t('iPhone / iOS')}${currentSuffix}`;
+      if (lower.includes('ipad')) return `${_t('iPad / iPadOS')}${currentSuffix}`;
+      if (lower.includes('android')) return `${_t('Android Device')}${currentSuffix}`;
+      if (lower.includes('mac os') || lower.includes('macintosh'))
+        return `${_t('Mac Browser')}${currentSuffix}`;
+      if (lower.includes('windows')) return `${_t('Windows Browser')}${currentSuffix}`;
+      if (lower.includes('linux')) return `${_t('Linux Browser')}${currentSuffix}`;
+      if (lower.includes('curl')) return `${_t('CLI Client')}${currentSuffix}`;
+      return `${agent}${currentSuffix}`;
     };
     const addressFingerprint = (session) => {
       const raw = String(session.remote_addr || '').trim();
       if (!raw) return '-';
-      const hash = Array.from(raw).reduce((acc, char) => (acc * 33 + char.charCodeAt(0)) >>> 0, 5381);
+      const hash = Array.from(raw).reduce(
+        (acc, char) => (acc * 33 + char.charCodeAt(0)) >>> 0,
+        5381
+      );
       if (raw.includes('.')) {
         const parts = raw.split('.');
         const suffix = parts.slice(-2).join('.');
@@ -84,7 +101,9 @@ export const createSessionViews = ({
       return `...${half} #${hash.toString(16).slice(-6)}`;
     };
     const sessionFlags = (session) => {
-      const username = String(session.username || '').trim().toLowerCase();
+      const username = String(session.username || '')
+        .trim()
+        .toLowerCase();
       const flags = [];
       if (session.current) flags.push('Current');
       if (sessionAgeHours(session) >= 12) flags.push('Long-Lived');
@@ -101,11 +120,14 @@ export const createSessionViews = ({
             <input type="checkbox" data-select-session="${escapeHTML(session.id || '')}" ${state.selectedSessions.includes(session.id) ? 'checked' : ''}>
             <strong>${escapeHTML(clientLabel(session))}</strong>
           </label>
-          <div class="muted">${escapeHTML(session.user_agent || 'Unknown client')}</div>
+          <div class="muted">${escapeHTML(session.user_agent || _t('Unknown client'))}</div>
           <div class="muted mono">${escapeHTML(session.id || '')}</div>
           <div class="toolbar">
             ${sessionFlags(session)
-              .map((flag) => `<span class="contract-badge ${flag === 'Current' ? 'ok' : 'warn'}">${escapeHTML(flag)}</span>`)
+              .map(
+                (flag) =>
+                  `<span class="contract-badge ${flag === 'Current' ? 'ok' : 'warn'}">${escapeHTML(_t(flag))}</span>`
+              )
               .join('')}
           </div>
         </span>
@@ -115,16 +137,16 @@ export const createSessionViews = ({
         </span>
         <span>
           <div>${escapeHTML(addressFingerprint(session))}</div>
-          <div class="muted">${session.mfa_complete ? 'MFA complete' : 'Password only'}</div>
+          <div class="muted">${session.mfa_complete ? _t('MFA complete') : _t('Password only')}</div>
         </span>
         <span>
           <div>${escapeHTML(formatDateTime(session.last_seen) || session.last_seen || '-')}</div>
-          <div class="muted">Issued ${escapeHTML(formatDateTime(session.issued_at) || session.issued_at || '-')}</div>
-          <div class="muted">Expires ${escapeHTML(formatDateTime(session.expires_at) || session.expires_at || '-')}</div>
+          <div class="muted">${_t('Issued')} ${escapeHTML(formatDateTime(session.issued_at) || session.issued_at || '-')}</div>
+          <div class="muted">${_t('Expires')} ${escapeHTML(formatDateTime(session.expires_at) || session.expires_at || '-')}</div>
         </span>
         <span class="row-actions">
-          <button type="button" class="ghost small" data-session-user="${escapeHTML(session.username || '')}">Open User</button>
-          <button type="button" class="ghost small danger" data-revoke-session-id="${escapeHTML(session.id || '')}" ${session.current ? 'data-current-session="true"' : ''}>Revoke</button>
+          <button type="button" class="ghost small" data-session-user="${escapeHTML(session.username || '')}">${_t('Open User')}</button>
+          <button type="button" class="ghost small danger" data-revoke-session-id="${escapeHTML(session.id || '')}" ${session.current ? 'data-current-session="true"' : ''}>${_t('Revoke')}</button>
         </span>
       </div>`
     );
@@ -136,38 +158,38 @@ export const createSessionViews = ({
             `
             <div class="panel-pad">
               <div class="cards">
-                <article class="card"><span class="card-label">Concurrent Users</span><strong>${escapeHTML(String(sharedUsers))}</strong><span class="card-copy">Users with multiple active sessions.</span></article>
-                <article class="card"><span class="card-label">Address Spread</span><strong>${escapeHTML(String(spreadUsers))}</strong><span class="card-copy">Users with sessions from multiple addresses.</span></article>
-                <article class="card"><span class="card-label">Long-Lived</span><strong>${escapeHTML(String(longLivedCount))}</strong><span class="card-copy">Sessions older than 12 hours.</span></article>
-                <article class="card"><span class="card-label">Idle</span><strong>${escapeHTML(String(idleCount))}</strong><span class="card-copy">Sessions idle for 30+ minutes.</span></article>
+                <article class="card"><span class="card-label">${_t('Concurrent Users')}</span><strong>${escapeHTML(String(sharedUsers))}</strong><span class="card-copy">${_t('Users with multiple active sessions.')}</span></article>
+                <article class="card"><span class="card-label">${_t('Address Spread')}</span><strong>${escapeHTML(String(spreadUsers))}</strong><span class="card-copy">${_t('Users with sessions from multiple addresses.')}</span></article>
+                <article class="card"><span class="card-label">${_t('Long-Lived')}</span><strong>${escapeHTML(String(longLivedCount))}</strong><span class="card-copy">${_t('Sessions older than 12 hours.')}</span></article>
+                <article class="card"><span class="card-label">${_t('Idle')}</span><strong>${escapeHTML(String(idleCount))}</strong><span class="card-copy">${_t('Sessions idle for 30+ minutes.')}</span></article>
               </div>
             </div>
             <div class="panel-pad stack">
               <form id="session-filter-form" class="toolbar">
-                <label>Username
-                  <input id="session-filter-username" type="text" value="${escapeHTML(state.sessionFilters?.username || '')}" placeholder="Filter by username">
+                <label>${_t('Username')}
+                  <input id="session-filter-username" type="text" value="${escapeHTML(state.sessionFilters?.username || '')}" placeholder="${_t('Filter by username')}">
                 </label>
-                <button type="submit" class="ghost small">Apply Filter</button>
-                <button type="button" class="ghost small" id="session-filter-clear">Clear</button>
-                <button type="button" class="ghost small" id="session-select-all">${pagedSessions.items.length && pagedSessions.items.every((session) => state.selectedSessions.includes(session.id)) ? 'Deselect All' : 'Select All'}</button>
-                <button type="button" class="ghost small danger" id="session-revoke-selected" ${state.selectedSessions.length ? '' : 'disabled'}>Revoke Selected</button>
-                <button type="button" class="small danger" id="session-revoke-all">Emergency Revoke All</button>
+                <button type="submit" class="ghost small">${_t('Apply Filter')}</button>
+                <button type="button" class="ghost small" id="session-filter-clear">${_t('Clear')}</button>
+                <button type="button" class="ghost small" id="session-select-all">${pagedSessions.items.length && pagedSessions.items.every((session) => state.selectedSessions.includes(session.id)) ? _t('Deselect All') : _t('Select All')}</button>
+                <button type="button" class="ghost small danger" id="session-revoke-selected" ${state.selectedSessions.length ? '' : 'disabled'}>${_t('Revoke Selected')}</button>
+                <button type="button" class="small danger" id="session-revoke-all">${_t('Emergency Revoke All')}</button>
               </form>
             </div>
             ${renderTableControls(state, 'sessions', visibleSessions.length, pagedSessions.totalPages)}
-            <div class="table table-five"><div class="table-head"><span>Client</span><span>User</span><span>Network</span><span>Activity</span><span>Actions</span></div>${rows.length ? rows.join('') : '<div class="panel-pad empty-state">No active sessions found.</div>'}</div>`,
-            `${visibleSessions.length} active sessions`
+            <div class="table table-five"><div class="table-head"><span>${_t('Client')}</span><span>${_t('User')}</span><span>${_t('Network')}</span><span>${_t('Activity')}</span><span>${_t('Actions')}</span></div>${rows.length ? rows.join('') : `<div class="panel-pad empty-state">${_t('No active sessions found.')}</div>`}</div>`,
+            _t('{count} active sessions', { count: visibleSessions.length })
           )}
         </div>
         <div class="stack">
           ${panel(
             'Session Notes',
             `<div class="panel-pad stack">
-              <div class="note">Sessions are stored with a hashed bearer token, a non-secret session id, coarse remote address, and truncated user-agent for operational review.</div>
-              <div class="note">Revoking the current session will sign that browser out on its next authenticated action.</div>
-              <div class="note">Address display is intentionally masked and fingerprinted so operators can distinguish sessions without exposing the full stored address in the UI.</div>
-              <div class="note">Signals shown here are heuristic only: concurrent sessions, address spread, long-lived sessions, and idle sessions help operators spot suspicious patterns quickly.</div>
-              <div class="note">Per-user session controls remain available from the Users screen.</div>
+              <div class="note">${_t('Sessions are stored with a hashed bearer token, a non-secret session id, coarse remote address, and truncated user-agent for operational review.')}</div>
+              <div class="note">${_t('Revoking the current session will sign that browser out on its next authenticated action.')}</div>
+              <div class="note">${_t('Address display is intentionally masked and fingerprinted so operators can distinguish sessions without exposing the full stored address in the UI.')}</div>
+              <div class="note">${_t('Signals shown here are heuristic only: concurrent sessions, address spread, long-lived sessions, and idle sessions help operators spot suspicious patterns quickly.')}</div>
+              <div class="note">${_t('Per-user session controls remain available from the Users screen.')}</div>
             </div>`,
             'Operational visibility without storing raw session tokens'
           )}

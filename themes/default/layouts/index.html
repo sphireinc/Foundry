@@ -2,40 +2,38 @@
 <section class="hero">
   <div class="hero-grid">
     <div class="hero-panel">
-      <div class="hero-kicker">Foundry Default Theme</div>
-      <h1>Elegant publishing, without the bloat.</h1>
+      <div class="hero-kicker">{{ t .Lang "Foundry Default Theme" }}</div>
+      <h1>{{ t .Lang "Elegant publishing, without the bloat." }}</h1>
       <p>
-        Foundry is a Go-powered Markdown CMS built for developers, founders, and teams who want a
-        clean content workflow.
+        {{ t .Lang "Foundry is a Go-powered Markdown CMS built for developers, founders, and teams who want a clean content workflow." }}
       </p>
 
       <div class="hero-actions">
-        <a class="button" href="/posts/hello-world/">Read the sample post</a>
-        <a class="button-secondary" href="{{ .Site.Feed.RSSPath }}">View RSS feed</a>
+        <a class="button" href="/posts/hello-world/">{{ t .Lang "Read the sample post" }}</a>
+        <a class="button-secondary" href="{{ .Site.Feed.RSSPath }}">{{ t .Lang "View RSS feed" }}</a>
       </div>
     </div>
 
     <aside class="side-panel">
       <div>
-        <h2>Default theme</h2>
+        <h2>{{ t .Lang "Default theme" }}</h2>
         <p>
-          A strong baseline for company sites, blogs, changelogs, and documentation-driven
-          marketing.
+          {{ t .Lang "A strong baseline for company sites, blogs, changelogs, and documentation-driven marketing." }}
         </p>
       </div>
 
       <div class="stat-stack">
         <div class="stat-card">
           <div class="stat-value">{{ len .Documents }}</div>
-          <div class="stat-label">Published documents in this language</div>
+          <div class="stat-label">{{ t .Lang "Published documents in this language" }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">Go</div>
-          <div class="stat-label">Powered by a modern language</div>
+          <div class="stat-label">{{ t .Lang "Powered by a modern language" }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">MD</div>
-          <div class="stat-label">Markdown-first authoring workflow</div>
+          <div class="stat-label">{{ t .Lang "Markdown-first authoring workflow" }}</div>
         </div>
       </div>
     </aside>
@@ -45,8 +43,8 @@
 <section class="home-section">
   <div class="section-heading">
     <div>
-      <h2>Recent content</h2>
-      <p>Freshly rendered pages and posts using the default Foundry theme.</p>
+      <h2>{{ t .Lang "Recent content" }}</h2>
+      <p>{{ t .Lang "Freshly rendered pages and posts using the default Foundry theme." }}</p>
     </div>
   </div>
 
@@ -57,8 +55,7 @@
         <div>
           <h3><a href="{{ .URL }}">{{ .Title }}</a></h3>
           <div class="post-card-meta">
-            {{ if eq .Type "post" }}Post{{ else }}Page{{ end }} {{ if .Date }} · {{ .Date.Format
-            "Jan 2, 2006" }}{{ end }}
+            {{ if eq .Type "post" }}{{ t $.Lang "Post" }}{{ else }}{{ t $.Lang "Page" }}{{ end }} {{ if .Date }} · {{ formatDate $.Lang .Date }}{{ end }}
           </div>
         </div>
       </div>
@@ -68,7 +65,7 @@
       {{ end }}
 
       <div class="post-card-footer">
-        <a class="post-card-link" href="{{ .URL }}">Read more</a>
+        <a class="post-card-link" href="{{ .URL }}">{{ t $.Lang "Read more" }}</a>
 
         {{ with index .Taxonomies "tags" }}
         <div class="tag-row">
@@ -80,7 +77,7 @@
       </div>
     </article>
     {{ else }}
-    <div class="empty-state">No content has been published yet.</div>
+    <div class="empty-state">{{ t .Lang "No content has been published yet." }}</div>
     {{ end }}
   </div>
 </section>
