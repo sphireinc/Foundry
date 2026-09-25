@@ -32,7 +32,7 @@ jobs:
           ref: ${{ github.event.inputs.ref || github.ref }}
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
       - run: go run ./cmd/plugin-sync
       - run: go test ./...
@@ -47,7 +47,7 @@ jobs:
           ref: ${{ github.event.inputs.ref || github.ref }}
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
       - name: Determine image tag
         id: meta
