@@ -3,12 +3,12 @@
   <div class="container site-footer-inner">
     <div>
       <strong>{{ .Site.Title }}</strong><br />
-      <span class="muted">A modern Markdown CMS powered by Go.</span>
+      <span class="muted">{{ t .Lang "A modern Markdown CMS powered by Go." }}</span>
     </div>
     <div>
-      <a href="{{ .Site.Feed.RSSPath }}">RSS</a>
+      <a href="{{ .Site.Feed.RSSPath }}">{{ t .Lang "RSS" }}</a>
       &nbsp;·&nbsp;
-      <a href="{{ .Site.Feed.SitemapPath }}">Sitemap</a>
+      <a href="{{ .Site.Feed.SitemapPath }}">{{ t .Lang "Sitemap" }}</a>
     </div>
   </div>
 </footer>

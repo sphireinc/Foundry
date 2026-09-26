@@ -34,6 +34,10 @@ func TestInternalContainsOnlyGoCode(t *testing.T) {
 			if relErr != nil {
 				return relErr
 			}
+			// This catalogue is embedded by internal/i18n and is a runtime source asset.
+			if filepath.ToSlash(rel) == "internal/i18n/messages.json" {
+				return nil
+			}
 			violations = append(violations, rel)
 		}
 		return nil

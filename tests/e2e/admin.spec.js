@@ -259,6 +259,52 @@ async function deleteMediaViaAdminAPI(page, reference) {
 }
 
 test.describe('default admin theme', () => {
+  test('browser language preference initializes the admin locale and selection persists', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'languages', {
+        configurable: true,
+        get: () => ['es-MX', 'en-US'],
+      });
+      Object.defineProperty(navigator, 'language', { configurable: true, get: () => 'es-MX' });
+    });
+
+    await page.goto('/__admin');
+    const language = page.locator('#ui-language');
+    await expect(language).toHaveValue('es');
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible();
+
+    await language.selectOption('en');
+    await expect(page.getByRole('button', { name: 'Log In' })).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('foundry.admin.ui-language')))
+      .toBe('en');
+
+    await page.reload();
+    await expect(page.locator('#ui-language')).toHaveValue('en');
+  });
+
+  test('changing the interface language preserves a selected media file', async ({ page }) => {
+    await login(page);
+    await ensureFrontendTheme(page, 'default');
+    await page.getByRole('link', { name: /^Media$/i }).click();
+    await expect(page.locator('#media-file')).toBeVisible();
+
+    const filename = `i18n-preserve-${Date.now()}.txt`;
+    await page.locator('#media-file').setInputFiles({
+      name: filename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('selected but not uploaded'),
+    });
+    await page.locator('#ui-language').selectOption('es');
+
+    await expect(page.getByRole('heading', { name: 'Cargar archivo multimedia' })).toBeVisible();
+    await expect
+      .poll(() => page.locator('#media-file').evaluate((input) => input.files?.[0]?.name || ''))
+      .toBe(filename);
+  });
+
   test('admin login and shell bootstrap work', async ({ page }) => {
     await login(page);
     await ensureFrontendTheme(page, 'default');
@@ -350,7 +396,11 @@ test.describe('default admin theme', () => {
         page,
         `/api/documents?include_drafts=1&q=${encodeURIComponent(slug)}`
       );
-      if (documents.ok && Array.isArray(documents.json) && documents.json.some((doc) => doc.source_path === sourcePath)) {
+      if (
+        documents.ok &&
+        Array.isArray(documents.json) &&
+        documents.json.some((doc) => doc.source_path === sourcePath)
+      ) {
         await deleteDocumentViaAdminAPI(page, sourcePath);
       }
     }
@@ -385,7 +435,9 @@ test.describe('default admin theme', () => {
       await page.reload();
 
       await openDocumentInEditor(page, slug, sourcePath);
-      await expect(page.locator('.frontmatter-card-header strong', { hasText: 'Custom Fields' }).first()).toBeVisible();
+      await expect(
+        page.locator('.frontmatter-card-header strong', { hasText: 'Custom Fields' }).first()
+      ).toBeVisible();
       await expect(page.locator('[data-custom-field="hero_title"]')).toBeVisible();
       await page.locator('[data-custom-field="hero_title"]').fill(heroTitle);
       await page.locator('#document-version-comment').fill('e2e custom field update');
@@ -409,7 +461,11 @@ test.describe('default admin theme', () => {
         page,
         `/api/documents?include_drafts=1&q=${encodeURIComponent(slug)}`
       );
-      if (documents.ok && Array.isArray(documents.json) && documents.json.some((doc) => doc.source_path === sourcePath)) {
+      if (
+        documents.ok &&
+        Array.isArray(documents.json) &&
+        documents.json.some((doc) => doc.source_path === sourcePath)
+      ) {
         await deleteDocumentViaAdminAPI(page, sourcePath);
       }
       await switchFrontendThemeViaAdminAPI(page, currentTheme);
@@ -551,7 +607,9 @@ test.describe('default admin theme', () => {
 
       await expect(page.locator('.toast-stack')).toContainText(/Media uploaded\./i);
       await expect(page.locator('.status-line.mono')).toContainText(/media:/i);
-      upload.reference = ((await page.locator('.status-line.mono').first().textContent()) || '').trim();
+      upload.reference = (
+        (await page.locator('.status-line.mono').first().textContent()) || ''
+      ).trim();
 
       await page.locator('#media-title').fill('E2E Uploaded Logo');
       await page.locator('#media-alt').fill('E2E uploaded logo alt text');
@@ -718,10 +776,18 @@ Created at ${Date.now()}
 
     await page.getByRole('link', { name: /^Debug$/i }).click();
     await expect(page.getByRole('heading', { level: 1, name: /^Debug$/i })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: /^Runtime Event Stream$/i })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: /^Admin SDK Inspector$/i })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: /^Request \/ Command Console$/i })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: /^Feature Flags \/ Experiments$/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: /^Runtime Event Stream$/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: /^Admin SDK Inspector$/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: /^Request \/ Command Console$/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: /^Feature Flags \/ Experiments$/i })
+    ).toBeVisible();
   });
 
   test('editor, reviewer, and author roles see the expected shell', async ({ page }) => {
@@ -764,8 +830,8 @@ Created at ${Date.now()}
       }
 
       for (const user of users) {
-      await logout(page);
-      await login(page, user.username, user.password);
+        await logout(page);
+        await login(page, user.username, user.password);
         for (const pattern of user.visible) {
           await expect(page.locator('.foundry-nav')).toContainText(pattern);
         }

@@ -3,14 +3,14 @@
   <header class="archive-header">
     <div class="eyebrow">404</div>
     <h1>{{ .Title }}</h1>
-    <p>The page <code>{{ .RequestPath }}</code> could not be found.</p>
+    <p>{{ printf (t .Lang "The page %s could not be found.") .RequestPath }}</p>
   </header>
 
   <div class="archive-list">
     <article class="archive-item">
-      <h2 class="archive-item-title"><a href="/">Return home</a></h2>
+      <h2 class="archive-item-title"><a href="/">{{ t .Lang "Return home" }}</a></h2>
       <div class="archive-item-summary">
-        Use the navigation or jump back to the homepage to keep exploring the site.
+        {{ t .Lang "Use the navigation or jump back to the homepage to keep exploring the site." }}
       </div>
     </article>
 

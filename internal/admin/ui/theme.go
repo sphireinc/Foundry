@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/i18n"
 	"github.com/sphireinc/foundry/internal/safepath"
 )
 
@@ -32,17 +33,19 @@ func (m *Manager) RenderIndex() ([]byte, error) {
 	}
 
 	data := struct {
-		Title       string
-		AdminPath   string
-		DefaultLang string
-		ThemeName   string
-		ThemeBase   string
+		Title        string
+		AdminPath    string
+		DefaultLang  string
+		ThemeName    string
+		ThemeBase    string
+		Translations string
 	}{
-		Title:       m.cfg.Title,
-		AdminPath:   m.cfg.AdminPath(),
-		DefaultLang: m.cfg.DefaultLang,
-		ThemeName:   m.themeName(),
-		ThemeBase:   m.cfg.AdminPath() + "/theme",
+		Title:        m.cfg.Title,
+		AdminPath:    m.cfg.AdminPath(),
+		DefaultLang:  m.cfg.DefaultLang,
+		ThemeName:    m.themeName(),
+		ThemeBase:    m.cfg.AdminPath() + "/theme",
+		Translations: i18n.CatalogJSON(),
 	}
 
 	var buf bytes.Buffer
@@ -129,7 +132,7 @@ const defaultIndexTemplate = `<!doctype html>
   <link rel="stylesheet" href="{{ .ThemeBase }}/admin.css">
 </head>
 <body>
-  <div id="app" data-admin-base="{{ .AdminPath }}" data-default-lang="{{ .DefaultLang }}" data-theme="{{ .ThemeName }}">
+  <div id="app" data-admin-base="{{ .AdminPath }}" data-default-lang="{{ .DefaultLang }}" data-theme="{{ .ThemeName }}" data-i18n-catalog="{{ .Translations }}">
     <noscript>Foundry admin requires JavaScript.</noscript>
   </div>
   <script type="module" src="{{ .ThemeBase }}/admin.js"></script>

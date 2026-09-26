@@ -1,6 +1,6 @@
 {{ define "taxonomy_chips" }} {{ with index .Page.Taxonomies "tags" }}
 <div class="meta-panel-block">
-  <h3>Tags</h3>
+  <h3>{{ t $.Lang "Tags" }}</h3>
   <div class="tag-row">
     {{ range . }}
     <a class="tag" href="/tags/{{ . }}/">{{ . }}</a>
@@ -9,7 +9,7 @@
 </div>
 {{ end }} {{ with index .Page.Taxonomies "categories" }}
 <div class="meta-panel-block">
-  <h3>Categories</h3>
+  <h3>{{ t $.Lang "Categories" }}</h3>
   <div class="tag-row">
     {{ range . }}
     <a class="tag" href="/categories/{{ . }}/">{{ . }}</a>

@@ -4,7 +4,7 @@
     {{ pluginSlot "post.before_header" }}
 
     <header class="post-header">
-      <div class="eyebrow">Post</div>
+      <div class="eyebrow">{{ t .Lang "Post" }}</div>
       <h1>{{ with field .Page "hero_title" }}{{ . }}{{ else }}{{ .Page.Title }}{{ end }}</h1>
 
       {{ with field .Page "hero_body" }}
@@ -31,11 +31,11 @@
     {{ pluginSlot "post.sidebar.top" }}
 
     <div class="meta-panel-block">
-      <h3>Overview</h3>
+      <h3>{{ t .Lang "Overview" }}</h3>
       <div class="meta-list">
-        <div><strong>Type:</strong> {{ .Page.Type }}</div>
-        <div><strong>Slug:</strong> {{ .Page.Slug }}</div>
-        <div><strong>Language:</strong> {{ .Page.Lang }}</div>
+        <div><strong>{{ t .Lang "Type:" }}</strong> {{ .Page.Type }}</div>
+        <div><strong>{{ t .Lang "Slug:" }}</strong> {{ .Page.Slug }}</div>
+        <div><strong>{{ t .Lang "Language:" }}</strong> {{ .Page.Lang }}</div>
         {{ pluginSlot "post.sidebar.overview" }}
       </div>
     </div>

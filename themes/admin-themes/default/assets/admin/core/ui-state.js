@@ -1,3 +1,5 @@
+import { _t } from './i18n.js';
+
 // createUIStateHelpers centralizes non-network UI state transitions for the
 // default admin theme.
 //
@@ -67,7 +69,7 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
   const pushToast = (message, tone = 'info') => {
     if (!String(message || '').trim()) return;
     const id = Date.now() + Math.random();
-    state.toasts = [...state.toasts.slice(-3), { id, message: String(message), tone }];
+    state.toasts = [...state.toasts.slice(-3), { id, message: _t(String(message)), tone }];
     window.setTimeout(
       () => {
         state.toasts = state.toasts.filter((toast) => toast.id !== id);
@@ -78,15 +80,15 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
   };
 
   const setFlash = (message) => {
-    state.flash = message;
+    state.flash = _t(String(message || ''));
     state.error = '';
-    pushToast(message, 'success');
+    pushToast(state.flash, 'success');
   };
 
   const setError = (message) => {
-    state.error = message;
-    if (message) {
-      pushToast(message, 'error');
+    state.error = message ? _t(String(message)) : '';
+    if (state.error) {
+      pushToast(state.error, 'error');
     }
   };
 
@@ -123,7 +125,7 @@ export const createUIStateHelpers = ({ state, render, buildDefaultMarkdown }) =>
   const confirmNavigation = () => {
     if (!hasUnsavedChanges()) return true;
     const confirmed = window.confirm(
-      `You have unsaved changes in: ${dirtyMessage()}. Leave this view?`
+      _t('You have unsaved changes in: {items}. Leave this view?', { items: dirtyMessage() })
     );
     if (confirmed) {
       clearDirtyState();
