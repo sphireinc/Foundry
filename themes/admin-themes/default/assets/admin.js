@@ -675,9 +675,13 @@ import {
     controls.forEach((entry) => {
       const element = document.getElementById(entry.id);
       if (!element || element.type !== entry.type) return;
-      if (entry.value !== null) element.value = entry.value;
-      if (entry.type === 'checkbox' || entry.type === 'radio') {
-        element.checked = entry.checked;
+      if (entry.id === 'ui-language') {
+        element.value = getLocale();
+      } else {
+        if (entry.value !== null) element.value = entry.value;
+        if (entry.type === 'checkbox' || entry.type === 'radio') {
+          element.checked = entry.checked;
+        }
       }
       if (entry.focused) {
         element.focus({ preventScroll: true });
