@@ -23,7 +23,7 @@
 }
 
 .page-body th {
-  background: #f6f0e3;
+  background: var(--paper-strong);
 }
 
 .page-body table code {

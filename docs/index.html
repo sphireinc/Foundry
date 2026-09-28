@@ -8,6 +8,7 @@
       name="description"
       content="Foundry project documentation, the CLI contract, the admin and frontend API reference, and the latest published coverage report."
     />
+    <script src="./theme-toggle.js"></script>
     <link rel="stylesheet" href="./site.css" />
   </head>
   <body>
@@ -19,67 +20,134 @@
             <strong>Foundry</strong>
           </span>
         </a>
-        <nav class="nav">
-          <a href="./">Home</a>
-          <a href="./getting-started/">Getting Started</a>
-          <a href="./docker/">Docker</a>
-          <a href="./operations/">Operations</a>
-          <a href="./architecture/">Architecture</a>
-          <a href="./config/">Configuration</a>
-          <a href="./custom-fields/">Custom Fields</a>
-          <a href="./sdk/">SDKs</a>
-          <a href="./plugins/">Plugins</a>
-          <a href="./themes/">Themes</a>
-          <a href="./api-documentation/">API Docs</a>
-          <a href="./contract/">CLI Contract</a>
-          <a href="./coverage/">Coverage</a>
-          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-link nav-home" href="./" aria-current="page">Home</a>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Learn</summary>
+            <div class="nav-menu-panel">
+              <a href="./getting-started/">
+                <strong>Getting Started</strong>
+                <span>Project overview and setup</span>
+              </a>
+              <a href="./architecture/">
+                <strong>Architecture</strong>
+                <span>Runtime flow and packages</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Build &amp; Run</summary>
+            <div class="nav-menu-panel">
+              <a href="./docker/">
+                <strong>Docker</strong>
+                <span>Local and production containers</span>
+              </a>
+              <a href="./operations/">
+                <strong>Operations</strong>
+                <span>Health, metrics, and recovery</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Extend</summary>
+            <div class="nav-menu-panel">
+              <a href="./custom-fields/">
+                <strong>Custom Fields</strong>
+                <span>Theme-owned field contracts</span>
+              </a>
+              <a href="./sdk/">
+                <strong>SDKs</strong>
+                <span>Admin and frontend JavaScript APIs</span>
+              </a>
+              <a href="./plugins/">
+                <strong>Plugins</strong>
+                <span>Go and RPC extensions</span>
+              </a>
+              <a href="./themes/">
+                <strong>Themes</strong>
+                <span>Layouts, partials, and authoring</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Reference</summary>
+            <div class="nav-menu-panel">
+              <a href="./config/">
+                <strong>Configuration</strong>
+                <span>Every site.yaml setting</span>
+              </a>
+              <a href="./api-documentation/">
+                <strong>API Docs</strong>
+                <span>Admin and frontend APIs</span>
+              </a>
+              <a href="./contract/">
+                <strong>CLI Contract</strong>
+                <span>CLI behavior and conventions</span>
+              </a>
+              <a href="./coverage/">
+                <strong>Coverage</strong>
+                <span>Latest Go coverage report</span>
+              </a>
+            </div>
+          </details>
+          <a
+            class="nav-link nav-external"
+            href="https://github.com/sphireinc/foundry"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch to light mode"
+            title="Switch to light mode"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-light" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+          </button>
         </nav>
       </header>
 
       <main>
         <section class="hero hero-split">
           <div class="hero-copy">
-            <div class="eyebrow">Project Documentation</div>
             <h1>Foundry.</h1>
             <p>
               Foundry is a Markdown-first CMS written in Go with file-based content, themes,
               first-class compiled plugins, and out-of-process RPC plugins. Here you can find the
-              project docs, the CLI contract, the admin and frontend API docs, and the latest
-              HTML coverage report generated from <code>main</code>.
+              project docs, the CLI contract, the admin and frontend API docs, and the latest test
+              coverage report.
             </p>
             <div class="hero-actions">
               <a class="button" href="./getting-started/">Read the Overview</a>
-              <a class="button-ghost" href="./coverage/">Open Coverage</a>
               <a class="button-ghost" href="./api-documentation/">API Docs</a>
               <a class="button-ghost" href="./contract/">Read the Contract</a>
+              <a class="button-ghost" href="./coverage/" target="_blank" rel="noreferrer">
+                Open Coverage <span aria-hidden="true">→</span>
+              </a>
             </div>
-            <div class="hero-stats">
-              <div class="stat">
-                <strong>Plugin Runtime</strong>
+            <ul class="hero-stats">
+              <li class="stat">
+                <strong>Plugin Runtime:</strong>
                 <span>First-class Go plugins and out-of-process RPC plugins.</span>
-              </div>
-              <div class="stat">
-                <strong>Coverage</strong>
+              </li>
+              <li class="stat">
+                <strong>Coverage:</strong>
                 <span>Current raw Go coverage numbers.</span>
-              </div>
-              <div class="stat">
-                <strong>API Docs</strong>
+              </li>
+              <li class="stat">
+                <strong>API Docs:</strong>
                 <span>Admin and frontend API documentation from the new markdown source.</span>
-              </div>
-              <div class="stat">
-                <strong>Contract</strong>
-                <span>The CLI contract.</span>
-              </div>
-            </div>
+              </li>
+              <li class="stat"><strong>Contract:</strong> <span>The CLI contract.</span></li>
+            </ul>
           </div>
           <aside class="hero-media" aria-label="Foundry project logo">
             <div class="hero-logo-card">
               <img src="./logo.png" alt="Foundry logo" class="hero-logo" />
-              <!--              <div class="hero-logo-meta">-->
-              <!--                <strong>Foundry</strong>-->
-              <!--                <span>Project Documentation</span>-->
-              <!--              </div>-->
             </div>
           </aside>
         </section>
@@ -102,9 +170,13 @@
                 production-oriented compose setup.
               </p>
               <div class="card-links">
-                <a href="./docker/">Open Docker guide</a>
-                <a href="https://github.com/sphireinc/foundry/blob/main/docker-compose.prod.yml"
-                  >Production compose</a
+                <a href="./docker/">Docker guide</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/blob/main/docker-compose.prod.yml"
+                  target="_blank"
+                  rel="noreferrer"
+                  >Production compose <span aria-hidden="true">↗</span></a
                 >
               </div>
             </article>
@@ -115,8 +187,14 @@
                 areas most people need first.
               </p>
               <div class="card-links">
-                <a href="./getting-started/">Open overview</a>
-                <a href="https://github.com/sphireinc/foundry/blob/main/README.md">Full README</a>
+                <a href="./getting-started/">Overview</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/blob/main/README.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  >README.md <span aria-hidden="true">↗</span></a
+                >
               </div>
             </article>
             <article class="card">
@@ -126,9 +204,13 @@
                 reading or changing the code.
               </p>
               <div class="card-links">
-                <a href="./architecture/">Open architecture guide</a>
-                <a href="https://github.com/sphireinc/foundry/tree/main/internal"
-                  >Browse internal packages</a
+                <a href="./architecture/">Architecture guide</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/tree/main/internal"
+                  target="_blank"
+                  rel="noreferrer"
+                  >Internal Packages <span aria-hidden="true">↗</span></a
                 >
               </div>
             </article>
@@ -139,9 +221,13 @@
                 access, migration, and admin editing behavior.
               </p>
               <div class="card-links">
-                <a href="./custom-fields/">Open custom fields guide</a>
-                <a href="https://github.com/sphireinc/foundry/blob/main/content/custom-fields.yaml"
-                  >Shared values file</a
+                <a href="./custom-fields/">Custom fields guide</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/blob/main/content/custom-fields.yaml"
+                  target="_blank"
+                  rel="noreferrer"
+                  >Shared values file <span aria-hidden="true">↗</span></a
                 >
               </div>
             </article>
@@ -152,10 +238,13 @@
                 group, every supported key, and how each setting is used.
               </p>
               <div class="card-links">
-                <a href="./config/">Open config reference</a>
+                <a href="./config/">Config reference</a>
                 <a
+                  class="external"
                   href="https://github.com/sphireinc/foundry/blob/main/content/config/example.site.yaml"
-                  >Default example config</a
+                  target="_blank"
+                  rel="noreferrer"
+                  >Example config <span aria-hidden="true">↗</span></a
                 >
               </div>
             </article>
@@ -166,8 +255,14 @@
                 surfaces, and example usage.
               </p>
               <div class="card-links">
-                <a href="./sdk/">Open SDK guide</a>
-                <a href="https://github.com/sphireinc/foundry/tree/main/sdk">SDK source</a>
+                <a href="./sdk/">SDK guide</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/tree/main/sdk"
+                  target="_blank"
+                  rel="noreferrer"
+                  >SDK source <span aria-hidden="true">↗</span></a
+                >
               </div>
             </article>
             <article class="card">
@@ -177,9 +272,13 @@
                 declare permissions, register hooks, and validate the result.
               </p>
               <div class="card-links">
-                <a href="./plugins/">Open plugin guide</a>
-                <a href="https://github.com/sphireinc/foundry/tree/main/plugins"
-                  >Built-in plugins</a
+                <a href="./plugins/">Plugin guide</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/tree/main/plugins"
+                  target="_blank"
+                  rel="noreferrer"
+                  >Built-in plugins <span aria-hidden="true">↗</span></a
                 >
               </div>
             </article>
@@ -190,8 +289,14 @@
                 and validate the finished package.
               </p>
               <div class="card-links">
-                <a href="./themes/">Open theme guide</a>
-                <a href="https://github.com/sphireinc/foundry/tree/main/themes">Theme sources</a>
+                <a href="./themes/">Theme guide</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/tree/main/themes"
+                  target="_blank"
+                  rel="noreferrer"
+                  >Theme sources <span aria-hidden="true">↗</span></a
+                >
               </div>
             </article>
             <article class="card">
@@ -201,18 +306,18 @@
                 scope, and mutation guidance.
               </p>
               <div class="card-links">
-                <a href="./contract/">Styled contract</a>
+                <a href="./contract/">Contract</a>
                 <a href="./cli-contract.md">Raw Markdown</a>
               </div>
             </article>
             <article class="card">
               <h3>API Docs</h3>
               <p>
-                The API documentation landing page for the new markdown reference under
-                <code>docs/api-documentation.md</code>, covering the admin and frontend APIs.
+                The API documentation landing page for the new markdown reference lives in
+                <code>api-documentation.md</code>, covering the admin and frontend APIs.
               </p>
               <div class="card-links">
-                <a href="./api-documentation/">Open API docs</a>
+                <a href="./api-documentation/">API docs</a>
                 <a href="./api-documentation.md">Raw Markdown</a>
                 <a href="./api.yaml">OpenAPI spec</a>
               </div>
@@ -224,8 +329,14 @@
                 into this site by CI.
               </p>
               <div class="card-links">
-                <a href="./coverage/">View coverage</a>
-                <a href="https://github.com/sphireinc/foundry/actions">GitHub Actions</a>
+                <a href="./coverage/">Coverage</a>
+                <a
+                  class="external"
+                  href="https://github.com/sphireinc/foundry/actions"
+                  target="_blank"
+                  rel="noreferrer"
+                  >GitHub Actions <span aria-hidden="true">↗</span></a
+                >
               </div>
             </article>
           </div>

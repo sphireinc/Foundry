@@ -8,6 +8,7 @@
       name="description"
       content="Official JavaScript SDKs for Foundry admin frontends and JS-powered themes."
     />
+    <script src="../theme-toggle.js"></script>
     <link rel="stylesheet" href="../site.css" />
   </head>
   <body>
@@ -17,19 +18,94 @@
           <span class="brand-mark"><img src="../logo.png" alt="Foundry logo" /></span>
           <span class="brand-copy"><strong>Foundry</strong></span>
         </a>
-        <nav class="nav">
-          <a href="../">Home</a>
-          <a href="../getting-started/">Getting Started</a>
-          <a href="../docker/">Docker</a>
-          <a href="../architecture/">Architecture</a>
-          <a href="../config/">Configuration</a>
-          <a href="../custom-fields/">Custom Fields</a>
-          <a href="../sdk/">SDKs</a>
-          <a href="../plugins/">Plugins</a>
-          <a href="../themes/">Themes</a>
-          <a href="../contract/">CLI Contract</a>
-          <a href="../coverage/">Coverage</a>
-          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-link nav-home" href="../">Home</a>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Learn</summary>
+            <div class="nav-menu-panel">
+              <a href="../getting-started/">
+                <strong>Getting Started</strong>
+                <span>Project overview and setup</span>
+              </a>
+              <a href="../architecture/">
+                <strong>Architecture</strong>
+                <span>Runtime flow and packages</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Build &amp; Run</summary>
+            <div class="nav-menu-panel">
+              <a href="../docker/">
+                <strong>Docker</strong>
+                <span>Local and production containers</span>
+              </a>
+              <a href="../operations/">
+                <strong>Operations</strong>
+                <span>Health, metrics, and recovery</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Extend</summary>
+            <div class="nav-menu-panel">
+              <a href="../custom-fields/">
+                <strong>Custom Fields</strong>
+                <span>Theme-owned field contracts</span>
+              </a>
+              <a href="../sdk/" aria-current="page">
+                <strong>SDKs</strong>
+                <span>Admin and frontend JavaScript APIs</span>
+              </a>
+              <a href="../plugins/">
+                <strong>Plugins</strong>
+                <span>Go and RPC extensions</span>
+              </a>
+              <a href="../themes/">
+                <strong>Themes</strong>
+                <span>Layouts, partials, and authoring</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Reference</summary>
+            <div class="nav-menu-panel">
+              <a href="../config/">
+                <strong>Configuration</strong>
+                <span>Every site.yaml setting</span>
+              </a>
+              <a href="../api-documentation/">
+                <strong>API Docs</strong>
+                <span>Admin and frontend APIs</span>
+              </a>
+              <a href="../contract/">
+                <strong>CLI Contract</strong>
+                <span>CLI behavior and conventions</span>
+              </a>
+              <a href="../coverage/">
+                <strong>Coverage</strong>
+                <span>Latest Go coverage report</span>
+              </a>
+            </div>
+          </details>
+          <a
+            class="nav-link nav-external"
+            href="https://github.com/sphireinc/foundry"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch to light mode"
+            title="Switch to light mode"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-light" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+          </button>
         </nav>
       </header>
 
