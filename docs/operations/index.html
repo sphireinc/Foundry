@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foundry Production Operations</title>
+    <meta
+      name="description"
+      content="Health, metrics, logging, recovery drills, and service managers."
+    />
+    <link rel="stylesheet" href="../site.css" />
+    <link rel="stylesheet" href="./operations.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark"><img src="../logo.png" alt="Foundry logo" /></span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>Operations</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="../">Home</a>
+          <a href="../getting-started/">Getting Started</a>
+          <a href="../docker/">Docker</a>
+          <a href="../operations/">Operations</a>
+          <a href="../architecture/">Architecture</a>
+          <a href="../config/">Configuration</a>
+          <a href="../custom-fields/">Custom Fields</a>
+          <a href="../sdk/">SDKs</a>
+          <a href="../plugins/">Plugins</a>
+          <a href="../themes/">Themes</a>
+          <a href="../contract/">CLI Contract</a>
+          <a href="../coverage/">Coverage</a>
+          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        </nav>
+      </header>
+
+      <main class="content-card">
+        <div class="page-body">
+          <h1>Production health and operations</h1>
+          <p>
+            This runbook applies to a live <code>foundry serve</code> process (including standalone,
+            service, and Docker modes). Static <code>foundry build</code> output has no running
+            health or metrics endpoints: monitor the CDN or web server that hosts it separately. Run
+            commands from the project directory with the same environment and config overlays used
+            by the server. Start with <code>foundry doctor</code> before deployment.
+          </p>
+          <h2>Health checks</h2>
+          <p>
+            <code>GET /__health</code> returns JSON with <code>status</code>, <code>version</code>,
+            <code>commit</code>, <code>managed</code>, <code>instance_id</code> when present,
+            <code>admin_ready</code>, <code>generated_at</code>, and <code>checks</code>.
+            <code>HEAD /__health</code> performs the same checks and returns no body. Other methods
+            return 405 with <code>Allow: GET, HEAD</code>. Responses have
+            <code>Cache-Control: no-store</code>.
+          </p>
+          <ul>
+            <li>200 means all checks pass (<code>status: healthy</code>).</li>
+            <li>
+              503 means at least one check failed (<code>status: degraded</code>). Inspect
+              <code>checks</code>.
+            </li>
+            <li>Connection refusal or timeout means the probe cannot reach the process.</li>
+          </ul>
+          <p>
+            The checks cover admin configuration readiness and read/write access to
+            <code>content</code>, <code>data</code>, <code>public</code>, <code>themes</code>, and
+            <code>plugins</code>. Storage checks create, write, and remove a temporary file in each
+            directory. They expose logical names such as <code>storage.data</code> and generic
+            errors rather than filesystem paths. <code>admin_ready</code> means admin is enabled and
+            its path is configured; it does not verify a login, external dependencies, plugin
+            behavior, or rendering. Disabling admin currently makes health degraded. This is a
+            readiness probe, not a separate process-only liveness endpoint. Avoid aggressive restart
+            loops on storage faults; alert and investigate mounts, permissions, capacity, and
+            configuration first.
+          </p>
+          <pre><code class="language-sh">curl --fail --max-time 5 http://127.0.0.1:8080/__health
+curl --head --max-time 5 http://127.0.0.1:8080/__health
+</code></pre>
+          <p>
+            Probe every 30 seconds with a 5-second timeout and allow startup time. The production
+            Compose file uses this endpoint. Test a representative public page and authenticated
+            admin login separately. The endpoint is unauthenticated and includes version and
+            instance metadata; restrict it at your reverse proxy if that metadata should remain
+            private. Health traffic follows the same server routing as other requests.
+          </p>
+          <h2>Metrics export</h2>
+          <p>
+            Set a strong random <code>FOUNDRY_METRICS_TOKEN</code> in the
+            <strong>server process environment</strong> and restart to enable
+            <code>GET /__metrics</code>. An unset or whitespace-only token keeps the reserved
+            endpoint at 404 and disables request instrumentation. Supply
+            <code>Authorization: Bearer &lt;token&gt;</code>; missing or incorrect credentials
+            return 401. Authenticated <code>HEAD</code> returns headers only; other methods return
+            405. Metrics responses use Prometheus text exposition format 0.0.4 and
+            <code>Cache-Control: no-store</code>. No plugin or extra Go dependency is required.
+          </p>
+          <pre><code class="language-sh"># Inject the token through your service's protected environment file or secrets system.
+curl --fail --max-time 5 \
+  -H &quot;Authorization: Bearer $FOUNDRY_METRICS_TOKEN&quot; \
+  http://127.0.0.1:8080/__metrics
+</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Type</th>
+                <th>Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>foundry_http_requests_total{status_class=&quot;2xx&quot;}</code></td>
+                <td>Counter</td>
+                <td>
+                  Completed requests, with fixed 1xx–5xx status classes and <code>other</code> for
+                  nonstandard codes
+                </td>
+              </tr>
+              <tr>
+                <td><code>foundry_http_request_duration_seconds_total</code></td>
+                <td>Counter</td>
+                <td>Sum of elapsed request time in seconds</td>
+              </tr>
+              <tr>
+                <td><code>foundry_http_requests_in_flight</code></td>
+                <td>Gauge</td>
+                <td>Requests currently being handled</td>
+              </tr>
+              <tr>
+                <td><code>foundry_go_goroutines</code></td>
+                <td>Gauge</td>
+                <td>Current Go goroutines</td>
+              </tr>
+              <tr>
+                <td><code>foundry_go_heap_alloc_bytes</code></td>
+                <td>Gauge</td>
+                <td>Allocated Go heap bytes</td>
+              </tr>
+              <tr>
+                <td><code>foundry_go_gc_cycles_total</code></td>
+                <td>Counter</td>
+                <td>Completed Go garbage collections</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            HTTP metrics include public pages, assets, health, and mounted admin/plugin routes.
+            Metrics scrapes (including failed authentication) are excluded. Counters reset on
+            process restart. Duration includes streaming connections and is recorded when a request
+            finishes; it is an aggregate, not a latency histogram or percentile. Metrics contain no
+            URL, query, username, token, or filesystem labels. Runtime memory collection happens
+            only on an authenticated GET scrape.
+          </p>
+          <p>Example Prometheus scrape configuration:</p>
+          <pre><code class="language-yaml">scrape_configs:
+  - job_name: foundry
+    metrics_path: /__metrics
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/foundry-token
+    static_configs:
+      - targets: ['127.0.0.1:8080']
+</code></pre>
+          <p>
+            Use the address reachable from Prometheus (a container's loopback is its own). Keep the
+            token file readable only by the scraper account. Use TLS when scraping across hosts and
+            restrict access at the proxy/firewall. Rotate the token and restart Foundry, then update
+            the scraper's secret. For Compose, set the token in the deployment environment;
+            <code>docker-compose.prod.yml</code> forwards it to Foundry.
+          </p>
+          <p>
+            Alert on sustained scrape failures (<code>up{job=&quot;foundry&quot;} == 0</code>),
+            readiness failures, and elevated
+            <code>rate(foundry_http_requests_total{status_class=&quot;5xx&quot;}[5m])</code>.
+            Average completed-request duration can be calculated as the rate of the duration counter
+            divided by <code>sum(rate(foundry_http_requests_total[5m]))</code>; guard against a zero
+            denominator. Also monitor disk space, inode availability, backup age, and host/container
+            resources through your infrastructure monitoring.
+          </p>
+          <h2>Structured logging</h2>
+          <p>
+            <code>FOUNDRY_LOG</code> accepts <code>debug</code>, <code>info</code> (default),
+            <code>warn</code>/<code>warning</code>, and <code>error</code>.
+            <code>FOUNDRY_LOG_FORMAT=json</code> selects newline-delimited JSON for Foundry's
+            <code>slog</code> logs on stderr. The default and unrecognized formats use readable
+            text. JSON entries include <code>time</code>, <code>level</code>, <code>msg</code>, and
+            event-specific typed attributes. Configure these variables before starting the process;
+            changes require restart. CLI progress output and third-party output can still be plain
+            text.
+          </p>
+          <pre><code class="language-sh">FOUNDRY_LOG=info FOUNDRY_LOG_FORMAT=json foundry serve
+</code></pre>
+          <p>The production Compose file defaults to JSON and <code>info</code>:</p>
+          <pre><code class="language-sh">docker compose -f docker-compose.prod.yml logs --follow --tail 100 foundry
+</code></pre>
+          <p>
+            Send stderr to your collector or service log file. Set retention and rotation at the
+            service/container logging layer and alert on repeated errors. Foundry's installed
+            services write <code>.foundry/run/service.log</code>; rotate it with a strategy
+            compatible with the manager's open file handles. <code>foundry logs -f</code> is the
+            standalone log viewer. JSON formatting does not redact event attributes. Avoid debug
+            mode in normal production: verbose request diagnostics can include queries, remote
+            addresses, user agents, and filesystem context. Restrict access to logs and apply
+            collector redaction where needed.
+          </p>
+          <h2>Backup and restore drills</h2>
+          <p>
+            Built-in ZIP and Git snapshots cover the <strong>content tree</strong>, including its
+            config and media. They do not provide a complete machine recovery image. Independently
+            back up <code>data/</code> (admin accounts, sessions, audit/runtime state),
+            <code>themes/</code>, <code>plugins/</code>, external secret material, service
+            definitions, and the executable version. <code>public/</code> can be rebuilt; include it
+            if your recovery-time target requires it. Treat backups containing configuration and
+            accounts as sensitive.
+          </p>
+          <pre><code class="language-sh">foundry backup create
+foundry backup list
+foundry backup git-snapshot &quot;before deployment&quot;
+foundry backup git-log 10
+</code></pre>
+          <p>
+            Managed ZIPs default to <code>.foundry/backups</code>; the production Docker overlay
+            uses <code>data/backups</code> on the persistent data volume.
+            <code>backup.on_change</code> is debounced and is not a scheduled complete-system
+            backup. Retention can prune local ZIPs. Copy verified archives off the host and keep an
+            independent retention policy. Never rely on a backup stored only on the disk being
+            protected. Quiesce writers for consistent content snapshots and stop the service during
+            full filesystem snapshots, especially when copying account/session data.
+          </p>
+          <p>Perform this drill on an isolated recovery project, never the live content tree:</p>
+          <ol>
+            <li>
+              Record the application revision, config overlays, backup timestamp, archive checksum
+              (<code>shasum -a 256 snapshot.zip</code>), and expected recovery point/time. Copy the
+              archive off-host and verify its checksum after retrieval.
+            </li>
+            <li>
+              Prepare a disposable project with the same executable, themes, plugins, and directory
+              names. Restore independently saved data and secrets where needed; disable managed
+              callbacks, remote Git pushes, and other production integrations. Use a distinct
+              listener port and local-only admin access.
+            </li>
+            <li>
+              Place the ZIP in that project's configured <code>backup.dir</code>. Check archive
+              integrity with <code>unzip -t snapshot.zip</code>. Start the recovery server and sign
+              in to its admin UI. Use the Platform → Operations backup controls to restore the
+              selected ZIP. There is currently no <code>foundry backup restore</code> CLI command.
+            </li>
+            <li>
+              The restore snapshots the existing recovery content first, extracts the archive, and
+              replaces the content tree. It requires backup space as well as temporary extraction
+              space. It restores content only, and can replace config; inspect the restored
+              configuration and reapply isolation settings before restarting the recovery server.
+            </li>
+            <li>
+              Run <code>foundry doctor</code> and <code>foundry build</code> in the recovery project
+              with the intended overlays. Restart it, inspect <code>/__health</code>, verify
+              representative pages/media, and test admin login and a disposable content edit.
+              Compare document/media counts and selected checksums with the expected recovery point.
+            </li>
+            <li>
+              Record elapsed recovery time, recovered data age, missing files, and corrective
+              actions. Retain drill evidence and repeat after storage/auth/plugin changes and on a
+              regular schedule suited to your recovery targets.
+            </li>
+          </ol>
+          <p>
+            For actual recovery, stop traffic and writers, retain the damaged state for
+            rollback/analysis, restore the verified complete backup set, rebuild, and run these
+            checks before reopening traffic. A green health response alone does not prove content or
+            account recovery.
+          </p>
+          <h2>Service-manager examples</h2>
+          <p>Run the built-in commands from the project root as the deployment user:</p>
+          <pre><code class="language-sh">foundry service install
+foundry service status
+foundry service restart
+foundry service stop
+foundry service start
+</code></pre>
+          <p>
+            Linux installation creates a user systemd unit in <code>~/.config/systemd/user/</code>;
+            macOS creates a LaunchAgent in <code>~/Library/LaunchAgents/</code>. Names and paths are
+            printed by installation/status and stored in <code>.foundry/run/service.json</code>.
+            Installation enables and starts the service. Linux users may need
+            <code>loginctl enable-linger &quot;$USER&quot;</code> for logout/reboot persistence. A
+            macOS LaunchAgent runs in the user's login session; use Docker or a separately managed
+            system service for deployments that must operate without that session.
+          </p>
+          <p>
+            The generated definitions run <code>serve</code> from the project root and do not
+            capture shell environment variables or command-line overlays. Configure a manager
+            provided environment explicitly. For Linux, add an override using the actual unit name
+            from service status:
+          </p>
+          <pre><code class="language-sh">systemctl --user edit &lt;installed-unit-name&gt;.service
+</code></pre>
+          <pre><code class="language-ini">[Service]
+Environment=FOUNDRY_LOG=info
+Environment=FOUNDRY_LOG_FORMAT=json
+EnvironmentFile=/absolute/path/to/protected/foundry.env
+# Optional explicit production overlay; use the executable printed by service status.
+ExecStart=
+ExecStart=/absolute/path/to/foundry --config-overlay content/config/site.production.yaml serve
+</code></pre>
+          <p>
+            Store <code>FOUNDRY_METRICS_TOKEN=...</code> and required admin secrets in that
+            protected file, with permissions limited to the service account. Then run:
+          </p>
+          <pre><code class="language-sh">systemctl --user daemon-reload
+systemctl --user restart &lt;installed-unit-name&gt;.service
+systemctl --user status &lt;installed-unit-name&gt;.service
+</code></pre>
+          <p>
+            For macOS, add an <code>EnvironmentVariables</code> dictionary to the installed plist,
+            containing <code>FOUNDRY_LOG</code>, <code>FOUNDRY_LOG_FORMAT</code>, and required
+            secrets. Restrict the plist's permissions, and unload/reload the agent using its
+            installed path:
+          </p>
+          <pre><code class="language-sh">launchctl bootout &quot;gui/$(id -u)&quot; /absolute/path/to/installed.plist
+launchctl bootstrap &quot;gui/$(id -u)&quot; /absolute/path/to/installed.plist
+</code></pre>
+          <p>
+            Use the plist's <code>ProgramArguments</code> array to add any required config overlay
+            before <code>serve</code>. Reinstalling can regenerate the plist; preserve your
+            settings. Check service status, health, metrics authentication, and log collection after
+            every restart and host reboot. Test these manager-specific steps on your host before
+            relying on unattended operation.
+          </p>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

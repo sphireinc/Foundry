@@ -1,0 +1,36 @@
+.page-body code {
+  overflow-wrap: anywhere;
+}
+
+.page-body pre code {
+  overflow-wrap: normal;
+}
+
+.page-body table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 24px 0;
+}
+
+.page-body th,
+.page-body td {
+  padding: 12px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.page-body th {
+  background: #f6f0e3;
+}
+
+.page-body table code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.page-body td:last-child {
+  min-width: 220px;
+}

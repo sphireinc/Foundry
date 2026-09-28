@@ -11,6 +11,9 @@ services:
     ports:
       - "${FOUNDRY_PUBLISH_ADDR:-8080}:8080"
     environment:
+      FOUNDRY_LOG: "${FOUNDRY_LOG:-info}"
+      FOUNDRY_LOG_FORMAT: "${FOUNDRY_LOG_FORMAT:-json}"
+      FOUNDRY_METRICS_TOKEN: "${FOUNDRY_METRICS_TOKEN:-}"
       FOUNDRY_ADMIN_SESSION_SECRET: "${FOUNDRY_ADMIN_SESSION_SECRET?required}"
       FOUNDRY_ADMIN_TOTP_SECRET_KEY: "${FOUNDRY_ADMIN_TOTP_SECRET_KEY?required}"
     volumes:
@@ -29,7 +32,7 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/__health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
