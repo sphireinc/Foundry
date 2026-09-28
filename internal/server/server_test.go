@@ -372,10 +372,10 @@ security:
     scripts:
       - https://cdn.example.com
 `
-	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "theme.yaml"), []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "theme.yaml"), []byte(manifest), 0o600); err != nil {
 		t.Fatalf("write theme manifest: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"), []byte(`{{ define "content" }}page {{ .Page.Title }}<img src="https://cdn.example.com/hero.png">{{ end }}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"), []byte(`{{ define "content" }}page {{ .Page.Title }}<img src="https://cdn.example.com/hero.png">{{ end }}`), 0o600); err != nil {
 		t.Fatalf("write page template: %v", err)
 	}
 

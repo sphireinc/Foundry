@@ -14,12 +14,12 @@ func TestListThemesIncludesSecurityRemediation(t *testing.T) {
 	writeServiceTheme(t, cfg, cfg.Theme)
 
 	headPath := filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "head.html")
-	headBody, err := os.ReadFile(headPath)
+	headBody, err := os.ReadFile(headPath) // #nosec G304 -- headPath is constructed beneath the test's temporary themes directory.
 	if err != nil {
 		t.Fatalf("read theme head: %v", err)
 	}
 	headBody = []byte(strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<script src="https://cdn.example.com/theme.js"></script>`, 1))
-	if err := os.WriteFile(headPath, headBody, 0o644); err != nil {
+	if err := os.WriteFile(headPath, headBody, 0o600); err != nil { // #nosec G703 -- headPath is constructed beneath the test's temporary themes directory.
 		t.Fatalf("write theme head: %v", err)
 	}
 

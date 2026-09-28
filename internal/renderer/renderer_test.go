@@ -413,7 +413,7 @@ security:
 		t.Fatalf("write manifest: %v", err)
 	}
 	headPath := filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "head.html")
-	if err := os.WriteFile(headPath, []byte(`{{ define "head" }}<script src="https://cdn.example.com/theme.js"></script>{{ end }}`), 0o644); err != nil {
+	if err := os.WriteFile(headPath, []byte(`{{ define "head" }}<script src="https://cdn.example.com/theme.js"></script>{{ end }}`), 0o600); err != nil {
 		t.Fatalf("write head template: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"), []byte(`{{ define "content" }}token={{ .Site.Admin.AccessToken }} params={{ .Site.Params }} field={{ field .Page "hero" }} shared={{ data "custom_fields" }}{{ end }}`), 0o644); err != nil {

@@ -22,14 +22,15 @@ type themeSecurityReference struct {
 }
 
 var (
-	htmlThemeTagPattern   = regexp.MustCompile(`(?is)<(script|link|img|video|audio|source)\b[^>]*>`)
-	htmlStyleBlockPattern = regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style\s*>`)
-	cssImportPattern      = regexp.MustCompile(`(?is)@import\s+(?:url\(\s*)?["']?((?:https?|wss?)://[^\s"')]+)`)
-	cssURLPattern         = regexp.MustCompile(`(?is)url\(\s*["']?((?:https?|wss?)://[^\s"')]+)`)
-	jsFetchPattern        = regexp.MustCompile("(?is)\\bfetch\\s*\\(\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
-	jsWebSocketPattern    = regexp.MustCompile("(?is)\\b(?:new\\s+)?(?:WebSocket|EventSource)\\s*\\(\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
-	jsXHROpenPattern      = regexp.MustCompile("(?is)\\.(?:open)\\s*\\(\\s*[\\\"'`][A-Z]+[\\\"'`]\\s*,\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
-	jsAxiosPattern        = regexp.MustCompile("(?is)\\baxios\\.(?:get|post|put|patch|delete|request)\\s*\\(\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
+	htmlThemeTagPattern       = regexp.MustCompile(`(?is)<(script|link|img|video|audio|source)\b[^>]*>`)
+	htmlMediaContainerPattern = regexp.MustCompile(`(?is)</?(picture|video|audio)\b[^>]*>`)
+	htmlStyleBlockPattern     = regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style\s*>`)
+	cssImportPattern          = regexp.MustCompile(`(?is)@import\s+(?:url\(\s*)?["']?((?:https?|wss?)://[^\s"')]+)`)
+	cssURLPattern             = regexp.MustCompile(`(?is)url\(\s*["']?((?:https?|wss?)://[^\s"')]+)`)
+	jsFetchPattern            = regexp.MustCompile("(?is)\\bfetch\\s*\\(\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
+	jsWebSocketPattern        = regexp.MustCompile("(?is)\\b(?:new\\s+)?(?:WebSocket|EventSource)\\s*\\(\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
+	jsXHROpenPattern          = regexp.MustCompile("(?is)\\.(?:open)\\s*\\(\\s*[\\\"'`][A-Z]+[\\\"'`]\\s*,\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
+	jsAxiosPattern            = regexp.MustCompile("(?is)\\baxios\\.(?:get|post|put|patch|delete|request)\\s*\\(\\s*[\\\"'`]((?:https?|wss?)://[^\\\"'`]+)[\\\"'`]")
 )
 
 func scanThemeSecurityReferences(root string) ([]themeSecurityReference, error) {
@@ -52,7 +53,7 @@ func scanThemeSecurityReferences(root string) ([]themeSecurityReference, error) 
 		if ext != ".html" && ext != ".css" && ext != ".js" {
 			return nil
 		}
-		body, err := os.ReadFile(path)
+		body, err := os.ReadFile(path) // #nosec G304,G122 -- path is constrained to root by EnsureNoSymlinkEscape above.
 		if err != nil {
 			return err
 		}
@@ -90,7 +91,7 @@ func scanThemeSecurityFile(path, ext string, body []byte) []themeSecurityReferen
 			}
 			tag := string(body[match[0]:match[1]])
 			tagName := strings.ToLower(string(maskedTags[match[2]:match[3]]))
-			references = append(references, htmlTagReferences(path, body, match[0], tagName, tag)...)
+			references = append(references, htmlTagReferences(path, body, maskedTags, match[0], tagName, tag)...)
 		}
 		for _, match := range htmlStyleBlockPattern.FindAllSubmatchIndex(masked, -1) {
 			if len(match) < 4 || match[2] < 0 || match[3] < 0 {
@@ -106,7 +107,7 @@ func scanThemeSecurityFile(path, ext string, body []byte) []themeSecurityReferen
 	return deduplicateThemeSecurityReferences(references)
 }
 
-func htmlTagReferences(path string, body []byte, offset int, tagName, tag string) []themeSecurityReference {
+func htmlTagReferences(path string, body, maskedBody []byte, offset int, tagName, tag string) []themeSecurityReference {
 	kind := ""
 	var values []string
 	switch strings.ToLower(tagName) {
@@ -114,16 +115,19 @@ func htmlTagReferences(path string, body []byte, offset int, tagName, tag string
 		kind = "script"
 		values = append(values, htmlAttribute(tag, "src"))
 	case "link":
-		if !strings.Contains(strings.ToLower(htmlAttribute(tag, "rel")), "stylesheet") {
+		kind = htmlLinkReferenceKind(tag)
+		if kind == "" {
 			return nil
 		}
-		kind = "style"
 		values = append(values, htmlAttribute(tag, "href"))
 	case "img":
 		kind = "image"
 		values = append(values, htmlAttribute(tag, "src"), htmlAttribute(tag, "srcset"))
-	case "video", "audio", "source":
+	case "video", "audio":
 		kind = "media"
+		values = append(values, htmlAttribute(tag, "src"), htmlAttribute(tag, "srcset"))
+	case "source":
+		kind = htmlSourceReferenceKind(maskedBody, offset, tag)
 		values = append(values, htmlAttribute(tag, "src"), htmlAttribute(tag, "srcset"))
 	default:
 		return nil
@@ -132,12 +136,104 @@ func htmlTagReferences(path string, body []byte, offset int, tagName, tag string
 	var references []themeSecurityReference
 	for _, value := range values {
 		for _, raw := range splitHTMLURLs(value) {
-			if isRemoteAssetURL(raw) {
+			remote := isRemoteAssetURL(raw)
+			if kind == "request" {
+				remote = isRemoteThemeURL(raw)
+			}
+			if remote {
 				references = append(references, themeSecurityReference{Kind: kind, URL: raw, Path: path, Line: lineNumber(body, offset)})
 			}
 		}
 	}
 	return references
+}
+
+func htmlLinkReferenceKind(tag string) string {
+	rel := make(map[string]struct{})
+	for _, token := range strings.Fields(strings.ToLower(htmlAttribute(tag, "rel"))) {
+		rel[token] = struct{}{}
+	}
+	if _, ok := rel["stylesheet"]; ok {
+		return "style"
+	}
+	if _, ok := rel["modulepreload"]; ok {
+		return "script"
+	}
+	if _, ok := rel["preload"]; ok {
+		return htmlLinkFetchKind(tag)
+	}
+	if _, ok := rel["prefetch"]; ok {
+		return htmlLinkFetchKind(tag)
+	}
+	if _, ok := rel["icon"]; ok {
+		return "image"
+	}
+	if _, ok := rel["apple-touch-icon"]; ok {
+		return "image"
+	}
+	if _, ok := rel["mask-icon"]; ok {
+		return "image"
+	}
+	return ""
+}
+
+func htmlLinkFetchKind(tag string) string {
+	switch strings.ToLower(htmlAttribute(tag, "as")) {
+	case "script":
+		return "script"
+	case "style":
+		return "style"
+	case "font":
+		return "font"
+	case "image":
+		return "image"
+	case "audio", "video", "media":
+		return "media"
+	case "fetch":
+		return "request"
+	}
+	return ""
+}
+
+func htmlSourceReferenceKind(body []byte, offset int, tag string) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(htmlAttribute(tag, "type"))), "image/") {
+		return "image"
+	}
+	if htmlHasOpenContainer(body, offset, "picture") {
+		return "image"
+	}
+	return "media"
+}
+
+func htmlHasOpenContainer(body []byte, offset int, wanted string) bool {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(body) {
+		offset = len(body)
+	}
+	stack := []string{}
+	for _, match := range htmlMediaContainerPattern.FindAllSubmatchIndex(body[:offset], -1) {
+		if len(match) < 4 || match[2] < 0 || match[3] < 0 {
+			continue
+		}
+		name := strings.ToLower(string(body[match[2]:match[3]]))
+		raw := strings.TrimSpace(string(body[match[0]:match[1]]))
+		if strings.HasPrefix(raw, "</") {
+			for index := len(stack) - 1; index >= 0; index-- {
+				if stack[index] == name {
+					stack = stack[:index]
+					break
+				}
+			}
+			continue
+		}
+		if strings.HasSuffix(strings.TrimSpace(strings.TrimSuffix(raw, ">")), "/") {
+			continue
+		}
+		stack = append(stack, name)
+	}
+	return len(stack) > 0 && stack[len(stack)-1] == wanted
 }
 
 func htmlAttribute(tag, name string) string {
@@ -441,7 +537,7 @@ func maskJSComments(body []byte) []byte {
 		if out[i] == '/' && i+1 < len(out) && out[i+1] == '*' {
 			start := i
 			i += 2
-			for i+1 < len(out) && !(out[i] == '*' && out[i+1] == '/') {
+			for i+1 < len(out) && (out[i] != '*' || out[i+1] != '/') {
 				i++
 			}
 			if i+1 < len(out) {
@@ -501,22 +597,41 @@ func securityReferenceCategory(kind string) string {
 }
 
 func securityReferenceAllowed(ref themeSecurityReference, sec ThemeSecurity) bool {
+	return securityReferenceStatus(ref, sec) == "declared"
+}
+
+func securityReferenceStatus(ref themeSecurityReference, sec ThemeSecurity) string {
+	declared := false
+	enabled := false
 	switch ref.Kind {
 	case "script":
-		return sec.ExternalAssets.Allowed && URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Scripts)
+		declared = URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Scripts)
+		enabled = sec.ExternalAssets.Allowed
 	case "style":
-		return sec.ExternalAssets.Allowed && URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Styles)
+		declared = URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Styles)
+		enabled = sec.ExternalAssets.Allowed
 	case "font":
-		return sec.ExternalAssets.Allowed && URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Fonts)
+		declared = URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Fonts)
+		enabled = sec.ExternalAssets.Allowed
 	case "image":
-		return sec.ExternalAssets.Allowed && URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Images)
+		declared = URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Images)
+		enabled = sec.ExternalAssets.Allowed
 	case "media":
-		return sec.ExternalAssets.Allowed && URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Media)
+		declared = URLAllowedByPatterns(ref.URL, sec.ExternalAssets.Media)
+		enabled = sec.ExternalAssets.Allowed
 	case "request":
-		return sec.FrontendRequests.Allowed && URLAllowedByPatterns(ref.URL, sec.FrontendRequests.Origins)
+		declared = URLAllowedByPatterns(ref.URL, sec.FrontendRequests.Origins)
+		enabled = sec.FrontendRequests.Allowed
 	default:
-		return false
+		return "undeclared"
 	}
+	if !declared {
+		return "undeclared"
+	}
+	if !enabled {
+		return "disabled"
+	}
+	return "declared"
 }
 
 func securityReferenceHint(ref themeSecurityReference) string {
@@ -528,6 +643,19 @@ func securityReferenceHint(ref themeSecurityReference) string {
 		return fmt.Sprintf("Add %s to %s in theme.yaml and set security.frontend_requests.allowed: true.", origin, securityReferenceField(ref.Kind))
 	}
 	return fmt.Sprintf("Add %s to %s in theme.yaml and set security.external_assets.allowed: true.", origin, securityReferenceField(ref.Kind))
+}
+
+func securityReferenceRemediation(ref themeSecurityReference, status string) string {
+	if status == "declared" {
+		return ""
+	}
+	if status == "disabled" {
+		if ref.Kind == "request" {
+			return "Set security.frontend_requests.allowed: true in theme.yaml."
+		}
+		return "Set security.external_assets.allowed: true in theme.yaml."
+	}
+	return securityReferenceHint(ref)
 }
 
 func securityOrigin(raw string) string {

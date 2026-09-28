@@ -244,7 +244,7 @@ func TestValidateInstalledDetailedChecksThemeSecurity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("analyze security: %v", err)
 	}
-	if len(report.DetectedAssets) != 1 || report.DetectedAssets[0].Kind != "script" || report.DetectedAssets[0].Status != "declared" {
+	if len(report.DetectedAssets) != 1 || report.DetectedAssets[0].Kind != "script" || report.DetectedAssets[0].Status != "declared" || report.DetectedAssets[0].Remediation != "" {
 		t.Fatalf("expected declared script finding, got %#v", report.DetectedAssets)
 	}
 	manifest, err := LoadManifest(root, "security-theme")
@@ -264,30 +264,30 @@ func TestValidateInstalledDetailedUsesAssetCategoriesAndRequestOrigins(t *testin
 	}
 
 	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
-	headBody, err := os.ReadFile(headPath)
+	headBody, err := os.ReadFile(headPath) // #nosec G304 -- headPath is constructed beneath the test's temporary themes directory.
 	if err != nil {
 		t.Fatalf("read head: %v", err)
 	}
 	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<img src="https://cdn.example.com/hero.png">`, 1)
-	if err := os.WriteFile(headPath, []byte(updatedHead), 0o644); err != nil {
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o600); err != nil { // #nosec G703 -- headPath is constructed beneath the test's temporary themes directory.
 		t.Fatalf("write head: %v", err)
 	}
 	requestPath := filepath.Join(scaffolded, "assets", "js", "requests.js")
-	if err := os.MkdirAll(filepath.Dir(requestPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(requestPath), 0o750); err != nil {
 		t.Fatalf("mkdir request assets: %v", err)
 	}
-	if err := os.WriteFile(requestPath, []byte(`fetch("https://api.example.com/data")`), 0o644); err != nil {
+	if err := os.WriteFile(requestPath, []byte(`fetch("https://api.example.com/data")`), 0o600); err != nil {
 		t.Fatalf("write request asset: %v", err)
 	}
 
 	manifestPath := filepath.Join(scaffolded, "theme.yaml")
-	manifestBody, err := os.ReadFile(manifestPath)
+	manifestBody, err := os.ReadFile(manifestPath) // #nosec G304 -- manifestPath is constructed beneath the test's temporary themes directory.
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
 	manifest := strings.Replace(string(manifestBody), "  external_assets:\n    allowed: false\n", "  external_assets:\n    allowed: true\n    scripts:\n      - https://cdn.example.com\n", 1)
 	manifest = strings.Replace(manifest, "  frontend_requests:\n    allowed: false\n", "  frontend_requests:\n    allowed: true\n    origins:\n      - https://declared-api.example.com\n", 1)
-	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil { // #nosec G703 -- manifestPath is constructed beneath the test's temporary themes directory.
 		t.Fatalf("write manifest: %v", err)
 	}
 
@@ -325,29 +325,29 @@ func TestValidateInstalledDetailedAcceptsEachDeclaredAssetCategory(t *testing.T)
 	}
 
 	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
-	headBody, err := os.ReadFile(headPath)
+	headBody, err := os.ReadFile(headPath) // #nosec G304 -- headPath is constructed beneath the test's temporary themes directory.
 	if err != nil {
 		t.Fatalf("read head: %v", err)
 	}
 	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<script src="https://scripts.example.com/theme.js"></script><link rel="stylesheet" href="https://styles.example.com/theme.css"><img src="https://images.example.com/hero.png"><video src="https://media.example.com/demo.mp4"></video>`, 1)
-	if err := os.WriteFile(headPath, []byte(updatedHead), 0o644); err != nil {
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o600); err != nil { // #nosec G703 -- headPath is constructed beneath the test's temporary themes directory.
 		t.Fatalf("write head: %v", err)
 	}
 	cssPath := filepath.Join(scaffolded, "assets", "css", "theme.css")
-	if err := os.MkdirAll(filepath.Dir(cssPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cssPath), 0o750); err != nil {
 		t.Fatalf("mkdir css dir: %v", err)
 	}
-	if err := os.WriteFile(cssPath, []byte(`@import url("https://styles.example.com/import.css"); @font-face { src: url("https://fonts.example.com/theme.woff2"); } .hero { background: url("https://images.example.com/background.png"); } .video { background: url("https://media.example.com/background.mp4"); }`), 0o644); err != nil {
+	if err := os.WriteFile(cssPath, []byte(`@import url("https://styles.example.com/import.css"); @font-face { src: url("https://fonts.example.com/theme.woff2"); } .hero { background: url("https://images.example.com/background.png"); } .video { background: url("https://media.example.com/background.mp4"); }`), 0o600); err != nil {
 		t.Fatalf("write css: %v", err)
 	}
 
 	manifestPath := filepath.Join(scaffolded, "theme.yaml")
-	manifestBody, err := os.ReadFile(manifestPath)
+	manifestBody, err := os.ReadFile(manifestPath) // #nosec G304 -- manifestPath is constructed beneath the test's temporary themes directory.
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
 	manifest := strings.Replace(string(manifestBody), "  external_assets:\n    allowed: false\n", "  external_assets:\n    allowed: true\n    scripts:\n      - https://scripts.example.com\n    styles:\n      - https://styles.example.com\n    fonts:\n      - https://fonts.example.com\n    images:\n      - https://images.example.com\n    media:\n      - https://media.example.com\n", 1)
-	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil { // #nosec G703 -- manifestPath is constructed beneath the test's temporary themes directory.
 		t.Fatalf("write manifest: %v", err)
 	}
 
@@ -364,6 +364,9 @@ func TestValidateInstalledDetailedAcceptsEachDeclaredAssetCategory(t *testing.T)
 	}
 	seen := map[string]bool{}
 	for _, finding := range report.DetectedAssets {
+		if finding.Remediation != "" {
+			t.Fatalf("declared %s finding should not have remediation, got %q", finding.Kind, finding.Remediation)
+		}
 		seen[finding.Kind] = finding.Status == "declared"
 	}
 	for _, kind := range []string{"script", "style", "font", "image", "media"} {
@@ -380,14 +383,31 @@ func TestValidateInstalledDetailedReportsDisabledSecurityPolicies(t *testing.T) 
 		t.Fatalf("scaffold theme: %v", err)
 	}
 	manifestPath := filepath.Join(scaffolded, "theme.yaml")
-	body, err := os.ReadFile(manifestPath)
+	body, err := os.ReadFile(manifestPath) // #nosec G304 -- manifestPath is constructed beneath the test's temporary themes directory.
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
 	manifest := strings.Replace(string(body), "  external_assets:\n    allowed: false\n", "  external_assets:\n    allowed: false\n    images:\n      - https://images.example.com\n", 1)
 	manifest = strings.Replace(manifest, "  frontend_requests:\n    allowed: false\n", "  frontend_requests:\n    allowed: false\n    origins:\n      - https://api.example.com\n", 1)
-	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil { // #nosec G703 -- manifestPath is constructed beneath the test's temporary themes directory.
 		t.Fatalf("write manifest: %v", err)
+	}
+
+	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
+	headBody, err := os.ReadFile(headPath) // #nosec G304 -- headPath is constructed beneath the test's temporary themes directory.
+	if err != nil {
+		t.Fatalf("read head: %v", err)
+	}
+	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<img src="https://images.example.com/hero.png">`, 1)
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o600); err != nil { // #nosec G703 -- headPath is constructed beneath the test's temporary themes directory.
+		t.Fatalf("write head: %v", err)
+	}
+	requestPath := filepath.Join(scaffolded, "assets", "js", "requests.js")
+	if err := os.MkdirAll(filepath.Dir(requestPath), 0o750); err != nil {
+		t.Fatalf("mkdir request assets: %v", err)
+	}
+	if err := os.WriteFile(requestPath, []byte(`fetch("https://api.example.com/data")`), 0o600); err != nil {
+		t.Fatalf("write request asset: %v", err)
 	}
 
 	result, err := ValidateInstalledDetailed(root, "disabled-policy-theme")
@@ -406,6 +426,16 @@ func TestValidateInstalledDetailedReportsDisabledSecurityPolicies(t *testing.T) 
 	}
 	if diagnostic := seen["theme.security.frontend_requests.disabled"]; diagnostic.Field != "security.frontend_requests.allowed" || diagnostic.Hint == "" {
 		t.Fatalf("expected frontend requests disabled diagnostic, got %#v", diagnostic)
+	}
+	report, err := AnalyzeInstalledSecurity(root, "disabled-policy-theme")
+	if err != nil {
+		t.Fatalf("analyze disabled policy security: %v", err)
+	}
+	if len(report.DetectedAssets) != 1 || report.DetectedAssets[0].Status != "disabled" || !strings.Contains(report.DetectedAssets[0].Remediation, "security.external_assets.allowed: true") || strings.Contains(report.DetectedAssets[0].Remediation, "Add ") {
+		t.Fatalf("expected disabled image finding with enable-only remediation, got %#v", report.DetectedAssets)
+	}
+	if len(report.DetectedRequests) != 1 || report.DetectedRequests[0].Status != "disabled" || !strings.Contains(report.DetectedRequests[0].Remediation, "security.frontend_requests.allowed: true") || strings.Contains(report.DetectedRequests[0].Remediation, "Add ") {
+		t.Fatalf("expected disabled request finding with enable-only remediation, got %#v", report.DetectedRequests)
 	}
 	loadedManifest, err := LoadManifest(root, "disabled-policy-theme")
 	if err != nil {

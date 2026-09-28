@@ -36,6 +36,32 @@ func TestScanThemeSecurityFileClassifiesAssetsAndIgnoresLinksAndComments(t *test
 	}
 }
 
+func TestScanThemeSecurityFileClassifiesPictureSourcesAndFetchedLinks(t *testing.T) {
+	body := []byte(`<picture>
+<source srcset="https://images.example.com/hero.avif" type="image/avif">
+</picture>
+<video><source src="https://media.example.com/demo.mp4"></video>
+<link rel="preload" as="font" href="https://fonts.example.com/theme.woff2">
+<link rel="modulepreload" href="https://cdn.example.com/module.js">
+<link rel="preload" as="image" href="https://images.example.com/preloaded.png">
+<link rel="icon" href="https://images.example.com/favicon.png">
+<link rel="preload" as="fetch" href="https://api.example.com/data">
+<link rel="prefetch" as="style" href="https://cdn.example.com/prefetched.css">
+<link rel="apple-touch-icon" href="https://images.example.com/touch-icon.png">`)
+
+	references := scanThemeSecurityFile("theme.html", ".html", body)
+	if len(references) != 9 {
+		t.Fatalf("expected nine security references, got %#v", references)
+	}
+	gotKinds := make([]string, 0, len(references))
+	for _, reference := range references {
+		gotKinds = append(gotKinds, reference.Kind)
+	}
+	if got := strings.Join(gotKinds, ","); got != "image,media,font,script,image,image,request,style,image" {
+		t.Fatalf("unexpected reference categories: %s", got)
+	}
+}
+
 func TestScanThemeSecurityFileDetectsRequestsAndIgnoresStringsAndComments(t *testing.T) {
 	body := []byte(`// fetch("https://ignored.example/comment")
 const documentationURL = "https://ignored.example/string"
@@ -94,5 +120,38 @@ func TestSecurityReferenceMatchingUsesTheCSPCategory(t *testing.T) {
 	}
 	if got := securityReferenceField("image"); got != "security.external_assets.images" {
 		t.Fatalf("unexpected image declaration field: %q", got)
+	}
+}
+
+func TestSecurityReferenceStatusDistinguishesDisabledAndMissingDeclarations(t *testing.T) {
+	sec := ThemeSecurity{
+		ExternalAssets: ThemeExternalAssets{
+			Images: []string{"https://images.example.com"},
+		},
+		FrontendRequests: ThemeFrontendRequests{
+			Origins: []string{"https://api.example.com"},
+		},
+	}
+
+	image := themeSecurityReference{Kind: "image", URL: "https://images.example.com/hero.png"}
+	request := themeSecurityReference{Kind: "request", URL: "https://api.example.com/data"}
+	missing := themeSecurityReference{Kind: "image", URL: "https://other.example.com/hero.png"}
+	if got := securityReferenceStatus(image, sec); got != "disabled" {
+		t.Fatalf("expected declared image with disabled policy to be disabled, got %q", got)
+	}
+	if got := securityReferenceStatus(request, sec); got != "disabled" {
+		t.Fatalf("expected declared request with disabled policy to be disabled, got %q", got)
+	}
+	if got := securityReferenceStatus(missing, sec); got != "undeclared" {
+		t.Fatalf("expected missing image declaration to be undeclared, got %q", got)
+	}
+	if got := securityReferenceRemediation(image, "disabled"); got != "Set security.external_assets.allowed: true in theme.yaml." {
+		t.Fatalf("unexpected disabled asset remediation: %q", got)
+	}
+	if got := securityReferenceRemediation(request, "disabled"); got != "Set security.frontend_requests.allowed: true in theme.yaml." {
+		t.Fatalf("unexpected disabled request remediation: %q", got)
+	}
+	if got := securityReferenceRemediation(image, "declared"); got != "" {
+		t.Fatalf("expected no remediation for declared finding, got %q", got)
 	}
 }

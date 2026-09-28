@@ -64,14 +64,15 @@ func detectRemoteThemeReferences(root string, sec ThemeSecurity) ([]SecurityAsse
 		return nil, nil, err
 	}
 	for _, reference := range references {
+		status := securityReferenceStatus(reference, sec)
 		finding := SecurityAssetFinding{
 			Kind:        reference.Kind,
 			URL:         reference.URL,
 			Path:        reference.Path,
 			Line:        reference.Line,
 			Field:       securityReferenceField(reference.Kind),
-			Status:      allowState(securityReferenceAllowed(reference, sec)),
-			Remediation: securityReferenceHint(reference),
+			Status:      status,
+			Remediation: securityReferenceRemediation(reference, status),
 		}
 		if reference.Kind == "request" {
 			requests = append(requests, finding)
@@ -113,11 +114,4 @@ func summarizeCSP(sec ThemeSecurity) []string {
 		out = append(out, "connect-src restricted to self")
 	}
 	return out
-}
-
-func allowState(ok bool) string {
-	if ok {
-		return "declared"
-	}
-	return "undeclared"
 }
