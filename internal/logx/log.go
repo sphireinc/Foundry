@@ -1,6 +1,7 @@
 package logx
 
 import (
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -11,14 +12,16 @@ var once sync.Once
 
 func InitFromEnv() {
 	once.Do(func() {
-		level := parseLevel(os.Getenv("FOUNDRY_LOG"))
-
-		handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: level,
-		})
-
-		slog.SetDefault(slog.New(handler))
+		slog.SetDefault(slog.New(newHandler(os.Stderr, os.Getenv("FOUNDRY_LOG"), os.Getenv("FOUNDRY_LOG_FORMAT"))))
 	})
+}
+
+func newHandler(w io.Writer, level, format string) slog.Handler {
+	opts := &slog.HandlerOptions{Level: parseLevel(level)}
+	if strings.EqualFold(strings.TrimSpace(format), "json") {
+		return slog.NewJSONHandler(w, opts)
+	}
+	return slog.NewTextHandler(w, opts)
 }
 
 func parseLevel(v string) slog.Level {

@@ -69,6 +69,7 @@ type Server struct {
 	preview      bool
 	debug        bool
 	activeReqs   atomic.Int64
+	metrics      httpMetrics
 	connMu       sync.Mutex
 	connStates   map[net.Conn]http.ConnState
 	mu           sync.RWMutex
@@ -193,6 +194,9 @@ func (s *Server) newMux() http.Handler {
 		mux.HandleFunc("/__debug/deps", s.handleDepsDebug)
 	}
 	mux.HandleFunc("/__health", s.handleHealth)
+	metricsToken := strings.TrimSpace(os.Getenv("FOUNDRY_METRICS_TOKEN"))
+	// Reserve the route even when disabled so it cannot fall through to content.
+	mux.Handle("/__metrics", s.metricsHandler(metricsToken))
 
 	mux.HandleFunc(s.cfg.Feed.RSSPath, s.handleRSS)
 	mux.HandleFunc(s.cfg.Feed.SitemapPath, s.handleSitemap)
@@ -210,11 +214,12 @@ func (s *Server) newMux() http.Handler {
 	mux.HandleFunc("/", s.handlePage)
 
 	handler := s.wrapRateLimit(mux)
-
 	if s.debug {
-		return s.wrapDebugHTTP(handler)
+		handler = s.wrapDebugHTTP(handler)
 	}
-
+	if metricsToken != "" {
+		handler = s.wrapMetrics(handler)
+	}
 	return handler
 }
 

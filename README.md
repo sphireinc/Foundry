@@ -650,6 +650,11 @@ If live reload causes browser connection stalls in development, switch `server.l
 
 ## Deploy and operations
 
+See the [production operations runbook](docs/operations.md) for health endpoint
+semantics, authenticated Prometheus metrics, JSON logging, backup/restore drills,
+and systemd/launchd examples. A [rendered guide](docs/operations/index.html)
+is included in the documentation site.
+
 Foundry supports environment-specific config overlays and named deploy targets.
 
 If `content/config/site.preview.yaml` exists, it can be layered on top of the base config with:
