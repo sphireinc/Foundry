@@ -16,7 +16,7 @@ import (
 type httpMetrics struct {
 	completed  [6]atomic.Uint64
 	inFlight   atomic.Int64
-	durationNS atomic.Uint64
+	durationNS atomic.Int64
 }
 
 func (s *Server) wrapMetrics(next http.Handler) http.Handler {
@@ -30,7 +30,9 @@ func (s *Server) wrapMetrics(next http.Handler) http.Handler {
 		rec := &metricsWriter{ResponseWriter: w, status: http.StatusOK}
 		defer func() {
 			s.metrics.inFlight.Add(-1)
-			s.metrics.durationNS.Add(uint64(time.Since(start)))
+			if elapsed := time.Since(start); elapsed > 0 {
+				s.metrics.durationNS.Add(elapsed.Nanoseconds())
+			}
 			class := rec.status / 100
 			if class > 5 {
 				class = 0
@@ -103,15 +105,35 @@ func (s *Server) metricsHandler(token string) http.Handler {
 		}
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
-		fmt.Fprint(w, "# HELP foundry_http_requests_total Completed HTTP requests excluding metrics scrapes.\n# TYPE foundry_http_requests_total counter\n")
-		fmt.Fprintf(w, "foundry_http_requests_total{status_class=\"other\"} %d\n", s.metrics.completed[0].Load())
-		for class := 1; class <= 5; class++ {
-			fmt.Fprintf(w, "foundry_http_requests_total{status_class=\"%dxx\"} %d\n", class, s.metrics.completed[class].Load())
+		write := func(format string, args ...any) bool {
+			_, err := fmt.Fprintf(w, format, args...)
+			return err == nil
 		}
-		fmt.Fprintf(w, "# HELP foundry_http_request_duration_seconds_total Total HTTP request duration excluding metrics scrapes.\n# TYPE foundry_http_request_duration_seconds_total counter\nfoundry_http_request_duration_seconds_total %g\n", float64(s.metrics.durationNS.Load())/float64(time.Second))
-		fmt.Fprintf(w, "# HELP foundry_http_requests_in_flight Active HTTP requests excluding metrics scrapes.\n# TYPE foundry_http_requests_in_flight gauge\nfoundry_http_requests_in_flight %d\n", s.metrics.inFlight.Load())
-		fmt.Fprintf(w, "# HELP foundry_go_goroutines Current goroutines.\n# TYPE foundry_go_goroutines gauge\nfoundry_go_goroutines %d\n", runtime.NumGoroutine())
-		fmt.Fprintf(w, "# HELP foundry_go_heap_alloc_bytes Allocated heap bytes.\n# TYPE foundry_go_heap_alloc_bytes gauge\nfoundry_go_heap_alloc_bytes %d\n", mem.HeapAlloc)
-		fmt.Fprintf(w, "# HELP foundry_go_gc_cycles_total Completed garbage collection cycles.\n# TYPE foundry_go_gc_cycles_total counter\nfoundry_go_gc_cycles_total %d\n", mem.NumGC)
+		if !write("# HELP foundry_http_requests_total Completed HTTP requests excluding metrics scrapes.\n# TYPE foundry_http_requests_total counter\n") {
+			return
+		}
+		if !write("foundry_http_requests_total{status_class=\"other\"} %d\n", s.metrics.completed[0].Load()) {
+			return
+		}
+		for class := 1; class <= 5; class++ {
+			if !write("foundry_http_requests_total{status_class=\"%dxx\"} %d\n", class, s.metrics.completed[class].Load()) {
+				return
+			}
+		}
+		if !write("# HELP foundry_http_request_duration_seconds_total Total HTTP request duration excluding metrics scrapes.\n# TYPE foundry_http_request_duration_seconds_total counter\nfoundry_http_request_duration_seconds_total %g\n", float64(s.metrics.durationNS.Load())/float64(time.Second)) {
+			return
+		}
+		if !write("# HELP foundry_http_requests_in_flight Active HTTP requests excluding metrics scrapes.\n# TYPE foundry_http_requests_in_flight gauge\nfoundry_http_requests_in_flight %d\n", s.metrics.inFlight.Load()) {
+			return
+		}
+		if !write("# HELP foundry_go_goroutines Current goroutines.\n# TYPE foundry_go_goroutines gauge\nfoundry_go_goroutines %d\n", runtime.NumGoroutine()) {
+			return
+		}
+		if !write("# HELP foundry_go_heap_alloc_bytes Allocated heap bytes.\n# TYPE foundry_go_heap_alloc_bytes gauge\nfoundry_go_heap_alloc_bytes %d\n", mem.HeapAlloc) {
+			return
+		}
+		if !write("# HELP foundry_go_gc_cycles_total Completed garbage collection cycles.\n# TYPE foundry_go_gc_cycles_total counter\nfoundry_go_gc_cycles_total %d\n", mem.NumGC) {
+			return
+		}
 	})
 }
