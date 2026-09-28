@@ -8,6 +8,7 @@
       name="description"
       content="Theme-owned advanced custom fields in Foundry: field contracts, shared values, template access, and admin behavior."
     />
+    <script src="../theme-toggle.js"></script>
     <link rel="stylesheet" href="../site.css" />
   </head>
   <body>
@@ -20,19 +21,94 @@
             <span>Advanced custom fields</span>
           </span>
         </a>
-        <nav class="nav">
-          <a href="../">Home</a>
-          <a href="../getting-started/">Getting Started</a>
-          <a href="../docker/">Docker</a>
-          <a href="../architecture/">Architecture</a>
-          <a href="../config/">Configuration</a>
-          <a href="../custom-fields/">Custom Fields</a>
-          <a href="../sdk/">SDKs</a>
-          <a href="../plugins/">Plugins</a>
-          <a href="../themes/">Themes</a>
-          <a href="../contract/">CLI Contract</a>
-          <a href="../coverage/">Coverage</a>
-          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-link nav-home" href="../">Home</a>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Learn</summary>
+            <div class="nav-menu-panel">
+              <a href="../getting-started/">
+                <strong>Getting Started</strong>
+                <span>Project overview and setup</span>
+              </a>
+              <a href="../architecture/">
+                <strong>Architecture</strong>
+                <span>Runtime flow and packages</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Build &amp; Run</summary>
+            <div class="nav-menu-panel">
+              <a href="../docker/">
+                <strong>Docker</strong>
+                <span>Local and production containers</span>
+              </a>
+              <a href="../operations/">
+                <strong>Operations</strong>
+                <span>Health, metrics, and recovery</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Extend</summary>
+            <div class="nav-menu-panel">
+              <a href="../custom-fields/" aria-current="page">
+                <strong>Custom Fields</strong>
+                <span>Theme-owned field contracts</span>
+              </a>
+              <a href="../sdk/">
+                <strong>SDKs</strong>
+                <span>Admin and frontend JavaScript APIs</span>
+              </a>
+              <a href="../plugins/">
+                <strong>Plugins</strong>
+                <span>Go and RPC extensions</span>
+              </a>
+              <a href="../themes/">
+                <strong>Themes</strong>
+                <span>Layouts, partials, and authoring</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Reference</summary>
+            <div class="nav-menu-panel">
+              <a href="../config/">
+                <strong>Configuration</strong>
+                <span>Every site.yaml setting</span>
+              </a>
+              <a href="../api-documentation/">
+                <strong>API Docs</strong>
+                <span>Admin and frontend APIs</span>
+              </a>
+              <a href="../contract/">
+                <strong>CLI Contract</strong>
+                <span>CLI behavior and conventions</span>
+              </a>
+              <a href="../coverage/">
+                <strong>Coverage</strong>
+                <span>Latest Go coverage report</span>
+              </a>
+            </div>
+          </details>
+          <a
+            class="nav-link nav-external"
+            href="https://github.com/sphireinc/foundry"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch to light mode"
+            title="Switch to light mode"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-light" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+          </button>
         </nav>
       </header>
 
@@ -65,8 +141,8 @@
             </li>
             <li>
               <strong>The admin resolves fields from the active theme.</strong> The editor shows the
-              matching document contract for the current page. The
-              <code>Custom Fields</code> screen shows shared contracts.
+              matching document contract for the current page. The <code>Custom Fields</code> screen
+              shows shared contracts.
             </li>
             <li>
               <strong>Plugins must keep derived metadata out of persisted fields.</strong>
@@ -179,15 +255,19 @@ Page body content here.</code></pre>
 
           <h2>Migration from the old model</h2>
           <p>
-            Advanced field schemas no longer belong in <code>content/config/site.yaml</code>. If
-            you still have an older site using config-owned field schemas, migrate them with:
+            Advanced field schemas no longer belong in <code>content/config/site.yaml</code>. If you
+            still have an older site using config-owned field schemas, migrate them with:
           </p>
           <pre><code>foundry theme migrate field-contracts</code></pre>
 
           <h2>Related docs</h2>
           <ul>
-            <li><a href="../themes/">Theme authoring</a> for manifest structure and layout contracts</li>
-            <li><a href="../plugins/">Plugins</a> for runtime-data guidance and field safety rules</li>
+            <li>
+              <a href="../themes/">Theme authoring</a> for manifest structure and layout contracts
+            </li>
+            <li>
+              <a href="../plugins/">Plugins</a> for runtime-data guidance and field safety rules
+            </li>
             <li><a href="../config/">Configuration</a> for the remaining site config reference</li>
           </ul>
         </div>

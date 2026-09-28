@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Foundry Plugin Authoring</title>
     <meta name="description" content="How to build, register, and validate a Foundry plugin." />
+    <script src="../theme-toggle.js"></script>
     <link rel="stylesheet" href="../site.css" />
   </head>
   <body>
@@ -17,19 +18,94 @@
             <span>Plugin authoring</span>
           </span>
         </a>
-        <nav class="nav">
-          <a href="../">Home</a>
-          <a href="../getting-started/">Getting Started</a>
-          <a href="../docker/">Docker</a>
-          <a href="../architecture/">Architecture</a>
-          <a href="../config/">Configuration</a>
-          <a href="../custom-fields/">Custom Fields</a>
-          <a href="../sdk/">SDKs</a>
-          <a href="../plugins/">Plugins</a>
-          <a href="../themes/">Themes</a>
-          <a href="../contract/">CLI Contract</a>
-          <a href="../coverage/">Coverage</a>
-          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-link nav-home" href="../">Home</a>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Learn</summary>
+            <div class="nav-menu-panel">
+              <a href="../getting-started/">
+                <strong>Getting Started</strong>
+                <span>Project overview and setup</span>
+              </a>
+              <a href="../architecture/">
+                <strong>Architecture</strong>
+                <span>Runtime flow and packages</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Build &amp; Run</summary>
+            <div class="nav-menu-panel">
+              <a href="../docker/">
+                <strong>Docker</strong>
+                <span>Local and production containers</span>
+              </a>
+              <a href="../operations/">
+                <strong>Operations</strong>
+                <span>Health, metrics, and recovery</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Extend</summary>
+            <div class="nav-menu-panel">
+              <a href="../custom-fields/">
+                <strong>Custom Fields</strong>
+                <span>Theme-owned field contracts</span>
+              </a>
+              <a href="../sdk/">
+                <strong>SDKs</strong>
+                <span>Admin and frontend JavaScript APIs</span>
+              </a>
+              <a href="../plugins/" aria-current="page">
+                <strong>Plugins</strong>
+                <span>Go and RPC extensions</span>
+              </a>
+              <a href="../themes/">
+                <strong>Themes</strong>
+                <span>Layouts, partials, and authoring</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Reference</summary>
+            <div class="nav-menu-panel">
+              <a href="../config/">
+                <strong>Configuration</strong>
+                <span>Every site.yaml setting</span>
+              </a>
+              <a href="../api-documentation/">
+                <strong>API Docs</strong>
+                <span>Admin and frontend APIs</span>
+              </a>
+              <a href="../contract/">
+                <strong>CLI Contract</strong>
+                <span>CLI behavior and conventions</span>
+              </a>
+              <a href="../coverage/">
+                <strong>Coverage</strong>
+                <span>Latest Go coverage report</span>
+              </a>
+            </div>
+          </details>
+          <a
+            class="nav-link nav-external"
+            href="https://github.com/sphireinc/foundry"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch to light mode"
+            title="Switch to light mode"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-light" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+          </button>
         </nav>
       </header>
 
@@ -180,8 +256,8 @@ permissions:
               compares that detected behavior against the declared permissions.
             </li>
             <li>
-              CLI and admin install, enable, and update flows require explicit approval for risky
-              or mismatched plugins. Use <code>--approve-risk</code> in the CLI when you intend to
+              CLI and admin install, enable, and update flows require explicit approval for risky or
+              mismatched plugins. Use <code>--approve-risk</code> in the CLI when you intend to
               trust that plugin.
             </li>
           </ul>
@@ -209,15 +285,15 @@ permissions:
             </li>
             <li>
               <code>permissions.network.outbound</code>
-              <code>http</code>, <code>https</code>, <code>websocket</code>,
-              <code>grpc</code>, <code>custom_schemes</code>, <code>domains</code>, and
-              <code>methods</code>. Use this for any outbound request behavior.
+              <code>http</code>, <code>https</code>, <code>websocket</code>, <code>grpc</code>,
+              <code>custom_schemes</code>, <code>domains</code>, and <code>methods</code>. Use this
+              for any outbound request behavior.
             </li>
             <li>
               <code>permissions.network.inbound</code>
-              <code>register_routes</code>, <code>admin_routes</code>,
-              <code>public_routes</code>, and <code>bind_external_services</code>. Use this when a
-              plugin exposes handlers or binds its own listeners.
+              <code>register_routes</code>, <code>admin_routes</code>, <code>public_routes</code>,
+              and <code>bind_external_services</code>. Use this when a plugin exposes handlers or
+              binds its own listeners.
             </li>
             <li>
               <code>permissions.process.exec</code>
@@ -245,18 +321,18 @@ permissions:
             </li>
             <li>
               <code>permissions.config.write</code>
-              <code>site</code>, <code>plugin_config</code>, and
-              <code>theme_manifest</code>. Use when the plugin mutates configuration on disk.
+              <code>site</code>, <code>plugin_config</code>, and <code>theme_manifest</code>. Use
+              when the plugin mutates configuration on disk.
             </li>
             <li>
               <code>permissions.content.documents</code>
-              <code>read</code>, <code>write</code>, <code>delete</code>,
-              <code>workflow</code>, and <code>versions</code>. Use for document lifecycle access.
+              <code>read</code>, <code>write</code>, <code>delete</code>, <code>workflow</code>, and
+              <code>versions</code>. Use for document lifecycle access.
             </li>
             <li>
               <code>permissions.content.media</code>
-              <code>read</code>, <code>write</code>, <code>delete</code>,
-              <code>metadata</code>, and <code>versions</code>. Use for media-library access.
+              <code>read</code>, <code>write</code>, <code>delete</code>, <code>metadata</code>, and
+              <code>versions</code>. Use for media-library access.
             </li>
             <li>
               <code>permissions.content.taxonomies</code>
@@ -280,12 +356,11 @@ permissions:
             <li>
               <code>permissions.render.assets</code>
               <code>inject_css</code>, <code>inject_js</code>, and
-              <code>inject_remote_assets</code>. Use when the plugin adds frontend assets to a
-              page.
+              <code>inject_remote_assets</code>. Use when the plugin adds frontend assets to a page.
             </li>
             <li>
-              <code>permissions.render.after_render.mutate_html</code>. Use when the plugin
-              rewrites final rendered HTML.
+              <code>permissions.render.after_render.mutate_html</code>. Use when the plugin rewrites
+              final rendered HTML.
             </li>
             <li>
               <code>permissions.graph</code>
@@ -330,9 +405,8 @@ permissions:
             </li>
             <li>
               <code>permissions.secrets.access</code>
-              <code>admin_tokens</code>, <code>session_store</code>,
-              <code>password_hashes</code>, <code>totp_secrets</code>,
-              <code>env_secrets</code>, <code>deploy_keys</code>, and
+              <code>admin_tokens</code>, <code>session_store</code>, <code>password_hashes</code>,
+              <code>totp_secrets</code>, <code>env_secrets</code>, <code>deploy_keys</code>, and
               <code>update_credentials</code>. These are high-risk declarations and should be used
               sparingly.
             </li>
@@ -352,14 +426,14 @@ permissions:
             <li>
               <strong>In-process Go plugins</strong> are compiled into the Foundry binary. They
               register through Go <code>init()</code> functions, so enabling one from the Admin UI
-              only changes configuration. It cannot import new Go code into an already-built
-              binary. After enabling a newly installed in-process plugin, run
+              only changes configuration. It cannot import new Go code into an already-built binary.
+              After enabling a newly installed in-process plugin, run
               <code>foundry plugin sync</code> or <code>go run ./cmd/plugin-sync</code>, rebuild,
               and restart.
             </li>
             <li>
-              <strong>Out-of-process RPC plugins</strong> declare <code>runtime.mode: rpc</code>
-              in <code>plugin.yaml</code>. They do not need generated Go imports because Foundry
+              <strong>Out-of-process RPC plugins</strong> declare <code>runtime.mode: rpc</code> in
+              <code>plugin.yaml</code>. They do not need generated Go imports because Foundry
               launches the configured command and communicates through the RPC protocol.
             </li>
           </ul>
@@ -394,9 +468,7 @@ permissions:
             <code>context</code> requests with sanitized page/view data. The plugin responds with a
             data map to merge back into the page context.
           </p>
-          <p>
-            The current RPC host enforces a narrow boundary:
-          </p>
+          <p>The current RPC host enforces a narrow boundary:</p>
           <ul>
             <li>sanitized environment only</li>
             <li>no host-granted filesystem write channel</li>
@@ -435,13 +507,12 @@ permissions:
           <p>
             Use <code>nav_group</code> to place a plugin-defined page in the default admin theme's
             grouped sidebar. Supported values are <code>dashboard</code>, <code>content</code>,
-            <code>manage</code>, and <code>admin</code>. Omit it to fall back to
-            <code>admin</code>.
+            <code>manage</code>, and <code>admin</code>. Omit it to fall back to <code>admin</code>.
           </p>
           <p>
             The default admin shell's Extensions page itself lives at
-            <code>&lt;admin.path&gt;/a-extensions</code>. That route is separate from the
-            plugin bundle asset namespace so the shell page and plugin assets do not collide.
+            <code>&lt;admin.path&gt;/a-extensions</code>. That route is separate from the plugin
+            bundle asset namespace so the shell page and plugin assets do not collide.
           </p>
           <p>
             When that page is active, the default admin shell dispatches
@@ -621,12 +692,12 @@ func init() {
               <code>reading_time</code>, or similar render metadata to document fields.
             </li>
             <li>
-              Prefer render-time data surfaces such as <code>ctx.Data</code>, or recompute the
-              value during rendering when practical.
+              Prefer render-time data surfaces such as <code>ctx.Data</code>, or recompute the value
+              during rendering when practical.
             </li>
             <li>
-              The built-in <code>toc</code> plugin is the reference example for runtime-only
-              derived metadata.
+              The built-in <code>toc</code> plugin is the reference example for runtime-only derived
+              metadata.
             </li>
           </ul>
         </div>

@@ -8,6 +8,7 @@
       name="description"
       content="How to run Foundry with Docker in local development and in a stricter production-oriented container shape."
     />
+    <script src="../theme-toggle.js"></script>
     <link rel="stylesheet" href="../site.css" />
   </head>
   <body>
@@ -20,20 +21,94 @@
             <span>Docker guide</span>
           </span>
         </a>
-        <nav class="nav">
-          <a href="../">Home</a>
-          <a href="../getting-started/">Getting Started</a>
-          <a href="../docker/">Docker</a>
-          <a href="../operations/">Operations</a>
-          <a href="../architecture/">Architecture</a>
-          <a href="../config/">Configuration</a>
-          <a href="../custom-fields/">Custom Fields</a>
-          <a href="../sdk/">SDKs</a>
-          <a href="../plugins/">Plugins</a>
-          <a href="../themes/">Themes</a>
-          <a href="../contract/">CLI Contract</a>
-          <a href="../coverage/">Coverage</a>
-          <a href="https://github.com/sphireinc/foundry">GitHub</a>
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-link nav-home" href="../">Home</a>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Learn</summary>
+            <div class="nav-menu-panel">
+              <a href="../getting-started/">
+                <strong>Getting Started</strong>
+                <span>Project overview and setup</span>
+              </a>
+              <a href="../architecture/">
+                <strong>Architecture</strong>
+                <span>Runtime flow and packages</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Build &amp; Run</summary>
+            <div class="nav-menu-panel">
+              <a href="../docker/" aria-current="page">
+                <strong>Docker</strong>
+                <span>Local and production containers</span>
+              </a>
+              <a href="../operations/">
+                <strong>Operations</strong>
+                <span>Health, metrics, and recovery</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Extend</summary>
+            <div class="nav-menu-panel">
+              <a href="../custom-fields/">
+                <strong>Custom Fields</strong>
+                <span>Theme-owned field contracts</span>
+              </a>
+              <a href="../sdk/">
+                <strong>SDKs</strong>
+                <span>Admin and frontend JavaScript APIs</span>
+              </a>
+              <a href="../plugins/">
+                <strong>Plugins</strong>
+                <span>Go and RPC extensions</span>
+              </a>
+              <a href="../themes/">
+                <strong>Themes</strong>
+                <span>Layouts, partials, and authoring</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Reference</summary>
+            <div class="nav-menu-panel">
+              <a href="../config/">
+                <strong>Configuration</strong>
+                <span>Every site.yaml setting</span>
+              </a>
+              <a href="../api-documentation/">
+                <strong>API Docs</strong>
+                <span>Admin and frontend APIs</span>
+              </a>
+              <a href="../contract/">
+                <strong>CLI Contract</strong>
+                <span>CLI behavior and conventions</span>
+              </a>
+              <a href="../coverage/">
+                <strong>Coverage</strong>
+                <span>Latest Go coverage report</span>
+              </a>
+            </div>
+          </details>
+          <a
+            class="nav-link nav-external"
+            href="https://github.com/sphireinc/foundry"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch to light mode"
+            title="Switch to light mode"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-light" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+          </button>
         </nav>
       </header>
 
@@ -43,16 +118,16 @@
           <h1 class="page-title">Running Foundry with Docker</h1>
           <p>
             Foundry ships two Docker Compose shapes: a local-development default and a stricter
-            production-oriented setup. This page explains when to use each one and what each
-            overlay expects.
+            production-oriented setup. This page explains when to use each one and what each overlay
+            expects.
           </p>
         </div>
 
         <div class="page-body">
           <h2>Default Docker workflow</h2>
           <p>
-            The default <code>docker-compose.yml</code> is meant for local development. It keeps
-            the source tree bind-mounted into the container so code, themes, and content edits are
+            The default <code>docker-compose.yml</code> is meant for local development. It keeps the
+            source tree bind-mounted into the container so code, themes, and content edits are
             reflected immediately.
           </p>
           <pre><code>sh scripts/docker-init.sh
@@ -63,7 +138,9 @@ docker compose up -d --build</code></pre>
             <li>keeps <code>data/</code> and <code>public/</code> on named Docker volumes</li>
             <li>uses <code>content/config/site.docker.yaml</code> as the config overlay</li>
             <li>reads local Docker secrets from <code>.env</code> when present</li>
-            <li>can bootstrap a local <code>.env</code> with <code>scripts/docker-init.sh</code></li>
+            <li>
+              can bootstrap a local <code>.env</code> with <code>scripts/docker-init.sh</code>
+            </li>
           </ul>
 
           <h2>Local secret bootstrap</h2>
@@ -83,9 +160,8 @@ docker compose up -d --build</code></pre>
 
           <h2>Production-oriented Docker workflow</h2>
           <p>
-            The stricter setup lives in <code>docker-compose.prod.yml</code>. Use it when you want
-            a safer immutable-style container shape instead of a source-mounted development
-            container.
+            The stricter setup lives in <code>docker-compose.prod.yml</code>. Use it when you want a
+            safer immutable-style container shape instead of a source-mounted development container.
           </p>
           <pre><code>export FOUNDRY_ADMIN_SESSION_SECRET="$(openssl rand -hex 32)"
 export FOUNDRY_ADMIN_TOTP_SECRET_KEY="$(openssl rand -base64 32)"
@@ -97,20 +173,23 @@ docker compose -f docker-compose.prod.yml up -d --build</code></pre>
             <li>uses <code>tmpfs</code> for <code>/tmp</code></li>
             <li>drops Linux capabilities</li>
             <li>enables <code>no-new-privileges</code></li>
-            <li>uses named volumes for <code>content/</code>, <code>themes/</code>, <code>plugins/</code>, <code>data/</code>, and <code>public/</code></li>
+            <li>
+              uses named volumes for <code>content/</code>, <code>themes/</code>,
+              <code>plugins/</code>, <code>data/</code>, and <code>public/</code>
+            </li>
             <li>uses <code>content/config/site.docker.prod.yaml</code> as the config overlay</li>
           </ul>
 
           <h2>Important config overlays</h2>
           <ul>
             <li>
-              <strong><code>content/config/site.docker.yaml</code></strong>: development-oriented
-              Docker defaults like local base URL and live reload enabled.
+              <strong><code>content/config/site.docker.yaml</code></strong
+              >: development-oriented Docker defaults like local base URL and live reload enabled.
             </li>
             <li>
-              <strong><code>content/config/site.docker.prod.yaml</code></strong>: production-shaped
-              Docker defaults like disabled live reload, disabled debug surfaces, and explicit
-              production environment labeling.
+              <strong><code>content/config/site.docker.prod.yaml</code></strong
+              >: production-shaped Docker defaults like disabled live reload, disabled debug
+              surfaces, and explicit production environment labeling.
             </li>
           </ul>
           <p>
@@ -125,9 +204,7 @@ docker compose -f docker-compose.prod.yml up -d --build</code></pre>
               Set strong values for <code>FOUNDRY_ADMIN_SESSION_SECRET</code> and
               <code>FOUNDRY_ADMIN_TOTP_SECRET_KEY</code> in production.
             </li>
-            <li>
-              Keep the production admin behind HTTPS so secure cookies behave correctly.
-            </li>
+            <li>Keep the production admin behind HTTPS so secure cookies behave correctly.</li>
             <li>
               The default Docker setup is convenient for development, but the production compose
               file is the right base for a real deployment.
