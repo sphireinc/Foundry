@@ -355,6 +355,76 @@ func TestPublicStaticHandlerAddsSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlePageCSPUsesTheSameAssetCategoryAsThemeValidation(t *testing.T) {
+	cfg := testServerConfig(t)
+	writeServerTheme(t, cfg)
+	manifest := `name: default
+title: Default
+version: 0.1.0
+min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
+layouts: [base, index, page, post, list]
+slots: [head.end, body.start, body.end, page.before_main, page.after_main, page.before_content, page.after_content, post.before_header, post.after_header, post.before_content, post.after_content, post.sidebar.top, post.sidebar.overview, post.sidebar.bottom]
+security:
+  external_assets:
+    allowed: true
+    scripts:
+      - https://cdn.example.com
+`
+	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "theme.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write theme manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"), []byte(`{{ define "content" }}page {{ .Page.Title }}<img src="https://cdn.example.com/hero.png">{{ end }}`), 0o644); err != nil {
+		t.Fatalf("write page template: %v", err)
+	}
+
+	validation, err := theme.ValidateInstalledDetailed(cfg.ThemesDir, cfg.Theme)
+	if err != nil {
+		t.Fatalf("validate theme: %v", err)
+	}
+	if validation.Valid {
+		t.Fatal("expected image declared under scripts to fail validation")
+	}
+	var imageDiagnostic theme.ValidationDiagnostic
+	for _, diagnostic := range validation.Diagnostics {
+		if diagnostic.Category == "images" {
+			imageDiagnostic = diagnostic
+			break
+		}
+	}
+	if imageDiagnostic.Field != "security.external_assets.images" {
+		t.Fatalf("expected image category diagnostic, got %#v", imageDiagnostic)
+	}
+
+	graph := content.NewSiteGraph(cfg)
+	graph.Add(&content.Document{
+		ID:         "page-1",
+		Type:       "page",
+		Lang:       "en",
+		Title:      "About",
+		Slug:       "about",
+		URL:        "/about/",
+		Layout:     "page",
+		SourcePath: filepath.ToSlash(filepath.Join(cfg.ContentDir, "pages", "about.md")),
+	})
+	r := renderer.New(cfg, theme.NewManager(cfg.ThemesDir, cfg.Theme), nil)
+	s := New(cfg, stubLoader{graph: graph}, router.NewResolver(cfg), r, &hookRecorder{}, false)
+	s.graph = graph
+	rr := httptest.NewRecorder()
+	s.handlePage(rr, httptest.NewRequest(http.MethodGet, "/about/", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected page response, got %d: %s", rr.Code, rr.Body.String())
+	}
+	csp := rr.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'self' 'unsafe-inline' https://cdn.example.com") {
+		t.Fatalf("expected declared script origin in CSP, got %q", csp)
+	}
+	if strings.Contains(csp, "img-src 'self' data: blob: https://cdn.example.com") {
+		t.Fatalf("expected script declaration not to authorize image CSP, got %q", csp)
+	}
+}
+
 func TestServerRateLimitsPublicAdminShellAndAdminAPIIndependently(t *testing.T) {
 	cfg := testServerConfig(t)
 	cfg.Server.RateLimit = config.RateLimitConfig{

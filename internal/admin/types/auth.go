@@ -292,9 +292,14 @@ type PluginRecord struct {
 }
 
 type ValidationDiagnostic struct {
+	Code     string `json:"code,omitempty"`
 	Severity string `json:"severity"`
 	Path     string `json:"path,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Category string `json:"category,omitempty"`
+	Field    string `json:"field,omitempty"`
 	Message  string `json:"message"`
+	Hint     string `json:"hint,omitempty"`
 }
 
 type PluginDependency struct {

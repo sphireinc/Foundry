@@ -412,10 +412,13 @@ security:
 	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "theme.yaml"), []byte(manifest), 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
+	headPath := filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "partials", "head.html")
+	if err := os.WriteFile(headPath, []byte(`{{ define "head" }}<script src="https://cdn.example.com/theme.js"></script>{{ end }}`), 0o644); err != nil {
+		t.Fatalf("write head template: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(cfg.ThemesDir, cfg.Theme, "layouts", "page.html"), []byte(`{{ define "content" }}token={{ .Site.Admin.AccessToken }} params={{ .Site.Params }} field={{ field .Page "hero" }} shared={{ data "custom_fields" }}{{ end }}`), 0o644); err != nil {
 		t.Fatalf("write page template: %v", err)
 	}
-
 	graph := content.NewSiteGraph(cfg)
 	graph.Data["custom_fields"] = map[string]any{"cta": "launch"}
 	graph.Add(&content.Document{
@@ -440,7 +443,7 @@ security:
 		t.Fatalf("expected sanitized theme context, got %q", body)
 	}
 	csp := r.ContentSecurityPolicy()
-	if !strings.Contains(csp, "https://cdn.example.com") || !strings.Contains(csp, "https://api.example.com") {
+	if !strings.Contains(csp, "script-src 'self' 'unsafe-inline' https://cdn.example.com") || !strings.Contains(csp, "connect-src 'self' https://api.example.com") {
 		t.Fatalf("expected CSP to include declared origins, got %q", csp)
 	}
 }

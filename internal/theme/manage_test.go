@@ -209,6 +209,19 @@ func TestValidateInstalledDetailedChecksThemeSecurity(t *testing.T) {
 	if result.Valid {
 		t.Fatal("expected undeclared remote asset to invalidate theme")
 	}
+	var securityDiagnostic ValidationDiagnostic
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Code == "theme.security.remote_asset_undeclared" {
+			securityDiagnostic = diagnostic
+			break
+		}
+	}
+	if securityDiagnostic.Path != filepath.ToSlash(headPath) || securityDiagnostic.Line == 0 {
+		t.Fatalf("expected source path and line in security diagnostic, got %#v", securityDiagnostic)
+	}
+	if securityDiagnostic.Field != "security.external_assets.scripts" || !strings.Contains(securityDiagnostic.Hint, "security.external_assets.allowed: true") {
+		t.Fatalf("expected actionable script remediation, got %#v", securityDiagnostic)
+	}
 
 	manifestPath := filepath.Join(scaffolded, "theme.yaml")
 	body, err := os.ReadFile(manifestPath)
@@ -226,6 +239,180 @@ func TestValidateInstalledDetailedChecksThemeSecurity(t *testing.T) {
 	}
 	if !result.Valid {
 		t.Fatalf("expected security declaration to validate, got %#v", result.Diagnostics)
+	}
+	report, err := AnalyzeInstalledSecurity(root, "security-theme")
+	if err != nil {
+		t.Fatalf("analyze security: %v", err)
+	}
+	if len(report.DetectedAssets) != 1 || report.DetectedAssets[0].Kind != "script" || report.DetectedAssets[0].Status != "declared" {
+		t.Fatalf("expected declared script finding, got %#v", report.DetectedAssets)
+	}
+	manifest, err := LoadManifest(root, "security-theme")
+	if err != nil {
+		t.Fatalf("load declared security manifest: %v", err)
+	}
+	if csp := ContentSecurityPolicy(manifest); !strings.Contains(csp, "script-src 'self' 'unsafe-inline' https://cdn.example.com") {
+		t.Fatalf("expected declared script in script-src CSP, got %q", csp)
+	}
+}
+
+func TestValidateInstalledDetailedUsesAssetCategoriesAndRequestOrigins(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "category-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+
+	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
+	headBody, err := os.ReadFile(headPath)
+	if err != nil {
+		t.Fatalf("read head: %v", err)
+	}
+	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<img src="https://cdn.example.com/hero.png">`, 1)
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o644); err != nil {
+		t.Fatalf("write head: %v", err)
+	}
+	requestPath := filepath.Join(scaffolded, "assets", "js", "requests.js")
+	if err := os.MkdirAll(filepath.Dir(requestPath), 0o755); err != nil {
+		t.Fatalf("mkdir request assets: %v", err)
+	}
+	if err := os.WriteFile(requestPath, []byte(`fetch("https://api.example.com/data")`), 0o644); err != nil {
+		t.Fatalf("write request asset: %v", err)
+	}
+
+	manifestPath := filepath.Join(scaffolded, "theme.yaml")
+	manifestBody, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	manifest := strings.Replace(string(manifestBody), "  external_assets:\n    allowed: false\n", "  external_assets:\n    allowed: true\n    scripts:\n      - https://cdn.example.com\n", 1)
+	manifest = strings.Replace(manifest, "  frontend_requests:\n    allowed: false\n", "  frontend_requests:\n    allowed: true\n    origins:\n      - https://declared-api.example.com\n", 1)
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "category-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected image declared under scripts and request to be invalid")
+	}
+	var imageDiagnostic, requestDiagnostic ValidationDiagnostic
+	for _, diagnostic := range result.Diagnostics {
+		switch diagnostic.Code {
+		case "theme.security.remote_asset_undeclared":
+			if diagnostic.Category == "images" {
+				imageDiagnostic = diagnostic
+			}
+		case "theme.security.frontend_request_undeclared":
+			requestDiagnostic = diagnostic
+		}
+	}
+	if imageDiagnostic.Field != "security.external_assets.images" || !strings.Contains(imageDiagnostic.Hint, "security.external_assets.images") {
+		t.Fatalf("expected image category remediation, got %#v", imageDiagnostic)
+	}
+	if requestDiagnostic.Field != "security.frontend_requests.origins" || !strings.Contains(requestDiagnostic.Hint, "security.frontend_requests.origins") {
+		t.Fatalf("expected request origin remediation, got %#v", requestDiagnostic)
+	}
+}
+
+func TestValidateInstalledDetailedAcceptsEachDeclaredAssetCategory(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "all-assets-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+
+	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
+	headBody, err := os.ReadFile(headPath)
+	if err != nil {
+		t.Fatalf("read head: %v", err)
+	}
+	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<script src="https://scripts.example.com/theme.js"></script><link rel="stylesheet" href="https://styles.example.com/theme.css"><img src="https://images.example.com/hero.png"><video src="https://media.example.com/demo.mp4"></video>`, 1)
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o644); err != nil {
+		t.Fatalf("write head: %v", err)
+	}
+	cssPath := filepath.Join(scaffolded, "assets", "css", "theme.css")
+	if err := os.MkdirAll(filepath.Dir(cssPath), 0o755); err != nil {
+		t.Fatalf("mkdir css dir: %v", err)
+	}
+	if err := os.WriteFile(cssPath, []byte(`@import url("https://styles.example.com/import.css"); @font-face { src: url("https://fonts.example.com/theme.woff2"); } .hero { background: url("https://images.example.com/background.png"); } .video { background: url("https://media.example.com/background.mp4"); }`), 0o644); err != nil {
+		t.Fatalf("write css: %v", err)
+	}
+
+	manifestPath := filepath.Join(scaffolded, "theme.yaml")
+	manifestBody, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	manifest := strings.Replace(string(manifestBody), "  external_assets:\n    allowed: false\n", "  external_assets:\n    allowed: true\n    scripts:\n      - https://scripts.example.com\n    styles:\n      - https://styles.example.com\n    fonts:\n      - https://fonts.example.com\n    images:\n      - https://images.example.com\n    media:\n      - https://media.example.com\n", 1)
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "all-assets-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if !result.Valid {
+		t.Fatalf("expected each declared asset category to pass, got %#v", result.Diagnostics)
+	}
+	report, err := AnalyzeInstalledSecurity(root, "all-assets-theme")
+	if err != nil {
+		t.Fatalf("analyze declared assets: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, finding := range report.DetectedAssets {
+		seen[finding.Kind] = finding.Status == "declared"
+	}
+	for _, kind := range []string{"script", "style", "font", "image", "media"} {
+		if !seen[kind] {
+			t.Fatalf("expected declared %s finding, got %#v", kind, report.DetectedAssets)
+		}
+	}
+}
+
+func TestValidateInstalledDetailedReportsDisabledSecurityPolicies(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "disabled-policy-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	manifestPath := filepath.Join(scaffolded, "theme.yaml")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	manifest := strings.Replace(string(body), "  external_assets:\n    allowed: false\n", "  external_assets:\n    allowed: false\n    images:\n      - https://images.example.com\n", 1)
+	manifest = strings.Replace(manifest, "  frontend_requests:\n    allowed: false\n", "  frontend_requests:\n    allowed: false\n    origins:\n      - https://api.example.com\n", 1)
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "disabled-policy-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected disabled policies with declarations to be invalid")
+	}
+	seen := map[string]ValidationDiagnostic{}
+	for _, diagnostic := range result.Diagnostics {
+		seen[diagnostic.Code] = diagnostic
+	}
+	if diagnostic := seen["theme.security.external_assets.disabled"]; diagnostic.Field != "security.external_assets.allowed" || diagnostic.Hint == "" {
+		t.Fatalf("expected external assets disabled diagnostic, got %#v", diagnostic)
+	}
+	if diagnostic := seen["theme.security.frontend_requests.disabled"]; diagnostic.Field != "security.frontend_requests.allowed" || diagnostic.Hint == "" {
+		t.Fatalf("expected frontend requests disabled diagnostic, got %#v", diagnostic)
+	}
+	loadedManifest, err := LoadManifest(root, "disabled-policy-theme")
+	if err != nil {
+		t.Fatalf("load disabled policy manifest: %v", err)
+	}
+	if csp := ContentSecurityPolicy(loadedManifest); strings.Contains(csp, "https://images.example.com") {
+		t.Fatalf("disabled external asset policy should not widen CSP, got %q", csp)
 	}
 }
 

@@ -3,7 +3,6 @@ package theme
 import (
 	"fmt"
 	"html/template"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,9 +16,14 @@ import (
 
 // ValidationDiagnostic is a single frontend-theme validation finding.
 type ValidationDiagnostic struct {
+	Code     string `json:"code,omitempty"`
 	Severity string `json:"severity"`
 	Path     string `json:"path,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Category string `json:"category,omitempty"`
+	Field    string `json:"field,omitempty"`
 	Message  string `json:"message"`
+	Hint     string `json:"hint,omitempty"`
 }
 
 // ValidationResult summarizes frontend-theme validation.
@@ -29,7 +33,6 @@ type ValidationResult struct {
 }
 
 var templateReferencePattern = regexp.MustCompile(`{{\s*(?:template|block)\s+"([^"]+)"`)
-var remoteURLPattern = regexp.MustCompile(`(?i)(https?|wss?)://[^\s"'()<>]+`)
 
 // ValidateInstalledDetailed performs Foundry's full frontend-theme validation
 // pass and returns all diagnostics.
@@ -68,15 +71,18 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 	}
 
 	result := &ValidationResult{Valid: true, Diagnostics: make([]ValidationDiagnostic, 0)}
+	addDiagnostic := func(diagnostic ValidationDiagnostic) {
+		result.Diagnostics = append(result.Diagnostics, diagnostic)
+		if diagnostic.Severity == "error" {
+			result.Valid = false
+		}
+	}
 	add := func(severity, path, message string) {
-		result.Diagnostics = append(result.Diagnostics, ValidationDiagnostic{
+		addDiagnostic(ValidationDiagnostic{
 			Severity: severity,
 			Path:     filepath.ToSlash(path),
 			Message:  message,
 		})
-		if severity == "error" {
-			result.Valid = false
-		}
 	}
 
 	if strings.TrimSpace(manifest.Name) != name {
@@ -127,7 +133,7 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 
 	validateRequiredLaunchSlotsDetailed(root, manifest, add)
 	validateFieldContractsDetailed(root, manifest, add)
-	validateThemeSecurityDetailed(root, manifest, add)
+	validateThemeSecurityDetailed(root, manifest, add, addDiagnostic)
 	validateTemplateReferences(root, manifest, add)
 	validateTemplateParsing(root, add)
 
@@ -138,85 +144,103 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 		if result.Diagnostics[i].Path != result.Diagnostics[j].Path {
 			return result.Diagnostics[i].Path < result.Diagnostics[j].Path
 		}
+		if result.Diagnostics[i].Line != result.Diagnostics[j].Line {
+			return result.Diagnostics[i].Line < result.Diagnostics[j].Line
+		}
+		if result.Diagnostics[i].Code != result.Diagnostics[j].Code {
+			return result.Diagnostics[i].Code < result.Diagnostics[j].Code
+		}
 		return result.Diagnostics[i].Message < result.Diagnostics[j].Message
 	})
 
 	return result, nil
 }
 
-func validateThemeSecurityDetailed(root string, manifest *Manifest, add func(severity, path, message string)) {
+func validateThemeSecurityDetailed(root string, manifest *Manifest, add func(severity, path, message string), addDiagnostic func(ValidationDiagnostic)) {
 	keyPath := filepath.Join(root, "theme.yaml")
 	normalizeThemeSecurity(&manifest.Security)
 
 	if !manifest.Security.ExternalAssets.Allowed {
-		for _, list := range [][]string{
-			manifest.Security.ExternalAssets.Scripts,
-			manifest.Security.ExternalAssets.Styles,
-			manifest.Security.ExternalAssets.Fonts,
-			manifest.Security.ExternalAssets.Images,
-			manifest.Security.ExternalAssets.Media,
-		} {
-			if len(list) > 0 {
-				add("error", keyPath, "security.external_assets.allowed must be true when remote asset allowlists are declared")
-				break
-			}
+		if len(themeExternalAssetAllowlist(manifest.Security)) > 0 {
+			addDiagnostic(ValidationDiagnostic{
+				Code:     "theme.security.external_assets.disabled",
+				Severity: "error",
+				Path:     filepath.ToSlash(keyPath),
+				Field:    "security.external_assets.allowed",
+				Message:  "remote asset allowlists are declared while security.external_assets.allowed is false",
+				Hint:     "Set security.external_assets.allowed: true if these assets are intentional, or remove the external asset allowlists.",
+			})
 		}
 	}
 	if !manifest.Security.FrontendRequests.Allowed && len(manifest.Security.FrontendRequests.Origins) > 0 {
-		add("error", keyPath, "security.frontend_requests.allowed must be true when remote request origins are declared")
+		addDiagnostic(ValidationDiagnostic{
+			Code:     "theme.security.frontend_requests.disabled",
+			Severity: "error",
+			Path:     filepath.ToSlash(keyPath),
+			Field:    "security.frontend_requests.allowed",
+			Message:  "remote request origins are declared while security.frontend_requests.allowed is false",
+			Hint:     "Set security.frontend_requests.allowed: true if these browser-side requests are intentional, or remove the declared origins.",
+		})
 	}
 	if themeBoolValue(manifest.Security.TemplateContext.AllowRawConfig) {
-		add("error", keyPath, "security.template_context.allow_raw_config is not supported; templates only receive a curated public-safe site config")
+		addDiagnostic(ValidationDiagnostic{
+			Code:     "theme.security.template_context.raw_config_unsupported",
+			Severity: "error",
+			Path:     filepath.ToSlash(keyPath),
+			Field:    "security.template_context.allow_raw_config",
+			Message:  "security.template_context.allow_raw_config is not supported; templates only receive a curated public-safe site config",
+			Hint:     "Remove security.template_context.allow_raw_config or set it to false.",
+		})
 	}
 	if themeBoolValue(manifest.Security.TemplateContext.AllowAdminState) {
-		add("error", keyPath, "security.template_context.allow_admin_state is not supported; admin state is never exposed to themes")
+		addDiagnostic(ValidationDiagnostic{
+			Code:     "theme.security.template_context.admin_state_unsupported",
+			Severity: "error",
+			Path:     filepath.ToSlash(keyPath),
+			Field:    "security.template_context.allow_admin_state",
+			Message:  "security.template_context.allow_admin_state is not supported; admin state is never exposed to themes",
+			Hint:     "Remove security.template_context.allow_admin_state or set it to false.",
+		})
 	}
 	if themeBoolValue(manifest.Security.TemplateContext.AllowRuntimeState) {
-		add("warning", keyPath, "security.template_context.allow_runtime_state is advisory only; undeclared runtime/admin keys are still filtered from template data")
+		addDiagnostic(ValidationDiagnostic{
+			Code:     "theme.security.template_context.runtime_state_advisory",
+			Severity: "warning",
+			Path:     filepath.ToSlash(keyPath),
+			Field:    "security.template_context.allow_runtime_state",
+			Message:  "security.template_context.allow_runtime_state is advisory only; undeclared runtime/admin keys are still filtered from template data",
+			Hint:     "Set security.template_context.allow_runtime_state to false unless the advisory behavior is intentional.",
+		})
 	}
 
-	assetAllowlist := themeExternalAssetAllowlist(manifest.Security)
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if err := safepath.EnsureNoSymlinkEscape(root, path); err != nil {
-			return err
-		}
-		if d.IsDir() {
-			name := d.Name()
-			if name == ".git" || name == "node_modules" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		switch ext {
-		case ".html", ".css", ".js":
-		default:
-			return nil
-		}
-		body, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-		urls := remoteURLPattern.FindAllString(string(body), -1)
-		for _, raw := range urls {
-			switch ext {
-			case ".js":
-				if !manifest.Security.FrontendRequests.Allowed || !URLAllowedByPatterns(raw, manifest.Security.FrontendRequests.Origins) {
-					add("error", path, fmt.Sprintf("remote frontend request %q is not declared in security.frontend_requests.origins", raw))
-				}
-			default:
-				if !manifest.Security.ExternalAssets.Allowed || !URLAllowedByPatterns(raw, assetAllowlist) {
-					add("error", path, fmt.Sprintf("remote asset %q is not declared in security.external_assets allowlists", raw))
-				}
-			}
-		}
-		return nil
-	})
+	references, err := scanThemeSecurityReferences(root)
 	if err != nil {
 		add("error", root, err.Error())
+		return
+	}
+	for _, reference := range references {
+		if securityReferenceAllowed(reference, manifest.Security) {
+			continue
+		}
+		field := securityReferenceField(reference.Kind)
+		kind := reference.Kind
+		code := "theme.security.remote_asset_undeclared"
+		if reference.Kind == "request" {
+			code = "theme.security.frontend_request_undeclared"
+			kind = "frontend request"
+		} else {
+			kind += " asset"
+		}
+		addDiagnostic(ValidationDiagnostic{
+			Code:     code,
+			Severity: "error",
+			Path:     reference.Path,
+			Line:     reference.Line,
+			Category: securityReferenceCategory(reference.Kind),
+			Field:    field,
+			Message:  fmt.Sprintf("Remote %s %q is not declared in %s", kind, reference.URL, field),
+			Hint:     securityReferenceHint(reference),
+		})
 	}
 }
 

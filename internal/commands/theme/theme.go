@@ -153,8 +153,13 @@ func runValidate(cfg *config.Config, args []string) error {
 	}
 
 	if !result.Valid {
-		for _, diag := range result.Diagnostics {
-			fmt.Printf("[%s] %s: %s\n", diag.Severity, diag.Path, diag.Message)
+		printThemeValidationDiagnostics(result.Diagnostics)
+		if securityMode || cspMode {
+			report, reportErr := theme.AnalyzeInstalledSecurity(cfg.ThemesDir, name)
+			if reportErr != nil {
+				return reportErr
+			}
+			printThemeSecurityReport(report, cspMode)
 		}
 		return fmt.Errorf("theme %q is invalid", name)
 	}
@@ -335,19 +340,19 @@ func printThemeSecurityReport(report *theme.SecurityReport, includeCSP bool) {
 	if len(report.DetectedAssets) > 0 {
 		fmt.Println("Detected remote assets:")
 		for _, item := range report.DetectedAssets {
-			fmt.Printf("  - %s [%s] (%s)\n", item.URL, item.Status, item.Path)
+			printThemeSecurityFinding(item)
 		}
 	}
 	if len(report.DetectedRequests) > 0 {
 		fmt.Println("Detected frontend requests:")
 		for _, item := range report.DetectedRequests {
-			fmt.Printf("  - %s [%s] (%s)\n", item.URL, item.Status, item.Path)
+			printThemeSecurityFinding(item)
 		}
 	}
 	if len(report.Mismatches) > 0 {
 		fmt.Println("Security mismatches:")
 		for _, diag := range report.Mismatches {
-			fmt.Printf("  - %s\n", diag.Message)
+			printThemeValidationDiagnostic("  -", diag)
 		}
 	}
 	if includeCSP {
@@ -357,6 +362,47 @@ func printThemeSecurityReport(report *theme.SecurityReport, includeCSP bool) {
 		}
 		fmt.Println("Generated CSP:")
 		fmt.Println(report.GeneratedCSP)
+	}
+}
+
+func printThemeSecurityFinding(item theme.SecurityAssetFinding) {
+	location := item.Path
+	if item.Line > 0 {
+		location = fmt.Sprintf("%s:%d", location, item.Line)
+	}
+	field := ""
+	if item.Field != "" {
+		field = fmt.Sprintf("; declare in %s", item.Field)
+	}
+	fmt.Printf("  - %s [%s] (%s%s)\n", item.URL, item.Status, location, field)
+	if item.Remediation != "" {
+		fmt.Printf("    Hint: %s\n", item.Remediation)
+	}
+}
+
+func printThemeValidationDiagnostics(diagnostics []theme.ValidationDiagnostic) {
+	for _, diagnostic := range diagnostics {
+		printThemeValidationDiagnostic("["+diagnostic.Severity+"]", diagnostic)
+	}
+}
+
+func printThemeValidationDiagnostic(prefix string, diagnostic theme.ValidationDiagnostic) {
+	if diagnostic.Code != "" {
+		prefix = fmt.Sprintf("%s %s", prefix, diagnostic.Code)
+	}
+	location := diagnostic.Path
+	if diagnostic.Line > 0 {
+		location = fmt.Sprintf("%s:%d", location, diagnostic.Line)
+	}
+	if location == "" {
+		location = "theme"
+	}
+	if diagnostic.Field != "" {
+		location = fmt.Sprintf("%s (%s)", location, diagnostic.Field)
+	}
+	fmt.Printf("%s %s: %s\n", prefix, location, diagnostic.Message)
+	if diagnostic.Hint != "" {
+		fmt.Printf("  Hint: %s\n", diagnostic.Hint)
 	}
 }
 

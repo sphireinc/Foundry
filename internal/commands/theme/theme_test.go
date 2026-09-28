@@ -1,6 +1,7 @@
 package themecmd
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,6 +66,66 @@ func TestThemeCommandRun(t *testing.T) {
 	if err := cmd.Run(cfg, []string{"foundry", "theme", "missing"}); err == nil {
 		t.Fatal("expected unknown subcommand error")
 	}
+}
+
+func TestThemeValidatePrintsSecurityReportForInvalidTheme(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{
+		Theme:     "security-cli",
+		ThemesDir: filepath.Join(root, "themes"),
+	}
+	cfg.ApplyDefaults()
+	scaffolded, err := theme.Scaffold(cfg.ThemesDir, cfg.Theme)
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
+	headBody, err := os.ReadFile(headPath)
+	if err != nil {
+		t.Fatalf("read theme head: %v", err)
+	}
+	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<script src="https://cdn.example.com/theme.js"></script>`, 1)
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o644); err != nil {
+		t.Fatalf("write theme head: %v", err)
+	}
+
+	output, validateErr := captureStdout(t, func() error {
+		return (command{}).Run(cfg, []string{"foundry", "theme", "validate", cfg.Theme, "--security", "--csp"})
+	})
+	if validateErr == nil {
+		t.Fatal("expected invalid theme validation to return an error")
+	}
+	for _, want := range []string{
+		"theme.security.remote_asset_undeclared",
+		"security.external_assets.scripts",
+		"Hint: Add https://cdn.example.com",
+		"Detected remote assets:",
+		"Generated CSP:",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("expected CLI output to contain %q, got %q", want, output)
+		}
+	}
+}
+
+func captureStdout(t *testing.T, run func() error) (string, error) {
+	t.Helper()
+	original := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stdout pipe: %v", err)
+	}
+	os.Stdout = writer
+	runErr := run()
+	if closeErr := writer.Close(); closeErr != nil {
+		t.Fatalf("close stdout writer: %v", closeErr)
+	}
+	os.Stdout = original
+	body, readErr := io.ReadAll(reader)
+	if readErr != nil {
+		t.Fatalf("read captured stdout: %v", readErr)
+	}
+	return string(body), runErr
 }
 
 func writeConfigFile(t *testing.T, root, body string) {

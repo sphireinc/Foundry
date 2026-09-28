@@ -11,9 +11,14 @@ func toValidationDiagnostics(in []theme.ValidationDiagnostic) []types.Validation
 	out := make([]types.ValidationDiagnostic, 0, len(in))
 	for _, diagnostic := range in {
 		out = append(out, types.ValidationDiagnostic{
+			Code:     diagnostic.Code,
 			Severity: diagnostic.Severity,
 			Path:     diagnostic.Path,
+			Line:     diagnostic.Line,
+			Category: diagnostic.Category,
+			Field:    diagnostic.Field,
 			Message:  diagnostic.Message,
+			Hint:     diagnostic.Hint,
 		})
 	}
 	return out

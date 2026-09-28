@@ -112,6 +112,16 @@ func TestDefaultAdminThemeAssetsIncludeStructuredEditor(t *testing.T) {
 	if !strings.Contains(source, "Diagnostics") || !strings.Contains(source, "Embedded pprof") || !strings.Contains(source, "Runtime Summary") || !strings.Contains(source, "/api/debug/runtime") {
 		t.Fatalf("expected default admin theme to expose the diagnostics surface")
 	}
+	platformBody, err := os.ReadFile(filepath.Join("..", "..", "..", "themes", "admin-themes", "default", "assets", "admin", "views", "platform.js"))
+	if err != nil {
+		t.Fatalf("read platform admin view: %v", err)
+	}
+	platformSource := string(platformBody)
+	for _, want := range []string{"item.remediation", "item.field", "diag.hint", "diag.category", "diag.line"} {
+		if !strings.Contains(platformSource, want) {
+			t.Fatalf("expected theme security UI to render %s", want)
+		}
+	}
 	debugBody, err := os.ReadFile(filepath.Join("..", "..", "..", "themes", "admin-themes", "default", "assets", "admin", "views", "debug.js"))
 	if err != nil {
 		t.Fatalf("read debug admin view module: %v", err)
