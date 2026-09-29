@@ -256,6 +256,53 @@ func TestValidateInstalledDetailedChecksThemeSecurity(t *testing.T) {
 	}
 }
 
+func TestValidateInstalledDetailedRejectsUnsupportedNetworkLinks(t *testing.T) {
+	root := t.TempDir()
+	scaffolded, err := Scaffold(root, "unsupported-network-theme")
+	if err != nil {
+		t.Fatalf("scaffold theme: %v", err)
+	}
+
+	headPath := filepath.Join(scaffolded, "layouts", "partials", "head.html")
+	headBody, err := os.ReadFile(headPath) // #nosec G304 -- headPath is constructed beneath the test's temporary themes directory.
+	if err != nil {
+		t.Fatalf("read head: %v", err)
+	}
+	updatedHead := strings.Replace(string(headBody), `{{ pluginSlot "head.end" }}`, `{{ pluginSlot "head.end" }}<link rel="manifest" href="https://cdn.example.com/site.webmanifest"><link rel="preload" as="worker" href="https://cdn.example.com/worker.js">`, 1)
+	if err := os.WriteFile(headPath, []byte(updatedHead), 0o600); err != nil { // #nosec G703 -- headPath is constructed beneath the test's temporary themes directory.
+		t.Fatalf("write head: %v", err)
+	}
+
+	result, err := ValidateInstalledDetailed(root, "unsupported-network-theme")
+	if err != nil {
+		t.Fatalf("validate detailed: %v", err)
+	}
+	if result.Valid {
+		t.Fatal("expected unsupported remote network links to invalidate theme")
+	}
+	count := 0
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Code != "theme.security.network_resource_unsupported" {
+			continue
+		}
+		count++
+		if diagnostic.Path != filepath.ToSlash(headPath) || diagnostic.Line == 0 || diagnostic.Category != "network_resources" || diagnostic.Hint == "" {
+			t.Fatalf("expected actionable unsupported network diagnostic, got %#v", diagnostic)
+		}
+	}
+	if count != 2 {
+		t.Fatalf("expected two unsupported network diagnostics, got %d: %#v", count, result.Diagnostics)
+	}
+
+	report, err := AnalyzeInstalledSecurity(root, "unsupported-network-theme")
+	if err != nil {
+		t.Fatalf("analyze security: %v", err)
+	}
+	if len(report.DetectedAssets) != 2 || report.DetectedAssets[0].Kind != "unsupported" || report.DetectedAssets[0].Remediation == "" {
+		t.Fatalf("expected unsupported findings with remediation, got %#v", report.DetectedAssets)
+	}
+}
+
 func TestValidateInstalledDetailedUsesAssetCategoriesAndRequestOrigins(t *testing.T) {
 	root := t.TempDir()
 	scaffolded, err := Scaffold(root, "category-theme")

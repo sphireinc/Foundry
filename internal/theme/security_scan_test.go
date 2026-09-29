@@ -90,6 +90,23 @@ func TestScanThemeSecurityFileClassifiesDestinationlessPrefetch(t *testing.T) {
 	}
 }
 
+func TestScanThemeSecurityFileReportsUnsupportedNetworkLinks(t *testing.T) {
+	body := []byte(`<link rel="manifest" href="https://cdn.example.com/site.webmanifest">
+<link rel="preload" as="worker" href="https://cdn.example.com/worker.js">
+<link rel="preload" as="document" href="https://docs.example.com/guide">
+<link rel="preload" as="track" href="https://media.example.com/captions.vtt">`)
+
+	references := scanThemeSecurityFile("theme.html", ".html", body)
+	if len(references) != 4 {
+		t.Fatalf("expected four unsupported network references, got %#v", references)
+	}
+	for _, reference := range references {
+		if reference.Kind != "unsupported" {
+			t.Fatalf("expected unsupported reference category, got %#v", references)
+		}
+	}
+}
+
 func TestScanThemeSecurityFileDetectsRequestsAndIgnoresStringsAndComments(t *testing.T) {
 	body := []byte(`// fetch("https://ignored.example/comment")
 const documentationURL = "https://ignored.example/string"

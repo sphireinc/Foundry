@@ -172,6 +172,11 @@ func htmlLinkReferenceKind(tag string) string {
 	if _, ok := rel["prefetch"]; ok {
 		return htmlLinkFetchKind(tag)
 	}
+	if _, ok := rel["manifest"]; ok {
+		// The current theme security contract has no manifest-src category. Keep
+		// the remote reference visible so validation can report it explicitly.
+		return "unsupported"
+	}
 	if _, ok := rel["icon"]; ok {
 		return "image"
 	}
@@ -200,7 +205,9 @@ func htmlLinkFetchKind(tag string) string {
 		return "request"
 	}
 	if strings.TrimSpace(htmlAttribute(tag, "as")) != "" {
-		return ""
+		// Do not silently drop a network-bearing destination that has no
+		// corresponding policy category.
+		return "unsupported"
 	}
 	return htmlLinkURLKind(htmlAttribute(tag, "href"))
 }
@@ -612,6 +619,8 @@ func securityReferenceField(kind string) string {
 		return "security.external_assets.media"
 	case "request":
 		return "security.frontend_requests.origins"
+	case "unsupported":
+		return ""
 	default:
 		return "security"
 	}
@@ -631,6 +640,8 @@ func securityReferenceCategory(kind string) string {
 		return "media"
 	case "request":
 		return "frontend_requests"
+	case "unsupported":
+		return "network_resources"
 	default:
 		return kind
 	}
@@ -675,6 +686,9 @@ func securityReferenceStatus(ref themeSecurityReference, sec ThemeSecurity) stri
 }
 
 func securityReferenceHint(ref themeSecurityReference) string {
+	if ref.Kind == "unsupported" {
+		return "This remote link destination is not covered by Foundry's theme security contract; serve it from the site's origin, remove it, or use a supported resource policy."
+	}
 	origin := securityOrigin(ref.URL)
 	if origin == "" {
 		origin = ref.URL
