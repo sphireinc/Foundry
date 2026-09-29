@@ -224,6 +224,18 @@ func validateThemeSecurityDetailed(root string, manifest *Manifest, add func(sev
 			continue
 		}
 		field := securityReferenceField(reference.Kind)
+		if reference.Kind == "unsupported" {
+			addDiagnostic(ValidationDiagnostic{
+				Code:     "theme.security.network_resource_unsupported",
+				Severity: "error",
+				Path:     reference.Path,
+				Line:     reference.Line,
+				Category: securityReferenceCategory(reference.Kind),
+				Message:  fmt.Sprintf("Remote network resource %q uses an unsupported HTML link destination", reference.URL),
+				Hint:     securityReferenceHint(reference),
+			})
+			continue
+		}
 		kind := reference.Kind
 		code := "theme.security.remote_asset_undeclared"
 		if reference.Kind == "request" {
