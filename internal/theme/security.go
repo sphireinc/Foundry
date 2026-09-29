@@ -145,11 +145,11 @@ func ContentSecurityPolicy(manifest *Manifest) string {
 		{"frame-ancestors", "'self'"},
 	}
 
-	directives = append(directives, append([]string{"script-src", "'self'", "'unsafe-inline'"}, sec.ExternalAssets.Scripts...))
-	directives = append(directives, append([]string{"style-src", "'self'", "'unsafe-inline'"}, sec.ExternalAssets.Styles...))
-	directives = append(directives, append([]string{"font-src", "'self'", "data:"}, sec.ExternalAssets.Fonts...))
-	directives = append(directives, append([]string{"img-src", "'self'", "data:", "blob:"}, sec.ExternalAssets.Images...))
-	directives = append(directives, append([]string{"media-src", "'self'", "data:", "blob:"}, sec.ExternalAssets.Media...))
+	directives = append(directives, append([]string{"script-src", "'self'", "'unsafe-inline'"}, allowedExternalSources(sec.ExternalAssets.Allowed, sec.ExternalAssets.Scripts)...))
+	directives = append(directives, append([]string{"style-src", "'self'", "'unsafe-inline'"}, allowedExternalSources(sec.ExternalAssets.Allowed, sec.ExternalAssets.Styles)...))
+	directives = append(directives, append([]string{"font-src", "'self'", "data:"}, allowedExternalSources(sec.ExternalAssets.Allowed, sec.ExternalAssets.Fonts)...))
+	directives = append(directives, append([]string{"img-src", "'self'", "data:", "blob:"}, allowedExternalSources(sec.ExternalAssets.Allowed, sec.ExternalAssets.Images)...))
+	directives = append(directives, append([]string{"media-src", "'self'", "data:", "blob:"}, allowedExternalSources(sec.ExternalAssets.Allowed, sec.ExternalAssets.Media)...))
 
 	connect := []string{"connect-src", "'self'"}
 	if sec.FrontendRequests.Allowed {
@@ -162,6 +162,13 @@ func ContentSecurityPolicy(manifest *Manifest) string {
 		parts = append(parts, strings.Join(uniqueDirectiveValues(directive), " "))
 	}
 	return strings.Join(parts, "; ")
+}
+
+func allowedExternalSources(allowed bool, sources []string) []string {
+	if !allowed {
+		return nil
+	}
+	return sources
 }
 
 func uniqueDirectiveValues(values []string) []string {

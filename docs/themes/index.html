@@ -355,6 +355,60 @@ slots:
             </li>
           </ul>
 
+          <h3>Theme security troubleshooting</h3>
+          <p>
+            Validation reports the source path, line, policy category, and the exact manifest field
+            to update. Run the validator with the security report when a theme is rejected:
+          </p>
+          <pre><code>foundry theme validate aurora --security --csp
+foundry theme security aurora</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>Finding</th>
+                <th>Declare it in <code>theme.yaml</code></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Remote script, stylesheet, font, image, or media asset</td>
+                <td><code>security.external_assets.scripts</code>, <code>styles</code>, <code>fonts</code>, <code>images</code>, or <code>media</code></td>
+              </tr>
+              <tr>
+                <td>Browser-side fetch, XHR, WebSocket, or EventSource</td>
+                <td><code>security.frontend_requests.origins</code></td>
+              </tr>
+              <tr>
+                <td>Declarations while a policy is disabled</td>
+                <td>Set the matching <code>allowed</code> value to <code>true</code>, or remove the declaration</td>
+              </tr>
+              <tr>
+                <td>Unsupported template context flag</td>
+                <td>Remove it or set <code>allow_raw_config</code> and <code>allow_admin_state</code> to <code>false</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>For example, a theme that loads a CDN script and calls an API changes from:</p>
+          <pre><code>security:
+  external_assets:
+    allowed: false
+  frontend_requests:
+    allowed: false</code></pre>
+          <p>to:</p>
+          <pre><code>security:
+  external_assets:
+    allowed: true
+    scripts:
+      - https://cdn.example.com
+  frontend_requests:
+    allowed: true
+    origins:
+      - https://api.example.com</code></pre>
+          <p>
+            Keep each origin in the list that matches the CSP directive it needs. A script origin in
+            <code>scripts</code> does not authorize images, fonts, styles, or media from that origin.
+          </p>
+
           <h2>End-to-end custom fields example</h2>
           <p>A complete theme-driven custom field flow has four parts:</p>
           <ol>

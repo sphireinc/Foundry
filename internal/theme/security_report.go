@@ -2,18 +2,19 @@ package theme
 
 import (
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
 type SecurityAssetFinding struct {
-	Kind   string `json:"kind"`
-	URL    string `json:"url"`
-	Path   string `json:"path,omitempty"`
-	Status string `json:"status,omitempty"`
+	Kind        string `json:"kind"`
+	URL         string `json:"url"`
+	Path        string `json:"path,omitempty"`
+	Line        int    `json:"line,omitempty"`
+	Field       string `json:"field,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Remediation string `json:"remediation,omitempty"`
 }
 
 type SecurityReport struct {
@@ -46,7 +47,7 @@ func AnalyzeInstalledSecurity(themesDir, name string) (*SecurityReport, error) {
 	report.DetectedRequests = detectedRequests
 	if validation, err := ValidateInstalledDetailed(themesDir, name); err == nil {
 		for _, diag := range validation.Diagnostics {
-			if strings.Contains(diag.Message, "security.") || strings.Contains(diag.Message, "remote asset") || strings.Contains(diag.Message, "frontend request") {
+			if strings.HasPrefix(diag.Code, "theme.security.") {
 				report.Mismatches = append(report.Mismatches, diag)
 			}
 		}
@@ -58,56 +59,33 @@ func detectRemoteThemeReferences(root string, sec ThemeSecurity) ([]SecurityAsse
 	normalizeThemeSecurity(&sec)
 	assets := []SecurityAssetFinding{}
 	requests := []SecurityAssetFinding{}
-	seen := map[string]struct{}{}
-	assetAllowlist := themeExternalAssetAllowlist(sec)
-
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	references, err := scanThemeSecurityReferences(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, reference := range references {
+		status := securityReferenceStatus(reference, sec)
+		finding := SecurityAssetFinding{
+			Kind:        reference.Kind,
+			URL:         reference.URL,
+			Path:        reference.Path,
+			Line:        reference.Line,
+			Field:       securityReferenceField(reference.Kind),
+			Status:      status,
+			Remediation: securityReferenceRemediation(reference, status),
 		}
-		if d.IsDir() {
-			if d.Name() == ".git" || d.Name() == "node_modules" {
-				return filepath.SkipDir
-			}
-			return nil
+		if reference.Kind == "request" {
+			requests = append(requests, finding)
+		} else {
+			assets = append(assets, finding)
 		}
-		switch strings.ToLower(filepath.Ext(path)) {
-		case ".html", ".css", ".js":
-		default:
-			return nil
-		}
-		body, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-		for _, raw := range remoteURLPattern.FindAllString(string(body), -1) {
-			key := path + "|" + raw
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			kind := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
-			if strings.EqualFold(filepath.Ext(path), ".js") {
-				requests = append(requests, SecurityAssetFinding{
-					Kind:   kind,
-					URL:    raw,
-					Path:   filepath.ToSlash(path),
-					Status: allowState(sec.FrontendRequests.Allowed && URLAllowedByPatterns(raw, sec.FrontendRequests.Origins)),
-				})
-				continue
-			}
-			assets = append(assets, SecurityAssetFinding{
-				Kind:   kind,
-				URL:    raw,
-				Path:   filepath.ToSlash(path),
-				Status: allowState(sec.ExternalAssets.Allowed && URLAllowedByPatterns(raw, assetAllowlist)),
-			})
-		}
-		return nil
-	})
+	}
 	sort.Slice(assets, func(i, j int) bool {
 		if assets[i].Path != assets[j].Path {
 			return assets[i].Path < assets[j].Path
+		}
+		if assets[i].Line != assets[j].Line {
+			return assets[i].Line < assets[j].Line
 		}
 		return assets[i].URL < assets[j].URL
 	})
@@ -115,17 +93,20 @@ func detectRemoteThemeReferences(root string, sec ThemeSecurity) ([]SecurityAsse
 		if requests[i].Path != requests[j].Path {
 			return requests[i].Path < requests[j].Path
 		}
+		if requests[i].Line != requests[j].Line {
+			return requests[i].Line < requests[j].Line
+		}
 		return requests[i].URL < requests[j].URL
 	})
-	return assets, requests, err
+	return assets, requests, nil
 }
 
 func summarizeCSP(sec ThemeSecurity) []string {
 	normalizeThemeSecurity(&sec)
 	out := []string{
 		"default-src self",
-		fmt.Sprintf("script sources: %d", len(sec.ExternalAssets.Scripts)+1),
-		fmt.Sprintf("style sources: %d", len(sec.ExternalAssets.Styles)+1),
+		fmt.Sprintf("script sources: %d", len(allowedExternalSources(sec.ExternalAssets.Allowed, sec.ExternalAssets.Scripts))+1),
+		fmt.Sprintf("style sources: %d", len(allowedExternalSources(sec.ExternalAssets.Allowed, sec.ExternalAssets.Styles))+1),
 	}
 	if sec.FrontendRequests.Allowed && len(sec.FrontendRequests.Origins) > 0 {
 		out = append(out, "connect-src includes declared remote origins")
@@ -133,11 +114,4 @@ func summarizeCSP(sec ThemeSecurity) []string {
 		out = append(out, "connect-src restricted to self")
 	}
 	return out
-}
-
-func allowState(ok bool) string {
-	if ok {
-		return "declared"
-	}
-	return "undeclared"
 }
