@@ -219,7 +219,8 @@ func validateThemeSecurityDetailed(root string, manifest *Manifest, add func(sev
 		return
 	}
 	for _, reference := range references {
-		if securityReferenceAllowed(reference, manifest.Security) {
+		status := securityReferenceStatus(reference, manifest.Security)
+		if status == "declared" || status == "disabled" {
 			continue
 		}
 		field := securityReferenceField(reference.Kind)

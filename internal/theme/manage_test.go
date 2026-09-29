@@ -437,6 +437,11 @@ func TestValidateInstalledDetailedReportsDisabledSecurityPolicies(t *testing.T) 
 	if len(report.DetectedRequests) != 1 || report.DetectedRequests[0].Status != "disabled" || !strings.Contains(report.DetectedRequests[0].Remediation, "security.frontend_requests.allowed: true") || strings.Contains(report.DetectedRequests[0].Remediation, "Add ") {
 		t.Fatalf("expected disabled request finding with enable-only remediation, got %#v", report.DetectedRequests)
 	}
+	for _, mismatch := range report.Mismatches {
+		if mismatch.Code == "theme.security.remote_asset_undeclared" || mismatch.Code == "theme.security.frontend_request_undeclared" {
+			t.Fatalf("disabled declaration should not produce an undeclared mismatch, got %#v", mismatch)
+		}
+	}
 	loadedManifest, err := LoadManifest(root, "disabled-policy-theme")
 	if err != nil {
 		t.Fatalf("load disabled policy manifest: %v", err)

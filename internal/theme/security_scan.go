@@ -24,6 +24,7 @@ type themeSecurityReference struct {
 var (
 	htmlThemeTagPattern       = regexp.MustCompile(`(?is)<(script|link|img|video|audio|source)\b[^>]*>`)
 	htmlMediaContainerPattern = regexp.MustCompile(`(?is)</?(picture|video|audio)\b[^>]*>`)
+	htmlScriptBlockPattern    = regexp.MustCompile(`(?is)<script\b[^>]*>(.*?)</script\s*>`)
 	htmlStyleBlockPattern     = regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style\s*>`)
 	cssImportPattern          = regexp.MustCompile(`(?is)@import\s+(?:url\(\s*)?["']?((?:https?|wss?)://[^\s"')]+)`)
 	cssURLPattern             = regexp.MustCompile(`(?is)url\(\s*["']?((?:https?|wss?)://[^\s"')]+)`)
@@ -98,6 +99,12 @@ func scanThemeSecurityFile(path, ext string, body []byte) []themeSecurityReferen
 				continue
 			}
 			references = append(references, cssReferences(path, body, match[2], body[match[2]:match[3]])...)
+		}
+		for _, match := range htmlScriptBlockPattern.FindAllSubmatchIndex(masked, -1) {
+			if len(match) < 4 || match[2] < 0 || match[3] < 0 {
+				continue
+			}
+			references = append(references, jsReferencesAt(path, body, match[2], body[match[2]:match[3]])...)
 		}
 	case ".css":
 		references = append(references, cssReferences(path, body, 0, body)...)
@@ -192,7 +199,36 @@ func htmlLinkFetchKind(tag string) string {
 	case "fetch":
 		return "request"
 	}
-	return ""
+	if strings.TrimSpace(htmlAttribute(tag, "as")) != "" {
+		return ""
+	}
+	return htmlLinkURLKind(htmlAttribute(tag, "href"))
+}
+
+func htmlLinkURLKind(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	path := raw
+	if parsed, err := url.Parse(raw); err == nil && parsed.Path != "" {
+		path = parsed.Path
+	}
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".js", ".mjs":
+		return "script"
+	case ".css":
+		return "style"
+	case ".woff", ".woff2", ".ttf", ".otf", ".eot":
+		return "font"
+	case ".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".webm", ".mov", ".avi":
+		return "media"
+	case ".avif", ".bmp", ".gif", ".ico", ".jpeg", ".jpg", ".png", ".svg", ".webp":
+		return "image"
+	default:
+		return "request"
+	}
 }
 
 func htmlSourceReferenceKind(body []byte, offset int, tag string) string {
@@ -302,7 +338,11 @@ func cssReferences(path string, body []byte, offset int, source []byte) []themeS
 }
 
 func jsReferences(path string, body []byte) []themeSecurityReference {
-	masked := maskJSComments(body)
+	return jsReferencesAt(path, body, 0, body)
+}
+
+func jsReferencesAt(path string, body []byte, offset int, source []byte) []themeSecurityReference {
+	masked := maskJSComments(source)
 	patterns := []*regexp.Regexp{jsFetchPattern, jsWebSocketPattern, jsXHROpenPattern, jsAxiosPattern}
 	references := []themeSecurityReference{}
 	seen := map[string]struct{}{}
@@ -311,10 +351,10 @@ func jsReferences(path string, body []byte) []themeSecurityReference {
 			if len(match) < 4 || match[2] < 0 || match[3] < 0 {
 				continue
 			}
-			if !jsCodeAtOffset(body, match[0]) {
+			if !jsCodeAtOffset(source, match[0]) {
 				continue
 			}
-			raw := string(body[match[2]:match[3]])
+			raw := string(source[match[2]:match[3]])
 			if !isRemoteThemeURL(raw) {
 				continue
 			}
@@ -322,7 +362,7 @@ func jsReferences(path string, body []byte) []themeSecurityReference {
 				continue
 			}
 			seen[raw] = struct{}{}
-			references = append(references, themeSecurityReference{Kind: "request", URL: raw, Path: path, Line: lineNumber(body, match[0])})
+			references = append(references, themeSecurityReference{Kind: "request", URL: raw, Path: path, Line: lineNumber(body, offset+match[0])})
 		}
 	}
 	return references

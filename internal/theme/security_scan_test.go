@@ -62,6 +62,34 @@ func TestScanThemeSecurityFileClassifiesPictureSourcesAndFetchedLinks(t *testing
 	}
 }
 
+func TestScanThemeSecurityFileDetectsInlineScriptRequests(t *testing.T) {
+	body := []byte(`<script>
+// fetch("https://ignored.example/comment")
+fetch("https://api.example.com/data")
+</script>`)
+
+	references := scanThemeSecurityFile("theme.html", ".html", body)
+	if len(references) != 1 || references[0].Kind != "request" || references[0].URL != "https://api.example.com/data" {
+		t.Fatalf("expected inline script request, got %#v", references)
+	}
+	if references[0].Line != 3 {
+		t.Fatalf("expected inline request line 3, got %#v", references[0])
+	}
+}
+
+func TestScanThemeSecurityFileClassifiesDestinationlessPrefetch(t *testing.T) {
+	body := []byte(`<link rel="prefetch" href="https://cdn.example.com/app.js">
+<link rel="prefetch" href="https://cdn.example.com/page">`)
+
+	references := scanThemeSecurityFile("theme.html", ".html", body)
+	if len(references) != 2 {
+		t.Fatalf("expected two destinationless prefetch references, got %#v", references)
+	}
+	if references[0].Kind != "script" || references[1].Kind != "request" {
+		t.Fatalf("unexpected destinationless prefetch categories: %#v", references)
+	}
+}
+
 func TestScanThemeSecurityFileDetectsRequestsAndIgnoresStringsAndComments(t *testing.T) {
 	body := []byte(`// fetch("https://ignored.example/comment")
 const documentationURL = "https://ignored.example/string"
