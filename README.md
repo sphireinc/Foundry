@@ -123,6 +123,11 @@ docker run --rm \
   foundry build
 ```
 
+If a release fails after publishing only one of the two versioned images,
+delete any versioned tags created by that partial run in GHCR before retrying,
+or choose a new release version. The workflow intentionally will not overwrite
+an existing versioned tag.
+
 The runtime image runs as the non-root `foundry` user and starts the server
 with `content/config/site.docker.yaml`. The static image defaults to
 `foundry build` and keeps the command overridable for other bounded CLI

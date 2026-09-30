@@ -250,6 +250,12 @@ docker compose -f docker-compose.prod.yml up -d --build</code></pre>
             repository.
           </p>
           <p>
+            If a release fails after publishing only one versioned image,
+            delete any versioned tags created by that partial run in GHCR
+            before retrying, or use a new release version. Versioned tags are
+            never overwritten.
+          </p>
+          <p>
             GitHub creates a newly published package as private. An
             organization or repository administrator must change both package
             visibility settings to <strong>Public</strong> before
