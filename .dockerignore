@@ -1,10 +1,14 @@
 .git
 .github
+.serena
+reviews
 .idea
 .DS_Store
 .foundry
 .cache
 public
+tmp
+.env
 
 docs/coverage
 playwright-report

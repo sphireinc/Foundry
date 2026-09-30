@@ -215,6 +215,44 @@ docker compose -f docker-compose.prod.yml up -d --build</code></pre>
             </li>
           </ul>
 
+          <h2>Published GitHub Container Registry images</h2>
+          <p>
+            Release tags publish two OCI images to
+            <code>ghcr.io/sphireinc</code>:
+          </p>
+          <ul>
+            <li>
+              <code>ghcr.io/sphireinc/foundry-runtime</code> runs Foundry as a
+              long-lived server.
+            </li>
+            <li>
+              <code>ghcr.io/sphireinc/foundry-static-runtime</code> builds a
+              checked-out Foundry site mounted at <code>/repo</code>.
+            </li>
+          </ul>
+          <p>
+            Use the static image with the invoking user's UID and GID so the
+            generated <code>public/</code> files remain writable on the host:
+          </p>
+          <pre><code>docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --mount "type=bind,src=$PWD,dst=/repo" \
+  --workdir /repo \
+  ghcr.io/sphireinc/foundry-static-runtime:latest \
+  foundry build</code></pre>
+          <p>
+            Versioned tags are immutable release references; the
+            <code>latest</code> tag is updated for convenience. The images
+            are built with OCI source, version, revision, and creation-date
+            labels so GitHub can associate them with this repository.
+          </p>
+          <p>
+            GitHub creates a newly published package as private. An
+            organization or repository administrator must change both package
+            visibility settings to <strong>Public</strong> before
+            unauthenticated pulls will work.
+          </p>
+
           <h2>Related docs</h2>
           <ul>
             <li><a href="../getting-started/">Getting Started</a></li>
