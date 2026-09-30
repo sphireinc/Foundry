@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
       args:
         FOUNDRY_BUILD_VERSION: "${FOUNDRY_BUILD_VERSION:-}"
         FOUNDRY_BUILD_COMMIT: "${FOUNDRY_BUILD_COMMIT:-}"

@@ -241,10 +241,13 @@ docker compose -f docker-compose.prod.yml up -d --build</code></pre>
   ghcr.io/sphireinc/foundry-static-runtime:latest \
   foundry build</code></pre>
           <p>
-            Versioned tags are immutable release references; the
-            <code>latest</code> tag is updated for convenience. The images
-            are built with OCI source, version, revision, and creation-date
-            labels so GitHub can associate them with this repository.
+            The workflow checks the registry and refuses to overwrite an
+            existing versioned release tag. The <code>latest</code> tag is
+            updated for convenience. Both images publish
+            <code>linux/amd64</code> and <code>linux/arm64</code> variants.
+            They are built with OCI source, version, revision, and
+            creation-date labels so GitHub can associate them with this
+            repository.
           </p>
           <p>
             GitHub creates a newly published package as private. An

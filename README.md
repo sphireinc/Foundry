@@ -108,9 +108,11 @@ Release tags publish two OCI images to the GitHub Container Registry:
 - `ghcr.io/sphireinc/foundry-static-runtime`: a static-site build image for a
   checked-out Foundry site mounted at `/repo`
 
-The versioned image tag is immutable for a release. The `latest` tag is also
-updated for convenience. To build a checked-out site, pass the invoking user's
-UID and GID so generated files in the bind mount remain writable locally:
+The workflow treats each versioned image tag as immutable: it checks the
+registry and refuses to overwrite an existing release tag. The `latest` tag is
+updated for convenience. Both images publish `linux/amd64` and `linux/arm64`
+variants. To build a checked-out site, pass the invoking user's UID and GID so
+generated files in the bind mount remain writable locally:
 
 ```bash
 docker run --rm \
