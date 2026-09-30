@@ -99,6 +99,46 @@ Before using the production overlay in anything real, update
 `content/config/site.docker.prod.yaml` so `base_url` matches your deployed
 HTTPS origin.
 
+### Published container images
+
+Release tags publish two OCI images to the GitHub Container Registry:
+
+- `ghcr.io/sphireinc/foundry-runtime`: the long-running server image used by
+  `docker-compose.prod.yml`
+- `ghcr.io/sphireinc/foundry-static-runtime`: a static-site build image for a
+  checked-out Foundry site mounted at `/repo`
+
+The workflow treats each versioned image tag as immutable: it checks the
+registry and refuses to overwrite an existing release tag. The `latest` tag is
+updated for convenience. Both images publish `linux/amd64` and `linux/arm64`
+variants. To build a checked-out site, pass the invoking user's UID and GID so
+generated files in the bind mount remain writable locally:
+
+```bash
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --mount "type=bind,src=$PWD,dst=/repo" \
+  --workdir /repo \
+  ghcr.io/sphireinc/foundry-static-runtime:latest \
+  foundry build
+```
+
+If a release fails after publishing only one of the two versioned images,
+delete any versioned tags created by that partial run in GHCR before retrying,
+or choose a new release version. The workflow intentionally will not overwrite
+an existing versioned tag.
+
+The runtime image runs as the non-root `foundry` user and starts the server
+with `content/config/site.docker.yaml`. The static image defaults to
+`foundry build` and keeps the command overridable for other bounded CLI
+operations.
+
+The first push creates the GHCR packages as private. An organization or
+repository administrator must change each package's visibility to **Public**
+in GitHub's package settings before unauthenticated pulls will work. The
+workflow only needs the repository-scoped `GITHUB_TOKEN` with `packages: write`
+permission to publish subsequent versions.
+
 Otherwise, see the [Getting Started](#getting-started) section for how to install the `foundry` command, run Foundry locally, or run it in portable standalone mode without Docker.
 
 Foundry will run on `http://localhost:8080/` by default, and the admin panel

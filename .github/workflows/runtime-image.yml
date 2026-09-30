@@ -4,7 +4,9 @@ on:
   pull_request:
     branches: ["main"]
   push:
-    tags: ["runtime-v*.*.*"]
+    tags:
+      - "runtime-v*.*.*"
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       ref:
@@ -19,11 +21,28 @@ permissions:
   contents: read
   packages: write
 
-concurrency:
-  group: runtime-image-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - name: Determine image tag
+        id: meta
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -n "$REQUESTED_VERSION" ]; then
+            IMAGE_TAG="$REQUESTED_VERSION"
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            IMAGE_TAG="${GITHUB_REF_NAME}"
+          else
+            IMAGE_TAG="runtime-${GITHUB_SHA::12}"
+          fi
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -34,13 +53,74 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - run: go run ./cmd/plugin-sync
       - run: go test ./...
+      - name: Build runtime and static images
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --target runtime \
+            --build-arg FOUNDRY_BUILD_VERSION="ci-${GITHUB_SHA}" \
+            --build-arg FOUNDRY_BUILD_COMMIT="${GITHUB_SHA}" \
+            --build-arg FOUNDRY_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t foundry-runtime:ci \
+            --load \
+            .
+          docker buildx build \
+            --platform linux/amd64 \
+            --target static \
+            --build-arg FOUNDRY_BUILD_VERSION="ci-${GITHUB_SHA}" \
+            --build-arg FOUNDRY_BUILD_COMMIT="${GITHUB_SHA}" \
+            --build-arg FOUNDRY_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t foundry-static-runtime:ci \
+            --load \
+            .
+      - name: Verify runtime image is non-root
+        run: test "$(docker run --rm --entrypoint id foundry-runtime:ci -u)" != "0"
+      - name: Smoke test static image with a bind-mounted site
+        shell: bash
+        run: |
+          set -eu
+          smoke_dir="$(mktemp -d)"
+          trap 'rm -rf "$smoke_dir"' EXIT
+
+          mkdir -p "$smoke_dir/content/config" "$smoke_dir/content/pages" "$smoke_dir/content/posts" "$smoke_dir/themes" "$smoke_dir/data" "$smoke_dir/plugins"
+          cp -R themes/default "$smoke_dir/themes/default"
+          cat <<'EOF' | sed 's/^          //' > "$smoke_dir/content/config/site.yaml"
+          name: smoke-test
+          title: Foundry Docker Smoke Test
+          theme: default
+          default_lang: en
+          content_dir: content
+          public_dir: public
+          themes_dir: themes
+          data_dir: data
+          plugins_dir: plugins
+          EOF
+          cat <<'EOF' | sed 's/^          //' > "$smoke_dir/content/pages/index.md"
+          ---
+          title: Smoke Test
+          ---
+
+          # Foundry Docker Smoke Test
+          EOF
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=${smoke_dir},dst=/repo" \
+            --workdir /repo \
+            foundry-static-runtime:ci \
+            foundry build
+          test -s "$smoke_dir/public/index.html"
 
   publish:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, resolve]
     if: github.event_name != 'pull_request'
+    concurrency:
+      group: runtime-image-${{ needs.resolve.outputs.image_tag }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -49,18 +129,8 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
-      - name: Determine image tag
-        id: meta
-        shell: bash
-        run: |
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
-            IMAGE_TAG="${{ github.event.inputs.version }}"
-          elif [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.ref }}" ]; then
-            IMAGE_TAG="${{ github.event.inputs.ref }}"
-          else
-            IMAGE_TAG="${GITHUB_REF_NAME}"
-          fi
-          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v4
         with:
@@ -69,15 +139,50 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push runtime image
         env:
-          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
         run: |
-          IMAGE_URI="ghcr.io/${GITHUB_REPOSITORY_OWNER}/foundry-runtime:${IMAGE_TAG}"
-          docker build \
-            --build-arg FOUNDRY_BUILD_VERSION="${IMAGE_TAG}" \
-            --build-arg FOUNDRY_BUILD_COMMIT="${GITHUB_SHA}" \
-            --build-arg FOUNDRY_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -t "${IMAGE_URI}" \
-            -t "ghcr.io/${GITHUB_REPOSITORY_OWNER}/foundry-runtime:latest" \
-            .
-          docker push "${IMAGE_URI}"
-          docker push "ghcr.io/${GITHUB_REPOSITORY_OWNER}/foundry-runtime:latest"
+          set -eu
+          IMAGE_NAMESPACE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          assert_tag_available() {
+            local image="$1" output
+            output="$(mktemp)"
+            if docker buildx imagetools inspect "$image" >"$output" 2>&1; then
+              rm -f "$output"
+              echo "::error::Refusing to overwrite existing immutable image tag $1"
+              return 1
+            fi
+            if ! grep -Eqi "not found|manifest unknown|name unknown|does not exist|404" "$output"; then
+              cat "$output"
+              rm -f "$output"
+              echo "::error::Unable to verify whether immutable image tag $image is available"
+              return 1
+            fi
+            rm -f "$output"
+          }
+
+          for image in foundry-runtime foundry-static-runtime; do
+            IMAGE_URI="${IMAGE_NAMESPACE}/${image}:${IMAGE_TAG}"
+            assert_tag_available "${IMAGE_URI}"
+          done
+
+          for image in foundry-runtime foundry-static-runtime; do
+            IMAGE_URI="${IMAGE_NAMESPACE}/${image}:${IMAGE_TAG}"
+            LATEST_URI="${IMAGE_NAMESPACE}/${image}:latest"
+            target=runtime
+            if [ "$image" = "foundry-static-runtime" ]; then
+              target=static
+            fi
+
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --target "$target" \
+              --build-arg FOUNDRY_BUILD_VERSION="${IMAGE_TAG}" \
+              --build-arg FOUNDRY_BUILD_COMMIT="${GITHUB_SHA}" \
+              --build-arg FOUNDRY_BUILD_DATE="${BUILD_DATE}" \
+              -t "${IMAGE_URI}" \
+              -t "${LATEST_URI}" \
+              --push \
+              .
+          done

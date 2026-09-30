@@ -1,7 +1,11 @@
-FROM golang:1.25-alpine AS builder
+ARG BUILDPLATFORM
+
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
 WORKDIR /src
 
+ARG TARGETOS
+ARG TARGETARCH
 ARG FOUNDRY_BUILD_VERSION=""
 ARG FOUNDRY_BUILD_COMMIT=""
 ARG FOUNDRY_BUILD_DATE=""
@@ -23,9 +27,50 @@ RUN set -eu; \
   if [ -n "$FOUNDRY_BUILD_DATE" ]; then \
     LDFLAGS="$LDFLAGS -X github.com/sphireinc/foundry/internal/commands/version.Date=$FOUNDRY_BUILD_DATE"; \
   fi; \
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o /out/foundry ./cmd/foundry
+  CGO_ENABLED=0 GOOS="${TARGETOS:-linux}" GOARCH="${TARGETARCH:-amd64}" go build -trimpath -ldflags="$LDFLAGS" -o /out/foundry ./cmd/foundry
 
-FROM alpine:3.20
+# The static image is intended for a checked-out Foundry site mounted at
+# /repo. It deliberately keeps the build command overridable so callers can
+# use `foundry build`, `foundry validate`, or another bounded CLI command.
+FROM alpine:3.20 AS static
+
+ARG FOUNDRY_BUILD_VERSION=""
+ARG FOUNDRY_BUILD_COMMIT=""
+ARG FOUNDRY_BUILD_DATE=""
+
+LABEL org.opencontainers.image.title="Foundry static builder" \
+      org.opencontainers.image.description="Foundry static-site build image" \
+      org.opencontainers.image.source="https://github.com/sphireinc/Foundry" \
+      org.opencontainers.image.version="$FOUNDRY_BUILD_VERSION" \
+      org.opencontainers.image.revision="$FOUNDRY_BUILD_COMMIT" \
+      org.opencontainers.image.created="$FOUNDRY_BUILD_DATE"
+
+RUN addgroup -S foundry && adduser -S -G foundry foundry \
+  && apk add --no-cache ca-certificates tzdata
+
+WORKDIR /repo
+
+COPY --from=builder /out/foundry /usr/local/bin/foundry
+
+# The image user is non-root. When /repo is a host bind mount, callers can
+# pass --user "$(id -u):$(id -g)" so generated public/ files are owned by the
+# invoking user.
+USER foundry
+
+CMD ["foundry", "build"]
+
+FROM alpine:3.20 AS runtime
+
+ARG FOUNDRY_BUILD_VERSION=""
+ARG FOUNDRY_BUILD_COMMIT=""
+ARG FOUNDRY_BUILD_DATE=""
+
+LABEL org.opencontainers.image.title="Foundry" \
+      org.opencontainers.image.description="Markdown-first CMS runtime" \
+      org.opencontainers.image.source="https://github.com/sphireinc/Foundry" \
+      org.opencontainers.image.version="$FOUNDRY_BUILD_VERSION" \
+      org.opencontainers.image.revision="$FOUNDRY_BUILD_COMMIT" \
+      org.opencontainers.image.created="$FOUNDRY_BUILD_DATE"
 
 RUN addgroup -S foundry && adduser -S -G foundry foundry \
   && apk add --no-cache ca-certificates tzdata wget
