@@ -13,32 +13,58 @@ import (
 // Strict plugins must be prebuilt executables inside their artifact directory.
 // Source runners need compiler caches, subprocesses and a wider filesystem view.
 func strictExecutable(meta Metadata) (string, string, error) {
+	if len(meta.Runtime.Command) == 0 || strings.TrimSpace(meta.Runtime.Command[0]) == "" {
+		return "", "", fmt.Errorf("strict RPC command requires an executable")
+	}
 	root, err := filepath.Abs(meta.Directory)
 	if err != nil {
 		return "", "", err
 	}
+	artifactRoot := root
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
 		return "", "", err
 	}
-	path := meta.Runtime.Command[0]
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, path)
+	rel := meta.Runtime.Command[0]
+	if filepath.IsAbs(rel) {
+		rel, err = filepath.Rel(root, rel)
+		// Artifact roots can themselves have a canonical alias (for example,
+		// macOS /var -> /private/var). Accept absolute paths under either name.
+		if err == nil && !filepath.IsLocal(rel) {
+			rel, err = filepath.Rel(artifactRoot, meta.Runtime.Command[0])
+		}
+		if err != nil {
+			return "", "", err
+		}
 	}
-	path, err = filepath.EvalSymlinks(path)
+	if !filepath.IsLocal(rel) {
+		return "", "", fmt.Errorf("strict RPC executable must be inside the plugin artifact directory")
+	}
+	// Open through the artifact root: symlinks cannot escape it between path
+	// validation and the executable metadata lookup.
+	scoped, err := os.OpenRoot(root)
 	if err != nil {
 		return "", "", err
 	}
-	rel, err := filepath.Rel(root, path)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", "", fmt.Errorf("strict RPC executable must be inside the plugin artifact directory")
+	defer func() { _ = scoped.Close() }()
+	file, err := scoped.Open(rel)
+	if err != nil {
+		return "", "", err
 	}
-	info, err := os.Stat(path)
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
 	if err != nil {
 		return "", "", err
 	}
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 		return "", "", fmt.Errorf("strict RPC command must be a prebuilt executable")
+	}
+	path, err := filepath.EvalSymlinks(filepath.Join(root, rel))
+	if err != nil {
+		return "", "", err
+	}
+	if !strings.HasPrefix(path, root+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("strict RPC executable must be inside the plugin artifact directory")
 	}
 	return root, path, nil
 }
