@@ -64,31 +64,35 @@ func (command) Run(cfg *config.Config, args []string) error {
 		fmt.Println("responsive images built; originals preserved")
 		return nil
 	case "trash":
-		if len(args) != 4 && (len(args) != 5 || args[4] != "--apply") {
+		if len(args) < 4 || len(args) > 5 {
 			return fmt.Errorf("usage: foundry media trash <reference> [--apply]")
 		}
+		if len(args) == 5 && args[4] != "--apply" {
+			return fmt.Errorf("usage: foundry media trash <reference> [--apply]")
+		}
+		reference := args[3]
 		report, err := media.Audit(cfg)
 		if err != nil {
 			return err
 		}
-		if !slices.Contains(report.PotentialOrphans, args[3]) {
-			return fmt.Errorf("media is referenced or absent from the orphan preview: %s", args[3])
+		if !slices.Contains(report.PotentialOrphans, reference) {
+			return fmt.Errorf("media is referenced or absent from the orphan preview: %s", reference)
 		}
 		if len(args) == 4 {
-			fmt.Printf("Preview: would move %s and its metadata to recoverable Trash.\nNo files changed. Run foundry media trash %q --apply after reviewing dynamic/external usage.\n", args[3], args[3])
+			fmt.Printf("Preview: would move %s and its metadata to recoverable Trash.\nNo files changed. Run foundry media trash %q --apply after reviewing dynamic/external usage.\n", reference, reference)
 			return nil
 		}
 		svc := service.New(cfg)
-		if err := svc.DeleteMedia(context.Background(), args[3]); err != nil {
+		if err := svc.DeleteMedia(context.Background(), reference); err != nil {
 			return err
 		}
 		trash, err := svc.ListMediaTrash(context.Background())
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Moved media to Trash: %s\n", args[3])
+		fmt.Printf("Moved media to Trash: %s\n", reference)
 		for _, entry := range trash {
-			if entry.CurrentReference == args[3] && !entry.MetadataOnly {
+			if entry.CurrentReference == reference && !entry.MetadataOnly {
 				fmt.Printf("Recover with: foundry media restore %q\n", entry.Path)
 			}
 		}

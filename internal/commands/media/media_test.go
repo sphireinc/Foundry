@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sphireinc/foundry/internal/admin/service"
@@ -99,5 +100,28 @@ func TestTrashRefusesImplicitCSSBundleInput(t *testing.T) {
 	}
 	if _, err := os.Stat(filename); err != nil {
 		t.Fatalf("bundled CSS was changed: %v", err)
+	}
+}
+
+func TestMalformedMediaArgumentsReturnUsage(t *testing.T) {
+	cases := [][]string{
+		nil, {"foundry"}, {"foundry", "media"},
+		{"foundry", "media", "trash"},
+		{"foundry", "media", "trash", "media:images/test.png", "--wrong"},
+		{"foundry", "media", "trash", "media:images/test.png", "--apply", "extra"},
+		{"foundry", "media", "audit", "--wrong"},
+		{"foundry", "media", "audit", "--json", "extra"},
+		{"foundry", "media", "optimize", "extra"},
+		{"foundry", "media", "restore"},
+		{"foundry", "media", "restore", "test.png", "extra"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			// Nil config ensures argument errors are returned before any filesystem work.
+			err := (command{}).Run(nil, args)
+			if err == nil || !strings.HasPrefix(err.Error(), "usage:") {
+				t.Fatalf("expected usage error, got %v", err)
+			}
+		})
 	}
 }
