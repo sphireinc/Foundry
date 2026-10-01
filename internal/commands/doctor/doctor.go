@@ -115,6 +115,9 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 	pmStart := time.Now()
 	pm, err := plugins.NewManagerWithGovernance(cfg.PluginsDir, cfg.Plugins.Enabled, plugins.GovernancePolicyFromConfig(cfg))
 	if err == nil {
+		defer func() { _ = pm.Close() }()
+	}
+	if err == nil {
 		err = pm.OnConfigLoaded(cfg)
 	}
 	pluginTiming := time.Since(pmStart)

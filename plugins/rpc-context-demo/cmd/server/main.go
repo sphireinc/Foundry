@@ -12,7 +12,7 @@ func (handler) Handshake(req pluginrpc.HandshakeRequest) (pluginrpc.HandshakeRes
 	return pluginrpc.HandshakeResponse{
 		PluginName:      req.PluginName,
 		ProtocolVersion: req.ProtocolVersion,
-		SupportedHooks:  []string{pluginrpc.MethodContext},
+		SupportedHooks:  []string{pluginrpc.MethodContext, pluginrpc.MethodHTMLSlots, pluginrpc.MethodAfterRender},
 	}, nil
 }
 
@@ -33,6 +33,14 @@ func (handler) Context(req pluginrpc.ContextRequest) (pluginrpc.ContextResponse,
 }
 
 func (handler) Shutdown() error { return nil }
+
+func (handler) HTMLSlots(pluginrpc.ContextRequest) (pluginrpc.HTMLSlotsResponse, error) {
+	return pluginrpc.HTMLSlotsResponse{Slots: map[string][]string{"head": {"<!-- RPC slot demo -->"}}}, nil
+}
+
+func (handler) AfterRender(req pluginrpc.AfterRenderRequest) (pluginrpc.AfterRenderResponse, error) {
+	return pluginrpc.AfterRenderResponse{HTML: req.HTML + "\n<!-- RPC after-render demo -->"}, nil
+}
 
 func main() {
 	server := pluginrpc.Server{

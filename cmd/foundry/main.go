@@ -55,9 +55,14 @@ func main() {
 	if err != nil {
 		exitWithError(diag.Wrap(diag.KindPlugin, "load plugins", err))
 	}
+	defer func() { _ = pluginManager.Close() }()
+	exitWithPlugins := func(err error) {
+		_ = pluginManager.Close()
+		exitWithError(err)
+	}
 
 	if err := pluginManager.OnConfigLoaded(cfg); err != nil {
-		exitWithError(diag.Wrap(diag.KindPlugin, "run plugin config hooks", err))
+		exitWithPlugins(diag.Wrap(diag.KindPlugin, "run plugin config hooks", err))
 	}
 
 	routeResolver := router.NewResolver(cfg)
@@ -69,34 +74,34 @@ func main() {
 	case "build":
 		buildOpts, err := parseBuildFlags(args[2:])
 		if err != nil {
-			exitWithError(diag.Wrap(diag.KindUsage, "parse build flags", err))
+			exitWithPlugins(diag.Wrap(diag.KindUsage, "parse build flags", err))
 		}
 		if buildOpts.preview {
 			cfg.Build.IncludeDrafts = true
 		}
 
 		if err := pluginManager.OnBuildStarted(); err != nil {
-			exitWithError(diag.Wrap(diag.KindBuild, "run build start hooks", err))
+			exitWithPlugins(diag.Wrap(diag.KindBuild, "run build start hooks", err))
 		}
 
 		graph, err := site.LoadGraphWithManager(ctx, cfg, pluginManager, cfg.Build.IncludeDrafts)
 		if err != nil {
-			exitWithError(err)
+			exitWithPlugins(err)
 		}
 
 		stats, err := rendererEngine.BuildWithStats(ctx, graph)
 		if err != nil {
-			exitWithError(diag.Wrap(diag.KindBuild, "build site", err))
+			exitWithPlugins(diag.Wrap(diag.KindBuild, "build site", err))
 		}
 		if err := ops.WritePreviewManifest(cfg, graph, loadOpts.Target, buildOpts.preview); err != nil {
-			exitWithError(diag.Wrap(diag.KindBuild, "write preview manifest", err))
+			exitWithPlugins(diag.Wrap(diag.KindBuild, "write preview manifest", err))
 		}
 		if err := ops.WriteBuildReport(cfg, graph, loadOpts.Target, buildOpts.preview, stats); err != nil {
-			exitWithError(diag.Wrap(diag.KindBuild, "write build report", err))
+			exitWithPlugins(diag.Wrap(diag.KindBuild, "write build report", err))
 		}
 
 		if err := pluginManager.OnBuildCompleted(graph); err != nil {
-			exitWithError(diag.Wrap(diag.KindBuild, "run build completed hooks", err))
+			exitWithPlugins(diag.Wrap(diag.KindBuild, "run build completed hooks", err))
 		}
 
 		cliout.Successf("build complete")
@@ -104,31 +109,31 @@ func main() {
 	case "serve":
 		serveDebug, err := parseServeDebugFlag(args[2:])
 		if err != nil {
-			exitWithError(diag.Wrap(diag.KindUsage, "parse serve flags", err))
+			exitWithPlugins(diag.Wrap(diag.KindUsage, "parse serve flags", err))
 		}
 
 		loader := content.NewLoader(cfg, pluginManager, false)
 		hooks := adminhttp.NewHooks(cfg, platformapi.NewHooks(cfg, pluginManager))
 		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, false, server.WithDebugMode(serveDebug))
 		if err := srv.ListenAndServe(ctx); err != nil {
-			exitWithError(diag.Wrap(diag.KindServe, "serve site", err))
+			exitWithPlugins(diag.Wrap(diag.KindServe, "serve site", err))
 		}
 
 	case "serve-preview":
 		serveDebug, err := parseServeDebugFlag(args[2:])
 		if err != nil {
-			exitWithError(diag.Wrap(diag.KindUsage, "parse serve-preview flags", err))
+			exitWithPlugins(diag.Wrap(diag.KindUsage, "parse serve-preview flags", err))
 		}
 
 		loader := content.NewLoader(cfg, pluginManager, true)
 		hooks := adminhttp.NewHooks(cfg, platformapi.NewHooks(cfg, pluginManager))
 		srv := server.New(cfg, loader, routeResolver, rendererEngine, hooks, true, server.WithDebugMode(serveDebug))
 		if err := srv.ListenAndServe(ctx); err != nil {
-			exitWithError(diag.Wrap(diag.KindServe, "serve preview site", err))
+			exitWithPlugins(diag.Wrap(diag.KindServe, "serve preview site", err))
 		}
 
 	default:
-		exitWithError(diag.New(diag.KindUsage, fmt.Sprintf("unknown command: %s", os.Args[1])))
+		exitWithPlugins(diag.New(diag.KindUsage, fmt.Sprintf("unknown command: %s", os.Args[1])))
 	}
 }
 
