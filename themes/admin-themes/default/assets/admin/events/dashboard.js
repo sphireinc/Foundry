@@ -511,6 +511,7 @@ export const bindDashboardEvents = (ctx) => {
       state.documentFieldValues = ctx.clone(detail.fields || {});
       state.documentMeta = {
         status: detail.status || 'draft',
+        editorial: detail.editorial || {},
         author: detail.author || '',
         last_editor: detail.last_editor || '',
         created_at: detail.created_at || '',
@@ -572,6 +573,41 @@ export const bindDashboardEvents = (ctx) => {
       });
       setFlash('Editor reset.');
       render();
+    });
+  });
+
+  root.querySelectorAll('[data-editorial-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      try {
+        // Decisions apply to the saved revision. Reloading only follows a successful action.
+        if (!state.documentEditor.source_path || !state.documentMeta.editorial?.revision) {
+          throw new Error(_t('Save and reload the document before reviewing.'));
+        }
+        const raw = document.getElementById('document-raw')?.value || '';
+        const detail = await admin.documents.get(state.documentEditor.source_path, {
+          include_drafts: 1,
+        });
+        if (raw !== detail.raw_body)
+          throw new Error(_t('Save your edits before making an editorial decision.'));
+        await admin.documents.editorial({
+          source_path: state.documentEditor.source_path,
+          action: button.dataset.editorialAction,
+          owner: document.getElementById('editorial-owner')?.value || '',
+          assignee: document.getElementById('editorial-assignee')?.value || '',
+          reviewer: document.getElementById('editorial-reviewer')?.value || '',
+          note: document.getElementById('editorial-comment')?.value || '',
+          expected_revision: state.documentMeta.editorial.revision,
+          lock_token: state.documentEditor.lock_token,
+        });
+        await loadDocumentIntoEditor(
+          await admin.documents.get(state.documentEditor.source_path, { include_drafts: 1 })
+        );
+        setFlash(_t('Editorial decision saved.'));
+        render();
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
     });
   });
 

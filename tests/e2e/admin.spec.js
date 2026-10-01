@@ -113,6 +113,7 @@ async function openSeededDocumentInEditor(page, query, sourcePath) {
 
   const documentRow = page.locator('.table-row', { hasText: sourcePath });
   await expect(documentRow).toHaveCount(1);
+  await expect(page.locator('[data-edit-document]')).toHaveCount(1);
   await documentRow.locator('[data-edit-document]').click();
 
   await expect(page).toHaveURL(/\/__admin\/editor$/);
@@ -643,6 +644,63 @@ test.describe('default admin theme', () => {
       if (upload.reference) {
         await deleteMediaViaAdminAPI(page, upload.reference);
       }
+    }
+  });
+
+  test('editorial workflow records an independent review before publication', async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page);
+    const stamp = Date.now();
+    const slug = `e2e-editorial-${stamp}`;
+    const reviewer = `e2e-reviewer-${stamp}`;
+    const password = 'FoundryReviewer123!';
+    let sourcePath = '';
+    try {
+      await createUserViaAdminAPI(page, {
+        username: reviewer,
+        name: reviewer,
+        email: `${reviewer}@example.com`,
+        role: 'reviewer',
+        password,
+      });
+      const created = await createDocumentViaAdminAPI(page, 'page', slug, 'en', 'page');
+      sourcePath = created.source_path;
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await page.locator('#editorial-reviewer').fill(reviewer);
+      await page.locator('[data-editorial-action="assign"]').click();
+      await expect(page.locator('.toast-stack')).toContainText('Editorial decision saved.');
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).editorial.reviewer)
+        .toBe(reviewer);
+      await page.locator('[data-apply-workflow="in_review"]').click();
+      await page.locator('#document-save-form button[type="submit"]').click();
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).status)
+        .toBe('in_review');
+      await logout(page);
+      await login(page, reviewer, password);
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await page.locator('#editorial-comment').fill('Fact check complete');
+      await page.locator('[data-editorial-action="approve"]').click();
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).editorial.approved_by)
+        .toBe(reviewer);
+      await expect(
+        page.locator('.mini-list-row', { hasText: 'Fact check complete' })
+      ).toBeVisible();
+      await logout(page);
+      await login(page);
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await page.locator('[data-apply-workflow="published"]').click();
+      await page.locator('#document-save-form button[type="submit"]').click();
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).status)
+        .toBe('published');
+    } finally {
+      await logout(page);
+      await login(page);
+      if (sourcePath) await deleteDocumentViaAdminAPI(page, sourcePath);
+      await deleteUserViaAdminAPI(page, reviewer);
     }
   });
 

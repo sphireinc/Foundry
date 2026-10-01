@@ -95,6 +95,8 @@ func (s *Service) GetDocument(ctx context.Context, idOrPath string, includeDraft
 }
 
 func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveRequest) (*types.DocumentSaveResponse, error) {
+	s.documentMu.Lock()
+	defer s.documentMu.Unlock()
 	sourcePath, err := s.resolveContentPath(req.SourcePath)
 	if err != nil {
 		return nil, err
@@ -113,6 +115,17 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	if fm.Params == nil {
 		fm.Params = make(map[string]any)
 	}
+	var previous *content.FrontMatter
+	previousBody := ""
+	previousRaw, readErr := s.fs.ReadFile(sourcePath)
+	if readErr == nil {
+		previous, previousBody, err = content.ParseDocument(previousRaw)
+		if err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(readErr) {
+		return nil, readErr
+	}
 	defs := s.fieldDefinitionsForDocument(sourcePath, fm)
 	if req.Fields != nil {
 		fm.Fields = fields.PruneToDefinitions(fields.Normalize(req.Fields), defs)
@@ -125,15 +138,17 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	}
 	actorUsername := strings.TrimSpace(req.Username)
 	if identity, ok := currentIdentity(ctx); ok {
-		if actorUsername == "" {
-			actorUsername = identity.Username
-		}
+		actorUsername = identity.Username
 		owner := documentOwnerFromFrontMatter(fm)
 		if owner == "" && actorUsername != "" {
 			fm.Author = actorUsername
 			owner = actorUsername
 		}
-		if !canMutateDocument(identity, owner) {
+		accessFM := fm
+		if previous != nil {
+			accessFM = previous
+		}
+		if !canEditFrontMatter(identity, accessFM) {
 			return nil, fmt.Errorf("document access denied")
 		}
 		fm.LastEditor = actorUsername
@@ -154,6 +169,9 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 	fm.UpdatedAt = &nowUpdated
 	if content.WorkflowFromFrontMatter(fm, nowUpdated).Status == "" {
 		content.ApplyWorkflowToFrontMatter(fm, "draft", nil, nil, "")
+	}
+	if err := s.prepareEditorialSave(ctx, fm, body, previous, previousBody); err != nil {
+		return nil, err
 	}
 	renderedRaw, err := marshalDocument(fm, body)
 	if err != nil {
@@ -176,7 +194,7 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 		if err != nil {
 			return nil, err
 		}
-		if identity, ok := currentIdentity(ctx); ok && !canMutateDocument(identity, documentOwnerFromFrontMatter(existingFM)) {
+		if identity, ok := currentIdentity(ctx); ok && !canEditFrontMatter(identity, existingFM) {
 			return nil, fmt.Errorf("document access denied")
 		}
 		if strings.TrimSpace(req.VersionComment) != "" || strings.TrimSpace(req.Actor) != "" {
@@ -205,6 +223,8 @@ func (s *Service) SaveDocument(ctx context.Context, req types.DocumentSaveReques
 }
 
 func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRequest) (*types.DocumentCreateResponse, error) {
+	s.documentMu.Lock()
+	defer s.documentMu.Unlock()
 	if err := requireCapability(ctx, "documents.create"); err != nil {
 		return nil, err
 	}
@@ -248,7 +268,7 @@ func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRe
 	if identity, ok := currentIdentity(ctx); ok && identity.Username != "" {
 		actorUsername = identity.Username
 	}
-	if actorUsername != "" {
+	if actorUsername != "" || s.cfg.Editorial.RequireApproval {
 		fm, contentBody, err := content.ParseDocument([]byte(body))
 		if err == nil {
 			if fm.Params == nil {
@@ -288,6 +308,8 @@ func (s *Service) CreateDocument(ctx context.Context, req types.DocumentCreateRe
 }
 
 func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentStatusRequest) (*types.DocumentStatusResponse, error) {
+	s.documentMu.Lock()
+	defer s.documentMu.Unlock()
 	sourcePath, err := s.resolveContentPath(req.SourcePath)
 	if err != nil {
 		return nil, err
@@ -301,7 +323,7 @@ func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentSt
 	if err != nil {
 		return nil, err
 	}
-	if identity, ok := currentIdentity(ctx); ok && !canMutateDocument(identity, documentOwnerFromFrontMatter(fm)) {
+	if identity, ok := currentIdentity(ctx); ok && !canEditFrontMatter(identity, fm) {
 		return nil, fmt.Errorf("document access denied")
 	}
 	if err := s.ensureDocumentLock(ctx, req.SourcePath, req.LockToken); err != nil {
@@ -324,11 +346,32 @@ func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentSt
 		return nil, fmt.Errorf("scheduled status requires scheduled publish or unpublish time")
 	}
 
+	if err := s.editorialPublicationAllowed(ctx, fm, body, status); err != nil {
+		return nil, err
+	}
+	if s.cfg.Editorial.RequireApproval && status == "scheduled" && (scheduledPublishAt == nil || !scheduledPublishAt.After(time.Now().UTC())) {
+		return nil, fmt.Errorf("scheduled publication requires a future publish time")
+	}
+	if scheduledPublishAt != nil && scheduledUnpublishAt != nil && !scheduledUnpublishAt.After(*scheduledPublishAt) {
+		return nil, fmt.Errorf("unpublish time must follow publish time")
+	}
+	state, err := editorialState(fm)
+	if err != nil {
+		return nil, err
+	}
+	revision, err := editorialRevision(fm, body)
+	if err != nil {
+		return nil, err
+	}
+	if status == "draft" || status == "in_review" || status == "archived" {
+		revokeApproval(&state)
+	}
+	appendEditorialEvent(&state, status, editorialActor(ctx), revision, req.EditorialNote)
+	setEditorial(fm, state)
 	if fm.Params == nil {
 		fm.Params = make(map[string]any)
 	}
 	if identity, ok := currentIdentity(ctx); ok && identity.Username != "" {
-		fm.LastEditor = identity.Username
 		if fm.Author == "" {
 			fm.Author = documentOwnerFromFrontMatter(fm)
 		}
@@ -342,6 +385,9 @@ func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentSt
 
 	rendered, err := marshalDocument(fm, body)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.snapshotDocumentVersion(sourcePath, time.Now(), "workflow: "+status, editorialActor(ctx)); err != nil {
 		return nil, err
 	}
 	if err := s.fs.WriteFile(sourcePath, rendered, 0o644); err != nil {
@@ -361,6 +407,8 @@ func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentSt
 }
 
 func (s *Service) DeleteDocument(ctx context.Context, req types.DocumentDeleteRequest) (*types.DocumentDeleteResponse, error) {
+	s.documentMu.Lock()
+	defer s.documentMu.Unlock()
 	sourcePath, err := s.resolveContentPath(req.SourcePath)
 	if err != nil {
 		return nil, err
@@ -373,7 +421,7 @@ func (s *Service) DeleteDocument(ctx context.Context, req types.DocumentDeleteRe
 	}
 	if raw, err := s.fs.ReadFile(sourcePath); err == nil {
 		if fm, _, err := content.ParseDocument(raw); err == nil {
-			if identity, ok := currentIdentity(ctx); ok && !canMutateDocument(identity, documentOwnerFromFrontMatter(fm)) {
+			if identity, ok := currentIdentity(ctx); ok && !canEditFrontMatter(identity, fm) {
 				return nil, fmt.Errorf("document access denied")
 			}
 		}
@@ -404,7 +452,7 @@ func (s *Service) PreviewDocument(ctx context.Context, req types.DocumentPreview
 			return nil, err
 		}
 		if identity, ok := currentIdentity(ctx); ok {
-			if fm, _, err := content.ParseDocument(b); err == nil && !canMutateDocument(identity, documentOwnerFromFrontMatter(fm)) && !adminauthCapabilityAllowed(identity, "documents.read") && !adminauthCapabilityAllowed(identity, "documents.read.own") {
+			if fm, _, err := content.ParseDocument(b); err == nil && !canEditFrontMatter(identity, fm) && !adminauthCapabilityAllowed(identity, "documents.read") && !adminauthCapabilityAllowed(identity, "documents.read.own") {
 				return nil, fmt.Errorf("document access denied")
 			}
 		}
@@ -533,10 +581,19 @@ func (s *Service) toDetail(ctx context.Context, doc *content.Document) (types.Do
 	if err != nil {
 		return types.DocumentDetail{}, err
 	}
-	fm, _, err := content.ParseDocument(raw)
+	fm, body, err := content.ParseDocument(raw)
 	if err != nil {
 		return types.DocumentDetail{}, err
 	}
+	state, err := editorialState(fm)
+	if err != nil {
+		return types.DocumentDetail{}, err
+	}
+	state.Revision, err = editorialRevision(fm, body)
+	if err != nil {
+		return types.DocumentDetail{}, err
+	}
+	state.RequireApproval = s.cfg.Editorial.RequireApproval
 	lock, err := s.DocumentLock(ctx, displayDocumentPath(doc.SourcePath, s.cfg.ContentDir))
 	if err != nil {
 		lock = nil
@@ -546,6 +603,7 @@ func (s *Service) toDetail(ctx context.Context, doc *content.Document) (types.Do
 	defs := theme.ApplicableDocumentFieldDefinitions(s.activeThemeManifest(), doc.Type, doc.Layout, doc.Slug)
 	return types.DocumentDetail{
 		DocumentSummary:     toSummary(doc),
+		Editorial:           &state,
 		RawBody:             string(raw),
 		HTMLBody:            string(doc.HTMLBody),
 		Params:              doc.Params,

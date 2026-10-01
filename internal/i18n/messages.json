@@ -939,6 +939,25 @@
     "accessibility issues": "problemas de accesibilidad",
     "potential orphans": "posibles archivos sin uso",
     "Accessibility and conservative orphan preview": "Accesibilidad y vista previa conservadora de archivos sin uso",
-    "Decorative image (empty alt text)": "Imagen decorativa (texto alternativo vacío)"
+    "Decorative image (empty alt text)": "Imagen decorativa (texto alternativo vacío)",
+    "Team review": "Revisión del equipo",
+    "Publication requires an independent approval of the saved revision.": "La publicación requiere la aprobación independiente de la revisión guardada.",
+    "Review decisions and assignments are recorded with the document.": "Las decisiones de revisión y las asignaciones se registran con el documento.",
+    "Owner": "Propietario",
+    "Assignee": "Responsable asignado",
+    "Reviewer": "Revisor",
+    "Review comment": "Comentario de revisión",
+    "Save assignments": "Guardar asignaciones",
+    "Approve saved revision": "Aprobar revisión guardada",
+    "Request changes": "Solicitar cambios",
+    "Approved by": "Aprobado por",
+    "No current approval": "Sin aprobación actual",
+    "Publish approved revision": "Publicar revisión aprobada",
+    "Frontmatter changes": "Cambios de metadatos",
+    "No frontmatter changes": "Sin cambios de metadatos",
+    "Body changes": "Cambios de contenido",
+    "Save and reload the document before reviewing.": "Guarda y vuelve a cargar el documento antes de revisarlo.",
+    "Save your edits before making an editorial decision.": "Guarda tus cambios antes de tomar una decisión editorial.",
+    "Editorial decision saved.": "Decisión editorial guardada."
   }
 }

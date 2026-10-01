@@ -17,6 +17,7 @@ const adminMediaUploadLimit = 256 << 20
 // group for the admin API.
 func registerDocumentRoutes(r *Router) []routeDef {
 	return []routeDef{
+		{pattern: r.routePath("/api/documents/editorial"), handler: http.HandlerFunc(r.handleEditorial), capability: "dashboard.read"},
 		{pattern: r.routePath("/api/media/audit"), handler: http.HandlerFunc(r.handleMediaAudit), capability: "media.read"},
 		{
 			pattern:    r.routePath("/api/documents"),
@@ -762,4 +763,22 @@ func (r *Router) handleMediaAudit(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
+}
+
+func (r *Router) handleEditorial(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var input admintypes.EditorialRequest
+	if err := decodeJSONBody(w, req, smallJSONBodyLimit, &input); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := r.service.UpdateEditorial(req.Context(), input)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -24,6 +25,9 @@ func (s *Service) GetDocumentHistory(ctx context.Context, sourcePath string) (*t
 
 	fullPath, originalPath, _, err := s.resolveDocumentLifecyclePath(sourcePath)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.authorizeRevision(ctx, fullPath, "documents.history"); err != nil {
 		return nil, err
 	}
 	entries, err := s.listDocumentLifecycleEntries(originalPath)
@@ -57,6 +61,9 @@ func (s *Service) ListDocumentTrash(ctx context.Context) ([]types.DocumentHistor
 		if err != nil {
 			return err
 		}
+		if err := s.authorizeRevision(ctx, path, "documents.history"); err != nil {
+			return nil
+		}
 		entries = append(entries, entry)
 		return nil
 	})
@@ -68,6 +75,8 @@ func (s *Service) ListDocumentTrash(ctx context.Context) ([]types.DocumentHistor
 }
 
 func (s *Service) RestoreDocument(ctx context.Context, req types.DocumentLifecycleRequest) (*types.DocumentLifecycleResponse, error) {
+	s.documentMu.Lock()
+	defer s.documentMu.Unlock()
 	if err := requireCapability(ctx, "documents.lifecycle"); err != nil {
 		return nil, err
 	}
@@ -79,6 +88,54 @@ func (s *Service) RestoreDocument(ctx context.Context, req types.DocumentLifecyc
 	if state == lifecycle.StateCurrent {
 		return nil, fmt.Errorf("restore requires a versioned or trashed document")
 	}
+	if err := s.authorizeRevision(ctx, path, "documents.lifecycle"); err != nil {
+		return nil, err
+	}
+	var restored []byte
+	if s.cfg.Editorial.RequireApproval {
+		raw, err := s.fs.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		fm, body, err := content.ParseDocument(raw)
+		if err != nil {
+			return nil, err
+		}
+		state, err := editorialState(fm)
+		if err != nil {
+			return nil, err
+		}
+		currentRaw, err := s.fs.ReadFile(originalPath)
+		if err == nil {
+			if err := s.authorizeRevision(ctx, originalPath, "documents.lifecycle"); err != nil {
+				return nil, err
+			}
+			currentFM, _, err := content.ParseDocument(currentRaw)
+			if err != nil {
+				return nil, err
+			}
+			state, err = editorialState(currentFM)
+			if err != nil {
+				return nil, err
+			}
+			fm.Author = currentFM.Author
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+		revokeApproval(&state)
+		state.ContentEditor = editorialActor(ctx)
+		content.ApplyWorkflowToFrontMatter(fm, "draft", nil, nil, "")
+		revision, err := editorialRevision(fm, body)
+		if err != nil {
+			return nil, err
+		}
+		appendEditorialEvent(&state, "restore", editorialActor(ctx), revision, "")
+		setEditorial(fm, state)
+		restored, err = marshalDocument(fm, body)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if _, err := s.fs.Stat(originalPath); err == nil {
 		if err := s.versionFile(originalPath, time.Now()); err != nil {
 			return nil, err
@@ -86,7 +143,11 @@ func (s *Service) RestoreDocument(ctx context.Context, req types.DocumentLifecyc
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err := s.fs.Rename(path, originalPath); err != nil {
+	if restored != nil {
+		if err := s.fs.WriteFile(originalPath, restored, 0o644); err != nil {
+			return nil, err
+		}
+	} else if err := s.fs.Rename(path, originalPath); err != nil {
 		return nil, err
 	}
 	s.invalidateGraphCache()
@@ -108,6 +169,9 @@ func (s *Service) PurgeDocument(ctx context.Context, req types.DocumentLifecycle
 	}
 	if state == lifecycle.StateCurrent {
 		return nil, fmt.Errorf("purge requires a versioned or trashed document")
+	}
+	if err := s.authorizeRevision(ctx, path, "documents.lifecycle"); err != nil {
+		return nil, err
 	}
 	if err := s.fs.Remove(path); err != nil {
 		return nil, err
@@ -133,6 +197,11 @@ func (s *Service) DiffDocument(ctx context.Context, req types.DocumentDiffReques
 		return nil, err
 	}
 
+	for _, path := range []string{leftPath, rightPath} {
+		if err := s.authorizeRevision(ctx, path, "documents.diff"); err != nil {
+			return nil, err
+		}
+	}
 	leftBody, err := s.fs.ReadFile(leftPath)
 	if err != nil {
 		return nil, err
@@ -142,12 +211,29 @@ func (s *Service) DiffDocument(ctx context.Context, req types.DocumentDiffReques
 		return nil, err
 	}
 
+	if len(leftBody) > 1<<20 || len(rightBody) > 1<<20 || len(splitLinesForDiff(leftBody)) > 2000 || len(splitLinesForDiff(rightBody)) > 2000 {
+		return nil, fmt.Errorf("revision comparison supports at most 1 MiB and 2000 lines per revision")
+	}
+	leftFM, leftMarkdown, err := content.ParseDocument(leftBody)
+	if err != nil {
+		return nil, err
+	}
+	rightFM, rightMarkdown, err := content.ParseDocument(rightBody)
+	if err != nil {
+		return nil, err
+	}
+	changes, err := compareFrontmatter(leftFM, rightFM)
+	if err != nil {
+		return nil, err
+	}
 	return &types.DocumentDiffResponse{
-		LeftPath:  displayDocumentPath(leftPath, s.cfg.ContentDir),
-		RightPath: displayDocumentPath(rightPath, s.cfg.ContentDir),
-		LeftRaw:   string(leftBody),
-		RightRaw:  string(rightBody),
-		Diff:      buildUnifiedLineDiff(leftPath, leftBody, rightPath, rightBody),
+		LeftPath:           displayDocumentPath(leftPath, s.cfg.ContentDir),
+		RightPath:          displayDocumentPath(rightPath, s.cfg.ContentDir),
+		LeftRaw:            string(leftBody),
+		RightRaw:           string(rightBody),
+		Diff:               buildUnifiedLineDiff(leftPath, leftBody, rightPath, rightBody),
+		BodyDiff:           buildUnifiedLineDiff(leftPath, []byte(leftMarkdown), rightPath, []byte(rightMarkdown)),
+		FrontmatterChanges: changes,
 	}, nil
 }
 
@@ -959,4 +1045,35 @@ func (s *Service) mediaUsage(reference string) ([]types.DocumentSummary, error) 
 		return out[i].SourcePath < out[j].SourcePath
 	})
 	return out, nil
+}
+
+func compareFrontmatter(left, right *content.FrontMatter) ([]types.FrontmatterChange, error) {
+	maps := []map[string]any{{}, {}}
+	for i, fm := range []*content.FrontMatter{left, right} {
+		raw, err := yaml.Marshal(fm)
+		if err != nil {
+			return nil, err
+		}
+		if err := yaml.Unmarshal(raw, &maps[i]); err != nil {
+			return nil, err
+		}
+	}
+	keys := map[string]bool{}
+	for _, values := range maps {
+		for key := range values {
+			keys[key] = true
+		}
+	}
+	sorted := []string{}
+	for key := range keys {
+		sorted = append(sorted, key)
+	}
+	sort.Strings(sorted)
+	changes := []types.FrontmatterChange{}
+	for _, key := range sorted {
+		if !reflect.DeepEqual(maps[0][key], maps[1][key]) {
+			changes = append(changes, types.FrontmatterChange{Field: key, Before: maps[0][key], After: maps[1][key]})
+		}
+	}
+	return changes, nil
 }

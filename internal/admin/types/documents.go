@@ -25,14 +25,15 @@ type DocumentSummary struct {
 
 type DocumentDetail struct {
 	DocumentSummary
-	RawBody             string         `json:"raw_body"`
-	HTMLBody            string         `json:"html_body"`
-	Params              map[string]any `json:"params,omitempty"`
-	Fields              map[string]any `json:"fields,omitempty"`
-	FieldSchema         []FieldSchema  `json:"field_schema,omitempty"`
-	FieldContractKeys   []string       `json:"field_contract_keys,omitempty"`
-	FieldContractTitles []string       `json:"field_contract_titles,omitempty"`
-	Lock                *DocumentLock  `json:"lock,omitempty"`
+	RawBody             string          `json:"raw_body"`
+	HTMLBody            string          `json:"html_body"`
+	Params              map[string]any  `json:"params,omitempty"`
+	Fields              map[string]any  `json:"fields,omitempty"`
+	FieldSchema         []FieldSchema   `json:"field_schema,omitempty"`
+	FieldContractKeys   []string        `json:"field_contract_keys,omitempty"`
+	FieldContractTitles []string        `json:"field_contract_titles,omitempty"`
+	Editorial           *EditorialState `json:"editorial,omitempty"`
+	Lock                *DocumentLock   `json:"lock,omitempty"`
 }
 
 type DocumentListOptions struct {
@@ -196,11 +197,13 @@ type DocumentDiffRequest struct {
 }
 
 type DocumentDiffResponse struct {
-	LeftPath  string `json:"left_path"`
-	RightPath string `json:"right_path"`
-	LeftRaw   string `json:"left_raw"`
-	RightRaw  string `json:"right_raw"`
-	Diff      string `json:"diff"`
+	LeftPath           string              `json:"left_path"`
+	RightPath          string              `json:"right_path"`
+	LeftRaw            string              `json:"left_raw"`
+	RightRaw           string              `json:"right_raw"`
+	Diff               string              `json:"diff"`
+	BodyDiff           string              `json:"body_diff"`
+	FrontmatterChanges []FrontmatterChange `json:"frontmatter_changes"`
 }
 
 type DocumentLifecycleRequest struct {
@@ -326,4 +329,37 @@ type MediaLifecycleResponse struct {
 	Path         string `json:"path"`
 	RestoredPath string `json:"restored_path,omitempty"`
 	Operation    string `json:"operation"`
+}
+
+type EditorialEvent struct {
+	Action   string    `json:"action" yaml:"action"`
+	Actor    string    `json:"actor" yaml:"actor"`
+	At       time.Time `json:"at" yaml:"at"`
+	Revision string    `json:"revision" yaml:"revision"`
+	Note     string    `json:"note,omitempty" yaml:"note,omitempty"`
+}
+type EditorialState struct {
+	ContentEditor    string           `json:"content_editor,omitempty" yaml:"content_editor,omitempty"`
+	Assignee         string           `json:"assignee,omitempty" yaml:"assignee,omitempty"`
+	Reviewer         string           `json:"reviewer,omitempty" yaml:"reviewer,omitempty"`
+	ApprovedBy       string           `json:"approved_by,omitempty" yaml:"approved_by,omitempty"`
+	ApprovedRevision string           `json:"approved_revision,omitempty" yaml:"approved_revision,omitempty"`
+	Events           []EditorialEvent `json:"events" yaml:"events,omitempty"`
+	Revision         string           `json:"revision" yaml:"-"`
+	RequireApproval  bool             `json:"require_approval" yaml:"-"`
+}
+type EditorialRequest struct {
+	SourcePath       string `json:"source_path"`
+	Action           string `json:"action"`
+	Owner            string `json:"owner,omitempty"`
+	Assignee         string `json:"assignee,omitempty"`
+	Reviewer         string `json:"reviewer,omitempty"`
+	ExpectedRevision string `json:"expected_revision"`
+	Note             string `json:"note,omitempty"`
+	LockToken        string `json:"lock_token,omitempty"`
+}
+type FrontmatterChange struct {
+	Field  string `json:"field"`
+	Before any    `json:"before"`
+	After  any    `json:"after"`
 }

@@ -26,6 +26,7 @@ type Config struct {
 	Permalinks  map[string]string     `yaml:"permalinks"`
 	Server      ServerConfig          `yaml:"server"`
 	Build       BuildConfig           `yaml:"build"`
+	Editorial   EditorialConfig       `yaml:"editorial"`
 	Media       MediaConfig           `yaml:"media"`
 	Content     ContentConfig         `yaml:"content"`
 	Taxonomies  TaxonomyConfig        `yaml:"taxonomies"`
@@ -155,6 +156,11 @@ type BuildConfig struct {
 }
 
 // MediaConfig keeps transforms and strict accessibility checks opt-in.
+// EditorialConfig enables enforced, revision-bound team approvals.
+type EditorialConfig struct {
+	RequireApproval bool `yaml:"require_approval"`
+}
+
 type MediaConfig struct {
 	ResponsiveImages bool  `yaml:"responsive_images"`
 	Widths           []int `yaml:"widths"`
