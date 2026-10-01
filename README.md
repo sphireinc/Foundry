@@ -666,6 +666,12 @@ On Linux, user services may need lingering enabled to survive logout and reboot:
 loginctl enable-linger "$USER"
 ```
 
+Responsive image variants, deterministic JPEG/PNG optimization, alt-text checks,
+and a non-destructive orphan audit are available through the media workflow.
+Image transforms and strict alt enforcement are opt-in. See
+[Media management](docs/media-management.md) for configuration, metadata,
+previewable trash, and restore commands.
+
 Embedded media uses normal Markdown image syntax:
 
 ```md

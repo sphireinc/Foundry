@@ -26,6 +26,7 @@ type Config struct {
 	Permalinks  map[string]string     `yaml:"permalinks"`
 	Server      ServerConfig          `yaml:"server"`
 	Build       BuildConfig           `yaml:"build"`
+	Media       MediaConfig           `yaml:"media"`
 	Content     ContentConfig         `yaml:"content"`
 	Taxonomies  TaxonomyConfig        `yaml:"taxonomies"`
 	Plugins     PluginConfig          `yaml:"plugins"`
@@ -151,6 +152,14 @@ type BuildConfig struct {
 	CopyAssets     bool `yaml:"copy_assets"`
 	CopyImages     bool `yaml:"copy_images"`
 	CopyUploads    bool `yaml:"copy_uploads"`
+}
+
+// MediaConfig keeps transforms and strict accessibility checks opt-in.
+type MediaConfig struct {
+	ResponsiveImages bool  `yaml:"responsive_images"`
+	Widths           []int `yaml:"widths"`
+	JPEGQuality      int   `yaml:"jpeg_quality"`
+	RequireAlt       bool  `yaml:"require_alt"`
 }
 
 type ContentConfig struct {

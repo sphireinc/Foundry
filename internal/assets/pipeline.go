@@ -11,6 +11,7 @@ import (
 
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/lifecycle"
+	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/safepath"
 )
 
@@ -118,6 +119,10 @@ func Sync(cfg *config.Config, hooks Hooks) error {
 		if err := copyDirIfExists(src, dst); err != nil {
 			return err
 		}
+	}
+
+	if err := media.BuildImages(cfg); err != nil {
+		return err
 	}
 
 	if err := buildCSSBundle(cfg); err != nil {

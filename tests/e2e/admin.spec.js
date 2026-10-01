@@ -616,6 +616,29 @@ test.describe('default admin theme', () => {
       await page.getByRole('button', { name: /^Save Metadata$/i }).click();
       await expect(page.locator('.toast-stack')).toContainText(/Media metadata saved\./i);
       await expect(page.locator('#media-title')).toHaveValue('E2E Uploaded Logo');
+      await page.locator('#media-alt').fill('');
+      await page.locator('#media-decorative').check();
+      await page.getByRole('button', { name: /^Save Metadata$/i }).click();
+      await expect(page.locator('#media-decorative')).toBeChecked();
+      await expect
+        .poll(async () => {
+          const detail = await adminRequest(
+            page,
+            'GET',
+            `/api/media/detail?reference=${encodeURIComponent(upload.reference)}`
+          );
+          return detail.json?.metadata?.decorative;
+        })
+        .toBe(true);
+      const auditResponse = page.waitForResponse((response) =>
+        response.url().includes('/api/media/audit')
+      );
+      await page.locator('#media-audit').click();
+      const audit = await auditResponse;
+      expect(audit.status()).toBe(200);
+      const report = await audit.json();
+      expect(report.potential_orphans).toContain(upload.reference);
+      await expect(page.getByRole('heading', { name: /^Media Audit$/i })).toBeVisible();
     } finally {
       if (upload.reference) {
         await deleteMediaViaAdminAPI(page, upload.reference);

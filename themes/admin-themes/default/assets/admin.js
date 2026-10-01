@@ -1446,6 +1446,7 @@ import {
             </div>`,
             'Bulk tag updates for selected media'
           )}
+          ${panel('Media Audit', `<div class="panel-pad stack"><button type="button" class="ghost" id="media-audit">${_t('Preview media audit')}</button><div class="note">${_t('Review potential orphans before moving individual files to Trash. Restore remains available; the audit changes no files.')}</div>${state.mediaAudit ? `<div class="note">${escapeHTML(String(state.mediaAudit.accessibility.length))} ${_t('accessibility issues')}; ${escapeHTML(String(state.mediaAudit.potential_orphans.length))} ${_t('potential orphans')}</div><div class="mini-list">${state.mediaAudit.accessibility.map((issue) => `<div class="mini-list-row"><span>${escapeHTML(issue.source)}: ${escapeHTML(issue.image)} — ${escapeHTML(issue.message)}</span></div>`).join('')}${state.mediaAudit.potential_orphans.map((reference) => `<div class="mini-list-row"><span class="mono">${escapeHTML(reference)}</span><button type="button" class="ghost small" data-edit-media="${escapeHTML(reference)}">${_t('Details')}</button></div>`).join('')}</div>` : ''}</div>`, 'Accessibility and conservative orphan preview')}
           ${panel('Library', `${renderTableControls(state, 'media', filteredMedia.length, pagedMedia.totalPages)}<div class="table table-four"><div class="table-head"><span>${_t('Name')}</span><span>${_t('Kind')}</span><span>${_t('Metadata')}</span><span>${_t('Actions')}</span></div>${rows.length ? rows.join('') : `<div class="panel-pad empty-state">${_t('No media matched the current search or filters. Upload a file or clear the filters.')}</div>`}</div>`, _t('{count} matching media items', { count: filteredMedia.length }))}
           ${panel('Trash', `<div class="table table-four"><div class="table-head"><span>${_t('Name')}</span><span>${_t('State')}</span><span>${_t('Captured')}</span><span>${_t('Actions')}</span></div>${trashRows || `<div class="panel-pad empty-state">${_t('No trashed media.')}</div>`}</div>`, _t('{count} trashed', { count: state.mediaTrash.length }))}
         </div>
@@ -1475,6 +1476,7 @@ import {
               <form id="media-metadata-form" class="stack">
                 <label>${_t('Title')}<input id="media-title" type="text" value="${escapeHTML(metadata.title || '')}"></label>
                 <label>${_t('Alt Text')}<input id="media-alt" type="text" value="${escapeHTML(metadata.alt || '')}"></label>
+                <label class="checkbox"><input id="media-decorative" type="checkbox" ${metadata.decorative ? 'checked' : ''}>${_t('Decorative image (empty alt text)')}</label>
                 <label>${_t('Caption')}<input id="media-caption" type="text" value="${escapeHTML(metadata.caption || '')}"></label>
                 <label>${_t('Description')}<textarea id="media-description" rows="5">${escapeHTML(metadata.description || '')}</textarea></label>
                 <label>${_t('Credit')}<input id="media-credit" type="text" value="${escapeHTML(metadata.credit || '')}"></label>

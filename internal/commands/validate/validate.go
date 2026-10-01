@@ -7,6 +7,7 @@ import (
 	"github.com/sphireinc/foundry/internal/cliout"
 	"github.com/sphireinc/foundry/internal/commands/registry"
 	foundryconfig "github.com/sphireinc/foundry/internal/config"
+	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/ops"
 	"github.com/sphireinc/foundry/internal/site"
 	"github.com/sphireinc/foundry/internal/theme"
@@ -64,6 +65,18 @@ func (command) Run(cfg *foundryconfig.Config, _ []string) error {
 		errCount += len(report.Messages())
 	}
 
+	if cfg.Media.RequireAlt {
+		report, err := media.Audit(cfg)
+		if err != nil {
+			fmt.Printf("media: %v\n", err)
+			errCount++
+		} else {
+			for _, issue := range report.Accessibility {
+				fmt.Printf("media: %s: %s (%s)\n", issue.Source, issue.Message, issue.Image)
+				errCount++
+			}
+		}
+	}
 	if errCount > 0 {
 		return fmt.Errorf("validation failed with %d error(s)", errCount)
 	}

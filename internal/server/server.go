@@ -203,6 +203,7 @@ func (s *Server) newMux() http.Handler {
 
 	mux.Handle("/assets/", s.publicStaticHandler(false))
 	mux.Handle("/images/", s.publicStaticHandler(true))
+	mux.Handle("/_foundry/media/", s.publicStaticHandler(true))
 	mux.Handle("/videos/", s.publicStaticHandler(true))
 	mux.Handle("/audio/", s.publicStaticHandler(true))
 	mux.Handle("/documents/", s.publicStaticHandler(true))

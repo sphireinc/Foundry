@@ -12,12 +12,14 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sphireinc/foundry/internal/assets"
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/i18n"
+	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/platformapi"
 	"github.com/sphireinc/foundry/internal/safepath"
 	"github.com/sphireinc/foundry/internal/theme"
@@ -58,9 +60,13 @@ func (noopHooks) OnHTMLSlots(*ViewData, *Slots) error                 { return n
 // Renderer turns the site graph into HTML output using the active frontend
 // theme and the provided render hooks.
 type Renderer struct {
-	cfg    *config.Config
-	themes *theme.Manager
-	hooks  Hooks
+	cfg            *config.Config
+	themes         *theme.Manager
+	hooks          Hooks
+	imageIndexMu   sync.Mutex
+	imageIndex     media.ImageIndex
+	imageIndexFile os.FileInfo
+	imageIndexPath string
 }
 
 // BuildStats records coarse timing breakdowns for a render/build pass.
@@ -600,6 +606,38 @@ func (r *Renderer) prepareBuild(cleanPublicDir, syncAssets bool, stats *BuildSta
 		stats.Prepare = time.Since(start)
 	}
 	return nil
+}
+
+// loadImageIndex reuses the decoded library until the manifest changes. Asset
+// generation publishes it with an atomic rename, so file identity detects even
+// replacements with the same size and timestamp, including external asset builds.
+func (r *Renderer) loadImageIndex() (media.ImageIndex, error) {
+	if !r.cfg.Media.ResponsiveImages {
+		return nil, nil
+	}
+	r.imageIndexMu.Lock()
+	defer r.imageIndexMu.Unlock()
+	filename := filepath.Join(r.cfg.PublicDir, media.VariantDirectory, "index.json")
+	if err := safepath.EnsureNoSymlinkEscape(r.cfg.PublicDir, filename); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		r.imageIndex, r.imageIndexFile = nil, nil
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if r.imageIndexPath == filename && r.imageIndexFile != nil && os.SameFile(info, r.imageIndexFile) && info.Size() == r.imageIndexFile.Size() && info.ModTime().Equal(r.imageIndexFile.ModTime()) {
+		return r.imageIndex, nil
+	}
+	index, err := media.LoadImageIndex(r.cfg)
+	if err != nil {
+		return nil, err
+	}
+	r.imageIndex, r.imageIndexFile, r.imageIndexPath = index, info, filename
+	return index, nil
 }
 
 func (r *Renderer) documentViewData(graph *content.SiteGraph, doc *content.Document, liveReload bool) ViewData {
@@ -1225,12 +1263,25 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	}
 
 	html := []byte(sb.String())
+	index, err := r.loadImageIndex()
+	if err != nil {
+		return nil, fmt.Errorf("load responsive images: %w", err)
+	}
+	html, err = media.EnrichHTML(html, r.cfg, index)
+	if err != nil {
+		return nil, fmt.Errorf("enrich media: %w", err)
+	}
 
 	html, err = r.hooks.OnAfterRender(targetURL, html)
 	if err != nil {
 		return nil, err
 	}
 
+	if r.cfg.Media.RequireAlt {
+		if err := media.RequireAccessibleHTML(html, targetURL); err != nil {
+			return nil, err
+		}
+	}
 	return html, nil
 }
 

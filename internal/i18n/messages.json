@@ -932,6 +932,13 @@
     "{count} user(s) have multiple active sessions": "{count} usuario(s) tienen varias sesiones activas",
     "{count} users": "{count} usuarios",
     "{kind} {name} installed.": "Se instaló {kind} {name}.",
-    "{version}": "{version}"
+    "{version}": "{version}",
+    "Media Audit": "Auditoría multimedia",
+    "Preview media audit": "Ver auditoría multimedia",
+    "Review potential orphans before moving individual files to Trash. Restore remains available; the audit changes no files.": "Revisa los posibles archivos sin uso antes de moverlos a la papelera. Podrás restaurarlos; la auditoría no cambia ningún archivo.",
+    "accessibility issues": "problemas de accesibilidad",
+    "potential orphans": "posibles archivos sin uso",
+    "Accessibility and conservative orphan preview": "Accesibilidad y vista previa conservadora de archivos sin uso",
+    "Decorative image (empty alt text)": "Imagen decorativa (texto alternativo vacío)"
   }
 }

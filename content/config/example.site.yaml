@@ -60,6 +60,13 @@ build:
   copy_images: false
   copy_uploads: false
 
+# Opt-in responsive variants and strict image accessibility.
+media:
+  responsive_images: false
+  widths: [320, 640, 960, 1280]
+  jpeg_quality: 82
+  require_alt: false
+
 content:
   pages_dir: "pages"
   posts_dir: "posts"
