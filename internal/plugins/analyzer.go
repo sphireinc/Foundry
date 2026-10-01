@@ -54,7 +54,7 @@ func AnalyzeInstalled(meta Metadata) SecurityReport {
 			Mode:             strings.TrimSpace(meta.Runtime.Mode),
 			RuntimeHost:      ResolveRuntimeHost(meta).Name(),
 			RuntimeSupported: EnsureRuntimeSupported(meta) == nil,
-			Strict:           true,
+			Strict:           meta.Runtime.Mode == "rpc" && meta.Runtime.Sandbox.Profile == "strict" && EnsureRuntimeSupported(meta) == nil,
 			Allowed:          true,
 		},
 	}
@@ -440,11 +440,15 @@ func SecurityApprovalRequired(meta Metadata, report SecurityReport) bool {
 func capabilityBoundaryForRuntime(runtime RuntimeConfig) []string {
 	mode := strings.ToLower(strings.TrimSpace(runtime.Mode))
 	if mode == "rpc" {
-		return []string{
+		boundary := []string{
 			"host-to-plugin messages only expose declared hook payloads",
 			"plugin process receives sanitized environment only",
 			"host does not expose direct config, session, or filesystem channels",
 		}
+		if runtime.Sandbox.Profile == "strict" {
+			return append(boundary, "strict execution requires an available OS sandbox; unavailable platforms are rejected", "OS sandbox denies network, filesystem writes, child processes, and reads outside plugin/system runtime paths")
+		}
+		return append(boundary, "default RPC is process separation, not an OS sandbox; execute only trusted plugins")
 	}
 	return []string{
 		"in-process plugin shares Foundry process memory",

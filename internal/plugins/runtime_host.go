@@ -4,10 +4,14 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sphireinc/foundry/internal/renderer"
 	"github.com/sphireinc/foundry/sdk/pluginrpc"
@@ -65,6 +69,17 @@ func EnsureRuntimeSupported(meta Metadata) error {
 	if meta.Runtime.Sandbox.AllowProcessExec {
 		return fmt.Errorf("plugin %q declares runtime.mode=rpc with sandbox.allow_process_exec=true, which is not supported by the current RPC host", meta.Name)
 	}
+	if meta.Runtime.ProtocolVersion != "v1alpha1" {
+		return fmt.Errorf("plugin %q declares unsupported RPC protocol %q", meta.Name, meta.Runtime.ProtocolVersion)
+	}
+	if meta.Runtime.Sandbox.Profile == "strict" {
+		if err := strictSandboxAvailable(); err != nil {
+			return err
+		}
+		if _, _, err := strictExecutable(meta); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -96,11 +111,16 @@ func (p *rpcPluginProxy) OnContext(ctx *renderer.ViewData) error {
 	if ctx == nil {
 		return nil
 	}
-	resp, err := p.client.Context(toRPCContextRequest(ctx))
+	permissions := p.meta.Permissions
+	if !permissions.Render.Context.Read && !permissions.Render.Context.Write {
+		return nil
+	}
+	req := p.contextRequest(ctx)
+	resp, err := p.client.Context(req)
 	if err != nil {
 		return err
 	}
-	if len(resp.Data) == 0 {
+	if !permissions.Render.Context.Write || len(resp.Data) == 0 {
 		return nil
 	}
 	if ctx.Data == nil {
@@ -112,15 +132,86 @@ func (p *rpcPluginProxy) OnContext(ctx *renderer.ViewData) error {
 	return nil
 }
 
+func (p *rpcPluginProxy) OnAfterRender(url string, html []byte) ([]byte, error) {
+	if !p.meta.Permissions.Render.AfterRender.MutateHTML {
+		return html, nil
+	}
+	p.client.mu.Lock()
+	defer p.client.mu.Unlock()
+	if err := p.client.ensureStartedLocked(); err != nil {
+		return nil, err
+	}
+	if !hookSupported(p.client.handshake.SupportedHooks, pluginrpc.MethodAfterRender) {
+		return html, nil
+	}
+	var response struct {
+		HTML *string `json:"html"`
+	}
+	if err := p.client.callLocked(pluginrpc.MethodAfterRender, pluginrpc.AfterRenderRequest{URL: url, HTML: string(html)}, &response); err != nil {
+		return nil, err
+	}
+	if response.HTML == nil {
+		p.client.stopLocked()
+		return nil, fmt.Errorf("rpc plugin %q omitted after-render HTML", p.meta.Name)
+	}
+	return []byte(*response.HTML), nil
+}
+
+func (p *rpcPluginProxy) OnHTMLSlots(view *renderer.ViewData, slots *renderer.Slots) error {
+	if view == nil || slots == nil || !p.meta.Permissions.Render.HTMLSlots.Inject {
+		return nil
+	}
+	p.client.mu.Lock()
+	defer p.client.mu.Unlock()
+	if err := p.client.ensureStartedLocked(); err != nil {
+		return err
+	}
+	if !hookSupported(p.client.handshake.SupportedHooks, pluginrpc.MethodHTMLSlots) {
+		return nil
+	}
+	req := p.contextRequest(view)
+	var response pluginrpc.HTMLSlotsResponse
+	if err := p.client.callLocked(pluginrpc.MethodHTMLSlots, req, &response); err != nil {
+		return err
+	}
+	names := make([]string, 0, len(response.Slots))
+	for name := range response.Slots {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		for _, html := range response.Slots[name] {
+			slots.Add(name, template.HTML(html)) // #nosec G203 -- explicit permissions.render.html_slots.inject grants raw HTML injection.
+		}
+	}
+	return nil
+}
+
+func (p *rpcPluginProxy) contextRequest(view *renderer.ViewData) pluginrpc.ContextRequest {
+	full := toRPCContextRequest(view)
+	req := pluginrpc.ContextRequest{}
+	if p.meta.Permissions.Render.Context.Read {
+		req = full
+	}
+	req.Page = nil
+	if p.meta.Permissions.Content.Documents.Read {
+		req.Page = full.Page
+	}
+	return req
+}
+
 type rpcPluginClient struct {
-	meta      Metadata
-	mu        sync.Mutex
-	cmd       *exec.Cmd
-	stdin     *bufio.Writer
-	encoder   *json.Encoder
-	decoder   *json.Decoder
-	nextID    int
-	handshake *pluginrpc.HandshakeResponse
+	meta           Metadata
+	mu             sync.Mutex
+	cmd            *exec.Cmd
+	input          io.WriteCloser
+	output         io.ReadCloser
+	stdin          *bufio.Writer
+	encoder        *json.Encoder
+	scanner        *bufio.Scanner
+	nextID         int
+	handshake      *pluginrpc.HandshakeResponse
+	cancelDeadline func()
 }
 
 func (c *rpcPluginClient) Context(req pluginrpc.ContextRequest) (pluginrpc.ContextResponse, error) {
@@ -143,15 +234,20 @@ func (c *rpcPluginClient) ensureStartedLocked() error {
 	if c.cmd != nil {
 		return nil
 	}
-	cmd := exec.Command(c.meta.Runtime.Command[0], c.meta.Runtime.Command[1:]...)
+	cmd, err := rpcCommand(c.meta)
+	if err != nil {
+		return err
+	}
 	cmd.Dir = c.meta.Directory
 	cmd.Env = c.rpcEnv()
+	isolateRPCProcess(cmd)
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = stdinPipe.Close()
 		return err
 	}
 	cmd.Stderr = os.Stderr
@@ -159,53 +255,160 @@ func (c *rpcPluginClient) ensureStartedLocked() error {
 		return err
 	}
 	c.cmd = cmd
+	c.input = stdinPipe
+	c.output = stdoutPipe
 	c.stdin = bufio.NewWriter(stdinPipe)
 	c.encoder = json.NewEncoder(c.stdin)
-	c.decoder = json.NewDecoder(bufio.NewReader(stdoutPipe))
+	c.scanner = bufio.NewScanner(stdoutPipe)
+	c.scanner.Buffer(make([]byte, 4096), 8*1024*1024)
 
 	var handshake pluginrpc.HandshakeResponse
 	if err := c.callLocked(pluginrpc.MethodHandshake, pluginrpc.HandshakeRequest{
 		PluginName:       c.meta.Name,
 		ProtocolVersion:  c.meta.Runtime.ProtocolVersion,
-		RequestedHooks:   []string{pluginrpc.MethodContext},
+		RequestedHooks:   c.requestedHooks(),
 		SandboxProfile:   c.meta.Runtime.Sandbox.Profile,
 		AllowNetwork:     c.meta.Runtime.Sandbox.AllowNetwork,
 		AllowFSWrite:     c.meta.Runtime.Sandbox.AllowFilesystemWrite,
 		AllowProcessExec: c.meta.Runtime.Sandbox.AllowProcessExec,
 	}, &handshake); err != nil {
-		_ = cmd.Process.Kill()
+		c.stopLocked()
 		return err
+	}
+	if handshake.PluginName != c.meta.Name || handshake.ProtocolVersion != c.meta.Runtime.ProtocolVersion {
+		c.stopLocked()
+		return fmt.Errorf("rpc plugin %q returned an incompatible handshake", c.meta.Name)
 	}
 	c.handshake = &handshake
 	return nil
 }
 
+func (c *rpcPluginClient) requestedHooks() []string {
+	hooks := []string{}
+	if c.meta.Permissions.Render.Context.Read || c.meta.Permissions.Render.Context.Write {
+		hooks = append(hooks, pluginrpc.MethodContext)
+	}
+	if c.meta.Permissions.Render.AfterRender.MutateHTML {
+		hooks = append(hooks, pluginrpc.MethodAfterRender)
+	}
+	if c.meta.Permissions.Render.HTMLSlots.Inject {
+		hooks = append(hooks, pluginrpc.MethodHTMLSlots)
+	}
+	return hooks
+}
+
 func (c *rpcPluginClient) callLocked(method string, params any, out any) error {
+	// Kill closes the pipe and releases a blocked encoder/decoder. Keeping the
+	// deadline active through both write and read also bounds a peer that stops
+	// consuming input. Wait is performed after the operation unwinds.
+	process := c.cmd.Process
+	input, output := c.input, c.output
+	deadlineDone := make(chan struct{})
+	timer := time.AfterFunc(10*time.Second, func() {
+		defer close(deadlineDone)
+		killRPCProcess(process)
+		_ = input.Close()
+		_ = output.Close()
+	})
+	var cancelOnce sync.Once
+	cancel := func() {
+		cancelOnce.Do(func() {
+			if !timer.Stop() {
+				<-deadlineDone
+			}
+		})
+	}
+	c.cancelDeadline = cancel
+	defer func() { cancel(); c.cancelDeadline = nil }()
 	c.nextID++
 	body, err := json.Marshal(params)
 	if err != nil {
 		return err
+	}
+	if len(body) > 8*1024*1024 {
+		return fmt.Errorf("RPC request exceeds 8 MiB limit")
 	}
 	if err := c.encoder.Encode(pluginrpc.Request{
 		ID:     c.nextID,
 		Method: method,
 		Params: body,
 	}); err != nil {
+		c.stopLocked()
 		return err
 	}
 	if err := c.stdin.Flush(); err != nil {
+		c.stopLocked()
 		return err
 	}
 	var resp pluginrpc.Response
-	if err := c.decoder.Decode(&resp); err != nil {
+	if !c.scanner.Scan() {
+		err := c.scanner.Err()
+		if err == nil {
+			err = fmt.Errorf("RPC peer closed its output")
+		}
+		c.stopLocked()
 		return err
+	}
+	if err := json.Unmarshal(c.scanner.Bytes(), &resp); err != nil {
+		c.stopLocked()
+		return err
+	}
+	if resp.ID != c.nextID {
+		c.stopLocked()
+		return fmt.Errorf("rpc plugin %q returned an unexpected response ID", c.meta.Name)
 	}
 	if resp.Error != "" {
 		return fmt.Errorf("rpc plugin %q %s failed: %s", c.meta.Name, method, resp.Error)
 	}
-	if out != nil && len(resp.Result) > 0 {
+	if out != nil {
+		if len(resp.Result) == 0 || string(resp.Result) == "null" {
+			c.stopLocked()
+			return fmt.Errorf("rpc plugin %q omitted its result", c.meta.Name)
+		}
 		if err := json.Unmarshal(resp.Result, out); err != nil {
+			c.stopLocked()
 			return err
+		}
+	}
+	cancel()
+	select {
+	case <-deadlineDone:
+		c.stopLocked()
+		return fmt.Errorf("rpc plugin %q %s exceeded its 10-second deadline", c.meta.Name, method)
+	default:
+	}
+	return nil
+}
+
+func (c *rpcPluginClient) stopLocked() {
+	// Finish any racing deadline callback before reaping the process, preventing
+	// a late process-group signal from targeting a recycled PID.
+	if c.cancelDeadline != nil {
+		c.cancelDeadline()
+	}
+	if c.cmd != nil {
+		killRPCProcess(c.cmd.Process)
+		_ = c.input.Close()
+		_ = c.output.Close()
+		_ = c.cmd.Wait()
+	}
+	c.cmd = nil
+	c.input = nil
+	c.output = nil
+	c.handshake = nil
+	c.stdin = nil
+	c.encoder = nil
+	c.scanner = nil
+}
+
+// Close releases RPC processes owned by this manager. Callers can close even
+// when no hook was ever invoked; no plugin is started just to shut it down.
+func (m *Manager) Close() error {
+	for _, plugin := range m.plugins {
+		if proxy, ok := plugin.(*rpcPluginProxy); ok {
+			proxy.client.mu.Lock()
+			proxy.client.stopLocked()
+			proxy.client.mu.Unlock()
 		}
 	}
 	return nil
@@ -217,6 +420,9 @@ func (c *rpcPluginClient) rpcEnv() []string {
 	goCache := ""
 	tmpDir := ""
 	for _, item := range os.Environ() {
+		if c.meta.Runtime.Sandbox.Profile == "strict" {
+			break
+		}
 		if strings.HasPrefix(item, "PATH=") {
 			path = item
 		}
@@ -318,6 +524,8 @@ func cloneTaxonomies(in map[string][]string) map[string][]string {
 }
 
 var (
-	_ Plugin      = (*rpcPluginProxy)(nil)
-	_ ContextHook = (*rpcPluginProxy)(nil)
+	_ Plugin          = (*rpcPluginProxy)(nil)
+	_ ContextHook     = (*rpcPluginProxy)(nil)
+	_ AfterRenderHook = (*rpcPluginProxy)(nil)
+	_ HTMLSlotsHook   = (*rpcPluginProxy)(nil)
 )

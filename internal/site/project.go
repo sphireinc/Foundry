@@ -17,6 +17,7 @@ func NewPluginManager(cfg *config.Config) (*plugins.Manager, error) {
 	}
 
 	if err := pm.OnConfigLoaded(cfg); err != nil {
+		_ = pm.Close()
 		return nil, diag.Wrap(diag.KindPlugin, "run plugin config hooks", err)
 	}
 
@@ -50,6 +51,7 @@ func LoadConfiguredGraph(ctx context.Context, cfg *config.Config, includeDrafts 
 
 	graph, err := LoadGraphWithManager(ctx, cfg, pm, includeDrafts)
 	if err != nil {
+		_ = pm.Close()
 		return nil, nil, err
 	}
 

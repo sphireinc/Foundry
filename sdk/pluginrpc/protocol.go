@@ -8,9 +8,11 @@ import (
 )
 
 const (
-	MethodHandshake = "handshake"
-	MethodContext   = "context"
-	MethodShutdown  = "shutdown"
+	MethodHandshake   = "handshake"
+	MethodContext     = "context"
+	MethodAfterRender = "after_render"
+	MethodHTMLSlots   = "html_slots"
+	MethodShutdown    = "shutdown"
 )
 
 type Request struct {
@@ -51,6 +53,31 @@ type ContextRequest struct {
 
 type ContextResponse struct {
 	Data map[string]any `json:"data,omitempty"`
+}
+
+// AfterRenderRequest contains only the output being processed, never host paths
+// or configuration. HTML is a string so the wire format remains readable JSON.
+type AfterRenderRequest struct {
+	URL  string `json:"url"`
+	HTML string `json:"html"`
+}
+
+type AfterRenderResponse struct {
+	HTML string `json:"html"`
+}
+
+// AfterRenderHandler is optional, preserving compatibility with context-only
+// handlers. Advertise after_render in the handshake only when implemented.
+type AfterRenderHandler interface {
+	AfterRender(AfterRenderRequest) (AfterRenderResponse, error)
+}
+
+type HTMLSlotsResponse struct {
+	Slots map[string][]string `json:"slots,omitempty"`
+}
+
+type HTMLSlotsHandler interface {
+	HTMLSlots(ContextRequest) (HTMLSlotsResponse, error)
 }
 
 type PagePayload struct {
@@ -110,6 +137,30 @@ func (s Server) Serve(handler Handler) error {
 			if err := json.Unmarshal(req.Params, &body); err != nil {
 				resp.Error = err.Error()
 			} else if result, err := handler.Context(body); err != nil {
+				resp.Error = err.Error()
+			} else {
+				resp.Result = mustJSON(result)
+			}
+		case MethodHTMLSlots:
+			var body ContextRequest
+			hook, ok := handler.(HTMLSlotsHandler)
+			if !ok {
+				resp.Error = "html_slots is not supported"
+			} else if err := json.Unmarshal(req.Params, &body); err != nil {
+				resp.Error = err.Error()
+			} else if result, err := hook.HTMLSlots(body); err != nil {
+				resp.Error = err.Error()
+			} else {
+				resp.Result = mustJSON(result)
+			}
+		case MethodAfterRender:
+			var body AfterRenderRequest
+			hook, ok := handler.(AfterRenderHandler)
+			if !ok {
+				resp.Error = "after_render is not supported"
+			} else if err := json.Unmarshal(req.Params, &body); err != nil {
+				resp.Error = err.Error()
+			} else if result, err := hook.AfterRender(body); err != nil {
 				resp.Error = err.Error()
 			} else {
 				resp.Result = mustJSON(result)
