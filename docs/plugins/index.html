@@ -447,7 +447,8 @@ permissions:
           <p>
             Foundry now supports a first-class <code>runtime</code> block in
             <code>plugin.yaml</code> for the out-of-process plugin host. The first supported RPC
-            hook family is <code>context</code>, which lets a plugin enrich render-time view data
+            hook families are <code>context</code>, <code>html_slots</code>, and
+            <code>after_render</code>, which let a plugin enrich render-time view data
             without sharing the Foundry process.
           </p>
           <pre><code>runtime:
@@ -475,7 +476,50 @@ permissions:
             <li>no host-granted network channel</li>
             <li>no host-granted local process execution channel</li>
             <li>unsupported sandbox expansions are rejected at enable time</li>
+            <li>context reads/writes, document reads, HTML slot injection, and final HTML mutation require their corresponding declared permissions</li>
+            <li>each RPC exchange has a 10-second deadline, an 8 MiB payload limit, and an 8 MiB newline-delimited response frame limit</li>
+            <li>handshake identity/protocol and response IDs are checked; invalid or timed-out peers are stopped and reaped</li>
           </ul>
+          <p>
+            <code>runtime.sandbox.profile: default</code> is process separation, not
+            an OS sandbox: use it only for trusted code. The <code>strict</code>
+            profile currently requires macOS and <code>/usr/bin/sandbox-exec</code>.
+            It denies network access, file writes, child processes, and reads outside
+            the plugin artifact and system runtime paths. Unsupported platforms
+            reject strict execution. Strict plugins must use a prebuilt executable
+            inside their artifact directory; <code>go run</code> and other source
+            runners are not supported. No CPU or memory quotas are provided.
+          </p>
+          <p>To run the bundled demo in strict mode on macOS, first build it from the repository root:</p>
+          <pre><code>go build -o plugins/rpc-context-demo/bin/server ./plugins/rpc-context-demo/cmd/server</code></pre>
+          <p>Then replace the demo's runtime command and profile in <code>plugin.yaml</code>:</p>
+          <pre><code>runtime:
+  mode: rpc
+  protocol_version: v1alpha1
+  command: [./bin/server]
+  sandbox:
+    profile: strict
+    allow_network: false
+    allow_filesystem_write: false
+    allow_process_exec: false</code></pre>
+          <p>
+            Strict execution does not inherit the host's HOME, PATH, GOCACHE, or TMPDIR.
+            Explicit <code>runtime.env</code> entries remain available to the plugin.
+            Keep credentials out of the plugin artifact: the sandbox intentionally
+            permits reading that artifact's files.
+          </p>
+          <p>
+            <code>context</code> reads require <code>permissions.render.context.read</code>;
+            returned data is applied only with <code>permissions.render.context.write</code>.
+            Page payloads separately require <code>permissions.content.documents.read</code>.
+            The optional SDK <code>HTMLSlotsHandler</code> returns named HTML fragments
+            with <code>permissions.render.html_slots.inject</code>.
+            <code>AfterRenderHandler</code> returns final HTML with
+            <code>permissions.render.after_render.mutate_html</code>.
+            Advertise supported methods in the handshake; legacy context-only SDK
+            handlers remain compatible. HTML injection/mutation grants trust over
+            browser output even when the plugin process is sandboxed.
+          </p>
           <p>
             A working example ships with Foundry at
             <code>plugins/rpc-context-demo/</code>.

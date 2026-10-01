@@ -344,10 +344,11 @@ Theme security currently covers:
 - validation of undeclared remote assets in theme HTML, CSS, and JS
 - explicit declaration of outbound frontend request origins
 
-Plugin permissions currently cover declaration and visibility, not true sandboxing.
-In-process plugins are still trusted Go code today, but Foundry now also has a
-working out-of-process RPC host for the first migrated hook family
-(`OnContext`). Foundry can now:
+In-process plugin permissions cover declaration and visibility; these plugins
+remain trusted Go code. The out-of-process RPC host enforces declared payload
+and mutation permissions for context, HTML slots, and after-render hooks.
+Its default profile provides process separation, while the strict profile uses
+a deny-by-default macOS OS sandbox. Foundry can now:
 
 - load and validate structured permission declarations
 - surface plugin risk and approval requirements in the admin UI
@@ -366,10 +367,19 @@ See the full authoring guides for details:
 - `docs/plugins/` also includes the full structured permission reference for plugin authors
 
 Plugin runtime metadata now supports a real `runtime` block. The current RPC
-host supports the `context` hook family over a JSON RPC transport, with a
-sanitized environment and no host-granted filesystem, network, or process
-capability channels. Broader hook migration and stronger OS-level sandboxing
-still build on that foundation.
+host supports `context`, `html_slots`, and `after_render` over newline-delimited
+JSON RPC, with a sanitized environment and no host-granted filesystem, network,
+or process capability channels. Each RPC exchange has a 10-second deadline and an 8 MiB
+payload limit; responses have an 8 MiB frame limit. Identity/protocol mismatches
+and malformed responses stop and reap the peer.
+
+Strict RPC execution requires a prebuilt executable inside the plugin artifact.
+On macOS, it denies network access, filesystem writes, child processes, and file
+reads outside the plugin artifact and system runtime paths. Other platforms
+currently reject the strict profile rather than running it without isolation.
+Default RPC plugins remain trusted code with the operating-system privileges of
+the Foundry user. The sandbox does not provide per-plugin CPU or memory quotas,
+and granting HTML mutation/injection still trusts the plugin's browser output.
 
 ## Getting Started
 
