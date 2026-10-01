@@ -151,6 +151,23 @@ func Audit(cfg *config.Config) (*AuditReport, error) {
 		return nil, err
 	}
 	scanReferences(report, "effective configuration", configBody)
+	assetsRoot, err := CollectionRoot(cfg, "assets")
+	if err != nil {
+		return nil, err
+	}
+	cssRoot := filepath.Join(assetsRoot, "css")
+	for i := range report.Assets {
+		asset := &report.Assets[i]
+		within, err := safepath.IsWithinRoot(cssRoot, asset.SourcePath)
+		if err != nil {
+			return nil, err
+		}
+		// The asset pipeline bundles content CSS independently of CopyAssets
+		// and without requiring an explicit reference to each input file.
+		if within && strings.EqualFold(filepath.Ext(asset.SourcePath), ".css") {
+			asset.UsedBy = append(asset.UsedBy, "generated /assets/css/foundry.bundle.css")
+		}
+	}
 	for _, asset := range report.Assets {
 		if len(asset.UsedBy) == 0 {
 			report.PotentialOrphans = append(report.PotentialOrphans, asset.Reference)

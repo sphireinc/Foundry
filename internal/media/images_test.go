@@ -305,3 +305,47 @@ func TestImagePixelLimitAndAnimatedPNGPreservation(t *testing.T) {
 		t.Fatal("animated source overwritten")
 	}
 }
+
+func TestAuditProtectsImplicitCSSBundleInputs(t *testing.T) {
+	cfg := mediaFixture(t)
+	cfg.Content.AssetsDir = "custom-assets"
+	cfg.Build.CopyAssets = false
+	for _, name := range []string{"css/site.css", "css/nested/other.CSS", "unused.css"} {
+		writeFixture(t, filepath.Join(cfg.ContentDir, cfg.Content.AssetsDir, filepath.FromSlash(name)), []byte("body { color: red }"))
+	}
+	report, err := Audit(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(report.PotentialOrphans, []string{"media:assets/unused.css"}) {
+		t.Fatalf("incorrect CSS orphan candidates: %#v", report.PotentialOrphans)
+	}
+	for _, asset := range report.Assets {
+		if strings.Contains(asset.Reference, "/css/") && !slices.Contains(asset.UsedBy, "generated /assets/css/foundry.bundle.css") {
+			t.Fatalf("missing implicit dependency: %#v", asset)
+		}
+	}
+}
+
+func TestGeneratedDirectoriesArePubliclyTraversable(t *testing.T) {
+	cfg := mediaFixture(t)
+	imageFixture(t, cfg)
+	// Simulate the permissions left by an older build.
+	for _, directory := range []string{"_foundry", VariantDirectory} {
+		if err := os.MkdirAll(filepath.Join(cfg.PublicDir, directory), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := BuildImages(cfg); err != nil {
+		t.Fatal(err)
+	}
+	for _, directory := range []string{"_foundry", VariantDirectory} {
+		info, err := os.Stat(filepath.Join(cfg.PublicDir, directory))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o755 {
+			t.Fatalf("public directory %s has permissions %o", directory, info.Mode().Perm())
+		}
+	}
+}

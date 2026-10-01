@@ -79,3 +79,25 @@ func TestTrashPreviewApplyAndRestore(t *testing.T) {
 		t.Fatal("rejected trash changed file")
 	}
 }
+
+func TestTrashRefusesImplicitCSSBundleInput(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{ContentDir: filepath.Join(root, "content"), PublicDir: filepath.Join(root, "public"), DataDir: filepath.Join(root, "data"), ThemesDir: filepath.Join(root, "themes"), PluginsDir: filepath.Join(root, "plugins"), Theme: "default"}
+	cfg.ApplyDefaults()
+	directory := filepath.Join(cfg.ContentDir, cfg.Content.AssetsDir, "css")
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(directory, "site.css")
+	if err := os.WriteFile(filename, []byte("body { color: red }"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"foundry", "media", "trash", "media:assets/css/site.css"}, {"foundry", "media", "trash", "media:assets/css/site.css", "--apply"}} {
+		if err := (command{}).Run(cfg, args); err == nil {
+			t.Fatal("allowed bundled CSS to be trashed")
+		}
+	}
+	if _, err := os.Stat(filename); err != nil {
+		t.Fatalf("bundled CSS was changed: %v", err)
+	}
+}

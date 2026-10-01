@@ -288,8 +288,15 @@ func writeDerived(root, relative string, body []byte) error {
 		return err
 	}
 	defer func() { _ = scoped.Close() }()
-	if err = scoped.MkdirAll(filepath.Dir(relative), 0o750); err != nil {
+	// #nosec G301 -- published directories must be traversable by the static web server.
+	if err = scoped.MkdirAll(filepath.Dir(relative), 0o755); err != nil {
 		return err
+	}
+	// Repair directories created by earlier builds with owner/group-only access.
+	for directory := filepath.Dir(relative); directory != "."; directory = filepath.Dir(directory) {
+		if err := scoped.Chmod(directory, 0o755); err != nil {
+			return err
+		}
 	}
 	suffix, err := randomSuffix(12)
 	if err != nil {

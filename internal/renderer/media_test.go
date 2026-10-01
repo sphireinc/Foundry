@@ -11,6 +11,7 @@ import (
 
 	"github.com/sphireinc/foundry/internal/assets"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/theme"
 )
 
@@ -63,5 +64,56 @@ func TestRenderedMediaReceivesVariantsAndAltValidation(t *testing.T) {
 	cfg.Media.RequireAlt = false
 	if _, err := renderer.RenderURL(graph, "/test/", false); err != nil {
 		t.Fatal("default rendering unexpectedly enforced alt")
+	}
+}
+
+func TestImageIndexCacheReusesAndRefreshesManifest(t *testing.T) {
+	cfg := testRendererConfig(t)
+	cfg.Media.ResponsiveImages = true
+	renderer := New(cfg, nil, nil)
+	if index, err := renderer.loadImageIndex(); err != nil || index != nil {
+		t.Fatalf("missing manifest: %v %v", index, err)
+	}
+	directory := filepath.Join(cfg.PublicDir, media.VariantDirectory)
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(directory, "index.json")
+	if err := os.WriteFile(filename, []byte(`{"/images/a.png":{"width":10}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	first, err := renderer.loadImageIndex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A marker in the decoded map proves the next load reused that map.
+	first["cache-marker"] = media.ImageEntry{Width: 42}
+	second, err := renderer.loadImageIndex()
+	if err != nil || second["cache-marker"].Width != 42 {
+		t.Fatalf("index not reused: %v", err)
+	}
+	oldInfo, err := os.Stat(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement := filepath.Join(directory, "replacement.json")
+	if err := os.WriteFile(replacement, []byte(`{"/images/a.png":{"width":20}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(replacement, oldInfo.ModTime(), oldInfo.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, filename); err != nil {
+		t.Fatal(err)
+	}
+	refreshed, err := renderer.loadImageIndex()
+	if err != nil || refreshed["/images/a.png"].Width != 20 || refreshed["cache-marker"].Width != 0 {
+		t.Fatalf("replacement not reloaded: %v %v", refreshed, err)
+	}
+	if err := os.Remove(filename); err != nil {
+		t.Fatal(err)
+	}
+	if index, err := renderer.loadImageIndex(); err != nil || index != nil {
+		t.Fatalf("removed manifest cached: %v %v", index, err)
 	}
 }
