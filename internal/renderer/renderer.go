@@ -18,6 +18,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/content"
 	"github.com/sphireinc/foundry/internal/i18n"
+	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/platformapi"
 	"github.com/sphireinc/foundry/internal/safepath"
 	"github.com/sphireinc/foundry/internal/theme"
@@ -1225,12 +1226,25 @@ func (r *Renderer) renderTemplate(name string, targetURL string, data ViewData) 
 	}
 
 	html := []byte(sb.String())
+	index, err := media.LoadImageIndex(r.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("load responsive images: %w", err)
+	}
+	html, err = media.EnrichHTML(html, r.cfg, index)
+	if err != nil {
+		return nil, fmt.Errorf("enrich media: %w", err)
+	}
 
 	html, err = r.hooks.OnAfterRender(targetURL, html)
 	if err != nil {
 		return nil, err
 	}
 
+	if r.cfg.Media.RequireAlt {
+		if err := media.RequireAccessibleHTML(html, targetURL); err != nil {
+			return nil, err
+		}
+	}
 	return html, nil
 }
 

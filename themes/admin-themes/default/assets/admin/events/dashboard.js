@@ -798,6 +798,16 @@ export const bindDashboardEvents = (ctx) => {
     });
   });
 
+  document.getElementById('media-audit')?.addEventListener('click', async () => {
+    try {
+      state.mediaAudit = await admin.media.audit();
+      render();
+    } catch (error) {
+      state.error = error.message || String(error);
+      render();
+    }
+  });
+
   document.getElementById('media-metadata-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!state.selectedMediaReference) return;
@@ -808,6 +818,7 @@ export const bindDashboardEvents = (ctx) => {
         metadata: {
           title: document.getElementById('media-title').value,
           alt: document.getElementById('media-alt').value,
+          decorative: document.getElementById('media-decorative').checked,
           caption: document.getElementById('media-caption').value,
           description: document.getElementById('media-description').value,
           credit: document.getElementById('media-credit').value,

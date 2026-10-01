@@ -256,6 +256,7 @@ type MediaDeleteRequest struct {
 
 type MediaMetadata struct {
 	Title            string     `json:"title,omitempty" yaml:"title,omitempty"`
+	Decorative       bool       `json:"decorative,omitempty" yaml:"decorative,omitempty"`
 	Alt              string     `json:"alt,omitempty" yaml:"alt,omitempty"`
 	Caption          string     `json:"caption,omitempty" yaml:"caption,omitempty"`
 	Description      string     `json:"description,omitempty" yaml:"description,omitempty"`

@@ -1,6 +1,9 @@
 // createAdminMediaAPI wraps media-library operations including upload, replace,
 // metadata updates, history, trash, and restore flows.
 export const createAdminMediaAPI = (http) => ({
+  audit() {
+    return http.get('/api/media/audit');
+  },
   list(params = {}) {
     return http.get('/api/media', { query: params });
   },

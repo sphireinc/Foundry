@@ -509,6 +509,18 @@ Move document to trash.
 
 ### Media Management
 
+#### GET `/media/audit`
+
+Preview media accessibility issues and potential orphans without changing files.
+Requires `media.read`. Returns `assets`, `potential_orphans`, `accessibility`, and
+`notes`. Candidate files may still have dynamic or external consumers and require
+manual review. The admin SDK exposes this endpoint as `media.audit()`.
+
+The metadata save endpoint also accepts `metadata.decorative` to explicitly mark
+an image as decorative. With `media.require_alt: true`, image metadata must contain
+a nonempty `alt` or `decorative: true`. See [Media management](media-management.md)
+for transforms, validation, and recoverable cleanup.
+
 #### GET `/media`
 List media files with pagination.
 - **Capabilities:** `dashboard.read`

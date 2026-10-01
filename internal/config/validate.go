@@ -27,6 +27,17 @@ func Validate(cfg *Config) []error {
 	}
 
 	var errs []error
+	if cfg.Media.JPEGQuality != 0 && (cfg.Media.JPEGQuality < 1 || cfg.Media.JPEGQuality > 100) {
+		errs = append(errs, fmt.Errorf("media.jpeg_quality must be between 1 and 100"))
+	}
+	if len(cfg.Media.Widths) > 16 {
+		errs = append(errs, fmt.Errorf("media.widths supports at most 16 sizes"))
+	}
+	for _, width := range cfg.Media.Widths {
+		if width < 1 || width > 8192 {
+			errs = append(errs, fmt.Errorf("media.widths must be between 1 and 8192"))
+		}
+	}
 
 	require := func(name, value string) {
 		if strings.TrimSpace(value) == "" {

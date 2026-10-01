@@ -309,6 +309,9 @@ func (s *Service) SaveMediaMetadata(ctx context.Context, reference string, metad
 		return nil, err
 	}
 	metadata = mergeEditableMediaMetadata(existingMetadata, metadata)
+	if s.cfg.Media.RequireAlt && item.Kind == "image" && !metadata.Decorative && strings.TrimSpace(metadata.Alt) == "" {
+		return nil, fmt.Errorf("image metadata requires alt text or decorative: true")
+	}
 	sidecar, err := s.mediaSidecarPath(path)
 	if err != nil {
 		return nil, err
@@ -502,6 +505,7 @@ type mediaMetadataDocument struct {
 func mediaMetadataEmpty(metadata types.MediaMetadata) bool {
 	return metadata.Title == "" &&
 		metadata.Alt == "" &&
+		!metadata.Decorative &&
 		metadata.Caption == "" &&
 		metadata.Description == "" &&
 		metadata.Credit == "" &&
@@ -682,6 +686,7 @@ func mergeEditableMediaMetadata(existing, requested types.MediaMetadata) types.M
 	requested = normalizeMediaMetadata(requested)
 	existing.Title = requested.Title
 	existing.Alt = requested.Alt
+	existing.Decorative = requested.Decorative
 	existing.Caption = requested.Caption
 	existing.Description = requested.Description
 	existing.Credit = requested.Credit
