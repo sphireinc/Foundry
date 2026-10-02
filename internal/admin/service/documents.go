@@ -342,18 +342,11 @@ func (s *Service) UpdateDocumentStatus(ctx context.Context, req types.DocumentSt
 	if err != nil {
 		return nil, fmt.Errorf("scheduled unpublish time: %w", err)
 	}
-	if status == "scheduled" && scheduledPublishAt == nil && scheduledUnpublishAt == nil {
-		return nil, fmt.Errorf("scheduled status requires scheduled publish or unpublish time")
-	}
-
-	if err := s.editorialPublicationAllowed(ctx, fm, body, status); err != nil {
+	if err := s.validateEditorialSchedule(status, scheduledPublishAt, scheduledUnpublishAt, true); err != nil {
 		return nil, err
 	}
-	if s.cfg.Editorial.RequireApproval && status == "scheduled" && (scheduledPublishAt == nil || !scheduledPublishAt.After(time.Now().UTC())) {
-		return nil, fmt.Errorf("scheduled publication requires a future publish time")
-	}
-	if scheduledPublishAt != nil && scheduledUnpublishAt != nil && !scheduledUnpublishAt.After(*scheduledPublishAt) {
-		return nil, fmt.Errorf("unpublish time must follow publish time")
+	if err := s.editorialPublicationAllowed(ctx, fm, body, status); err != nil {
+		return nil, err
 	}
 	state, err := editorialState(fm)
 	if err != nil {

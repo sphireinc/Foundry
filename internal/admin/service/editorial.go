@@ -84,6 +84,36 @@ func appendEditorialEvent(state *types.EditorialState, action, actor, revision, 
 }
 func revokeApproval(state *types.EditorialState) { state.ApprovedBy, state.ApprovedRevision = "", "" }
 
+func (s *Service) validateEditorialSchedule(status string, publishAt, unpublishAt *time.Time, requireFuture bool) error {
+	if status == "scheduled" {
+		if s.cfg.Editorial.RequireApproval {
+			if publishAt == nil || (requireFuture && !publishAt.After(time.Now().UTC())) {
+				return fmt.Errorf("scheduled publication requires a future publish time")
+			}
+		} else if publishAt == nil && unpublishAt == nil {
+			return fmt.Errorf("scheduled status requires scheduled publish or unpublish time")
+		}
+	}
+	if publishAt != nil && unpublishAt != nil && !unpublishAt.After(*publishAt) {
+		return fmt.Errorf("unpublish time must follow publish time")
+	}
+	return nil
+}
+
+func editorialScheduleTime(value any) (*time.Time, error) {
+	if value == nil {
+		return nil, nil
+	}
+	switch value := value.(type) {
+	case time.Time:
+		return &value, nil
+	case *time.Time:
+		return value, nil
+	default:
+		return parseOptionalTime(fmt.Sprint(value))
+	}
+}
+
 func (s *Service) editorialPublicationAllowed(ctx context.Context, fm *content.FrontMatter, body, status string) error {
 	if !s.cfg.Editorial.RequireApproval || (status != "published" && status != "scheduled") {
 		return nil
@@ -176,6 +206,24 @@ func (s *Service) prepareEditorialSave(ctx context.Context, fm *content.FrontMat
 		appendEditorialEvent(&state, status, editorialActor(ctx), revision, "")
 	}
 	setEditorial(fm, state)
+	publishAt, err := editorialScheduleTime(fm.Params["scheduled_publish_at"])
+	if err != nil {
+		return fmt.Errorf("scheduled publish time: %w", err)
+	}
+	unpublishAt, err := editorialScheduleTime(fm.Params["scheduled_unpublish_at"])
+	if err != nil {
+		return fmt.Errorf("scheduled unpublish time: %w", err)
+	}
+	declaredStatus := normalizeDocumentStatus(fmt.Sprint(fm.Params["workflow"]))
+	if declaredStatus == "" {
+		declaredStatus = status
+	}
+	// An unchanged schedule may already be due. New or rescheduled publications
+	// must be in the future, while ordinary saves keep that existing schedule.
+	requireFuture := previous == nil || normalizeDocumentStatus(fmt.Sprint(previous.Params["workflow"])) != "scheduled" || fmt.Sprint(fm.Params["scheduled_publish_at"]) != fmt.Sprint(previous.Params["scheduled_publish_at"])
+	if err := s.validateEditorialSchedule(declaredStatus, publishAt, unpublishAt, requireFuture); err != nil {
+		return err
+	}
 	return s.editorialPublicationAllowed(ctx, fm, body, status)
 }
 

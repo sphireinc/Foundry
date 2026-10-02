@@ -118,6 +118,40 @@ func TestEditorialApprovalPublicationAndInvalidation(t *testing.T) {
 	if approval.ApprovedRevision != revision || approval.ApprovedBy != "reviewer" {
 		t.Fatal("revision not approved")
 	}
+	for _, schedule := range []struct{ publish, unpublish string }{
+		{},
+		{publish: "not-a-time"},
+		{publish: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)},
+		{publish: time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339), unpublish: time.Now().Add(time.Hour).UTC().Format(time.RFC3339)},
+	} {
+		fm, body, _ := editorialRead(t, cfg)
+		fm.Params["workflow"] = "scheduled"
+		fm.Params["scheduled_publish_at"] = schedule.publish
+		fm.Params["scheduled_unpublish_at"] = schedule.unpublish
+		raw, err := marshalDocument(fm, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.SaveDocument(contexts["editor"], types.DocumentSaveRequest{SourcePath: "posts/story.md", Raw: string(raw)}); err == nil {
+			t.Fatalf("raw save accepted invalid schedule: %#v", schedule)
+		}
+		if _, err := svc.UpdateDocumentStatus(contexts["editor"], types.DocumentStatusRequest{SourcePath: "posts/story.md", Status: "scheduled", ScheduledPublishAt: schedule.publish, ScheduledUnpublishAt: schedule.unpublish}); err == nil {
+			t.Fatalf("status update accepted invalid schedule: %#v", schedule)
+		}
+	}
+	// The editor's raw-save path also accepts a valid, approved schedule.
+	{
+		fm, body, _ := editorialRead(t, cfg)
+		fm.Params["workflow"] = "scheduled"
+		fm.Params["scheduled_publish_at"] = time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+		raw, err := marshalDocument(fm, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.SaveDocument(contexts["editor"], types.DocumentSaveRequest{SourcePath: "posts/story.md", Raw: string(raw)}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := svc.UpdateDocumentStatus(contexts["editor"], types.DocumentStatusRequest{SourcePath: "posts/story.md", Status: "scheduled", ScheduledPublishAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339)}); err != nil {
 		t.Fatal(err)
 	}

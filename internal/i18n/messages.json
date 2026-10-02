@@ -958,6 +958,7 @@
     "Body changes": "Cambios de contenido",
     "Save and reload the document before reviewing.": "Guarda y vuelve a cargar el documento antes de revisarlo.",
     "Save your edits before making an editorial decision.": "Guarda tus cambios antes de tomar una decisión editorial.",
-    "Editorial decision saved.": "Decisión editorial guardada."
+    "Editorial decision saved.": "Decisión editorial guardada.",
+    "Document is locked by another user.": "El documento está bloqueado por otro usuario."
   }
 }
