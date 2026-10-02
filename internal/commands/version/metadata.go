@@ -85,21 +85,9 @@ func Current(projectDir string) Metadata {
 
 	// A site's checkout describes source execution only, never a separately installed binary.
 	if meta.InstallMode == string(installmode.Source) {
-		meta.NearestTag = gitNearestTag(projectDir)
-		if meta.Commit == "" {
-			meta.Commit = gitCommit(projectDir)
-		}
-		if meta.BuiltAt == "" {
-			meta.BuiltAt = gitCommitTime(projectDir)
-		}
-		if meta.NearestTag != "" {
-			meta.CommitCount = gitCommitsSinceTag(projectDir, meta.NearestTag)
-		}
-		meta.Dirty = gitDirty(projectDir)
-		if exact := gitOutput(projectDir, "describe", "--tags", "--exact-match", "HEAD"); exact != "" && (meta.VCSRevision == "" || strings.HasPrefix(meta.VCSRevision, gitCommit(projectDir))) {
-			meta.ModuleVersion = exact
-		}
+		applyCheckoutMetadata(&meta, projectDir)
 	}
+
 	meta.Dirty = meta.Dirty || meta.VCSModified
 
 	if meta.Version == "" {
@@ -304,10 +292,16 @@ func classifyBuild(meta *Metadata) {
 	meta.BuildKind = "unknown"
 	meta.BuildDescription = "Build provenance unavailable; the embedded version is a release baseline, not proof of a tagged release."
 	meta.ContainerImage = strings.TrimSpace(ContainerImage)
+	if ContainerBuild == "true" && BuildModified == "true" {
+		meta.Dirty = true
+	}
 	tagged := BuildTag != "" && releaseTag.MatchString(BuildTag) || releaseTag.MatchString(meta.ModuleVersion) && !pseudoVersion.MatchString(meta.ModuleVersion)
 	if meta.InstallMode == string(installmode.Source) || meta.VCSRevision != "" || (meta.Commit != "" && meta.Commit != "unknown") || meta.ModuleVersion != "" {
 		meta.BuildKind = "source_snapshot"
 		meta.BuildDescription = "Source snapshot; a release baseline does not identify this revision as a tagged release."
+	}
+	if ContainerBuild == "true" && BuildModified != "false" {
+		tagged = false
 	}
 	if tagged {
 		if releaseTag.MatchString(BuildTag) {
@@ -336,5 +330,21 @@ func classifyBuild(meta *Metadata) {
 		if meta.Dirty && !strings.Contains(meta.DisplayVersion, "dirty") {
 			meta.DisplayVersion += "-dirty"
 		}
+	}
+}
+
+// A checkout can describe this executable only when its full revision matches
+// the revision recorded by Go. Missing build provenance is not a match.
+func applyCheckoutMetadata(meta *Metadata, projectDir string) {
+	if meta.VCSRevision == "" || meta.VCSRevision != gitOutput(projectDir, "rev-parse", "HEAD") {
+		return
+	}
+	meta.NearestTag = gitNearestTag(projectDir)
+	if meta.NearestTag != "" {
+		meta.CommitCount = gitCommitsSinceTag(projectDir, meta.NearestTag)
+	}
+	meta.Dirty = gitDirty(projectDir)
+	if exact := gitOutput(projectDir, "describe", "--tags", "--exact-match", "HEAD"); exact != "" {
+		meta.ModuleVersion = exact
 	}
 }

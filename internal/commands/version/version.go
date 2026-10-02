@@ -11,6 +11,8 @@ import (
 
 var (
 	BuildTag       = ""
+	ContainerBuild = ""
+	BuildModified  = ""
 	ContainerImage = ""
 	Version        = embeddedVersion()
 	Commit         = "none"

@@ -1,6 +1,7 @@
 package version
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -94,5 +95,54 @@ func TestContainerIgnoresSiteCheckout(t *testing.T) {
 func TestMissingCheckoutIsNotDirty(t *testing.T) {
 	if gitDirty(t.TempDir()) {
 		t.Fatal("missing repository reported as local modifications")
+	}
+}
+
+func TestCheckoutMetadataRequiresMatchingRevision(t *testing.T) {
+	root := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...) // #nosec G204 -- fixed test-defined Git arguments in an isolated temporary repository.
+		cmd.Dir = root
+		if body, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git: %v: %s", err, body)
+		}
+	}
+	run("init", "-q")
+	run("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "site")
+	run("-c", "tag.gpgsign=false", "tag", "v9.9.9")
+	revision := gitOutput(root, "rev-parse", "HEAD")
+	for _, candidate := range []string{"", "unrelated", revision} {
+		meta := Metadata{VCSRevision: candidate, ModuleVersion: "original", Commit: "build-commit"}
+		applyCheckoutMetadata(&meta, root)
+		if candidate == revision {
+			if meta.ModuleVersion != "v9.9.9" || meta.NearestTag != "v9.9.9" {
+				t.Fatalf("matching checkout not recognized: %+v", meta)
+			}
+		} else if meta.ModuleVersion != "original" || meta.NearestTag != "" || meta.Commit != "build-commit" {
+			t.Fatalf("foreign checkout adopted: %+v", meta)
+		}
+	}
+}
+
+func TestContainerBuildModificationState(t *testing.T) {
+	oldTag, oldContainer, oldModified := BuildTag, ContainerBuild, BuildModified
+	t.Cleanup(func() { BuildTag, ContainerBuild, BuildModified = oldTag, oldContainer, oldModified })
+	BuildTag, ContainerBuild = "v1.4.6", "true"
+	for _, tc := range []struct {
+		modified, kind string
+		comparable     bool
+	}{
+		{"false", "tagged_release", true},
+		{"true", "modified_build", false},
+		{"unknown", "source_snapshot", false},
+		{"", "source_snapshot", false},
+	} {
+		BuildModified = tc.modified
+		meta := Metadata{Version: "v1.4.6", Commit: "abc123", InstallMode: "docker"}
+		classifyBuild(&meta)
+		if meta.BuildKind != tc.kind || meta.ReleaseComparable != tc.comparable {
+			t.Fatalf("state %q: %+v", tc.modified, meta)
+		}
 	}
 }

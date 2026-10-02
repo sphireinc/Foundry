@@ -35,5 +35,8 @@ and installation-specific instructions remain available.
 For custom builds, use `scripts/build-release.go` to record version, commit and
 build time; it records a release tag only when HEAD has an exact tag. Docker builds
 accept `FOUNDRY_BUILD_VERSION`, `FOUNDRY_BUILD_COMMIT`, `FOUNDRY_BUILD_DATE` and
-`FOUNDRY_BUILD_TAG`; set the last only to the exact source release tag. The image
+`FOUNDRY_BUILD_TAG` and `FOUNDRY_BUILD_MODIFIED`. Set the tag only to the exact
+source release tag and modification state to `true`, `false`, or `unknown` after
+checking the build context. A container with unknown modification state is not
+classified as a verified tagged release, even when a tag is supplied. The image
 workflow supplies it from Git, independently of the published image tag.
