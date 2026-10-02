@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -22,10 +21,9 @@ import (
 	"github.com/sphireinc/foundry/internal/media"
 	"github.com/sphireinc/foundry/internal/platformapi"
 	"github.com/sphireinc/foundry/internal/safepath"
+	"github.com/sphireinc/foundry/internal/sitesearch"
 	"github.com/sphireinc/foundry/internal/theme"
 )
-
-var stripHTMLTagsRE = regexp.MustCompile(`<[^>]+>`)
 
 // Hooks lets plugins participate in the render pipeline.
 //
@@ -114,6 +112,10 @@ type ViewData struct {
 	TaxonomyTerm string
 	AuthorName   string
 	SearchQuery  string
+	SearchType   string
+	SearchURL    string
+	SearchTotal  int
+	SearchLimit  int
 	RequestPath  string
 	StatusCode   int
 	Nav          []NavItem
@@ -482,44 +484,11 @@ func (r *Renderer) RenderURLWithQuery(graph *content.SiteGraph, urlPath string, 
 	return nil, os.ErrNotExist
 }
 
-type searchIndexEntry struct {
-	Title      string              `json:"title"`
-	URL        string              `json:"url"`
-	Summary    string              `json:"summary,omitempty"`
-	Snippet    string              `json:"snippet,omitempty"`
-	Content    string              `json:"content,omitempty"`
-	Type       string              `json:"type"`
-	Lang       string              `json:"lang"`
-	Layout     string              `json:"layout,omitempty"`
-	Tags       []string            `json:"tags,omitempty"`
-	Categories []string            `json:"categories,omitempty"`
-	Taxonomies map[string][]string `json:"taxonomies,omitempty"`
-}
-
 func (r *Renderer) writeSearchIndex(graph *content.SiteGraph) error {
 	if r == nil || r.cfg == nil || graph == nil {
 		return nil
 	}
-	items := make([]searchIndexEntry, 0, len(graph.Documents))
-	for _, doc := range graph.Documents {
-		if doc == nil || doc.Draft || documentArchived(doc) {
-			continue
-		}
-		normalizedContent := normalizeSearchContent(doc)
-		items = append(items, searchIndexEntry{
-			Title:      doc.Title,
-			URL:        doc.URL,
-			Summary:    doc.Summary,
-			Snippet:    buildSearchSnippet(doc.Summary, normalizedContent),
-			Content:    normalizedContent,
-			Type:       doc.Type,
-			Lang:       doc.Lang,
-			Layout:     doc.Layout,
-			Tags:       append([]string{}, doc.Taxonomies["tags"]...),
-			Categories: append([]string{}, doc.Taxonomies["categories"]...),
-			Taxonomies: cloneTaxonomies(doc.Taxonomies),
-		})
-	}
+	items := sitesearch.Entries(graph)
 	body, err := json.MarshalIndent(items, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal search index: %w", err)
@@ -532,29 +501,6 @@ func (r *Renderer) writeSearchIndex(graph *content.SiteGraph) error {
 		return fmt.Errorf("write search index: %w", err)
 	}
 	return nil
-}
-
-func normalizeSearchContent(doc *content.Document) string {
-	if doc == nil {
-		return ""
-	}
-	text := strings.TrimSpace(doc.RawBody)
-	if text == "" {
-		text = strings.TrimSpace(stripHTMLTagsRE.ReplaceAllString(string(doc.HTMLBody), " "))
-	}
-	return strings.Join(strings.Fields(text), " ")
-}
-
-func buildSearchSnippet(summary, content string) string {
-	summary = strings.TrimSpace(summary)
-	if summary != "" {
-		return summary
-	}
-	runes := []rune(strings.TrimSpace(content))
-	if len(runes) <= 180 {
-		return string(runes)
-	}
-	return strings.TrimSpace(string(runes[:180])) + "..."
 }
 
 func cloneTaxonomies(in map[string][]string) map[string][]string {
@@ -852,11 +798,15 @@ func (r *Renderer) findSearchPage(graph *content.SiteGraph, urlPath string, rawQ
 
 	queryValues, _ := url.ParseQuery(rawQuery)
 	query := strings.TrimSpace(queryValues.Get("q"))
-	return r.searchViewData(graph, lang, query, urlPath, liveReload), true
+	return r.searchViewDataWithOptions(graph, lang, query, urlPath, liveReload, sitesearch.Options{Lang: lang, Type: queryValues.Get("type"), Limit: sitesearch.ParseLimit(queryValues.Get("limit"))}), true
 }
 
 func (r *Renderer) searchViewData(graph *content.SiteGraph, lang, query, currentURL string, liveReload bool) ViewData {
-	docs := r.documentsForSearch(graph, lang, query)
+	return r.searchViewDataWithOptions(graph, lang, query, currentURL, liveReload, sitesearch.Options{Lang: lang})
+}
+func (r *Renderer) searchViewDataWithOptions(graph *content.SiteGraph, lang, query, currentURL string, liveReload bool, opts sitesearch.Options) ViewData {
+	result := sitesearch.Query(sitesearch.Entries(graph), query, opts)
+	docs := searchDocuments(graph, result.Items)
 	title := "Search"
 	if query != "" {
 		title = fmt.Sprintf("Search: %s", query)
@@ -869,6 +819,11 @@ func (r *Renderer) searchViewData(graph *content.SiteGraph, lang, query, current
 		Documents:   docs,
 		LiveReload:  liveReload,
 		SearchQuery: query,
+		SearchType:  opts.Type,
+		SearchTotal: result.Total,
+		SearchLimit: result.Limit,
+		SearchURL:   content.SearchPageURL(r.cfg.DefaultLang, lang),
+		Nav:         r.resolveNav(graph, currentURL),
 	}
 }
 
@@ -942,39 +897,17 @@ func (r *Renderer) documentsForLang(graph *content.SiteGraph, lang string) []*co
 	return docs
 }
 
-func (r *Renderer) documentsForSearch(graph *content.SiteGraph, lang, query string) []*content.Document {
-	docs := make([]*content.Document, 0)
-	needle := strings.ToLower(strings.TrimSpace(query))
+func searchDocuments(graph *content.SiteGraph, items []sitesearch.Entry) []*content.Document {
+	docs := []*content.Document{}
+	byURL := map[string]*content.Document{}
 	for _, doc := range graph.Documents {
-		if doc == nil || doc.Draft || documentArchived(doc) {
-			continue
+		if doc != nil {
+			byURL[doc.URL] = doc
 		}
-		if lang != "" && doc.Lang != lang {
-			continue
-		}
-		if needle != "" {
-			normalizedContent := normalizeSearchContent(doc)
-			var haystackBuilder strings.Builder
-			haystackBuilder.Grow(len(doc.Title) + len(doc.Slug) + len(doc.URL) + len(doc.Summary) + len(normalizedContent) + 4)
-			haystackBuilder.WriteString(doc.Title)
-			haystackBuilder.WriteByte(' ')
-			haystackBuilder.WriteString(doc.Slug)
-			haystackBuilder.WriteByte(' ')
-			haystackBuilder.WriteString(doc.URL)
-			haystackBuilder.WriteByte(' ')
-			haystackBuilder.WriteString(doc.Summary)
-			haystackBuilder.WriteByte(' ')
-			haystackBuilder.WriteString(normalizedContent)
-			haystack := strings.ToLower(haystackBuilder.String())
-			if !strings.Contains(haystack, needle) {
-				continue
-			}
-		}
-		docs = append(docs, doc)
 	}
-	sort.Slice(docs, func(i, j int) bool {
-		return docs[i].URL < docs[j].URL
-	})
+	for _, item := range items {
+		docs = append(docs, byURL[item.URL])
+	}
 	return docs
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/sphireinc/foundry/internal/config"
 	"github.com/sphireinc/foundry/internal/consts"
 	"github.com/sphireinc/foundry/internal/content"
+	"github.com/sphireinc/foundry/internal/sitesearch"
 	sdkassets "github.com/sphireinc/foundry/sdk"
 )
 
@@ -137,17 +138,7 @@ type CollectionResponse struct {
 
 // SearchEntry is the normalized record returned by search endpoints and static
 // search artifacts.
-type SearchEntry struct {
-	Title      string              `json:"title"`
-	URL        string              `json:"url"`
-	Summary    string              `json:"summary,omitempty"`
-	Snippet    string              `json:"snippet,omitempty"`
-	Content    string              `json:"content,omitempty"`
-	Type       string              `json:"type"`
-	Lang       string              `json:"lang"`
-	Layout     string              `json:"layout,omitempty"`
-	Taxonomies map[string][]string `json:"taxonomies,omitempty"`
-}
+type SearchEntry = sitesearch.Entry
 
 // PreviewLink identifies a previewable content item and its URLs.
 type PreviewLink struct {
@@ -240,6 +231,9 @@ func (a *API) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(APIBase+"/content", a.handleContent)
 	mux.HandleFunc(APIBase+"/collections", a.handleCollections)
 	mux.HandleFunc(APIBase+"/search", a.handleSearch)
+	mux.HandleFunc("/search.json", a.handleSearchIndex)
+	mux.HandleFunc(RouteBase+"/search.json", a.handleSearchIndex)
+	mux.HandleFunc(RouteBase+"/site.json", a.handleSite)
 	mux.HandleFunc(APIBase+"/preview", a.handlePreview)
 }
 
@@ -379,15 +373,22 @@ func (a *API) handleSearch(w http.ResponseWriter, req *http.Request) {
 	if graph == nil {
 		return
 	}
-	query := strings.ToLower(strings.TrimSpace(req.URL.Query().Get("q")))
-	items := buildSearchEntries(graph)
-	if query != "" {
-		items = rankSearchEntries(items, query)
+	values := req.URL.Query()
+	lang := values.Get("lang")
+	if lang == "" {
+		lang = a.cfg.DefaultLang
 	}
-	writeJSON(w, map[string]any{
-		"query": query,
-		"items": items,
-	})
+	writeJSON(w, sitesearch.Query(buildSearchEntries(graph), values.Get("q"), sitesearch.Options{Lang: lang, Type: values.Get("type"), Limit: sitesearch.ParseLimit(values.Get("limit"))}))
+
+}
+
+func (a *API) handleSearchIndex(w http.ResponseWriter, req *http.Request) {
+	graph := a.requireGraph(w, req)
+	if graph == nil {
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	writeJSON(w, buildSearchEntries(graph))
 }
 
 func (a *API) handlePreview(w http.ResponseWriter, req *http.Request) {
@@ -581,120 +582,7 @@ func buildContentDetail(doc *content.Document) ContentDetail {
 	}
 }
 
-func buildSearchEntries(graph *content.SiteGraph) []SearchEntry {
-	out := make([]SearchEntry, 0, len(graph.Documents))
-	for _, doc := range graph.Documents {
-		if doc == nil || doc.Draft || documentArchived(doc) {
-			continue
-		}
-		out = append(out, SearchEntry{
-			Title:      doc.Title,
-			URL:        doc.URL,
-			Summary:    doc.Summary,
-			Snippet:    deriveSearchSnippet(doc.Title, doc.Summary, normalizeSearchContent(doc), ""),
-			Content:    normalizeSearchContent(doc),
-			Type:       doc.Type,
-			Lang:       doc.Lang,
-			Layout:     doc.Layout,
-			Taxonomies: cloneTaxonomies(doc.Taxonomies),
-		})
-	}
-	return out
-}
-
-func rankSearchEntries(items []SearchEntry, query string) []SearchEntry {
-	query = strings.ToLower(strings.TrimSpace(query))
-	if query == "" {
-		return items
-	}
-	type scored struct {
-		entry SearchEntry
-		score int
-	}
-	scoredItems := make([]scored, 0, len(items))
-	for _, item := range items {
-		score := 0
-		title := strings.ToLower(item.Title)
-		summary := strings.ToLower(item.Summary)
-		content := strings.ToLower(item.Content)
-		url := strings.ToLower(item.URL)
-		if strings.Contains(title, query) {
-			score += 6
-		}
-		if strings.Contains(summary, query) {
-			score += 4
-		}
-		if strings.Contains(content, query) {
-			score += 2
-		}
-		if strings.Contains(url, query) {
-			score += 1
-		}
-		if score == 0 {
-			continue
-		}
-		item.Snippet = deriveSearchSnippet(item.Title, item.Summary, item.Content, query)
-		scoredItems = append(scoredItems, scored{entry: item, score: score})
-	}
-	sort.SliceStable(scoredItems, func(i, j int) bool {
-		if scoredItems[i].score == scoredItems[j].score {
-			return scoredItems[i].entry.Title < scoredItems[j].entry.Title
-		}
-		return scoredItems[i].score > scoredItems[j].score
-	})
-	out := make([]SearchEntry, 0, len(scoredItems))
-	for _, item := range scoredItems {
-		out = append(out, item.entry)
-	}
-	return out
-}
-
-func deriveSearchSnippet(title, summary, content, query string) string {
-	if strings.TrimSpace(summary) != "" {
-		return strings.TrimSpace(summary)
-	}
-	body := strings.TrimSpace(content)
-	if body == "" {
-		return strings.TrimSpace(title)
-	}
-	if query == "" {
-		return firstRunes(body, 180)
-	}
-	lower := strings.ToLower(body)
-	idx := strings.Index(lower, strings.ToLower(strings.TrimSpace(query)))
-	if idx < 0 {
-		return firstRunes(body, 180)
-	}
-	start := idx - 60
-	if start < 0 {
-		start = 0
-	}
-	end := start + 180
-	runes := []rune(body)
-	if start > len(runes) {
-		start = 0
-	}
-	if end > len(runes) {
-		end = len(runes)
-	}
-	snippet := strings.TrimSpace(string(runes[start:end]))
-	if start > 0 {
-		snippet = "..." + snippet
-	}
-	if end < len(runes) {
-		snippet += "..."
-	}
-	return snippet
-}
-
-func firstRunes(value string, max int) string {
-	runes := []rune(strings.TrimSpace(value))
-	if len(runes) <= max {
-		return string(runes)
-	}
-	return strings.TrimSpace(string(runes[:max])) + "..."
-}
-
+func buildSearchEntries(graph *content.SiteGraph) []SearchEntry { return sitesearch.Entries(graph) }
 func WriteStaticArtifacts(cfg *config.Config, graph *content.SiteGraph) error {
 	if cfg == nil || graph == nil {
 		return nil
@@ -829,16 +717,6 @@ func parsePositiveInt(value string, fallback int) int {
 		return fallback
 	}
 	return n
-}
-
-func normalizeSearchContent(doc *content.Document) string {
-	if doc == nil {
-		return ""
-	}
-	if strings.TrimSpace(doc.RawBody) != "" {
-		return strings.Join(strings.Fields(doc.RawBody), " ")
-	}
-	return strings.Join(strings.Fields(string(doc.HTMLBody)), " ")
 }
 
 func cloneTaxonomies(in map[string][]string) map[string][]string {

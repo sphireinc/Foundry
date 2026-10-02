@@ -30,6 +30,7 @@ export const createFrontendClient = ({
   const transport = {
     http,
     mode: resolvedMode,
+    autoFallback: mode === 'auto',
     normalizePath(path) {
       const value = String(path || '/').trim();
       if (!value) return '/';

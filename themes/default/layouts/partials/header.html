@@ -13,6 +13,9 @@
       {{ range .Nav }}
       <a href="{{ .URL }}" {{ if .Active }} class="is-active" {{ end }}>{{ .Name }}</a>
       {{ end }}
+      <a href="{{ if ne .Lang .Site.DefaultLang }}/{{ .Lang }}{{ end }}/search/"
+        >{{ t .Lang "Search" }}</a
+      >
     </nav>
   </div>
 </header>
