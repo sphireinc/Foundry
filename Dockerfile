@@ -7,6 +7,9 @@ WORKDIR /src
 ARG TARGETOS
 ARG TARGETARCH
 ARG FOUNDRY_BUILD_VERSION=""
+ARG FOUNDRY_BUILD_TAG=""
+# Omit or use unknown when source cleanliness has not been verified.
+ARG FOUNDRY_BUILD_MODIFIED="unknown"
 ARG FOUNDRY_BUILD_COMMIT=""
 ARG FOUNDRY_BUILD_DATE=""
 
@@ -17,7 +20,7 @@ COPY . .
 
 RUN go run ./cmd/plugin-sync
 RUN set -eu; \
-  LDFLAGS="-s -w"; \
+  LDFLAGS="-s -w -X github.com/sphireinc/foundry/internal/commands/version.ContainerImage=$FOUNDRY_BUILD_VERSION -X github.com/sphireinc/foundry/internal/commands/version.BuildTag=$FOUNDRY_BUILD_TAG -X github.com/sphireinc/foundry/internal/commands/version.ContainerBuild=true -X github.com/sphireinc/foundry/internal/commands/version.BuildModified=$FOUNDRY_BUILD_MODIFIED"; \
   if [ -n "$FOUNDRY_BUILD_VERSION" ]; then \
     LDFLAGS="$LDFLAGS -X github.com/sphireinc/foundry/internal/commands/version.Version=$FOUNDRY_BUILD_VERSION"; \
   fi; \
@@ -33,6 +36,7 @@ RUN set -eu; \
 # /repo. It deliberately keeps the build command overridable so callers can
 # use `foundry build`, `foundry validate`, or another bounded CLI command.
 FROM alpine:3.20 AS static
+ENV FOUNDRY_CONTAINER=true
 
 ARG FOUNDRY_BUILD_VERSION=""
 ARG FOUNDRY_BUILD_COMMIT=""
@@ -60,6 +64,7 @@ USER foundry
 CMD ["foundry", "build"]
 
 FROM alpine:3.20 AS runtime
+ENV FOUNDRY_CONTAINER=true
 
 ARG FOUNDRY_BUILD_VERSION=""
 ARG FOUNDRY_BUILD_COMMIT=""

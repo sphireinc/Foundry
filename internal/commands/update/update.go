@@ -53,9 +53,14 @@ func runCheck(projectDir string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s %s\n", cliout.Label("Current:"), info.CurrentVersion)
+	fmt.Printf("%s %s\n", cliout.Label("Current:"), info.CurrentDisplayVersion)
 	fmt.Printf("%s %s\n", cliout.Label("Latest:"), info.LatestVersion)
 	fmt.Printf("%s %s\n", cliout.Label("Install mode:"), info.InstallMode)
+	fmt.Printf("%s %s\n", cliout.Label("Build:"), info.BuildDescription)
+	fmt.Printf("%s %t\n", cliout.Label("Release comparison supported:"), info.ReleaseComparable)
+	if info.ContainerImage != "" {
+		fmt.Printf("Container image: %s\n", info.ContainerImage)
+	}
 	fmt.Printf("%s %t\n", cliout.Label("Update available:"), info.HasUpdate)
 	fmt.Printf("%s %t\n", cliout.Label("Apply supported:"), info.ApplySupported)
 	if info.ReleaseURL != "" {
@@ -73,7 +78,7 @@ func runApply(projectDir string) error {
 		return err
 	}
 	cliout.Successf("Update scheduled")
-	fmt.Printf("%s %s\n", cliout.Label("Current:"), info.CurrentVersion)
+	fmt.Printf("%s %s\n", cliout.Label("Current:"), info.CurrentDisplayVersion)
 	fmt.Printf("%s %s\n", cliout.Label("Latest:"), info.LatestVersion)
 	fmt.Printf("%s %s\n", cliout.Label("Asset:"), info.AssetName)
 	fmt.Println("Foundry will restart after the release binary is replaced.")

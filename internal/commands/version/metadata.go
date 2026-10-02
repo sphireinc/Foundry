@@ -2,9 +2,11 @@ package version
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -15,23 +17,27 @@ import (
 )
 
 type Metadata struct {
-	Version        string `json:"version"`
-	DisplayVersion string `json:"display_version,omitempty"`
-	Commit         string `json:"commit"`
-	BuiltAt        string `json:"built_at"`
-	GoVersion      string `json:"go_version"`
-	GOOS           string `json:"goos"`
-	GOARCH         string `json:"goarch"`
-	Executable     string `json:"executable"`
-	InstallMode    string `json:"install_mode"`
-	VCSRevision    string `json:"vcs_revision,omitempty"`
-	VCSTime        string `json:"vcs_time,omitempty"`
-	VCSModified    bool   `json:"vcs_modified"`
-	ModuleVersion  string `json:"module_version,omitempty"`
-	NearestTag     string `json:"nearest_tag,omitempty"`
-	CommitCount    int    `json:"commit_count,omitempty"`
-	Dirty          bool   `json:"dirty,omitempty"`
-	ManagedRuntime bool   `json:"managed_runtime"`
+	BuildKind         string `json:"build_kind"`
+	BuildDescription  string `json:"build_description"`
+	ReleaseComparable bool   `json:"release_comparable"`
+	ContainerImage    string `json:"container_image,omitempty"`
+	Version           string `json:"version"`
+	DisplayVersion    string `json:"display_version,omitempty"`
+	Commit            string `json:"commit"`
+	BuiltAt           string `json:"built_at"`
+	GoVersion         string `json:"go_version"`
+	GOOS              string `json:"goos"`
+	GOARCH            string `json:"goarch"`
+	Executable        string `json:"executable"`
+	InstallMode       string `json:"install_mode"`
+	VCSRevision       string `json:"vcs_revision,omitempty"`
+	VCSTime           string `json:"vcs_time,omitempty"`
+	VCSModified       bool   `json:"vcs_modified"`
+	ModuleVersion     string `json:"module_version,omitempty"`
+	NearestTag        string `json:"nearest_tag,omitempty"`
+	CommitCount       int    `json:"commit_count,omitempty"`
+	Dirty             bool   `json:"dirty,omitempty"`
+	ManagedRuntime    bool   `json:"managed_runtime"`
 }
 
 func Current(projectDir string) Metadata {
@@ -53,9 +59,9 @@ func Current(projectDir string) Metadata {
 		if info.GoVersion != "" {
 			meta.GoVersion = info.GoVersion
 		}
-		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		if info.Main.Replace == nil && info.Main.Version != "" && info.Main.Version != "(devel)" {
 			meta.ModuleVersion = info.Main.Version
-			if meta.Version == "" {
+			if Version == embeddedVersion() {
 				meta.Version = info.Main.Version
 			}
 		}
@@ -77,24 +83,12 @@ func Current(projectDir string) Metadata {
 		}
 	}
 
-	if meta.NearestTag == "" {
-		meta.NearestTag = gitNearestTag(projectDir)
+	// A site's checkout describes source execution only, never a separately installed binary.
+	if meta.InstallMode == string(installmode.Source) {
+		applyCheckoutMetadata(&meta, projectDir)
 	}
-	if meta.Commit == "" {
-		meta.Commit = gitCommit(projectDir)
-	}
-	if meta.BuiltAt == "" {
-		meta.BuiltAt = gitCommitTime(projectDir)
-	}
-	if meta.CommitCount == 0 && meta.NearestTag != "" {
-		meta.CommitCount = gitCommitsSinceTag(projectDir, meta.NearestTag)
-	}
-	if !meta.VCSModified {
-		meta.Dirty = gitDirty(projectDir)
-		meta.VCSModified = meta.Dirty
-	} else {
-		meta.Dirty = true
-	}
+
+	meta.Dirty = meta.Dirty || meta.VCSModified
 
 	if meta.Version == "" {
 		meta.Version = meta.NearestTag
@@ -113,18 +107,23 @@ func Current(projectDir string) Metadata {
 	if meta.InstallMode == string(installmode.Source) {
 		meta.DisplayVersion = sourceDisplayVersion(meta)
 	}
+	classifyBuild(&meta)
 	return meta
 }
 
 func (m Metadata) String() string {
 	lines := []string{
 		fmt.Sprintf("Foundry %s", firstNonEmpty(m.DisplayVersion, m.Version)),
+		fmt.Sprintf("Build: %s", m.BuildDescription),
 		fmt.Sprintf("Commit: %s", m.Commit),
 		fmt.Sprintf("Built: %s", m.BuiltAt),
 		fmt.Sprintf("Go: %s", m.GoVersion),
 		fmt.Sprintf("Target: %s/%s", m.GOOS, m.GOARCH),
 		fmt.Sprintf("Install mode: %s", m.InstallMode),
 		fmt.Sprintf("Managed runtime: %s", boolLabel(m.ManagedRuntime, "enabled", "disabled")),
+	}
+	if m.ContainerImage != "" {
+		lines = append(lines, "Container image: "+m.ContainerImage)
 	}
 	if m.Executable != "" {
 		lines = append(lines, fmt.Sprintf("Executable: %s", m.Executable))
@@ -231,7 +230,12 @@ func gitCommandSuccess(projectDir string, args ...string) bool {
 	}
 	cmd := exec.Command("git", args...)
 	cmd.Dir = projectDir
-	return cmd.Run() != nil
+	err := cmd.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return exit.ExitCode() == 1
+	}
+	return false
 }
 
 func sourceDisplayVersion(meta Metadata) string {
@@ -277,4 +281,70 @@ func gitOutput(projectDir string, args ...string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+var pseudoVersion = regexp.MustCompile(`[.-][0-9]{14}-[0-9a-f]+$`)
+
+var releaseTag = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$`)
+
+func classifyBuild(meta *Metadata) {
+	meta.ReleaseComparable = false
+	meta.BuildKind = "unknown"
+	meta.BuildDescription = "Build provenance unavailable; the embedded version is a release baseline, not proof of a tagged release."
+	meta.ContainerImage = strings.TrimSpace(ContainerImage)
+	if ContainerBuild == "true" && BuildModified == "true" {
+		meta.Dirty = true
+	}
+	tagged := BuildTag != "" && releaseTag.MatchString(BuildTag) || releaseTag.MatchString(meta.ModuleVersion) && !pseudoVersion.MatchString(meta.ModuleVersion)
+	if meta.InstallMode == string(installmode.Source) || meta.VCSRevision != "" || (meta.Commit != "" && meta.Commit != "unknown") || meta.ModuleVersion != "" {
+		meta.BuildKind = "source_snapshot"
+		meta.BuildDescription = "Source snapshot; a release baseline does not identify this revision as a tagged release."
+	}
+	if ContainerBuild == "true" && BuildModified != "false" {
+		tagged = false
+	}
+	if tagged {
+		if releaseTag.MatchString(BuildTag) {
+			meta.Version = BuildTag
+		} else {
+			meta.Version = meta.ModuleVersion
+		}
+		meta.DisplayVersion = meta.Version
+		meta.BuildKind = "tagged_release"
+		meta.BuildDescription = "Tagged release build (build metadata is not a signature verification)."
+		meta.ReleaseComparable = true
+	}
+	if meta.Dirty || meta.VCSModified {
+		meta.BuildKind = "modified_build"
+		meta.BuildDescription = "Modified local build; it may differ from the tagged release."
+		meta.ReleaseComparable = false
+	}
+	if meta.BuildKind == "modified_build" && meta.InstallMode == string(installmode.Source) {
+		meta.DisplayVersion = sourceDisplayVersion(*meta)
+	}
+	if meta.BuildKind != "tagged_release" && meta.InstallMode != string(installmode.Source) && meta.Commit != "unknown" {
+		meta.DisplayVersion = meta.Version
+		if !strings.Contains(meta.Version, shortRevision(meta.Commit)) {
+			meta.DisplayVersion += "+g" + shortRevision(meta.Commit)
+		}
+		if meta.Dirty && !strings.Contains(meta.DisplayVersion, "dirty") {
+			meta.DisplayVersion += "-dirty"
+		}
+	}
+}
+
+// A checkout can describe this executable only when its full revision matches
+// the revision recorded by Go. Missing build provenance is not a match.
+func applyCheckoutMetadata(meta *Metadata, projectDir string) {
+	if meta.VCSRevision == "" || meta.VCSRevision != gitOutput(projectDir, "rev-parse", "HEAD") {
+		return
+	}
+	meta.NearestTag = gitNearestTag(projectDir)
+	if meta.NearestTag != "" {
+		meta.CommitCount = gitCommitsSinceTag(projectDir, meta.NearestTag)
+	}
+	meta.Dirty = gitDirty(projectDir)
+	if exact := gitOutput(projectDir, "describe", "--tags", "--exact-match", "HEAD"); exact != "" {
+		meta.ModuleVersion = exact
+	}
 }
