@@ -1,0 +1,51 @@
+name: author-starter
+title: Author Starter
+version: 0.1.0
+description: A Foundry theme.
+author: Unknown
+license: MIT
+min_foundry_version: 0.1.0
+sdk_version: v1
+compatibility_version: v1
+layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+supported_layouts:
+  - base
+  - index
+  - page
+  - post
+  - list
+screenshots: []
+config_schema:
+  - name: accent_color
+    label: Accent Color
+    type: text
+    default: "#0c7c59"
+slots:
+  - head.end
+  - body.start
+  - body.end
+  - page.before_main
+  - page.after_main
+  - page.before_content
+  - page.after_content
+  - post.before_header
+  - post.after_header
+  - post.before_content
+  - post.after_content
+  - post.sidebar.top
+  - post.sidebar.overview
+  - post.sidebar.bottom
+security:
+  external_assets:
+    allowed: false
+  frontend_requests:
+    allowed: false
+  template_context:
+    allow_site_params: true
+    allow_content_fields: true
+    allow_shared_fields: true

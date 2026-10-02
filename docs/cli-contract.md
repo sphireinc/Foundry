@@ -22,7 +22,9 @@ Examples:
 ```bash
 foundry version
 foundry plugin list --enabled
-foundry theme scaffold editorial
+foundry theme init editorial
+foundry plugin init my-plugin
+foundry plugin init my-plugin --runtime compiled
 foundry routes check
 ```
 
@@ -37,7 +39,7 @@ These should prefer aligned tabular output when showing multiple rows.
 Existing commands that follow this practice:
 
 ```bash
-foundry plugin list --enabled 
+foundry plugin list --enabled
 foundry plugin list --installed
 foundry theme list
 foundry routes list

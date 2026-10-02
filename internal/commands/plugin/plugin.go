@@ -29,6 +29,7 @@ func (command) Group() string {
 
 func (command) Details() []string {
 	return []string{
+		"foundry plugin init <name> [--runtime rpc|compiled]",
 		"foundry plugin list --installed",
 		"foundry plugin list --enabled",
 		"foundry plugin info <name>",
@@ -50,7 +51,7 @@ func (command) RequiresConfig() bool {
 
 func (command) Run(cfg *config.Config, args []string) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: foundry plugin [list|info|install|uninstall|enable|disable|validate|deps|update|sync|security]")
+		return fmt.Errorf("usage: foundry plugin [init|list|info|install|uninstall|enable|disable|validate|deps|update|sync|security]")
 	}
 
 	project := plugins.NewProject(
@@ -61,6 +62,8 @@ func (command) Run(cfg *config.Config, args []string) error {
 	)
 
 	switch args[2] {
+	case "init":
+		return runInit(cfg, args)
 	case "list":
 		return runList(cfg, project, args)
 	case "info":
@@ -318,6 +321,7 @@ func runValidate(cfg *config.Config, project plugins.Project, args []string) err
 	if len(names) >= 1 {
 		name := strings.TrimSpace(names[0])
 		if err := project.Validate(name); err != nil {
+			printAuthorValidationHints(project, name, err)
 			return err
 		}
 		if securityMode || strictSecurity {
@@ -334,8 +338,8 @@ func runValidate(cfg *config.Config, project plugins.Project, args []string) err
 		cliout.Println(cliout.Heading("Plugin validation"))
 		fmt.Println("")
 		fmt.Println("Legend:")
-		fmt.Printf("  %s    valid and loadable\n", cliout.OK("OK"))
-		fmt.Printf("  %s  invalid or not loadable\n", cliout.Fail("FAIL"))
+		fmt.Printf("  %s    metadata and detected permissions valid (build/test separately)\n", cliout.OK("OK"))
+		fmt.Printf("  %s  metadata or detected permissions invalid\n", cliout.Fail("FAIL"))
 		fmt.Println("")
 		fmt.Printf("[%s]   %s\n", cliout.OK("OK"), name)
 		return nil
@@ -346,8 +350,8 @@ func runValidate(cfg *config.Config, project plugins.Project, args []string) err
 	cliout.Println(cliout.Heading("Plugin validation"))
 	fmt.Println("")
 	fmt.Println("Legend:")
-	fmt.Printf("  %s    valid and loadable\n", cliout.OK("OK"))
-	fmt.Printf("  %s  invalid or not loadable\n", cliout.Fail("FAIL"))
+	fmt.Printf("  %s    metadata and detected permissions valid (build/test separately)\n", cliout.OK("OK"))
+	fmt.Printf("  %s  metadata or detected permissions invalid\n", cliout.Fail("FAIL"))
 	fmt.Println("")
 
 	for _, name := range report.Passed {
@@ -355,6 +359,7 @@ func runValidate(cfg *config.Config, project plugins.Project, args []string) err
 	}
 	for _, issue := range report.Issues {
 		fmt.Printf("[%s] %s\n", cliout.Fail("FAIL"), issue.String())
+		printAuthorValidationHints(project, issue.Name, issue.Err)
 	}
 	if securityMode || strictSecurity {
 		fmt.Println("")

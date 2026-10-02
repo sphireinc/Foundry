@@ -1,0 +1,7 @@
+{{ define "content" }}
+<article class="prose">
+  <h1>{{ .Page.Title }}</h1>
+  {{ pluginSlot "page.before_content" }} {{ safeHTML .Page.HTMLBody }} {{template "wordcount" .}} {{
+  pluginSlot "page.after_content" }}
+</article>
+{{ end }}

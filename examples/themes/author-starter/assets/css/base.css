@@ -1,0 +1,45 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, sans-serif;
+  color: #111;
+  background: #fff;
+}
+
+a {
+  color: inherit;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.site-header,
+.site-footer {
+  border-bottom: 1px solid #ddd;
+}
+
+.site-footer {
+  border-top: 1px solid #ddd;
+  border-bottom: 0;
+  margin-top: 3rem;
+}
+
+.site-header .container,
+.site-footer .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prose {
+  line-height: 1.7;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}

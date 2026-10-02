@@ -270,6 +270,7 @@ func Scaffold(themesDir, name string) (string, error) {
 	}
 
 	files := map[string]string{
+		filepath.Join(root, "README.md"):                          themeStarterReadme(name),
 		filepath.Join(root, "theme.yaml"):                         scaffoldManifest(name),
 		filepath.Join(root, "assets", "css", "base.css"):          scaffoldCSS(),
 		filepath.Join(root, "layouts", "base.html"):               scaffoldBase(),
@@ -324,8 +325,7 @@ supported_layouts:
   - page
   - post
   - list
-screenshots:
-  - screenshots/home.png
+screenshots: []
 config_schema:
   - name: accent_color
     label: Accent Color
@@ -662,4 +662,9 @@ func validateRequiredLaunchSlots(root string, manifest *Manifest) error {
 	}
 
 	return nil
+}
+
+func themeStarterReadme(name string) string {
+	commandName := "'" + strings.ReplaceAll(name, "'", "'\\''") + "'"
+	return fmt.Sprintf("# %s\n\nA local-assets-only frontend theme starter. Initializing it does not switch the site's active theme.\n\nFrom the site root:\n\n```sh\nfoundry theme validate %s --security --csp\nfoundry theme switch %s\nfoundry serve\n```\n\nUse a copied site or config overlay for experiments. Edit layouts and assets while serving; run validation and a production `foundry build` before deployment. See docs/extension-authoring.md for the full workflow.\n\nThe manifest denies remote assets and frontend requests by default. Declare exact origins by asset category before adding external resources. The base layout exposes plugin slots; `.Data` holds plugin context and `.Page.Fields` holds document fields.\n", name, commandName, commandName)
 }

@@ -330,6 +330,10 @@ The shipped themes use these SDKs too:
 
 Plugin-defned admin pages and widgets can also target a stable shell contract now. A plugin can declare admin page and widget bundles in `plugin.yaml`, Foundry exposes those bundles under `<admin.path>/extensions/<plugin>/...`, and the default admin shell will automatically import them when their page or widget slot is active. Admin pages can also declare `nav_group` (`dashboard`, `content`, `manage`, or `admin`) so they land in the right sidebar group. The shell dispatches `foundry:admin-extension-page` and `foundry:admin-extension-widget` and exposes `window.FoundryAdmin` so plugin code can mount against a supported runtime surface instead of private admin internals. The built-in Extensions admin page itself uses a separate route, `<admin.path>/a-extensions`, so it does not collide with the plugin asset namespace.
 
+Author tooling includes `foundry plugin init <name> [--runtime rpc|compiled]` and
+`foundry theme init <name>`. See [Extension authoring](docs/extension-authoring.md)
+for build/test/validation workflows and [runnable examples](examples/README.md).
+
 ## Theme and plugin security
 
 Foundry now treats themes and plugins as different security surfaces.
