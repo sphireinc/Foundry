@@ -60,6 +60,9 @@ build:
   copy_images: false
   copy_uploads: false
 
+editorial:
+  require_approval: false
+
 # Opt-in responsive variants and strict image accessibility.
 media:
   responsive_images: false

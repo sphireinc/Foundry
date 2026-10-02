@@ -78,11 +78,12 @@ func canAccessDocument(identity *adminauth.Identity, doc *content.Document) bool
 	if identity == nil || doc == nil {
 		return false
 	}
-	if adminauthCapabilityAllowed(identity, "documents.read") {
+	if exactCapability(identity, "documents.read") {
 		return true
 	}
 	if adminauthCapabilityAllowed(identity, "documents.read.own") {
-		return strings.EqualFold(documentOwner(doc), identity.Username)
+		state, err := editorialState(&content.FrontMatter{Params: doc.Params})
+		return strings.EqualFold(documentOwner(doc), identity.Username) || (err == nil && strings.EqualFold(state.Assignee, identity.Username))
 	}
 	return false
 }
@@ -91,7 +92,7 @@ func canMutateDocument(identity *adminauth.Identity, owner string) bool {
 	if identity == nil {
 		return false
 	}
-	if adminauthCapabilityAllowed(identity, "documents.write") || adminauthCapabilityAllowed(identity, "documents.review") || adminauthCapabilityAllowed(identity, "documents.lifecycle") {
+	if exactCapability(identity, "documents.write") || exactCapability(identity, "documents.lifecycle") {
 		return true
 	}
 	if adminauthCapabilityAllowed(identity, "documents.write.own") || adminauthCapabilityAllowed(identity, "documents.lifecycle.own") {

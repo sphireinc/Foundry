@@ -46,6 +46,30 @@ export const bindDashboardEvents = (ctx) => {
     zenMode,
   } = ctx;
 
+  const withDocumentMutationLock = async (sourcePath, mutate) => {
+    const currentToken =
+      state.documentEditor.source_path === sourcePath ? state.documentEditor.lock_token : '';
+    const capabilities = state.session?.capabilities || [];
+    if (
+      currentToken ||
+      ['*', 'documents.write', 'documents.review', 'documents.lifecycle'].some((capability) =>
+        capabilities.includes(capability)
+      )
+    ) {
+      return mutate(currentToken || '');
+    }
+    const response = await admin.documents.lock({ source_path: sourcePath });
+    if (!response.lock?.owned_by_me || !response.lock.token) {
+      throw new Error(_t('Document is locked by another user.'));
+    }
+    const token = response.lock.token;
+    try {
+      return await mutate(token);
+    } finally {
+      await admin.documents.unlock({ source_path: sourcePath, lock_token: token });
+    }
+  };
+
   const pluginRecordByName = (name) =>
     (state.plugins || []).find((item) => item.name === name) || null;
   const isRiskAckError = (error) => {
@@ -511,6 +535,7 @@ export const bindDashboardEvents = (ctx) => {
       state.documentFieldValues = ctx.clone(detail.fields || {});
       state.documentMeta = {
         status: detail.status || 'draft',
+        editorial: detail.editorial || {},
         author: detail.author || '',
         last_editor: detail.last_editor || '',
         created_at: detail.created_at || '',
@@ -575,6 +600,41 @@ export const bindDashboardEvents = (ctx) => {
     });
   });
 
+  root.querySelectorAll('[data-editorial-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      try {
+        // Decisions apply to the saved revision. Reloading only follows a successful action.
+        if (!state.documentEditor.source_path || !state.documentMeta.editorial?.revision) {
+          throw new Error(_t('Save and reload the document before reviewing.'));
+        }
+        const raw = document.getElementById('document-raw')?.value || '';
+        const detail = await admin.documents.get(state.documentEditor.source_path, {
+          include_drafts: 1,
+        });
+        if (raw !== detail.raw_body)
+          throw new Error(_t('Save your edits before making an editorial decision.'));
+        await admin.documents.editorial({
+          source_path: state.documentEditor.source_path,
+          action: button.dataset.editorialAction,
+          owner: document.getElementById('editorial-owner')?.value || '',
+          assignee: document.getElementById('editorial-assignee')?.value || '',
+          reviewer: document.getElementById('editorial-reviewer')?.value || '',
+          note: document.getElementById('editorial-comment')?.value || '',
+          expected_revision: state.documentMeta.editorial.revision,
+          lock_token: state.documentEditor.lock_token,
+        });
+        await loadDocumentIntoEditor(
+          await admin.documents.get(state.documentEditor.source_path, { include_drafts: 1 })
+        );
+        setFlash(_t('Editorial decision saved.'));
+        render();
+      } catch (error) {
+        state.error = error.message || String(error);
+        render();
+      }
+    });
+  });
+
   root.querySelectorAll('[data-apply-workflow]').forEach((button) => {
     button.addEventListener('click', () => {
       const workflowField = document.getElementById('document-frontmatter-workflow');
@@ -617,18 +677,19 @@ export const bindDashboardEvents = (ctx) => {
     button.addEventListener('click', async () => {
       const [sourcePath, status] = button.dataset.setDocumentStatus.split('|');
       try {
-        await admin.documents.setStatus({
-          source_path: sourcePath,
-          status,
-          scheduled_publish_at:
-            document.getElementById('document-frontmatter-scheduled-publish-at')?.value || '',
-          scheduled_unpublish_at:
-            document.getElementById('document-frontmatter-scheduled-unpublish-at')?.value || '',
-          editorial_note:
-            document.getElementById('document-frontmatter-editorial-note')?.value || '',
-          lock_token:
-            state.documentEditor.source_path === sourcePath ? state.documentEditor.lock_token : '',
-        });
+        await withDocumentMutationLock(sourcePath, (lockToken) =>
+          admin.documents.setStatus({
+            source_path: sourcePath,
+            status,
+            scheduled_publish_at:
+              document.getElementById('document-frontmatter-scheduled-publish-at')?.value || '',
+            scheduled_unpublish_at:
+              document.getElementById('document-frontmatter-scheduled-unpublish-at')?.value || '',
+            editorial_note:
+              document.getElementById('document-frontmatter-editorial-note')?.value || '',
+            lock_token: lockToken,
+          })
+        );
         setFlash(_t('Document moved to {status}.', { status: _t(status) }));
         if (state.documentEditor.source_path === sourcePath) {
           const detail = await admin.documents.get(sourcePath, { include_drafts: 1 });
@@ -719,13 +780,12 @@ export const bindDashboardEvents = (ctx) => {
       try {
         if (!window.confirm(_t('Move {path} to trash?', { path: button.dataset.deleteDocument })))
           return;
-        await admin.documents.delete({
-          source_path: button.dataset.deleteDocument,
-          lock_token:
-            state.documentEditor.source_path === button.dataset.deleteDocument
-              ? state.documentEditor.lock_token
-              : '',
-        });
+        await withDocumentMutationLock(button.dataset.deleteDocument, (lockToken) =>
+          admin.documents.delete({
+            source_path: button.dataset.deleteDocument,
+            lock_token: lockToken,
+          })
+        );
         await releaseCurrentDocumentLock();
         resetDocumentEditor();
         setFlash('Document moved to trash.');
@@ -1111,44 +1171,56 @@ export const bindDashboardEvents = (ctx) => {
       return;
     try {
       for (const sourcePath of state.selectedDocuments) {
-        const detail = await admin.documents.get(sourcePath, { include_drafts: 1 });
-        let raw = detail.raw_body || '';
-        const parsed = parseDocumentEditor(raw, sourcePath);
-        if (state.documentBulk.author)
-          parsed.extraLines = parsed.extraLines.filter((line) => !/^author:\s*/i.test(line));
-        if (state.documentBulk.author)
-          parsed.extraLines.push(`author: ${JSON.stringify(state.documentBulk.author)}`);
-        if (state.documentBulk.lang) parsed.fields.lang = state.documentBulk.lang;
-        if (state.documentBulk.tags) {
-          parsed.fields.tags = Array.from(
-            new Set([...(parsed.fields.tags || []), ...parseTagInput(state.documentBulk.tags)])
+        await withDocumentMutationLock(sourcePath, async (lockToken) => {
+          let detail = await admin.documents.get(sourcePath, { include_drafts: 1 });
+          if (state.documentBulk.author && state.documentBulk.author !== detail.author) {
+            await admin.documents.editorial({
+              source_path: sourcePath,
+              action: 'assign',
+              owner: state.documentBulk.author,
+              assignee: detail.editorial?.assignee || '',
+              reviewer: detail.editorial?.reviewer || '',
+              expected_revision: detail.editorial.revision,
+              lock_token: lockToken,
+            });
+            detail = await admin.documents.get(sourcePath, { include_drafts: 1 });
+          }
+          let raw = detail.raw_body || '';
+          const parsed = parseDocumentEditor(raw, sourcePath);
+          if (state.documentBulk.lang) parsed.fields.lang = state.documentBulk.lang;
+          if (state.documentBulk.tags) {
+            parsed.fields.tags = Array.from(
+              new Set([...(parsed.fields.tags || []), ...parseTagInput(state.documentBulk.tags)])
+            );
+          }
+          if (state.documentBulk.categories) {
+            parsed.fields.categories = Array.from(
+              new Set([
+                ...(parsed.fields.categories || []),
+                ...parseTagInput(state.documentBulk.categories),
+              ])
+            );
+          }
+          raw = buildDocumentRaw(
+            parsed.fields,
+            parsed.body,
+            parsed.extraLines,
+            parsed.fields.lang || 'en'
           );
-        }
-        if (state.documentBulk.categories) {
-          parsed.fields.categories = Array.from(
-            new Set([
-              ...(parsed.fields.categories || []),
-              ...parseTagInput(state.documentBulk.categories),
-            ])
-          );
-        }
-        raw = buildDocumentRaw(
-          parsed.fields,
-          parsed.body,
-          parsed.extraLines,
-          parsed.fields.lang || 'en'
-        );
-        await admin.documents.save({
-          source_path: sourcePath,
-          raw,
-          version_comment: 'Bulk editorial update',
-        });
-        if (state.documentBulk.status) {
-          await admin.documents.setStatus({
+          await admin.documents.save({
             source_path: sourcePath,
-            status: state.documentBulk.status,
+            raw,
+            version_comment: 'Bulk editorial update',
+            lock_token: lockToken,
           });
-        }
+          if (state.documentBulk.status) {
+            await admin.documents.setStatus({
+              source_path: sourcePath,
+              status: state.documentBulk.status,
+              lock_token: lockToken,
+            });
+          }
+        });
       }
       state.selectedDocuments = [];
       setFlash('Bulk document updates applied.');

@@ -113,6 +113,7 @@ async function openSeededDocumentInEditor(page, query, sourcePath) {
 
   const documentRow = page.locator('.table-row', { hasText: sourcePath });
   await expect(documentRow).toHaveCount(1);
+  await expect(page.locator('[data-edit-document]')).toHaveCount(1);
   await documentRow.locator('[data-edit-document]').click();
 
   await expect(page).toHaveURL(/\/__admin\/editor$/);
@@ -643,6 +644,161 @@ test.describe('default admin theme', () => {
       if (upload.reference) {
         await deleteMediaViaAdminAPI(page, upload.reference);
       }
+    }
+  });
+
+  test('editorial workflow records an independent review before publication', async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page);
+    const stamp = Date.now();
+    const slug = `e2e-editorial-${stamp}`;
+    const reviewer = `e2e-reviewer-${stamp}`;
+    const password = 'FoundryReviewer123!';
+    let sourcePath = '';
+    try {
+      await createUserViaAdminAPI(page, {
+        username: reviewer,
+        name: reviewer,
+        email: `${reviewer}@example.com`,
+        role: 'reviewer',
+        password,
+      });
+      const created = await createDocumentViaAdminAPI(page, 'page', slug, 'en', 'page');
+      sourcePath = created.source_path;
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await page.locator('#editorial-reviewer').fill(reviewer);
+      await page.locator('[data-editorial-action="assign"]').click();
+      await expect(page.locator('.toast-stack')).toContainText('Editorial decision saved.');
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).editorial.reviewer)
+        .toBe(reviewer);
+      await page.locator('[data-apply-workflow="in_review"]').click();
+      await page.locator('#document-save-form button[type="submit"]').click();
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).status)
+        .toBe('in_review');
+      await logout(page);
+      await login(page, reviewer, password);
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await page.locator('#editorial-comment').fill('Fact check complete');
+      await page.locator('[data-editorial-action="approve"]').click();
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).editorial.approved_by)
+        .toBe(reviewer);
+      await expect(
+        page.locator('.mini-list-row', { hasText: 'Fact check complete' })
+      ).toBeVisible();
+      await logout(page);
+      await login(page);
+      await openSeededDocumentInEditor(page, slug, sourcePath);
+      await page.locator('[data-apply-workflow="published"]').click();
+      await page.locator('#document-save-form button[type="submit"]').click();
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).status)
+        .toBe('published');
+    } finally {
+      await logout(page);
+      await login(page);
+      if (sourcePath) await deleteDocumentViaAdminAPI(page, sourcePath);
+      await deleteUserViaAdminAPI(page, reviewer);
+    }
+  });
+
+  test('editorial bulk ownership preserves assignments and author list actions use locks', async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await login(page);
+    const stamp = Date.now();
+    const slug = `e2e-team-list-${stamp}`;
+    const author = `e2e-author-${stamp}`;
+    const reviewer = `e2e-reviewer-${stamp}`;
+    const password = 'FoundryAuthor123!';
+    let sourcePath = '';
+    page.on('dialog', (dialog) => dialog.accept());
+    try {
+      for (const [username, role] of [
+        [author, 'author'],
+        [reviewer, 'reviewer'],
+      ]) {
+        await createUserViaAdminAPI(page, {
+          username,
+          name: username,
+          email: `${username}@example.com`,
+          role,
+          password,
+        });
+      }
+      sourcePath = (await createDocumentViaAdminAPI(page, 'page', slug, 'en', 'page')).source_path;
+      const detail = await getDocumentViaAdminAPI(page, sourcePath);
+      expectAdminOK(
+        await adminPost(page, '/api/documents/editorial', {
+          source_path: sourcePath,
+          action: 'assign',
+          assignee: author,
+          reviewer,
+          expected_revision: detail.editorial.revision,
+        }),
+        'assign test document'
+      );
+      const findRow = async (search = false) => {
+        await page.goto('/__admin/documents');
+        await expect(page.getByRole('heading', { name: /^Find Documents$/i })).toBeVisible();
+        if (search) {
+          await page.getByLabel(/Search Documents/i).fill(slug);
+          await page.getByRole('button', { name: /^Search$/i }).click({ timeout: 5000 });
+          await expect(page.locator('[data-edit-document]')).toHaveCount(1);
+        }
+        const row = page.locator('.table-row', { hasText: sourcePath });
+        await expect(row).toHaveCount(1);
+        return row;
+      };
+      let row = await findRow(true);
+      await row.locator('[data-select-document]').check();
+      await page.locator('#document-bulk-author').fill(author);
+      await page.locator('#document-bulk-tags').fill('team-test');
+      await page.locator('#document-bulk-apply').click({ timeout: 5000 });
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).author)
+        .toBe(author);
+      const assigned = await getDocumentViaAdminAPI(page, sourcePath);
+      expect(assigned.editorial.assignee).toBe(author);
+      expect(assigned.editorial.reviewer).toBe(reviewer);
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).taxonomies?.tags || [])
+        .toContain('team-test');
+      await logout(page);
+      await login(page, author, password);
+      row = await findRow();
+      await row
+        .locator('[data-set-document-status]')
+        .filter({ hasText: 'Request Review' })
+        .click({ timeout: 5000 });
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).status)
+        .toBe('in_review');
+      row = await findRow();
+      await row.locator('[data-select-document]').check();
+      await page.locator('#document-bulk-tags').fill('author-test');
+      await page.locator('#document-bulk-status').selectOption('draft');
+      await page.locator('#document-bulk-apply').click({ timeout: 5000 });
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).taxonomies?.tags || [])
+        .toContain('author-test');
+      await expect
+        .poll(async () => (await getDocumentViaAdminAPI(page, sourcePath)).status)
+        .toBe('draft');
+      row = await findRow();
+      await row.locator('[data-delete-document]').click({ timeout: 5000 });
+      await expect(page).toHaveURL(/\/__admin\/trash$/);
+      sourcePath = '';
+    } finally {
+      await logout(page);
+      await login(page);
+      if (sourcePath) await deleteDocumentViaAdminAPI(page, sourcePath);
+      await deleteUserViaAdminAPI(page, author);
+      await deleteUserViaAdminAPI(page, reviewer);
     }
   });
 

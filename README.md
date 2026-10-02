@@ -670,6 +670,10 @@ On Linux, user services may need lingering enabled to survive logout and reboot:
 loginctl enable-linger "$USER"
 ```
 
+Team assignments, independent revision-bound approvals, review history, and
+structured revision comparisons are available in the admin workflow. See
+[Editorial workflows](docs/editorial-workflows.md) for the opt-in approval policy.
+
 Responsive image variants, deterministic JPEG/PNG optimization, alt-text checks,
 and a non-destructive orphan audit are available through the media workflow.
 Image transforms and strict alt enforcement are opt-in. See

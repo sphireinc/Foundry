@@ -172,7 +172,7 @@ func (s *Service) ensureDocumentLock(ctx context.Context, sourcePath, lockToken 
 	if !ok {
 		return nil
 	}
-	if adminauthCapabilityAllowed(identity, "documents.write") || adminauthCapabilityAllowed(identity, "documents.review") || adminauthCapabilityAllowed(identity, "documents.lifecycle") {
+	if exactCapability(identity, "documents.write") || exactCapability(identity, "documents.review") || exactCapability(identity, "documents.lifecycle") {
 		return nil
 	}
 

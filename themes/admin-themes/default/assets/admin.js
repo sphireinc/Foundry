@@ -414,6 +414,7 @@ import {
       : [];
     state.documentMeta = {
       status: detail.status || 'draft',
+      editorial: detail.editorial || {},
       author: detail.author || '',
       last_editor: detail.last_editor || '',
       created_at: detail.created_at || '',
@@ -911,9 +912,33 @@ import {
                 <div class="toolbar">
                   <button type="button" class="ghost small" data-apply-workflow="draft">${_t('Save as Draft')}</button>
                   <button type="button" class="ghost small" data-apply-workflow="in_review">${_t('Request Review')}</button>
-                  <button type="button" class="ghost small" data-apply-workflow="published">${_t('Approve & Publish')}</button>
+                  <button type="button" class="ghost small" data-apply-workflow="published">${_t('Publish approved revision')}</button>
                   <button type="button" class="ghost small" data-apply-workflow="archived">${_t('Archive')}</button>
                 </div>
+              </div>
+              <div class="frontmatter-card">
+                <strong>${_t('Team review')}</strong>
+                <p class="muted">${state.documentMeta.editorial?.require_approval ? _t('Publication requires an independent approval of the saved revision.') : _t('Review decisions and assignments are recorded with the document.')}</p>
+                <div class="frontmatter-grid">
+                  <label>${_t('Owner')}<input id="editorial-owner" value="${escapeHTML(state.documentMeta.author || '')}"></label>
+                  <label>${_t('Assignee')}<input id="editorial-assignee" value="${escapeHTML(state.documentMeta.editorial?.assignee || '')}"></label>
+                  <label>${_t('Reviewer')}<input id="editorial-reviewer" value="${escapeHTML(state.documentMeta.editorial?.reviewer || '')}"></label>
+                  <label class="frontmatter-span-3">${_t('Review comment')}<textarea id="editorial-comment" rows="2" maxlength="4000"></textarea></label>
+                </div>
+                <div class="toolbar">
+                  <button type="button" class="ghost small" data-editorial-action="assign">${_t('Save assignments')}</button>
+                  <button type="button" class="ghost small" data-editorial-action="approve">${_t('Approve saved revision')}</button>
+                  <button type="button" class="ghost small" data-editorial-action="request_changes">${_t('Request changes')}</button>
+                </div>
+                <div class="note">${state.documentMeta.editorial?.approved_by ? `${_t('Approved by')} ${escapeHTML(state.documentMeta.editorial.approved_by)}` : _t('No current approval')}</div>
+                <div class="mini-list">${(state.documentMeta.editorial?.events || [])
+                  .slice(-20)
+                  .reverse()
+                  .map(
+                    (event) =>
+                      `<div class="mini-list-row"><span>${escapeHTML(event.action)} — ${escapeHTML(event.actor)} · ${escapeHTML(formatDateTime(event.at))}${event.note ? ` · ${escapeHTML(event.note)}` : ''}</span></div>`
+                  )
+                  .join('')}</div>
               </div>
               <div class="frontmatter-card">
                 <div class="frontmatter-card-header">
@@ -1225,6 +1250,9 @@ import {
             <button type="button" class="ghost small ${state.documentDiffMode === 'unified' ? 'active-toggle' : ''}" data-diff-mode="unified">${_t('Unified Diff')}</button>
           </div>
           <div class="status-line mono">${escapeHTML(state.documentDiff.left_path)} -> ${escapeHTML(state.documentDiff.right_path)}</div>
+          <h3>${_t('Frontmatter changes')}</h3>
+          <div class="mini-list">${(state.documentDiff.frontmatter_changes || []).map((change) => `<div class="mini-list-row"><strong>${escapeHTML(change.field)}</strong><code>${escapeHTML(JSON.stringify(change.before))} → ${escapeHTML(JSON.stringify(change.after))}</code></div>`).join('') || _t('No frontmatter changes')}</div>
+          <details><summary>${_t('Body changes')}</summary><pre class="diff-viewer">${escapeHTML(state.documentDiff.body_diff || '')}</pre></details>
           ${
             state.documentDiffMode === 'split'
               ? renderSplitDiffPane(state.documentDiff.left_raw, state.documentDiff.right_raw)
