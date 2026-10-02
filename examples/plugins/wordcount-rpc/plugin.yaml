@@ -1,0 +1,28 @@
+name: wordcount-rpc
+title: wordcount-rpc
+version: 0.1.0
+description: Adds a word count to the page render context.
+author: Unknown
+license: MIT
+foundry_api: v1
+min_foundry_version: 1.4.6
+compatibility_version: v1
+permissions:
+  content:
+    documents:
+      read: true
+  render:
+    context:
+      read: true
+      write: true
+  capabilities:
+    requires_admin_approval: true
+runtime:
+  mode: rpc
+  protocol_version: v1alpha1
+  command: ["./bin/wordcount-rpc"]
+  sandbox:
+    profile: default
+    allow_network: false
+    allow_filesystem_write: false
+    allow_process_exec: false

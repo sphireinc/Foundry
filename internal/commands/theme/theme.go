@@ -34,6 +34,7 @@ func (command) Details() []string {
 		"foundry theme security <name>",
 		"foundry theme install <git-url|owner/repo> [name] [--admin]",
 		"foundry theme migrate field-contracts",
+		"foundry theme init <name>",
 		"foundry theme scaffold <name>",
 		"foundry theme switch <name>",
 		"foundry theme switch --admin <name>",
@@ -46,7 +47,7 @@ func (command) RequiresConfig() bool {
 
 func (command) Run(cfg *config.Config, args []string) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: foundry theme [list|current|validate|security|install|migrate|scaffold|switch]")
+		return fmt.Errorf("usage: foundry theme [list|current|validate|security|install|migrate|init|scaffold|switch]")
 	}
 
 	switch args[2] {
@@ -62,7 +63,7 @@ func (command) Run(cfg *config.Config, args []string) error {
 		return runInstall(cfg, args)
 	case "migrate":
 		return runMigrateFieldContracts(cfg, args)
-	case "scaffold":
+	case "init", "scaffold":
 		return runScaffold(cfg, args)
 	case "switch":
 		return runSwitch(cfg, args)
@@ -250,8 +251,8 @@ func runInstall(cfg *config.Config, args []string) error {
 }
 
 func runScaffold(cfg *config.Config, args []string) error {
-	if len(args) < 4 {
-		return fmt.Errorf("usage: foundry theme scaffold <name>")
+	if len(args) != 4 {
+		return fmt.Errorf("usage: foundry theme %s <name>", args[2])
 	}
 
 	name := strings.TrimSpace(args[3])
@@ -261,6 +262,7 @@ func runScaffold(cfg *config.Config, args []string) error {
 	}
 
 	cliout.Successf("Scaffolded theme %q at %s", name, path)
+	fmt.Printf("Next: foundry theme validate %q --security --csp\nRead %s/README.md before switching the active theme.\n", name, path)
 	return nil
 }
 

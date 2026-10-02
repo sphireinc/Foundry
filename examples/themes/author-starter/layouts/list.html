@@ -1,0 +1,12 @@
+{{ define "content" }}
+<h1>{{ .Title }}</h1>
+
+{{ if .Documents }}
+<ul>
+  {{ range .Documents }}
+  <li><a href="{{ .URL }}">{{ .Title }}</a></li>
+  {{ end }}
+</ul>
+{{ else }}
+<p>No entries found.</p>
+{{ end }} {{ end }}
