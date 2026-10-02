@@ -244,6 +244,12 @@ type OperationsLogResponse struct {
 }
 
 type UpdateStatusResponse struct {
+	BuiltAt               string `json:"built_at,omitempty"`
+	BuildTarget           string `json:"build_target,omitempty"`
+	BuildKind             string `json:"build_kind"`
+	BuildDescription      string `json:"build_description"`
+	ReleaseComparable     bool   `json:"release_comparable"`
+	ContainerImage        string `json:"container_image,omitempty"`
 	Repo                  string `json:"repo"`
 	CurrentVersion        string `json:"current_version"`
 	CurrentDisplayVersion string `json:"current_display_version,omitempty"`

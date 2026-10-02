@@ -40,6 +40,7 @@ func main() {
 
 	ldflags := strings.Join([]string{
 		"-X github.com/sphireinc/foundry/internal/commands/version.Version=" + version,
+		"-X github.com/sphireinc/foundry/internal/commands/version.BuildTag=" + exactReleaseTag(),
 		"-X github.com/sphireinc/foundry/internal/commands/version.Commit=" + commit,
 		"-X github.com/sphireinc/foundry/internal/commands/version.Date=" + date,
 	}, " ")
@@ -230,4 +231,12 @@ func runBuild(goos, goarch, name string, args ...string) {
 func fail(step string, err error) {
 	_, _ = fmt.Fprintf(os.Stderr, "build-release: %s: %v\n", step, err)
 	os.Exit(1)
+}
+
+func exactReleaseTag() string {
+	tag, err := outputQuiet("git", "describe", "--tags", "--exact-match", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return tag
 }

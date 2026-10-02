@@ -179,6 +179,7 @@ jobs:
               --platform linux/amd64,linux/arm64 \
               --target "$target" \
               --build-arg FOUNDRY_BUILD_VERSION="${IMAGE_TAG}" \
+              --build-arg FOUNDRY_BUILD_TAG="$(git describe --tags --exact-match HEAD 2>/dev/null || true)" \
               --build-arg FOUNDRY_BUILD_COMMIT="${GITHUB_SHA}" \
               --build-arg FOUNDRY_BUILD_DATE="${BUILD_DATE}" \
               -t "${IMAGE_URI}" \

@@ -51,3 +51,48 @@ func TestCurrentReportsManagedRuntimeFromEnvironment(t *testing.T) {
 		t.Fatalf("expected version string to show managed runtime, got %q", meta.String())
 	}
 }
+
+func TestBuildClassification(t *testing.T) {
+	oldTag, oldImage := BuildTag, ContainerImage
+	t.Cleanup(func() { BuildTag, ContainerImage = oldTag, oldImage })
+	for _, tc := range []struct {
+		name, tag, module, mode string
+		dirty                   bool
+		kind                    string
+		comparable              bool
+	}{
+		{"fallback", "", "", "binary", false, "unknown", false},
+		{"snapshot", "", "", "source", false, "source_snapshot", false},
+		{"release", "v1.4.6", "", "binary", false, "tagged_release", true},
+		{"module release", "", "v1.4.6", "binary", false, "tagged_release", true},
+		{"pseudo version", "", "v1.4.7-0.20260101000000-abcdef123456", "binary", false, "source_snapshot", false},
+		{"modified", "v1.4.6", "", "standalone", true, "modified_build", false},
+		{"container tag", "v1.4.6", "", "docker", false, "tagged_release", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			BuildTag, ContainerImage = tc.tag, "runtime-v1.4.6"
+			meta := Metadata{Version: "v1.4.6", Commit: "unknown", ModuleVersion: tc.module, InstallMode: tc.mode, Dirty: tc.dirty}
+			if tc.name == "pseudo version" {
+				meta.Commit = "abcdef123456"
+			}
+			classifyBuild(&meta)
+			if meta.BuildKind != tc.kind || meta.ReleaseComparable != tc.comparable {
+				t.Fatalf("got %+v", meta)
+			}
+		})
+	}
+}
+
+func TestContainerIgnoresSiteCheckout(t *testing.T) {
+	t.Setenv("FOUNDRY_CONTAINER", "true")
+	meta := Current("../../..")
+	if meta.InstallMode != "docker" || meta.NearestTag != "" {
+		t.Fatalf("site checkout leaked into container identity: %+v", meta)
+	}
+}
+
+func TestMissingCheckoutIsNotDirty(t *testing.T) {
+	if gitDirty(t.TempDir()) {
+		t.Fatal("missing repository reported as local modifications")
+	}
+}

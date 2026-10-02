@@ -1401,3 +1401,6 @@ These permissions do not apply to Foundry itself, to modifications of
 Foundry, to works based on non-public or internal interfaces, or to
 works that copy code from Foundry except as otherwise permitted.
 ```
+
+See [Build identity and installation-specific updates](docs/installation-updates.md)
+for release, snapshot, modified-build, and container version semantics.

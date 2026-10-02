@@ -382,7 +382,16 @@ export const createPlatformViews = ({
             <div class="plugin-contract-meta">${(theme.security_summary || []).map((item) => `<span>${escapeHTML(item)}</span>`).join('')}</div>
             ${theme.security_report?.detected_assets?.length ? `<section class="plugin-contract-section"><strong>${_t('Detected remote assets')}</strong><div class="plugin-contract-rows">${theme.security_report.detected_assets.map((item) => `<div class="plugin-contract-row"><span><strong>${escapeHTML(item.kind || 'asset')}</strong><div class="muted mono">${escapeHTML(item.path || '')}${item.line ? `:${escapeHTML(String(item.line))}` : ''}</div>${item.field ? `<div class="muted mono">${escapeHTML(item.field)}</div>` : ''}</span><span>${escapeHTML(item.url || '')}${item.remediation ? `<div class="muted">${escapeHTML(item.remediation)}</div>` : ''}</span><span><span class="contract-badge ${item.status === 'declared' ? 'ok' : 'missing'}">${escapeHTML(item.status || 'unknown')}</span></span></div>`).join('')}</div></section>` : ''}
             ${theme.security_report?.detected_requests?.length ? `<section class="plugin-contract-section"><strong>${_t('Detected frontend requests')}</strong><div class="plugin-contract-rows">${theme.security_report.detected_requests.map((item) => `<div class="plugin-contract-row"><span><strong>${escapeHTML(item.kind || 'request')}</strong><div class="muted mono">${escapeHTML(item.path || '')}${item.line ? `:${escapeHTML(String(item.line))}` : ''}</div>${item.field ? `<div class="muted mono">${escapeHTML(item.field)}</div>` : ''}</span><span>${escapeHTML(item.url || '')}${item.remediation ? `<div class="muted">${escapeHTML(item.remediation)}</div>` : ''}</span><span><span class="contract-badge ${item.status === 'declared' ? 'ok' : 'missing'}">${escapeHTML(item.status || 'unknown')}</span></span></div>`).join('')}</div></section>` : ''}
-            ${theme.security_report?.mismatches?.length ? `<section class="plugin-contract-section"><strong>${_t('Security mismatches')}</strong><div class="contract-diagnostic-list">${theme.security_report.mismatches.map((diag) => { const location = `${diag.path || 'theme'}${diag.line ? `:${diag.line}` : ''}`; return `<div class="contract-diagnostic ${escapeHTML(diag.severity || 'error')}"><span class="contract-diagnostic-severity">${_t(diag.severity || 'error')}</span><span>${escapeHTML(diag.message || '')}${diag.code ? `<div class="muted mono">${escapeHTML(diag.code)}</div>` : ''}${diag.category ? `<div class="muted mono">${escapeHTML(diag.category)}</div>` : ''}${diag.field ? `<div class="muted mono">${escapeHTML(diag.field)}</div>` : ''}<div class="muted mono">${escapeHTML(location)}</div>${diag.hint ? `<div class="muted">${escapeHTML(diag.hint)}</div>` : ''}</span></div>`; }).join('')}</div></section>` : ''}
+            ${
+              theme.security_report?.mismatches?.length
+                ? `<section class="plugin-contract-section"><strong>${_t('Security mismatches')}</strong><div class="contract-diagnostic-list">${theme.security_report.mismatches
+                    .map((diag) => {
+                      const location = `${diag.path || 'theme'}${diag.line ? `:${diag.line}` : ''}`;
+                      return `<div class="contract-diagnostic ${escapeHTML(diag.severity || 'error')}"><span class="contract-diagnostic-severity">${_t(diag.severity || 'error')}</span><span>${escapeHTML(diag.message || '')}${diag.code ? `<div class="muted mono">${escapeHTML(diag.code)}</div>` : ''}${diag.category ? `<div class="muted mono">${escapeHTML(diag.category)}</div>` : ''}${diag.field ? `<div class="muted mono">${escapeHTML(diag.field)}</div>` : ''}<div class="muted mono">${escapeHTML(location)}</div>${diag.hint ? `<div class="muted">${escapeHTML(diag.hint)}</div>` : ''}</span></div>`;
+                    })
+                    .join('')}</div></section>`
+                : ''
+            }
             ${theme.security_report?.csp_summary?.length ? `<section class="plugin-contract-section"><strong>${_t('Generated CSP summary')}</strong><div class="plugin-contract-meta">${theme.security_report.csp_summary.map((item) => `<span>${escapeHTML(item)}</span>`).join('')}</div></section>` : ''}
             ${theme.security_report?.generated_csp ? `<pre class="diff-viewer">${escapeHTML(theme.security_report.generated_csp)}</pre>` : ''}
             <pre class="diff-viewer">${escapeHTML(JSON.stringify(theme.security || {}, null, 2))}</pre>
@@ -407,16 +416,13 @@ export const createPlatformViews = ({
         : updateInfo.has_update
           ? updateInfo.instructions ||
             _t('A new release is available, but this install mode cannot self-update in place.')
-          : _t('You are already on the latest release.');
+          : updateInfo.release_comparable
+            ? _t('No newer tagged release was found.')
+            : _t(
+                'This build cannot be compared reliably with tagged releases. Follow its installation-specific update instructions.'
+              );
     const currentReleaseDetail =
-      updateInfo?.install_mode === 'source'
-        ? `${_t('Source checkout at commit {commit}, based on {tag}.', {
-            commit: escapeHTML(updateInfo?.current_commit || _t('unknown')),
-            tag: escapeHTML(
-              updateInfo?.nearest_tag || updateInfo?.current_version || _t('unknown')
-            ),
-          })}${updateInfo?.dirty ? ` ${_t('The checkout has local changes.')}` : ''}`
-        : _t('This is the Foundry version currently running on this site.');
+      updateInfo?.build_description || _t('Build provenance unavailable.');
     const zipRows = (state.backups || [])
       .map(
         (item) => `<div class="table-row table-row-actions">
@@ -462,7 +468,7 @@ export const createPlatformViews = ({
       'Operations',
       `<div class="panel-pad stack">
         <div class="cards">
-          <article class="card"><span class="card-label">${_t('Current Release')}</span><strong>${escapeHTML(updateInfo?.current_display_version || updateInfo?.current_version || _t('unknown'))}</strong><span class="card-copy">${escapeHTML(currentReleaseDetail)}</span></article>
+          <article class="card"><span class="card-label">${_t('Running Build')}</span><strong>${escapeHTML(updateInfo?.current_display_version || updateInfo?.current_version || _t('unknown'))}</strong><span class="card-copy">${escapeHTML(currentReleaseDetail)}</span></article>
           <article class="card"><span class="card-label">${_t('Latest Release')}</span><strong>${escapeHTML(updateInfo?.latest_version || _t('unknown'))}</strong><span class="card-copy">${_t('Latest GitHub release.')}</span></article>
           <article class="card"><span class="card-label">${_t('Install Mode')}</span><strong>${escapeHTML(updateInfo?.install_mode || _t('unknown'))}</strong><span class="card-copy">${_t('Update support depends on deployment mode.')}</span></article>
           <article class="card"><span class="card-label">${_t('Service')}</span><strong>${_t(operations.service_running ? 'running' : operations.standalone_active ? 'standalone' : 'inactive')}</strong><span class="card-copy">${escapeHTML(operations.service_message || _t('No managed service detected.'))}</span></article>
@@ -478,6 +484,12 @@ export const createPlatformViews = ({
         </div>
         <div class="subtle-meta">
           ${updateInfo?.install_mode === 'source' ? `<div><strong>${_t('Nearest tag')}:</strong> ${escapeHTML(updateInfo.nearest_tag || '-')}</div><div><strong>${_t('Current commit')}:</strong> ${escapeHTML(updateInfo.current_commit || '-')}</div><div><strong>${_t('Local changes')}:</strong> ${_t(updateInfo.dirty ? 'dirty' : 'clean')}</div>` : ''}
+          <div><strong>${_t('Build commit')}:</strong> ${escapeHTML(updateInfo?.current_commit || '-')}</div>
+          <div><strong>${_t('Built at')}:</strong> ${escapeHTML(updateInfo?.built_at || '-')}</div>
+          <div><strong>${_t('Build target')}:</strong> ${escapeHTML(updateInfo?.build_target || '-')}</div>
+          <div><strong>${_t('Build kind')}:</strong> ${escapeHTML(updateInfo?.build_kind || _t('unknown'))}</div>
+          ${updateInfo?.container_image ? `<div><strong>${_t('Container image')}:</strong> ${escapeHTML(updateInfo.container_image)}</div>` : ''}
+          <div><strong>${_t('Update method')}:</strong> ${escapeHTML(updateInfo?.instructions || '-')}</div>
           <div><strong>${_t('Service')}:</strong> ${escapeHTML(operations.service_name || _t('not installed'))}</div>
           <div><strong>${_t('Service file')}:</strong> ${escapeHTML(operations.service_file || '-')}</div>
           <div><strong>${_t('Standalone PID')}:</strong> ${escapeHTML(String(operations.standalone_pid || 0))}</div>

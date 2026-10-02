@@ -116,6 +116,12 @@ func (s *Service) CheckForUpdates(ctx context.Context) (*types.UpdateStatusRespo
 	logx.Info("admin update check completed", "current_version", info.CurrentVersion, "latest_version", info.LatestVersion, "has_update", info.HasUpdate, "install_mode", info.InstallMode, "apply_supported", info.ApplySupported)
 	return &types.UpdateStatusResponse{
 		Repo:                  info.Repo,
+		BuiltAt:               info.BuiltAt,
+		BuildTarget:           info.BuildTarget,
+		BuildKind:             info.BuildKind,
+		BuildDescription:      info.BuildDescription,
+		ReleaseComparable:     info.ReleaseComparable,
+		ContainerImage:        info.ContainerImage,
 		CurrentVersion:        info.CurrentVersion,
 		CurrentDisplayVersion: info.CurrentDisplayVersion,
 		LatestVersion:         info.LatestVersion,
@@ -146,6 +152,12 @@ func (s *Service) ApplyUpdate(ctx context.Context) (*types.UpdateStatusResponse,
 	logx.Info("admin update apply scheduled", "current_version", info.CurrentVersion, "latest_version", info.LatestVersion, "install_mode", info.InstallMode, "asset_name", info.AssetName)
 	return &types.UpdateStatusResponse{
 		Repo:                  info.Repo,
+		BuiltAt:               info.BuiltAt,
+		BuildTarget:           info.BuildTarget,
+		BuildKind:             info.BuildKind,
+		BuildDescription:      info.BuildDescription,
+		ReleaseComparable:     info.ReleaseComparable,
+		ContainerImage:        info.ContainerImage,
 		CurrentVersion:        info.CurrentVersion,
 		CurrentDisplayVersion: info.CurrentDisplayVersion,
 		LatestVersion:         info.LatestVersion,

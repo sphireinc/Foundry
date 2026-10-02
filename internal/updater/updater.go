@@ -41,6 +41,12 @@ const (
 )
 
 type ReleaseInfo struct {
+	BuiltAt               string      `json:"built_at,omitempty"`
+	BuildTarget           string      `json:"build_target,omitempty"`
+	BuildKind             string      `json:"build_kind"`
+	BuildDescription      string      `json:"build_description"`
+	ReleaseComparable     bool        `json:"release_comparable"`
+	ContainerImage        string      `json:"container_image,omitempty"`
 	Repo                  string      `json:"repo"`
 	CurrentVersion        string      `json:"current_version"`
 	CurrentDisplayVersion string      `json:"current_display_version,omitempty"`
@@ -91,6 +97,12 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 	logx.Info("updater release check started", "project_dir", projectDir, "repo", repo, "install_mode", mode, "current_version", current)
 	info := &ReleaseInfo{
 		Repo:                  repo,
+		BuiltAt:               currentMeta.BuiltAt,
+		BuildTarget:           currentMeta.GOOS + "/" + currentMeta.GOARCH,
+		BuildKind:             currentMeta.BuildKind,
+		BuildDescription:      currentMeta.BuildDescription,
+		ReleaseComparable:     currentMeta.ReleaseComparable,
+		ContainerImage:        currentMeta.ContainerImage,
 		CurrentVersion:        currentDisplay,
 		CurrentDisplayVersion: formatVersion(firstNonEmpty(currentMeta.DisplayVersion, currentDisplay)),
 		InstallMode:           mode,
@@ -125,7 +137,7 @@ func Check(ctx context.Context, projectDir string) (*ReleaseInfo, error) {
 	if ts, err := time.Parse(time.RFC3339, rel.PublishedAt); err == nil {
 		info.PublishedAt = ts
 	}
-	info.HasUpdate = compareVersions(latest, current) > 0
+	info.HasUpdate = currentMeta.ReleaseComparable && compareVersions(latest, current) > 0
 	asset, checksum := selectAssets(rel.Assets)
 	if asset != nil {
 		info.AssetName = asset.Name
@@ -229,16 +241,19 @@ func RunHelper(projectDir, targetExe, sourceBinary string, pid int) error {
 func instructionsForMode(mode InstallMode, meta versioncmd.Metadata) string {
 	switch mode {
 	case ModeDocker:
-		return "Docker install detected. Pull the new image and recreate the container instead of in-place self-update."
+		return "Container install detected. Select the appropriate foundry-runtime or foundry-static-runtime image tag/digest, pull it and recreate the container through your deployment tooling. For locally built images, rebuild the image from the desired source revision. Do not replace the binary inside the container."
 	case ModeSource:
 		if meta.Dirty {
 			return "Source install detected with local changes. Commit or stash your work before pulling, rebuilding Foundry, and restarting the process."
 		}
 		return "Source install detected. Pull the repo, rebuild Foundry, and restart the process."
 	case ModeBinary:
-		return "Binary install detected. Use a standalone managed runtime for in-place self-update support."
+		return "Binary install detected. Replace the executable using the same installation method: download and verify the platform release archive, reinstall the Go module version, or rebuild your custom source. Restart the service afterwards; in-place self-update is unavailable."
 	case ModeStandalone:
-		return "Standalone managed runtime detected. In-place self-update is available."
+		if !meta.ReleaseComparable {
+			return "Custom or unverified standalone build. Rebuild or reinstall using its original installation method, then restart. Automatic release replacement is disabled."
+		}
+		return "Standalone managed runtime detected. A newer tagged release with a matching platform asset can be applied in place."
 	default:
 		return "Install mode could not be determined."
 	}

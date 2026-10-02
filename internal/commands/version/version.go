@@ -10,9 +10,11 @@ import (
 )
 
 var (
-	Version = embeddedVersion()
-	Commit  = "none"
-	Date    = "unknown"
+	BuildTag       = ""
+	ContainerImage = ""
+	Version        = embeddedVersion()
+	Commit         = "none"
+	Date           = "unknown"
 )
 
 func embeddedVersion() string {
