@@ -1,20 +1,28 @@
 {{ define "content" }}
-<section>
+{{ $prompt := t .Lang "Enter a search term." }}
+{{ $loading := t .Lang "Searching…" }}
+{{ $empty := t .Lang "No results matched your search." }}
+{{ $error := t .Lang "Search could not be loaded. Please try again." }}
+{{ $count := t .Lang "results" }}
+<section data-foundry-search data-search-lang="{{ .Lang }}" data-search-prompt="{{ $prompt }}" data-search-loading="{{ $loading }}" data-search-empty="{{ $empty }}" data-search-error="{{ $error }}" data-search-count="{{ $count }}">
   <header class="archive-header">
     <div class="eyebrow">{{ t .Lang "Search" }}</div>
-    <h1>{{ .Title }}</h1>
-    <p>{{ t .Lang "Search results" }}{{ if .SearchQuery }} {{ t .Lang "for" }} <strong>{{ .SearchQuery }}</strong>{{ end }}.</p>
+    <h1>{{ t .Lang "Search" }}</h1>
+    <p>{{ t .Lang "Search results" }} <strong data-search-query>{{ .SearchQuery }}</strong></p>
   </header>
 
-  <form class="content-panel" action="/search/" method="get" role="search">
+  <form class="content-panel" action="{{ .SearchURL }}" method="get" role="search">
     <label for="site-search"><strong>{{ t .Lang "Find content" }}</strong></label>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.85rem;">
-      <input id="site-search" name="q" type="search" value="{{ .SearchQuery }}" placeholder="{{ t .Lang "Search articles, pages, and summaries" }}" style="flex:1;min-width:16rem;padding:.85rem 1rem;border:1px solid rgba(17,24,39,.14);border-radius:14px;">
+      <input id="site-search" name="q" type="search" value="{{ .SearchQuery }}" {{ $placeholder := t .Lang "Search articles, pages, and summaries" }} placeholder="{{ $placeholder }}" style="flex:1;min-width:16rem;padding:.85rem 1rem;border:1px solid rgba(17,24,39,.14);border-radius:14px;">
+      <label for="search-type">{{ t .Lang "Content type" }}</label>
+      <select id="search-type" name="type"><option value="">{{ t .Lang "All content" }}</option><option value="page" {{ if eq .SearchType "page" }}selected{{ end }}>{{ t .Lang "Page" }}</option><option value="post" {{ if eq .SearchType "post" }}selected{{ end }}>{{ t .Lang "Post" }}</option></select>
       <button type="submit" class="button-primary">{{ t .Lang "Search" }}</button>
     </div>
   </form>
 
-  <div class="archive-list" style="margin-top:1.5rem;">
+  <p data-search-status role="status" aria-live="polite">{{ if not .SearchQuery }}{{ t .Lang "Enter a search term." }}{{ else }}{{ .SearchTotal }} {{ t .Lang "results" }}{{ end }}</p>
+  <div data-search-results class="archive-list" style="margin-top:1.5rem;">
     {{ range .Documents }}
     <article class="archive-item">
       <h2 class="archive-item-title"><a href="{{ .URL }}">{{ .Title }}</a></h2>
@@ -27,8 +35,9 @@
       {{ end }}
     </article>
     {{ else }}
-    <div class="empty-state">{{ t .Lang "No results matched your search." }}</div>
+    <div class="empty-state">{{ if .SearchQuery }}{{ t .Lang "No results matched your search." }}{{ else }}{{ t .Lang "Enter a search term." }}{{ end }}</div>
     {{ end }}
   </div>
+<script type="module" src="/__foundry/sdk/frontend/search-page.js"></script>
 </section>
 {{ end }}

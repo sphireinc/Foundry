@@ -1237,7 +1237,10 @@ Static builds now also emit a frontend search index at:
 public/search.json
 ```
 
-The generated and live search surfaces now include snippets, and the search APIs apply simple weighted ranking so title and summary matches are promoted ahead of body-only matches.
+The default theme includes language-aware, ranked search for live and static deployments.
+The live API, server-rendered pages, and frontend SDK share filters and result limits.
+See [Built-in site search](docs/site-search.md) for integration, deployment, caching,
+and publication-safety details.
 
 `foundry validate` now checks for:
 

@@ -1,0 +1,107 @@
+{
+  "entries": [
+    {
+      "title": "Body match",
+      "url": "/body/",
+      "content": "alpha",
+      "lang": "en",
+      "type": "page"
+    },
+    {
+      "title": "Alpha",
+      "url": "/b/",
+      "summary": "alpha",
+      "content": "alpha",
+      "lang": "en",
+      "type": "post"
+    },
+    {
+      "title": "Alpha",
+      "url": "/a/",
+      "summary": "alpha",
+      "content": "alpha",
+      "lang": "en",
+      "type": "page"
+    },
+    {
+      "title": "Guía de café",
+      "url": "/es/guia/",
+      "content": "café español",
+      "lang": "es",
+      "type": "page"
+    },
+    {
+      "title": "Summary match",
+      "url": "/summary/",
+      "summary": "alpha",
+      "lang": "en",
+      "type": "page"
+    },
+    {
+      "title": "ΟΣ guide",
+      "url": "/greek/",
+      "content": "",
+      "lang": "el",
+      "type": "page"
+    },
+    {
+      "title": "İstanbul guide",
+      "url": "/turkish/",
+      "content": "",
+      "lang": "tr",
+      "type": "page"
+    }
+  ],
+  "cases": [
+    {
+      "q": " ALPHA ",
+      "lang": "en",
+      "urls": ["/a/", "/b/", "/summary/", "/body/"],
+      "total": 4
+    },
+    {
+      "q": "alpha",
+      "lang": "en",
+      "type": "page",
+      "limit": 2,
+      "urls": ["/a/", "/summary/"],
+      "total": 3
+    },
+    {
+      "q": "alpha",
+      "lang": "es",
+      "urls": [],
+      "total": 0
+    },
+    {
+      "q": "CAFÉ",
+      "lang": "es",
+      "urls": ["/es/guia/"],
+      "total": 1
+    },
+    {
+      "q": "",
+      "lang": "en",
+      "urls": [],
+      "total": 0
+    },
+    {
+      "q": "not found",
+      "lang": "en",
+      "urls": [],
+      "total": 0
+    },
+    {
+      "q": "οσ",
+      "lang": "el",
+      "urls": ["/greek/"],
+      "total": 1
+    },
+    {
+      "q": "istanbul",
+      "lang": "tr",
+      "urls": ["/turkish/"],
+      "total": 1
+    }
+  ]
+}

@@ -1026,24 +1026,23 @@ Generate content using AI.
 ### JavaScript (Frontend SDK)
 
 ```javascript
-// Initialize the Foundry SDK
-const foundry = new FoundrySDK({
-  baseURL: '/__foundry/api'
-});
+import { createFrontendClient } from '/__foundry/sdk/frontend/client.js';
+
+// Auto mode supports live APIs and static build artifacts.
+const foundry = createFrontendClient({ mode: 'auto' });
 
 // Get site information
-const siteInfo = await foundry.site.get();
+const siteInfo = await foundry.site.getInfo();
 
 // Search for content
-const searchResults = await foundry.search.query({
-  q: 'getting started',
-  type: 'post'
+const searchResults = await foundry.search.query('getting started', {
+  lang: 'en',
+  type: 'post',
+  limit: 20
 });
 
 // Get content by path
-const content = await foundry.content.get({
-  path: '/blog/hello-world'
-});
+const content = await foundry.content.getByPath('/blog/hello-world/');
 ```
 
 ### cURL Examples
@@ -1110,3 +1109,6 @@ For detailed request/response schemas and interactive API documentation, see the
 ## Support
 
 For questions about the API or integration issues, please refer to the [project documentation](/docs) or create an issue in the repository.
+
+See [Built-in site search](site-search.md) for the search response contract,
+static/live behavior, ranking, language handling, and publication rules.
