@@ -1,0 +1,12 @@
+{{ define "header" }}
+<header class="site-header">
+  <div class="container">
+    <strong>{{ .Site.Title }}</strong>
+    <nav>
+      {{ range .Nav }}
+      <a href="{{ .URL }}">{{ .Name }}</a>
+      {{ end }}
+    </nav>
+  </div>
+</header>
+{{ end }}

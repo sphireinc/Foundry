@@ -1,0 +1,17 @@
+name: wordcount-compiled
+title: wordcount-compiled
+version: 0.1.0
+description: Adds a word count to the page render context.
+author: Unknown
+license: MIT
+foundry_api: v1
+min_foundry_version: 1.4.6
+compatibility_version: v1
+permissions:
+  content:
+    documents:
+      read: true
+  render:
+    context:
+      read: true
+      write: true

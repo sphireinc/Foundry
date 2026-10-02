@@ -1,0 +1,5 @@
+{{define "wordcount"}} {{with index .Data "wordcount_rpc"}}
+<p class="muted">Word count from RPC plugin: {{.words}}</p>
+{{end}} {{with index .Data "wordcount_compiled"}}
+<p class="muted">Word count from compiled plugin: {{.words}}</p>
+{{end}} {{end}}

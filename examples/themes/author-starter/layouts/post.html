@@ -1,0 +1,16 @@
+{{ define "content" }}
+<div class="split-layout">
+  <section class="prose">
+    {{ pluginSlot "post.before_header" }}
+    <h1>{{ .Page.Title }}</h1>
+    {{ pluginSlot "post.after_header" }} {{ pluginSlot "post.before_content" }} {{ safeHTML
+    .Page.HTMLBody }} {{template "wordcount" .}} {{ pluginSlot "post.after_content" }}
+  </section>
+
+  <aside>
+    {{ pluginSlot "post.sidebar.top" }}
+    <div>{{ pluginSlot "post.sidebar.overview" }}</div>
+    {{ pluginSlot "post.sidebar.bottom" }}
+  </aside>
+</div>
+{{ end }}

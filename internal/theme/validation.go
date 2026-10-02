@@ -82,6 +82,7 @@ func ValidateInstalledDetailed(themesDir, name string) (*ValidationResult, error
 			Severity: severity,
 			Path:     filepath.ToSlash(path),
 			Message:  message,
+			Hint:     themeAuthorHint(message),
 		})
 	}
 
@@ -429,5 +430,22 @@ func validateTemplateParsing(root string, add func(severity, path, message strin
 	}).ParseFiles(files...)
 	if err != nil {
 		add("error", filepath.Join(root, "layouts"), fmt.Sprintf("invalid template parse: %v", err))
+	}
+}
+
+func themeAuthorHint(message string) string {
+	switch {
+	case message == "missing required theme layout":
+		return "Create the named layouts/*.html file with its matching define block; compare the output of foundry theme init in a separate directory."
+	case message == "missing required theme partial":
+		return "Create the named partial and define the template referenced by layouts/base.html."
+	case strings.Contains(message, "unsupported sdk_version"):
+		return "Set sdk_version: " + consts.FrontendSDKVersion + " in theme.yaml after checking the theme against the current SDK."
+	case strings.Contains(message, "unsupported compatibility_version"):
+		return "Set compatibility_version: " + consts.FrontendCompatibility + " in theme.yaml after checking compatibility."
+	case strings.Contains(message, "must match directory"):
+		return "Make theme.yaml name match the installed theme directory."
+	default:
+		return ""
 	}
 }
