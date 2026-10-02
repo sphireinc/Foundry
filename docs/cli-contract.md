@@ -145,3 +145,15 @@ to both developers and non-developers.
 ## Incremental adoption
 
 This contract applies to all new commands and to existing commands whenever they are modified.
+
+## Recent workflow command guides
+
+The command-specific guides document the newer workflows and their safety boundaries:
+
+- [Extension authoring](extension-authoring.md): `plugin init`, `theme init`,
+  validation/security reports, compiled registration, and runnable examples.
+- [Media management](media-management.md): `media optimize`, read-only `media audit`,
+  preview-first `media trash` with explicit `--apply`, and recoverable restore.
+- [Content bundles](content-bundles.md): portable content export and validated import.
+- [Installation updates](installation-updates.md): `version --json`, build provenance,
+  and update paths for source, standalone, and container installations.

@@ -17,6 +17,18 @@ Foundry is a Markdown-first, file-based CMS written in Go for teams that want th
 - **Archived content support** without deleting the source document state
 - **In-place soft delete and versioning** using `*.trash.<timestamp>.*` and `*.version.<timestamp>.*` file conventions
 
+## Recently added workflows
+
+- **Editorial Workflows**: assignments, independent approvals, and revision comparison. See [Editorial Workflows](docs/editorial-workflows.md).
+- **Media Management**: responsive images, accessible metadata, and recoverable cleanup. See [Media Management](docs/media-management.md).
+- **Site Search**: ranked, language-aware live and static search. See [Site Search](docs/site-search.md).
+- **Extension Starters**: scaffolds, runnable examples, and actionable diagnostics. See [Extension Starters](docs/extension-authoring.md).
+- **Installation & Updates**: build identity and installation-specific update paths. See [Installation & Updates](docs/installation-updates.md).
+- **Content Bundles**: portable export and validated import. See [Content Bundles](docs/content-bundles.md).
+- **Managed Runtime**: provider-neutral integration and plugin governance. See [Managed Runtime](docs/managed-runtime-boundary.md).
+- **RPC plugin isolation profiles**: supported strict macOS execution and explicit trust boundaries. See [plugin security](README.md#theme-and-plugin-security).
+- **Published runtime and static-builder container images**: multi-platform packages and versioned release tags. See [Docker](docs/docker/index.html).
+
 ## Authoring and editorial workflow
 
 - **Create new pages from the admin**

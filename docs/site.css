@@ -557,6 +557,18 @@ li,
   color: #ffffff;
 }
 
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .generated-guide .page-body code:not(pre code) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 .page-body blockquote {
   margin: 18px 0;
   padding: 4px 0 4px 18px;

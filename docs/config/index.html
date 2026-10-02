@@ -39,6 +39,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Build &amp; Run</summary>
             <div class="nav-menu-panel">
+              <a href="../installation-updates/"
+                ><strong>Installation &amp; Updates</strong
+                ><span>Build identity and installation-specific update paths</span></a
+              >
               <a href="../docker/">
                 <strong>Docker</strong>
                 <span>Local and production containers</span>
@@ -50,8 +54,30 @@
             </div>
           </details>
           <details class="nav-menu" name="primary-nav">
+            <summary>Content</summary>
+            <div class="nav-menu-panel">
+              <a href="../editorial-workflows/"
+                ><strong>Editorial Workflows</strong
+                ><span>Assignments, independent approvals, and revision comparison</span></a
+              ><a href="../media-management/"
+                ><strong>Media Management</strong
+                ><span>Responsive images, accessible metadata, and recoverable cleanup</span></a
+              ><a href="../site-search/"
+                ><strong>Site Search</strong
+                ><span>Ranked, language-aware live and static search</span></a
+              ><a href="../content-bundles/"
+                ><strong>Content Bundles</strong
+                ><span>Portable export and validated import</span></a
+              >
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
             <summary>Extend</summary>
             <div class="nav-menu-panel">
+              <a href="../extension-authoring/"
+                ><strong>Extension Starters</strong
+                ><span>Scaffolds, runnable examples, and actionable diagnostics</span></a
+              >
               <a href="../custom-fields/">
                 <strong>Custom Fields</strong>
                 <span>Theme-owned field contracts</span>
@@ -73,6 +99,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Reference</summary>
             <div class="nav-menu-panel">
+              <a href="../managed-runtime-boundary/"
+                ><strong>Managed Runtime</strong
+                ><span>Provider-neutral integration and plugin governance</span></a
+              >
               <a href="../config/" aria-current="page">
                 <strong>Configuration</strong>
                 <span>Every site.yaml setting</span>
@@ -1001,6 +1031,29 @@ fields:
             </li>
           </ul>
         </div>
+        <section class="section">
+          <h2>Editorial and media configuration</h2>
+          <pre><code>editorial:
+  require_approval: false
+media:
+  responsive_images: false
+  widths: [320, 640, 960, 1280]
+  jpeg_quality: 82
+  require_alt: false</code></pre>
+          <p>
+            <code>editorial.require_approval</code> opts into independent approval of saved
+            revisions before publishing or scheduling through the admin API. See
+            <a href="../editorial-workflows/">editorial policy</a>.
+          </p>
+          <p>
+            <code>media.responsive_images</code> enables JPEG/static-PNG variants in copied
+            collections. <code>widths</code> accepts at most 16 values from 1 through 8192;
+            <code>jpeg_quality</code> accepts 1 through 100. Omitted widths and quality use the
+            values shown. <code>media.require_alt</code> enforces meaningful alt text or an explicit
+            decorative declaration. Both flags default to false. See
+            <a href="../media-management/">formats, metadata, and cleanup</a>.
+          </p>
+        </section>
       </main>
 
       <footer class="footer">

@@ -16,8 +16,8 @@ Enable it before allowing a team to publish through the admin API. Direct edits
 to repository files, plugins with filesystem access, and configuration changes
 remain trusted operator actions; this is an admin workflow boundary.
 
-With enforcement enabled, an editor must approve the saved revision through an
-independent reviewer before publishing or scheduling it. Approval is separate
+With enforcement enabled, the saved revision must be approved by an independent
+reviewer before an editor publishes or schedules it. Approval is separate
 from publication: reviewers decide; editors publish. Existing published files
 remain published when the policy is enabled, but future publication actions
 require a current approval. Editing approved or published content clears its

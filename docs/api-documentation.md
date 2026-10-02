@@ -1112,3 +1112,10 @@ For questions about the API or integration issues, please refer to the [project 
 
 See [Built-in site search](site-search.md) for the search response contract,
 static/live behavior, ranking, language handling, and publication rules.
+
+See [Editorial workflows](editorial-workflows.md) for the authenticated editorial
+assignment/review endpoint, revision and lock requirements, server-managed review
+history, and structured revision diffs. See [Media management](media-management.md)
+for the read-only media audit endpoint and accessible/decorative image metadata.
+[Build identity and updates](installation-updates.md) explains the running-build
+metadata and installation-specific update eligibility shown in Operations.

@@ -36,6 +36,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Build &amp; Run</summary>
             <div class="nav-menu-panel">
+              <a href="../installation-updates/"
+                ><strong>Installation &amp; Updates</strong
+                ><span>Build identity and installation-specific update paths</span></a
+              >
               <a href="../docker/">
                 <strong>Docker</strong>
                 <span>Local and production containers</span>
@@ -47,8 +51,30 @@
             </div>
           </details>
           <details class="nav-menu" name="primary-nav">
+            <summary>Content</summary>
+            <div class="nav-menu-panel">
+              <a href="../editorial-workflows/"
+                ><strong>Editorial Workflows</strong
+                ><span>Assignments, independent approvals, and revision comparison</span></a
+              ><a href="../media-management/"
+                ><strong>Media Management</strong
+                ><span>Responsive images, accessible metadata, and recoverable cleanup</span></a
+              ><a href="../site-search/"
+                ><strong>Site Search</strong
+                ><span>Ranked, language-aware live and static search</span></a
+              ><a href="../content-bundles/"
+                ><strong>Content Bundles</strong
+                ><span>Portable export and validated import</span></a
+              >
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
             <summary>Extend</summary>
             <div class="nav-menu-panel">
+              <a href="../extension-authoring/"
+                ><strong>Extension Starters</strong
+                ><span>Scaffolds, runnable examples, and actionable diagnostics</span></a
+              >
               <a href="../custom-fields/">
                 <strong>Custom Fields</strong>
                 <span>Theme-owned field contracts</span>
@@ -70,6 +96,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Reference</summary>
             <div class="nav-menu-panel">
+              <a href="../managed-runtime-boundary/"
+                ><strong>Managed Runtime</strong
+                ><span>Provider-neutral integration and plugin governance</span></a
+              >
               <a href="../config/">
                 <strong>Configuration</strong>
                 <span>Every site.yaml setting</span>
@@ -372,7 +402,10 @@ foundry theme security aurora</code></pre>
             <tbody>
               <tr>
                 <td>Remote script, stylesheet, font, image, or media asset</td>
-                <td><code>security.external_assets.scripts</code>, <code>styles</code>, <code>fonts</code>, <code>images</code>, or <code>media</code></td>
+                <td>
+                  <code>security.external_assets.scripts</code>, <code>styles</code>,
+                  <code>fonts</code>, <code>images</code>, or <code>media</code>
+                </td>
               </tr>
               <tr>
                 <td>Browser-side fetch, XHR, WebSocket, or EventSource</td>
@@ -380,15 +413,24 @@ foundry theme security aurora</code></pre>
               </tr>
               <tr>
                 <td>Remote web manifest or unsupported preload destination</td>
-                <td>Serve it from the site's origin, remove the link, or use a supported resource policy</td>
+                <td>
+                  Serve it from the site's origin, remove the link, or use a supported resource
+                  policy
+                </td>
               </tr>
               <tr>
                 <td>Declarations while a policy is disabled</td>
-                <td>Set the matching <code>allowed</code> value to <code>true</code>, or remove the declaration</td>
+                <td>
+                  Set the matching <code>allowed</code> value to <code>true</code>, or remove the
+                  declaration
+                </td>
               </tr>
               <tr>
                 <td>Unsupported template context flag</td>
-                <td>Remove it or set <code>allow_raw_config</code> and <code>allow_admin_state</code> to <code>false</code></td>
+                <td>
+                  Remove it or set <code>allow_raw_config</code> and
+                  <code>allow_admin_state</code> to <code>false</code>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -410,7 +452,8 @@ foundry theme security aurora</code></pre>
       - https://api.example.com</code></pre>
           <p>
             Keep each origin in the list that matches the CSP directive it needs. A script origin in
-            <code>scripts</code> does not authorize images, fonts, styles, or media from that origin.
+            <code>scripts</code> does not authorize images, fonts, styles, or media from that
+            origin.
           </p>
 
           <h2>End-to-end custom fields example</h2>
@@ -603,6 +646,17 @@ widget_slots:
             themes are validated against the same baseline.
           </p>
         </div>
+        <section class="section">
+          <h2>Author tooling and frontend integrations</h2>
+          <p>
+            <code>foundry theme init my-theme</code> aliases the existing scaffold command. Follow
+            the <a href="../extension-authoring/">development loop</a>, integrate
+            <a href="../site-search/">live and static search</a>, and supply accurate
+            <code>sizes</code> values for <a href="../media-management/">responsive images</a>.
+            Security diagnostics distinguish disabled policies, missing origins, and unsupported
+            network resources.
+          </p>
+        </section>
       </main>
 
       <footer class="footer">

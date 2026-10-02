@@ -36,6 +36,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Build &amp; Run</summary>
             <div class="nav-menu-panel">
+              <a href="../installation-updates/"
+                ><strong>Installation &amp; Updates</strong
+                ><span>Build identity and installation-specific update paths</span></a
+              >
               <a href="../docker/">
                 <strong>Docker</strong>
                 <span>Local and production containers</span>
@@ -47,8 +51,30 @@
             </div>
           </details>
           <details class="nav-menu" name="primary-nav">
+            <summary>Content</summary>
+            <div class="nav-menu-panel">
+              <a href="../editorial-workflows/"
+                ><strong>Editorial Workflows</strong
+                ><span>Assignments, independent approvals, and revision comparison</span></a
+              ><a href="../media-management/"
+                ><strong>Media Management</strong
+                ><span>Responsive images, accessible metadata, and recoverable cleanup</span></a
+              ><a href="../site-search/"
+                ><strong>Site Search</strong
+                ><span>Ranked, language-aware live and static search</span></a
+              ><a href="../content-bundles/"
+                ><strong>Content Bundles</strong
+                ><span>Portable export and validated import</span></a
+              >
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
             <summary>Extend</summary>
             <div class="nav-menu-panel">
+              <a href="../extension-authoring/"
+                ><strong>Extension Starters</strong
+                ><span>Scaffolds, runnable examples, and actionable diagnostics</span></a
+              >
               <a href="../custom-fields/">
                 <strong>Custom Fields</strong>
                 <span>Theme-owned field contracts</span>
@@ -70,6 +96,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Reference</summary>
             <div class="nav-menu-panel">
+              <a href="../managed-runtime-boundary/"
+                ><strong>Managed Runtime</strong
+                ><span>Provider-neutral integration and plugin governance</span></a
+              >
               <a href="../config/">
                 <strong>Configuration</strong>
                 <span>Every site.yaml setting</span>
@@ -448,8 +478,8 @@ permissions:
             Foundry now supports a first-class <code>runtime</code> block in
             <code>plugin.yaml</code> for the out-of-process plugin host. The first supported RPC
             hook families are <code>context</code>, <code>html_slots</code>, and
-            <code>after_render</code>, which let a plugin enrich render-time view data
-            without sharing the Foundry process.
+            <code>after_render</code>, which let a plugin enrich render-time view data without
+            sharing the Foundry process.
           </p>
           <pre><code>runtime:
   mode: rpc
@@ -476,21 +506,32 @@ permissions:
             <li>no host-granted network channel</li>
             <li>no host-granted local process execution channel</li>
             <li>unsupported sandbox expansions are rejected at enable time</li>
-            <li>context reads/writes, document reads, HTML slot injection, and final HTML mutation require their corresponding declared permissions</li>
-            <li>each RPC exchange has a 10-second deadline, an 8 MiB payload limit, and an 8 MiB newline-delimited response frame limit</li>
-            <li>handshake identity/protocol and response IDs are checked; invalid or timed-out peers are stopped and reaped</li>
+            <li>
+              context reads/writes, document reads, HTML slot injection, and final HTML mutation
+              require their corresponding declared permissions
+            </li>
+            <li>
+              each RPC exchange has a 10-second deadline, an 8 MiB payload limit, and an 8 MiB
+              newline-delimited response frame limit
+            </li>
+            <li>
+              handshake identity/protocol and response IDs are checked; invalid or timed-out peers
+              are stopped and reaped
+            </li>
           </ul>
           <p>
-            <code>runtime.sandbox.profile: default</code> is process separation, not
-            an OS sandbox: use it only for trusted code. The <code>strict</code>
-            profile currently requires macOS and <code>/usr/bin/sandbox-exec</code>.
-            It denies network access, file writes, child processes, and reads outside
-            the plugin artifact and system runtime paths. Unsupported platforms
-            reject strict execution. Strict plugins must use a prebuilt executable
-            inside their artifact directory; <code>go run</code> and other source
-            runners are not supported. No CPU or memory quotas are provided.
+            <code>runtime.sandbox.profile: default</code> is process separation, not an OS sandbox:
+            use it only for trusted code. The <code>strict</code> profile currently requires macOS
+            and <code>/usr/bin/sandbox-exec</code>. It denies network access, file writes, child
+            processes, and reads outside the plugin artifact and system runtime paths. Unsupported
+            platforms reject strict execution. Strict plugins must use a prebuilt executable inside
+            their artifact directory; <code>go run</code> and other source runners are not
+            supported. No CPU or memory quotas are provided.
           </p>
-          <p>To run the bundled demo in strict mode on macOS, first build it from the repository root:</p>
+          <p>
+            To run the bundled demo in strict mode on macOS, first build it from the repository
+            root:
+          </p>
           <pre><code>go build -o plugins/rpc-context-demo/bin/server ./plugins/rpc-context-demo/cmd/server</code></pre>
           <p>Then replace the demo's runtime command and profile in <code>plugin.yaml</code>:</p>
           <pre><code>runtime:
@@ -503,22 +544,21 @@ permissions:
     allow_filesystem_write: false
     allow_process_exec: false</code></pre>
           <p>
-            Strict execution does not inherit the host's HOME, PATH, GOCACHE, or TMPDIR.
-            Explicit <code>runtime.env</code> entries remain available to the plugin.
-            Keep credentials out of the plugin artifact: the sandbox intentionally
-            permits reading that artifact's files.
+            Strict execution does not inherit the host's HOME, PATH, GOCACHE, or TMPDIR. Explicit
+            <code>runtime.env</code> entries remain available to the plugin. Keep credentials out of
+            the plugin artifact: the sandbox intentionally permits reading that artifact's files.
           </p>
           <p>
             <code>context</code> reads require <code>permissions.render.context.read</code>;
-            returned data is applied only with <code>permissions.render.context.write</code>.
-            Page payloads separately require <code>permissions.content.documents.read</code>.
-            The optional SDK <code>HTMLSlotsHandler</code> returns named HTML fragments
-            with <code>permissions.render.html_slots.inject</code>.
+            returned data is applied only with <code>permissions.render.context.write</code>. Page
+            payloads separately require <code>permissions.content.documents.read</code>. The
+            optional SDK <code>HTMLSlotsHandler</code> returns named HTML fragments with
+            <code>permissions.render.html_slots.inject</code>.
             <code>AfterRenderHandler</code> returns final HTML with
-            <code>permissions.render.after_render.mutate_html</code>.
-            Advertise supported methods in the handshake; legacy context-only SDK
-            handlers remain compatible. HTML injection/mutation grants trust over
-            browser output even when the plugin process is sandboxed.
+            <code>permissions.render.after_render.mutate_html</code>. Advertise supported methods in
+            the handshake; legacy context-only SDK handlers remain compatible. HTML
+            injection/mutation grants trust over browser output even when the plugin process is
+            sandboxed.
           </p>
           <p>
             A working example ships with Foundry at
@@ -745,6 +785,17 @@ func init() {
             </li>
           </ul>
         </div>
+        <section class="section">
+          <h2>Scaffolding and runnable examples</h2>
+          <p>
+            Use <code>foundry plugin init my-plugin</code> for an independent RPC starter, or add
+            <code>--runtime compiled</code> inside a Foundry source checkout. Initialization does
+            not enable plugins or grant permissions. The
+            <a href="../extension-authoring/">authoring guide</a> covers build/test commands,
+            context-hook examples, actionable diagnostics, and trusted/default versus strict runtime
+            boundaries.
+          </p>
+        </section>
       </main>
 
       <footer class="footer">

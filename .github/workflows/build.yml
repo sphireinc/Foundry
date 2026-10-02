@@ -72,6 +72,9 @@ jobs:
         go tool cover -html=coverage.out -o docs/coverage/index.html
         touch docs/.nojekyll
 
+    - name: Render documentation guides
+      run: go run ./scripts/cmd/docs-build
+
     - name: Upload Pages artifact
       uses: actions/upload-pages-artifact@v5
       with:

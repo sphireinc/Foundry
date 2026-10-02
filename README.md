@@ -1374,9 +1374,26 @@ Asset roots and plugin/theme names are validated as safe paths, and symlinked as
 
 The repository publishes a small docs site from `docs/` that includes:
 
-- a project overview
-- the CLI contract
-- the latest HTML coverage report generated in CI
+- setup, architecture, configuration, and production operations guides
+- editorial approvals, assignments, and revision comparison
+- responsive images, accessible metadata, and recoverable media cleanup
+- language-aware search for live and static deployments
+- plugin/theme scaffolds, examples, validation, and runtime security boundaries
+- container deployment, build provenance, and installation-specific updates
+- content bundles and the managed runtime boundary
+- the CLI contract, SDK/API references, and the latest HTML coverage report
+
+The recent workflow guides are rendered from their canonical Markdown sources
+before Pages publication. To regenerate and preview the website locally:
+
+```sh
+go run ./scripts/cmd/docs-build
+python3 -m http.server 8000 --directory docs
+```
+
+Open `http://localhost:8000/`. See [documentation maintenance](docs/README.md)
+for source/generated-file conventions. Publication occurs after the updated
+main-branch Pages workflow succeeds.
 
 ## Development
 

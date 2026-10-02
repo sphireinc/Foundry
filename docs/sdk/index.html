@@ -36,6 +36,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Build &amp; Run</summary>
             <div class="nav-menu-panel">
+              <a href="../installation-updates/"
+                ><strong>Installation &amp; Updates</strong
+                ><span>Build identity and installation-specific update paths</span></a
+              >
               <a href="../docker/">
                 <strong>Docker</strong>
                 <span>Local and production containers</span>
@@ -47,8 +51,30 @@
             </div>
           </details>
           <details class="nav-menu" name="primary-nav">
+            <summary>Content</summary>
+            <div class="nav-menu-panel">
+              <a href="../editorial-workflows/"
+                ><strong>Editorial Workflows</strong
+                ><span>Assignments, independent approvals, and revision comparison</span></a
+              ><a href="../media-management/"
+                ><strong>Media Management</strong
+                ><span>Responsive images, accessible metadata, and recoverable cleanup</span></a
+              ><a href="../site-search/"
+                ><strong>Site Search</strong
+                ><span>Ranked, language-aware live and static search</span></a
+              ><a href="../content-bundles/"
+                ><strong>Content Bundles</strong
+                ><span>Portable export and validated import</span></a
+              >
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
             <summary>Extend</summary>
             <div class="nav-menu-panel">
+              <a href="../extension-authoring/"
+                ><strong>Extension Starters</strong
+                ><span>Scaffolds, runnable examples, and actionable diagnostics</span></a
+              >
               <a href="../custom-fields/">
                 <strong>Custom Fields</strong>
                 <span>Theme-owned field contracts</span>
@@ -70,6 +96,10 @@
           <details class="nav-menu" name="primary-nav">
             <summary>Reference</summary>
             <div class="nav-menu-panel">
+              <a href="../managed-runtime-boundary/"
+                ><strong>Managed Runtime</strong
+                ><span>Provider-neutral integration and plugin governance</span></a
+              >
               <a href="../config/">
                 <strong>Configuration</strong>
                 <span>Every site.yaml setting</span>
@@ -344,6 +374,19 @@ console.log(site.title, current?.title, nav.length, results.items.length);</code
           <p>
             A concrete reference implementation of that mount pattern ships in
             <code>sdk/examples/admin-extension-page.js</code>.
+          </p>
+        </section>
+        <section class="section">
+          <h2>Search, editorial actions, and media audit</h2>
+          <p>
+            <code>frontend.search.query(q, { lang, type, limit })</code> returns <code>query</code>,
+            <code>items</code>, <code>total</code>, and <code>limit</code>. Auto mode falls back to
+            cached static data; see <a href="../site-search/">the search contract</a>. The Admin SDK
+            exposes <code>documents.editorial(input)</code> and <code>media.audit()</code>; see
+            <a href="../editorial-workflows/"
+              >editorial permissions and revision/lock requirements</a
+            >
+            and <a href="../media-management/">media audit and metadata</a>.
           </p>
         </section>
       </main>

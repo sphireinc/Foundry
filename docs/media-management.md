@@ -93,6 +93,9 @@ configuration, active theme sources and plugin sources for `media:` references
 and public URLs. It handles escaped URLs and considers references in frontmatter,
 HTML, CSS and JSON. Sidecars, retained versions and trash are excluded as assets;
 references that exist only in historical content do not protect current assets.
+CSS files under the configured content assets' `css/` directory are also recorded
+as used because they contribute to the automatically generated CSS bundle, even
+when no source file references their individual URLs.
 
 **Potential orphan does not mean safe to delete.** Dynamic URL construction,
 external consumers and references outside the scanned roots may be invisible.
