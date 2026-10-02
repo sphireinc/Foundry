@@ -60,6 +60,7 @@ type Service struct {
 	pluginMetadata  func() map[string]plugins.Metadata
 	mu              sync.RWMutex
 	lockMu          sync.Mutex
+	documentMu      sync.Mutex
 	statusProviders map[string]StatusProvider
 	graphCache      map[bool]cachedGraph
 }

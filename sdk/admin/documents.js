@@ -16,6 +16,9 @@ export const createAdminDocumentsAPI = (http) => ({
   preview(input) {
     return http.post('/api/documents/preview', input);
   },
+  editorial(input) {
+    return http.post('/api/documents/editorial', input);
+  },
   setStatus(input) {
     return http.post('/api/documents/status', input);
   },

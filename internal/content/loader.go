@@ -254,6 +254,7 @@ func (l *Loader) loadDocument(path, relPath, lang string, isDefault bool, docTyp
 	}
 	workflow := WorkflowFromFrontMatter(fm, time.Now().UTC())
 	doc.Status = workflow.Status
+	doc.Draft = workflow.Status != "published"
 	if workflow.Status == "scheduled" && !l.includeDrafts {
 		return nil, nil
 	}

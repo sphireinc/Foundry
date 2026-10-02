@@ -507,6 +507,20 @@ Move document to trash.
   }
   ```
 
+### Editorial workflows
+
+`POST /documents/editorial` records assignments and review decisions against an
+`expected_revision`. Supported actions are `assign`, `approve`, and
+`request_changes`. Assignment requires `documents.assign`; decisions require
+`documents.review` and an independent reviewer. Document details expose current
+assignments, approval, revision hash, review events, and the active approval policy.
+
+With `editorial.require_approval: true`, save/status publication requires
+`documents.publish` and approval of the current revision. Content changes revoke
+approval; restore returns content to draft. Revision diff responses include
+`frontmatter_changes` and `body_diff`. See
+[Editorial workflows](editorial-workflows.md) for setup and the complete contract.
+
 ### Media Management
 
 #### GET `/media/audit`

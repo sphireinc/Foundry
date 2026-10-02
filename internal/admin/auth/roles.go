@@ -13,6 +13,8 @@ var roleCapabilities = map[string][]string{
 		"documents.read",
 		"documents.create",
 		"documents.write",
+		"documents.assign",
+		"documents.publish",
 		"documents.review",
 		"documents.history",
 		"documents.lifecycle",

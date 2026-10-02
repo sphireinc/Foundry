@@ -38,10 +38,13 @@ func WorkflowFromFrontMatter(fm *FrontMatter, now time.Time) Workflow {
 			if workflow.Status == "published" && now.Before(*ts) {
 				workflow.Status = "scheduled"
 			}
+			if workflow.Status == "scheduled" && !now.Before(*ts) {
+				workflow.Status = "published"
+			}
 		}
 		if ts := timeFromParam(fm.Params["scheduled_unpublish_at"]); ts != nil {
 			workflow.ScheduledUnpublish = ts
-			if now.After(*ts) {
+			if !now.Before(*ts) {
 				workflow.Status = "draft"
 			}
 		}
