@@ -41,6 +41,38 @@ Either model is fully supported. Content is stored the same way in both cases: M
 
 If your goal is to manage content and publish a static site, Foundry fits that model well. If you also need a live API surface, an admin UI, or incremental rebuilds during development, those are first-class too.
 
+
+## AI-Assisted Contributions
+
+Foundry is a human-engineered project. AI-assisted development is permitted only in a limited, supporting role.
+
+Pull requests **must consist of at least 90% human-written code**. Contributors are expected to understand, design, and implement their changes themselves. AI-generated implementations, large generated patches, and "vibe coded" contributions are not acceptable. Honor system is in place here - please disclose your usage. 
+
+Any use of generative AI in preparing a pull request **must be disclosed in the PR description**, including what the tool was used for and which portions of the contribution were AI-assisted.
+
+Acceptable uses include:
+
+- Code review, security review, and identifying potential bugs or edge cases
+- Reviewing tests or suggesting additional test coverage
+- Explaining unfamiliar APIs, language features, or existing code
+- Small, targeted suggestions that are subsequently reviewed and substantially authored by the contributor
+- Documentation proofreading or wording/translation assistance
+
+Unacceptable uses include:
+
+- Generating entire features, packages, modules, or substantial implementations
+- Submitting large AI-generated patches with minimal human modification
+- Asking an AI agent to autonomously implement an issue and submitting the result
+- Generating code the contributor cannot fully explain, maintain, or defend during review
+- Concealing or misrepresenting AI usage
+
+**Do not vibe code Foundry.**
+
+AI may assist your engineering process; it must not replace it. Every contributor remains fully responsible for the correctness, security, maintainability, licensing, and originality of everything they submit.
+
+Maintainers may reject or close contributions that appear substantially AI-generated, fail to disclose AI assistance, the author cannot defend, or otherwise violate this policy.
+
+
 ## Headless Mode
 
 Content is exposed as JSON via two options:
