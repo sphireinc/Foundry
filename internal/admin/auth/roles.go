@@ -85,6 +85,10 @@ func capabilitiesFor(role string, custom []string) []string {
 	return normalizeCapabilities(base)
 }
 
+func CapabilityAllowed(capabilities []string, required string) bool {
+	return capabilityAllowed(capabilities, required)
+}
+
 func capabilityAllowed(actual []string, required string) bool {
 	required = strings.TrimSpace(strings.ToLower(required))
 	if required == "" {

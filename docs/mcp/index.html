@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MCP Server</title>
+    <meta
+      name="description"
+      content="Run Foundry's governed Model Context Protocol server for read-only content, documentation, theme, plugin, and runtime access."
+    />
+    <script src="../theme-toggle.js"></script>
+    <link rel="stylesheet" href="../site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="../">
+          <span class="brand-mark"><img src="../logo.png" alt="Foundry logo" /></span>
+          <span class="brand-copy">
+            <strong>Foundry</strong>
+            <span>MCP server</span>
+          </span>
+        </a>
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-link nav-home" href="../">Home</a>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Learn</summary>
+            <div class="nav-menu-panel">
+              <a href="../getting-started/">
+                <strong>Getting Started</strong>
+                <span>Project overview and setup</span>
+              </a>
+              <a href="../architecture/">
+                <strong>Architecture</strong>
+                <span>Runtime flow and packages</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Build &amp; Run</summary>
+            <div class="nav-menu-panel">
+              <a href="../installation-updates/"
+                ><strong>Installation &amp; Updates</strong
+                ><span>Build identity and installation-specific update paths</span></a
+              >
+              <a href="../docker/">
+                <strong>Docker</strong>
+                <span>Local and production containers</span>
+              </a>
+              <a href="../operations/">
+                <strong>Operations</strong>
+                <span>Health, metrics, and recovery</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Content</summary>
+            <div class="nav-menu-panel">
+              <a href="../editorial-workflows/"
+                ><strong>Editorial Workflows</strong
+                ><span>Assignments, independent approvals, and revision comparison</span></a
+              ><a href="../media-management/"
+                ><strong>Media Management</strong
+                ><span>Responsive images, accessible metadata, and recoverable cleanup</span></a
+              ><a href="../site-search/"
+                ><strong>Site Search</strong
+                ><span>Ranked, language-aware live and static search</span></a
+              ><a href="../content-bundles/"
+                ><strong>Content Bundles</strong
+                ><span>Portable export and validated import</span></a
+              >
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Extend</summary>
+            <div class="nav-menu-panel">
+              <a href="../extension-authoring/"
+                ><strong>Extension Starters</strong
+                ><span>Scaffolds, runnable examples, and actionable diagnostics</span></a
+              >
+              <a href="../custom-fields/">
+                <strong>Custom Fields</strong>
+                <span>Theme-owned field contracts</span>
+              </a>
+              <a href="../sdk/">
+                <strong>SDKs</strong>
+                <span>Admin and frontend JavaScript APIs</span>
+              </a>
+              <a href="../plugins/">
+                <strong>Plugins</strong>
+                <span>Go and RPC extensions</span>
+              </a>
+              <a href="../themes/">
+                <strong>Themes</strong>
+                <span>Layouts, partials, and authoring</span>
+              </a>
+              <a href="../mcp/" aria-current="page">
+                <strong>MCP Server</strong>
+                <span>Governed AI client access</span>
+              </a>
+            </div>
+          </details>
+          <details class="nav-menu" name="primary-nav">
+            <summary>Reference</summary>
+            <div class="nav-menu-panel">
+              <a href="../managed-runtime-boundary/"
+                ><strong>Managed Runtime</strong
+                ><span>Provider-neutral integration and plugin governance</span></a
+              >
+              <a href="../config/">
+                <strong>Configuration</strong>
+                <span>Every site.yaml setting</span>
+              </a>
+              <a href="../api-documentation/">
+                <strong>API Docs</strong>
+                <span>Admin and frontend APIs</span>
+              </a>
+              <a href="../contract/">
+                <strong>CLI Contract</strong>
+                <span>CLI behavior and conventions</span>
+              </a>
+              <a href="../coverage/">
+                <strong>Coverage</strong>
+                <span>Latest Go coverage report</span>
+              </a>
+            </div>
+          </details>
+          <a
+            class="nav-link nav-external"
+            href="https://github.com/sphireinc/foundry"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch to light mode"
+            title="Switch to light mode"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-light" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+          </button>
+        </nav>
+      </header>
+
+      <main class="content-card">
+        <div class="page-header">
+          <div class="eyebrow">Extend</div>
+          <h1 class="page-title">Model Context Protocol server</h1>
+          <p>
+            Foundry can expose a governed
+            <a href="https://modelcontextprotocol.io" target="_blank" rel="noreferrer"
+              >Model Context Protocol</a
+            >
+            (MCP) server over local stdio. MCP-compatible clients gain a standard, discoverable,
+            read-only view of content, documentation, themes, plugins, and runtime health without
+            scraping HTML, shelling out to the CLI, or reaching into the filesystem.
+          </p>
+          <p>
+            The transport is an adapter over existing Foundry services. It does not introduce a
+            parallel content model, and it never bypasses Foundry authorization, plugin
+            governance, or auditing.
+          </p>
+        </div>
+
+        <h2>Enabling the server</h2>
+        <p>MCP is disabled unless it is explicitly enabled in <code>content/config/site.yaml</code>:</p>
+        <pre><code>mcp:
+  enabled: true
+  read_only: true
+  audit: false
+  max_concurrency: 16
+  rate_limit:
+    requests_per_minute: 600
+    burst: 120
+  scopes:
+    - read:content
+    - read:docs
+    - read:themes
+    - read:plugins
+    - read:ops</code></pre>
+        <p>
+          The initial release is read-only. When <code>scopes</code> is omitted, every read scope is
+          enabled and every mutating scope stays disabled. <code>read_only</code> defaults to
+          <code>true</code>; setting it to <code>false</code> is reserved for future mutating
+          capabilities and does not by itself grant write access. <code>max_concurrency</code>
+          defaults to <code>16</code> in-flight requests, and <code>rate_limit</code> defaults to
+          <code>600</code> requests per minute with a <code>120</code> request burst.
+        </p>
+
+        <h2>Running the server</h2>
+        <pre><code>foundry mcp serve --transport stdio</code></pre>
+        <p>
+          In stdio mode the process speaks newline-delimited JSON-RPC on stdout and writes logs and
+          diagnostics to stderr. It exits cleanly when the client closes stdin. Startup banners never
+          touch stdout, so the protocol stream stays clean.
+        </p>
+
+        <h2>Configuring a client</h2>
+        <p>
+          Point any MCP-compatible client at the Foundry binary. Run it from the project root (or set
+          <code>cwd</code>) so Foundry loads the normal configuration and content.
+        </p>
+        <pre><code>{
+  "mcpServers": {
+    "foundry": {
+      "command": "foundry",
+      "args": ["mcp", "serve", "--transport", "stdio"],
+      "cwd": "/path/to/foundry-project"
+    }
+  }
+}</code></pre>
+
+        <h2>Capability catalog</h2>
+        <p>All capabilities are read-only in the initial release and are namespaced and versioned.</p>
+        <h3>Tools</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Scope</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>search_content</td><td>read:content</td><td>Ranked search across content.</td></tr>
+            <tr><td>list_documents</td><td>read:content</td><td>List content with type, language, and status filters.</td></tr>
+            <tr><td>get_document</td><td>read:content</td><td>Fetch a single document by slug, URL, or id.</td></tr>
+            <tr><td>get_navigation</td><td>read:content</td><td>Read navigation menus and the published page index.</td></tr>
+            <tr><td>get_project_documentation</td><td>read:docs</td><td>List or read project documentation files.</td></tr>
+            <tr><td>get_api_documentation</td><td>read:docs</td><td>Read the API documentation definition.</td></tr>
+            <tr><td>get_theme_manifest</td><td>read:themes</td><td>Read a theme manifest.</td></tr>
+            <tr><td>get_theme_security_report</td><td>read:themes</td><td>Read the external asset and CSP report.</td></tr>
+            <tr><td>validate_theme</td><td>read:themes</td><td>Validate a theme without applying changes.</td></tr>
+            <tr><td>list_plugins</td><td>read:plugins</td><td>List installed plugins and their status.</td></tr>
+            <tr><td>get_plugin_status</td><td>read:plugins</td><td>Read a plugin health and diagnostics report.</td></tr>
+            <tr><td>get_runtime_health</td><td>read:ops</td><td>Read runtime health and readiness.</td></tr>
+            <tr><td>validate_configuration</td><td>read:ops</td><td>Validate config, theme, and site graph.</td></tr>
+          </tbody>
+        </table>
+        <h3>Resource templates</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>URI template</th>
+              <th>Scope</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>foundry://content/pages/{slug}</td><td>read:content</td></tr>
+            <tr><td>foundry://content/collections/{type}</td><td>read:content</td></tr>
+            <tr><td>foundry://themes/{name}/manifest</td><td>read:themes</td></tr>
+            <tr><td>foundry://themes/{name}/security-report</td><td>read:themes</td></tr>
+            <tr><td>foundry://plugins</td><td>read:plugins</td></tr>
+            <tr><td>foundry://runtime/health</td><td>read:ops</td></tr>
+            <tr><td>foundry://docs/{path...}</td><td>read:docs</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Capability schemas and stable names</h2>
+        <p>
+          Every capability is registered with a stable name, a version, an input schema, an output
+          schema, a read-only or mutating classification, a required scope, an optional owning
+          plugin, an audit category, a timeout, a result-size limit, and a default-enabled state.
+          Names are namespaced: core capabilities use plain snake_case names such as
+          <code>search_content</code>, and plugin capabilities are prefixed with the plugin name,
+          for example <code>myplugin_reports</code>.
+        </p>
+        <p>Representative input schemas:</p>
+        <pre><code>search_content
+{
+  "type": "object",
+  "properties": {
+    "query": { "type": "string" },
+    "type": { "type": "string" },
+    "lang": { "type": "string" },
+    "limit": { "type": "integer" },
+    "cursor": { "type": "string" }
+  },
+  "required": ["query"]
+}
+
+get_document
+{
+  "type": "object",
+  "properties": {
+    "slug": { "type": "string" },
+    "url": { "type": "string" },
+    "id": { "type": "string" }
+  }
+}
+
+get_plugin_status
+{
+  "type": "object",
+  "properties": { "name": { "type": "string" } },
+  "required": ["name"]
+}</code></pre>
+        <p>
+          Names and schemas are part of the public contract. Renaming a capability or removing a
+          field is a breaking change; add a new version instead.
+        </p>
+
+        <h2>Plugin-provided capabilities</h2>
+        <p>
+          Plugin-provided MCP capabilities are planned after the core read-only contract is stable.
+          The registry already reserves the namespace and governance hooks for them, and the intent
+          is that a plugin capability must:
+        </p>
+        <ul>
+          <li>Use the <code>foundry-plugin://</code> scheme and a plugin-namespaced capability name.</li>
+          <li>Declare input and output schemas, required plugin permissions, and a read-only or mutating classification.</li>
+          <li>Declare an audit category and risk level.</li>
+          <li>Be listed in the admin UI and be independently enabled or disabled.</li>
+          <li>Execute inside the plugin's existing permission boundary, under the same timeout, rate, and response-size controls as core capabilities.</li>
+        </ul>
+        <p>
+          A plugin never gains filesystem, network, admin, or runtime privileges simply because it
+          registers an MCP capability. Until plugin registration ships, only the core read-only
+          capabilities in this guide are exposed.
+        </p>
+
+        <h2>Scopes and authorization</h2>
+        <p>
+          MCP scopes map onto existing Foundry capabilities. A scope that is not enabled is denied by
+          default, and an authenticated actor must also hold a matching Foundry capability.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>MCP scope</th>
+              <th>Foundry capability</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>read:content</td><td>documents.read</td></tr>
+            <tr><td>read:docs</td><td>dashboard.read</td></tr>
+            <tr><td>read:themes</td><td>themes.manage</td></tr>
+            <tr><td>read:plugins</td><td>plugins.manage</td></tr>
+            <tr><td>read:ops</td><td>dashboard.read</td></tr>
+            <tr><td>write:content</td><td>documents.write</td></tr>
+            <tr><td>publish:content</td><td>documents.publish</td></tr>
+            <tr><td>manage:plugins</td><td>plugins.manage</td></tr>
+            <tr><td>manage:themes</td><td>themes.manage</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Local process access is not the same as authenticated access. The stdio server runs as a
+          local actor and only exposes the scopes enabled in configuration.
+        </p>
+
+        <h2>Redaction and limits</h2>
+        <ul>
+          <li>
+            Responses are redacted for sensitive keys such as passwords, password hashes, session and
+            access tokens, API keys, private keys, and connection strings.
+          </li>
+          <li>List and search operations are bounded: default page size 20, maximum 100.</li>
+          <li>Every capability has an execution timeout (default 10 seconds) and a maximum result size (default 256 KiB).</li>
+          <li>Oversized responses return an explicit error instead of streaming unbounded data.</li>
+          <li>Request payloads over 8 MiB on the stdio transport are rejected before dispatch.</li>
+          <li>Requests are checked against a per-client rate limit and a concurrency cap; over-limit requests are rejected rather than queued.</li>
+        </ul>
+
+        <h2>Disabling MCP</h2>
+        <p>
+          Remove the <code>mcp</code> block or set <code>mcp.enabled</code> to <code>false</code>. The
+          <code>foundry mcp serve</code> command then refuses to start, and no MCP capabilities are
+          exposed.
+        </p>
+
+        <h2>Protocol revision</h2>
+        <p>
+          Foundry pins MCP protocol revision <code>2026-07-28</code> and also accepts
+          <code>2025-06-18</code> during initialization. The negotiated revision is reported in the
+          <code>initialize</code> response.
+        </p>
+
+        <h2>Roadmap</h2>
+        <p>
+          Authenticated Streamable HTTP transport, mutating tools (with explicit opt-in,
+          confirmation, idempotency, and before/after auditing), and plugin-provided capabilities are
+          planned after the read-only contract is reviewed and tested.
+        </p>
+      </main>
+    </div>
+  </body>
+</html>

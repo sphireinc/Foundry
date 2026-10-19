@@ -37,6 +37,7 @@ type Config struct {
 	Security    SecurityConfig        `yaml:"security"`
 	Feed        FeedConfig            `yaml:"feed"`
 	Deploy      DeployConfig          `yaml:"deploy"`
+	MCP         MCPConfig             `yaml:"mcp"`
 	Params      map[string]any        `yaml:"params"`
 	Menus       map[string][]MenuItem `yaml:"menus"`
 }
@@ -258,6 +259,28 @@ type DeployTarget struct {
 	Environment    string `yaml:"environment"`
 	Preview        *bool  `yaml:"preview"`
 	LiveReloadMode string `yaml:"live_reload_mode"`
+}
+
+type MCPConfig struct {
+	Enabled        bool               `yaml:"enabled"`
+	ReadOnly       *bool              `yaml:"read_only,omitempty"`
+	Scopes         []string           `yaml:"scopes,omitempty"`
+	Plugins        []string           `yaml:"plugins,omitempty"`
+	Audit          bool               `yaml:"audit,omitempty"`
+	MaxConcurrency int                `yaml:"max_concurrency,omitempty"`
+	RateLimit      MCPRateLimitConfig `yaml:"rate_limit,omitempty"`
+}
+
+type MCPRateLimitConfig struct {
+	RequestsPerMinute int `yaml:"requests_per_minute,omitempty"`
+	Burst             int `yaml:"burst,omitempty"`
+}
+
+func (c MCPConfig) ReadOnlyOrDefault() bool {
+	if c.ReadOnly == nil {
+		return true
+	}
+	return *c.ReadOnly
 }
 
 type MenuItem struct {
