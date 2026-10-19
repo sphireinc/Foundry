@@ -100,6 +100,21 @@ taxonomies:
 plugins:
   enabled: []
 
+mcp:
+  enabled: false
+  read_only: true
+  audit: false
+  max_concurrency: 16
+  rate_limit:
+    requests_per_minute: 600
+    burst: 120
+  scopes:
+    - read:content
+    - read:docs
+    - read:themes
+    - read:plugins
+    - read:ops
+
 seo:
   enabled: false
   default_title_sep: ""

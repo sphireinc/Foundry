@@ -1008,6 +1008,53 @@ fields:
     - name: "GitHub"
       url: "https://github.com/sphireinc/foundry"</code></pre>
 
+          <h2><code>mcp</code></h2>
+          <p>
+            The <code>mcp</code> group configures the governed Model Context Protocol server. It is
+            disabled unless <code>enabled</code> is <code>true</code>, and the initial release is
+            read-only.
+          </p>
+          <pre><code>mcp:
+  enabled: false
+  read_only: true
+  audit: false
+  max_concurrency: 16
+  rate_limit:
+    requests_per_minute: 600
+    burst: 120
+  scopes:
+    - read:content
+    - read:docs
+    - read:themes
+    - read:plugins
+    - read:ops</code></pre>
+          <ul>
+            <li>
+              <code>enabled</code>: starts the server when <code>foundry mcp serve</code> runs.
+            </li>
+            <li>
+              <code>read_only</code>: defaults to <code>true</code>. Mutating capabilities are not
+              available in the initial release.
+            </li>
+            <li>
+              <code>audit</code>: when <code>true</code>, capability calls are recorded through the
+              Foundry audit log.
+            </li>
+            <li>
+              <code>max_concurrency</code>: maximum in-flight requests. Requests over the limit are
+              rejected with a busy error instead of queueing. Default <code>16</code>.
+            </li>
+            <li>
+              <code>rate_limit.requests_per_minute</code> and <code>rate_limit.burst</code>: a token
+              bucket applied per client. Default <code>600</code> per minute with a
+              <code>120</code> request burst.
+            </li>
+            <li>
+              <code>scopes</code>: enabled capability scopes. Omitted scopes fall back to the full
+              read-only set. See <a href="../mcp/">MCP server</a> for the scope-to-capability map.
+            </li>
+          </ul>
+
           <h2>Defaults and examples</h2>
           <ul>
             <li>

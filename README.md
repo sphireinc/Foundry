@@ -1279,6 +1279,43 @@ and publication-safety details.
 - broken `media:` references
 - broken internal links to routes and static files
 
+### MCP server
+
+`mcp` exposes a governed [Model Context Protocol](https://modelcontextprotocol.io)
+server for AI clients. It is disabled by default and, in the initial release,
+read-only.
+
+```yaml
+mcp:
+  enabled: true
+  read_only: true
+  audit: false
+  max_concurrency: 16
+  rate_limit:
+    requests_per_minute: 600
+    burst: 120
+  scopes:
+    - read:content
+    - read:docs
+    - read:themes
+    - read:plugins
+    - read:ops
+```
+
+Run it over local stdio:
+
+```sh
+foundry mcp serve --transport stdio
+```
+
+Capabilities are namespaced and versioned, scopes map onto existing Foundry
+capabilities (`read:content` to `documents.read`, and so on), responses are
+redacted for secrets, and list or search results are bounded by page size and
+result-size limits. Requests are checked against a per-client rate limit and a
+concurrency cap; over-limit requests are rejected rather than queued. See
+[MCP server](docs/mcp/index.html) for the capability catalog and client
+configuration.
+
 ## Themes
 
 Themes live under `themes/<name>/`.
