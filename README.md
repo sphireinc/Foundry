@@ -5,6 +5,7 @@
 [![Pages](https://github.com/sphireinc/Foundry/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/sphireinc/Foundry/actions/workflows/pages/pages-build-deployment)
 [![GolangCI-Lint](https://github.com/sphireinc/foundry/actions/workflows/golangci-lint.yml/badge.svg?branch=main)](https://github.com/sphireinc/foundry/actions/workflows/golangci-lint.yml)
 ![Last Commit](https://img.shields.io/github/last-commit/sphireinc/foundry)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/nsa-yoda/badge.svg)](https://hub.xerj.org/contributors/nsa-yoda)
 
 <p align="center">
   <img height="300" src="readme-assets/logo.png" alt="logo">
